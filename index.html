@@ -105,54 +105,39 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 .history-info-line .hv-blue { font-weight: 700; color: #1565c0; }
 .history-info-line .hv-green { font-weight: 700; color: #2e7d32; }
 
-/* 得標區塊 - 橫向排列 */
-.history-bid-row {
-    background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
-    border-radius: 6px;
-    padding: 8px 10px;
-    margin: 8px 0;
-    display: flex;
-    justify-content: space-around;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-.history-bid-item {
-    text-align: center;
-    min-width: 100px;
-}
-.history-bid-item .bid-label {
-    font-size: 10px;
-    color: #e65100;
-    font-weight: bold;
-}
-.history-bid-item .bid-value {
-    font-size: 15px;
-    font-weight: 900;
-    color: #333;
-}
-.history-bid-item .bid-prem {
-    font-size: 12px;
-    font-weight: 700;
-    color: #d32f2f;
-}
-
-/* 掛牌資訊 - 橫向排列 */
-.history-market-row {
-    background: #e3f2fd;
-    border-radius: 6px;
-    padding: 6px 10px;
-    display: flex;
-    justify-content: space-around;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 6px;
+/* 卡片內表格 - 得標+掛牌合併 */
+.history-table {
+    width: 100%;
+    border-collapse: collapse;
     font-size: 11px;
+    margin-top: 8px;
+    background: linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%);
+    border-radius: 4px;
+    overflow: hidden;
 }
-.history-market-row span { white-space: nowrap; }
-.history-market-row .ml { color: #666; }
-.history-market-row .mv { font-weight: 700; color: #1565c0; }
-.history-market-row .mv-pink { font-weight: 700; color: #E91E63; }
+.history-table th {
+    background: #7b1fa2;
+    color: white;
+    padding: 4px 6px;
+    font-weight: 700;
+    font-size: 10px;
+    text-align: center;
+}
+.history-table td {
+    padding: 4px 6px;
+    text-align: center;
+    border-bottom: 1px solid #e0e0e0;
+}
+.history-table .row-label {
+    background: #f3e5f5;
+    font-weight: 700;
+    color: #6a1b9a;
+    width: 35px;
+}
+.history-table .val-main { font-weight: 700; color: #333; }
+.history-table .val-red { font-weight: 700; color: #d32f2f; }
+.history-table .val-blue { font-weight: 700; color: #1565c0; }
+.history-table .val-pink { font-weight: 900; color: #E91E63; background: #fce4ec; }
 
 /* 警示語 */
 .warning-box { background: #fff3e0; border-left: 4px solid #ff9800; padding: 10px; margin-top: 5px; font-size: 12px; color: #e65100; font-weight: bold; border-radius: 4px; }
@@ -480,7 +465,8 @@ async function loadStatistics() {
                 'qualifiedCount': safeFloat(getSmartValue(row, 'qualifiedCount')),
                 'bidShares': safeFloat(getSmartValue(row, 'bidShares')),
                 'bidMultiple': safeFloat(getSmartValue(row, 'bidMultiple')),
-                'avgBidShares': safeFloat(getSmartValue(row, 'avgBidShares'))
+                'avgBidShares': safeFloat(getSmartValue(row, 'avgBidShares')),
+                'auctionShares': safeFloat(getSmartValue(row, 'auctionShares'))
             };
         }).filter(item => item !== null);
 
@@ -657,7 +643,7 @@ function getStatsSmart(category, val) {
 // 4. UI 顯示
 // ==========================================
 
-// v3.50 強化版：歷史搜尋卡片生成 - 緊湊排版
+// v3.50 強化版：歷史搜尋卡片生成 - 緊湊表格版
 function generateHistoryCard(d) {
     const h = safeFloat(d.marketHigh);
     const l = safeFloat(d.marketLow);
@@ -673,6 +659,7 @@ function generateHistoryCard(d) {
         <div class="history-info-line">
             <span><span class="hl">產業:</span><span class="hv">${d.industry || '-'}</span></span>
             <span><span class="hl">規模:</span><span class="hv">${d.issueSize > 0 ? d.issueSize + '億' : '-'}</span></span>
+            <span><span class="hl">年期:</span><span class="hv">${d.years > 0 ? d.years + '年' : '-'}</span></span>
             <span><span class="hl">擔保:</span><span class="hv">${d.guarantee || '-'}</span></span>
             <span><span class="hl">信評:</span><span class="hv">${d.rating || '-'}</span></span>
             <span><span class="hl">券商:</span><span class="hv">${d.broker || '-'}</span></span>
@@ -682,29 +669,31 @@ function generateHistoryCard(d) {
             <span><span class="hl">轉換價:</span><span class="hv">${d.conversionPrice > 0 ? safeFixed(d.conversionPrice,1) : '-'}</span></span>
             <span><span class="hl">截標收盤:</span><span class="hv">${d.closePrice > 0 ? safeFixed(d.closePrice,1) : '-'}</span></span>
             <span><span class="hl">理論價:</span><span class="hv-blue">${d.theoreticalPrice > 0 ? safeFixed(d.theoreticalPrice,2) : '-'}</span></span>
+            <span><span class="hl">底標:</span><span class="hv">${d.floorPrice > 0 ? safeFixed(d.floorPrice,2) : '-'}</span></span>
+            <span><span class="hl">競拍張數:</span><span class="hv">${d.auctionShares > 0 ? d.auctionShares.toLocaleString() : '-'}</span></span>
             <span><span class="hl">投標倍數:</span><span class="hv-red">${d.bidMultiple > 0 ? safeFixed(d.bidMultiple, 2) + 'x' : '-'}</span></span>
         </div>
         
-        <div class="history-bid-row">
-            <div class="history-bid-item">
-                <div class="bid-label">最低得標</div>
-                <div class="bid-value">${d.minBidPrice > 0 ? safeFixed(d.minBidPrice, 2) : '-'}</div>
-                <div class="bid-prem">${d.lowPremium !== 0 ? safeFixed(d.lowPremium, 2) + '%' : '-'}</div>
-            </div>
-            <div class="history-bid-item">
-                <div class="bid-label">平均得標</div>
-                <div class="bid-value">${d.avgBidPrice > 0 ? safeFixed(d.avgBidPrice, 2) : '-'}</div>
-                <div class="bid-prem">${d.avgPremium !== 0 ? safeFixed(d.avgPremium, 2) + '%' : '-'}</div>
-            </div>
-        </div>
-        
-        ${(h > 0 || l > 0) ? `
-        <div class="history-market-row">
-            <span><span class="ml">掛牌高:</span><span class="mv">${h > 0 ? safeFixed(h, 1) : '-'}</span></span>
-            <span><span class="ml">掛牌低:</span><span class="mv">${l > 0 ? safeFixed(l, 1) : '-'}</span></span>
-            <span><span class="ml">振幅:</span><span class="mv-pink">${amp}%</span></span>
-        </div>
-        ` : ''}
+        <table class="history-table">
+            <tr>
+                <th></th><th>得標價</th><th>溢價率</th><th></th><th>掛牌價</th><th>振幅</th>
+            </tr>
+            <tr>
+                <td class="row-label">最低</td>
+                <td class="val-main">${d.minBidPrice > 0 ? safeFixed(d.minBidPrice, 2) : '-'}</td>
+                <td class="val-red">${d.lowPremium !== 0 ? safeFixed(d.lowPremium, 2) + '%' : '-'}</td>
+                <td class="row-label">高</td>
+                <td class="val-blue">${h > 0 ? safeFixed(h, 1) : '-'}</td>
+                <td class="val-pink" rowspan="2">${amp}%</td>
+            </tr>
+            <tr>
+                <td class="row-label">平均</td>
+                <td class="val-main">${d.avgBidPrice > 0 ? safeFixed(d.avgBidPrice, 2) : '-'}</td>
+                <td class="val-red">${d.avgPremium !== 0 ? safeFixed(d.avgPremium, 2) + '%' : '-'}</td>
+                <td class="row-label">低</td>
+                <td class="val-blue">${l > 0 ? safeFixed(l, 1) : '-'}</td>
+            </tr>
+        </table>
     </div>
     `;
 }

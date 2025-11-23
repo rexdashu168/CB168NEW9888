@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.42 (分頁修正版)</title>
+<title>AI智能可轉債競拍系統 v3.44 (00+04資料源修正版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="embedded_data.js" onerror="console.warn('embedded_data.js not found, using defaults.')"></script>
 
@@ -13,10 +13,10 @@
 body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
 .container { max-width: 1600px; margin: 0 auto; }
 .header { background: white; border-radius: 15px; padding: 30px; margin-bottom: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); position: relative; overflow: hidden; }
-.header::before { content: ""; position: absolute; top: 0; left: 0; width: 10px; height: 100%; background: #ff9800; }
+.header::before { content: ""; position: absolute; top: 0; left: 0; width: 10px; height: 100%; background: #E91E63; }
 .header h1 { color: #667eea; font-size: 32px; margin-bottom: 10px; }
 .header .subtitle { color: #666; font-size: 16px; display: flex; align-items: center; gap: 10px; }
-.version-badge { display: inline-block; background: #9C27B0; color: white; padding: 4px 12px; border-radius: 20px; font-size: 14px; font-weight: bold; box-shadow: 0 2px 5px rgba(156, 39, 176, 0.3); }
+.version-badge { display: inline-block; background: #C2185B; color: white; padding: 4px 12px; border-radius: 20px; font-size: 14px; font-weight: bold; box-shadow: 0 2px 5px rgba(194, 24, 91, 0.3); }
 
 .evaluation-container { display: grid; grid-template-columns: 450px 1fr; gap: 20px; }
 .input-panel { background: white; border-radius: 15px; padding: 30px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); height: fit-content; position: sticky; top: 20px; }
@@ -84,13 +84,13 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 24px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.42)...</div>
-    <div id="loading-detail" style="font-size: 16px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在讀取 00_CB.xlsx...</div>
+    <div>🔄 系統啟動中 (v3.44)...</div>
+    <div id="loading-detail" style="font-size: 16px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合 04競拍庫 與 00行情表...</div>
 </div>
 
 <div class="container" style="display: none;">
     <div class="header">
-        <h1>🤖 AI智能可轉債競拍系統 <span class="version-badge">v3.42 (精準讀取版)</span></h1>
+        <h1>🤖 AI智能可轉債競拍系統 <span class="version-badge">v3.44 源頭修正版</span></h1>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -143,8 +143,8 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
         
         <div class="result-panel">
             <div id="welcomeMsg" class="welcome-message">
-                <h2>歡迎使用AI智能競拍評估系統 (v3.42)</h2>
-                <p style="margin-top:10px; color:#666;">✅ 修復分頁讀取錯誤：精準鎖定「所有CB競拍資料庫」<br>✅ 已確認大金額/高價位標的資料讀取正常</p>
+                <h2>歡迎使用AI智能競拍評估系統 (v3.44)</h2>
+                <p style="margin-top:10px; color:#666;">✅ 鎖定讀取 04 競拍資料庫 (轉換價/得標價)<br>✅ 鎖定讀取 00 行情表 (掛牌高低)</p>
                 <div class="stats-summary" id="statsSummary"></div>
             </div>
             <div id="evaluationResult" class="evaluation-result"></div>
@@ -156,16 +156,37 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 // ==========================================
 // 1. 欄位設定 & 工具函數
 // ==========================================
+// 定義欄位別名：針對 04 和 00 分頁的不同命名習慣
 const FIELD_ALIASES = {
-    'cbId': ['CB代號', '代號', '股票代號'], 'name': ['名稱', 'CB名稱', '公司名稱'],
-    'industry': ['產業分類', '產業別', '產業'], 'broker': ['發行券商', '承銷券商', '主辦券商'],
-    'guarantee': ['擔保', '有無擔保', '擔保情形'], 'rating': ['信評', '信用擔保', 'TCRI'],
-    'capital': ['股本', '股本規模', '股本(億)'], 'issueSize': ['發行規模', '發行總額'],
-    'years': ['年期', '發行年期'], 'conversionPrice': ['轉換價', '轉換價格'],
-    'minBidPrice': ['最低得標', '最低得標價格', '最低得標價'], 'lowPremium': ['最低溢價', '最低得標價格_溢價率', '最低得標溢價', '最低溢價(%)'],
-    'avgBidPrice': ['平均得標', '平均得標價格', '得標加權平均價格', '平均得標價'], 'avgPremium': ['平均溢價', '得標加權平均價格_溢價率', '平均得標溢價', '平均溢價(%)'],
-    'marketHigh': ['掛牌最高', '掛牌最高價'], 'marketLow': ['掛牌最低', '掛牌最低價']
+    // 04分頁用 'CB代號', 00分頁用 '代號'
+    'cbId': ['CB代號', '代號', '股票代號'], 
+    'name': ['名稱', 'CB名稱', '公司名稱'],
+    'industry': ['產業分類', '產業別', '產業'], 
+    'broker': ['發行券商', '承銷券商', '主辦券商'],
+    'guarantee': ['擔保', '有無擔保', '擔保情形'], 
+    'rating': ['信評', '信用擔保', 'TCRI'],
+    'capital': ['股本', '股本規模', '股本(億)'], 
+    'issueSize': ['發行規模', '發行總額'],
+    'years': ['年期', '發行年期'], 
+    // 04分頁通常是 '轉換價'
+    'conversionPrice': ['轉換價', '轉換價格'],
+    // 04分頁的競拍結果
+    'minBidPrice': ['最低得標', '最低得標價格', '最低得標價'], 
+    'lowPremium': ['最低溢價', '最低得標價格_溢價率', '最低得標溢價', '最低溢價(%)'],
+    'avgBidPrice': ['平均得標', '平均得標價格', '得標加權平均價格', '平均得標價'], 
+    'avgPremium': ['平均溢價', '得標加權平均價格_溢價率', '平均得標溢價', '平均溢價(%)'],
+    // 00分頁的行情
+    'marketHigh': ['掛牌最高', '掛牌最高價'], 
+    'marketLow': ['掛牌最低', '掛牌最低價']
 };
+
+function normalizeKeys(obj) {
+    const newObj = {};
+    Object.keys(obj).forEach(key => {
+        newObj[key.trim()] = obj[key];
+    });
+    return newObj;
+}
 
 function getSmartValue(row, fieldKey) {
     if (!FIELD_ALIASES[fieldKey]) return undefined;
@@ -176,14 +197,12 @@ function getSmartValue(row, fieldKey) {
 }
 function safeFloat(val) { const num = parseFloat(val); return isNaN(num) ? 0 : num; }
 
-// 安全獲取權重係數 (防呆)
 function getWeightCoefficient(category, value) {
     const weights = (typeof window.WEIGHT_COEFFICIENTS !== 'undefined') ? window.WEIGHT_COEFFICIENTS : {};
     if (!weights[category]) return 1.0;
     return weights[category][value] ? weights[category][value].coefficient : 1.0;
 }
 
-// 安全獲取券商映射 (防呆)
 function getBrokerName(cbName) {
     const found = auctionRawData.find(d => d['name'] === cbName);
     if (found && found['broker']) return found['broker'];
@@ -191,11 +210,10 @@ function getBrokerName(cbName) {
     return map[cbName] || null;
 }
 
-// 根據 05號表單邏輯的分類顯示函數
 function getRangeLabel(category, val) {
     const v = parseFloat(val);
     if (isNaN(v)) return val;
-    
+    // 依照 05 號表單的邏輯定義區間 (但不讀取 05 的資料)
     if (category === '股本') {
         if (v < 3) return "小於 3 億";
         if (v < 6) return "3 ~ 6 億";
@@ -227,7 +245,7 @@ let statistics = { '維度統計': { '產業': {}, '發行券商': {} }, '資料
 let cbDatabase = {}, auctionRawData = [], globalMarketStats = { low: 0, avg: 0 }, cbNameMap = {};
 
 // ==========================================
-// 2. 資料讀取 (v3.42 關鍵修正)
+// 2. 資料讀取 (v3.44 分流讀取修正)
 // ==========================================
 async function loadStatistics() {
     const loadingDiv = document.getElementById('loading');
@@ -236,51 +254,73 @@ async function loadStatistics() {
         if (!response.ok) throw new Error("找不到 00_CB.xlsx，請確認檔案位置。");
         const workbook = XLSX.read(await response.arrayBuffer(), { type: 'array' });
         
-        // 【修正】優先尋找完整名稱 "所有CB競拍"，避免誤讀到 "CB競拍篩選條件"
-        const getSheetData = (k, exact=false) => { 
-            let n;
-            if (exact) {
-                // 優先使用精確搜尋
-                n = workbook.SheetNames.find(x => x.includes('所有CB競拍'));
-            }
-            if (!n) {
-                // 找不到才退而求其次
-                n = workbook.SheetNames.find(x => x.includes(k));
-            }
-            return n ? XLSX.utils.sheet_to_json(workbook.Sheets[n]) : []; 
+        // 輔助函數：根據關鍵字找分頁
+        const getSheetData = (keywords) => { 
+            // 嘗試尋找包含任一關鍵字的分頁
+            const n = workbook.SheetNames.find(x => keywords.some(k => x.includes(k)));
+            if (!n) return null;
+            const raw = XLSX.utils.sheet_to_json(workbook.Sheets[n]);
+            return raw.map(row => normalizeKeys(row));
         };
 
-        // 這裡改為 true，強制優先尋找 "所有CB競拍"
-        const sheetAuction = getSheetData('競拍', true);
-        const sheetHighLow = getSheetData('掛牌') || getSheetData('名稱過濾');
+        // 1. 讀取競拍數據 (04) - 這裡是 轉換價 & 得標價 的來源
+        const sheetAuction = getSheetData(['04', '所有CB競拍']);
         
-        if (sheetAuction.length === 0) throw new Error("Excel 中找不到「所有CB競拍資料庫」分頁");
+        // 2. 讀取行情數據 (00) - 這裡是 掛牌高低 的來源
+        const sheetHighLow = getSheetData(['00', '掛牌', '名稱過濾']);
+        
+        if (!sheetAuction || sheetAuction.length === 0) throw new Error("找不到包含 '04' 或 '所有CB競拍' 的分頁");
+        // 若找不到 00 表，不報錯，只是沒行情資料
+        const hasHighLow = (sheetHighLow && sheetHighLow.length > 0);
 
+        // 建立 HighLow 對照表 (key = CB代號)
         const highLowMap = {};
-        sheetHighLow.forEach(row => {
-            let id = getSmartValue(row, 'cbId');
-            if(id) highLowMap[String(id).replace('.0','').trim()] = row;
-        });
+        if (hasHighLow) {
+            sheetHighLow.forEach(row => {
+                // 在 00 表中，CB代號通常欄位名是 '代號'
+                let id = row['代號'] || row['CB代號'] || row['股票代號'];
+                if(id) {
+                    const cleanId = String(id).replace('.0','').trim();
+                    highLowMap[cleanId] = row;
+                }
+            });
+        }
 
+        // 合併資料
         auctionRawData = sheetAuction.map(row => {
-            let rawId = getSmartValue(row, 'cbId');
+            // 在 04 表中，CB代號通常欄位名是 'CB代號'
+            let rawId = row['CB代號'] || row['代號']; 
             if (!rawId) return null;
-            const id = String(rawId).trim();
-            const hlRow = highLowMap[id] || {};
+            
+            const id = String(rawId).replace('.0','').trim();
+            const hlRow = highLowMap[id] || {}; // 用 ID 去 00 表找對應行情
 
             let lowPrem = safeFloat(getSmartValue(row, 'lowPremium'));
             let avgPrem = safeFloat(getSmartValue(row, 'avgPremium'));
-            // 自動修正百分比格式
             if (lowPrem !== 0 && Math.abs(lowPrem) < 2) lowPrem *= 100;
             if (avgPrem !== 0 && Math.abs(avgPrem) < 2) avgPrem *= 100;
 
             return {
-                'id': id, 'name': getSmartValue(row, 'name'), 'industry': getSmartValue(row, 'industry'), 'broker': getSmartValue(row, 'broker'),
-                'guarantee': getSmartValue(row, 'guarantee'), 'rating': getSmartValue(row, 'rating'),
-                'capital': safeFloat(getSmartValue(row, 'capital')), 'issueSize': safeFloat(getSmartValue(row, 'issueSize')), 'years': safeFloat(getSmartValue(row, 'years')),
-                'minBidPrice': safeFloat(getSmartValue(row, 'minBidPrice')), 'avgBidPrice': safeFloat(getSmartValue(row, 'avgBidPrice')),
-                'lowPremium': lowPrem, 'avgPremium': avgPrem,
-                'marketHigh': safeFloat(getSmartValue(hlRow, 'marketHigh')), 'marketLow': safeFloat(getSmartValue(hlRow, 'marketLow'))
+                'id': id, 
+                'name': getSmartValue(row, 'name'), 
+                'industry': getSmartValue(row, 'industry'), 
+                'broker': getSmartValue(row, 'broker'),
+                'guarantee': getSmartValue(row, 'guarantee'), 
+                'rating': getSmartValue(row, 'rating'),
+                'capital': safeFloat(getSmartValue(row, 'capital')), 
+                'issueSize': safeFloat(getSmartValue(row, 'issueSize')), 
+                'years': safeFloat(getSmartValue(row, 'years')),
+                
+                // 這裡讀取的是 04 表的欄位
+                'conversionPrice': safeFloat(getSmartValue(row, 'conversionPrice')), // 轉換價
+                'minBidPrice': safeFloat(getSmartValue(row, 'minBidPrice')), 
+                'avgBidPrice': safeFloat(getSmartValue(row, 'avgBidPrice')),
+                'lowPremium': lowPrem, 
+                'avgPremium': avgPrem,
+                
+                // 這裡讀取的是 00 表的欄位
+                'marketHigh': safeFloat(getSmartValue(hlRow, 'marketHigh')), 
+                'marketLow': safeFloat(getSmartValue(hlRow, 'marketLow'))
             };
         }).filter(item => item !== null);
 
@@ -300,7 +340,7 @@ async function loadStatistics() {
 }
 
 // ==========================================
-// 3. 統計核心 (智慧邏輯修正版 v3.41)
+// 3. 統計核心
 // ==========================================
 function autoGenerateStatistics() {
     statistics['維度統計']['產業'] = {}; statistics['維度統計']['發行券商'] = {};
@@ -328,9 +368,13 @@ function updateStatCategory(category, key, row) {
         statistics['維度統計'][category][key] = { count: 0, sumLowPrem: 0, sumAvgPrem: 0, sumLowPrice: 0, sumAvgPrice: 0, sumHigh: 0, sumLow: 0, countMarket: 0 };
     }
     const obj = statistics['維度統計'][category][key];
-    if (row.lowPremium !== 0 || row.avgPremium !== 0) {
-        obj.count++; obj.sumLowPrem += row.lowPremium; obj.sumAvgPrem += row.avgPremium;
-        obj.sumLowPrice += row.minBidPrice; obj.sumAvgPrice += row.avgBidPrice;
+    // 只要有得標價就納入
+    if (row.minBidPrice > 0 || row.avgBidPrice > 0) {
+        obj.count++; 
+        obj.sumLowPrem += row.lowPremium; 
+        obj.sumAvgPrem += row.avgPremium;
+        obj.sumLowPrice += row.minBidPrice; 
+        obj.sumAvgPrice += row.avgBidPrice;
     }
     if (row.marketHigh > 0 && row.marketLow > 0) {
         obj.sumHigh += row.marketHigh; obj.sumLow += row.marketLow;
@@ -340,7 +384,7 @@ function updateStatCategory(category, key, row) {
 
 function calculateGlobalMarketStats() {
     let sumLow = 0, sumAvg = 0, count = 0;
-    auctionRawData.forEach(d => { if (d.lowPremium !== 0) { sumLow += d.lowPremium; sumAvg += d.avgPremium; count++; } });
+    auctionRawData.forEach(d => { if (d.minBidPrice > 0) { sumLow += d.lowPremium; sumAvg += d.avgPremium; count++; } });
     if (count > 0) { globalMarketStats.low = (sumLow / count); globalMarketStats.avg = (sumAvg / count); }
 }
 
@@ -350,7 +394,6 @@ function getStatsSmart(category, val) {
     const v = parseFloat(val);
     let rangeLabel = "";
 
-    // 1. 嚴格遵照「05_CB競拍篩選條件區間」邏輯
     if (category === '股本') {
         if (v < 3) { rangeLabel = "小於 3 億"; filterFn = d => d.capital < 3; }
         else if (v < 6) { rangeLabel = "3 ~ 6 億"; filterFn = d => d.capital >= 3 && d.capital < 6; }
@@ -381,12 +424,10 @@ function getStatsSmart(category, val) {
     else if (category === '年期') filterFn = d => d.years == val;
     else if (category === '信評') filterFn = d => (d.rating || '').toString().includes(val.toString());
 
-    // 2. 執行統計計算
     if (filterFn) {
         let sumLowP = 0, sumAvgP = 0, sumLowPr = 0, sumAvgPr = 0, sumH = 0, sumL = 0, countM = 0, count = 0;
         auctionRawData.filter(filterFn).forEach(d => {
-            // 修正：必須 lowPremium 不為 0 才能算入平均，否則會拉低數值
-            if (d.lowPremium !== 0) { 
+            if (d.minBidPrice > 0 || d.avgBidPrice > 0) { 
                 sumLowP += d.lowPremium; sumAvgP += d.avgPremium; 
                 sumLowPr += d.minBidPrice; sumAvgPr += d.avgBidPrice; 
                 count++; 
@@ -411,22 +452,19 @@ function getStatsSmart(category, val) {
         }
     }
     
-    // 3. Fallback 機制 (安全氣囊)
-    // 修正邏輯：如果 stats.low 為 0 (可能是查無資料或該資料值為0)，強制啟用 Fallback
-    if (stats.low === 0 || isNaN(stats.low)) { 
-        // 嘗試使用靜態統計
+    // Fallback
+    if (stats.low === 0 && (!stats.rawData || stats.rawData['平均得標價'] === 0)) { 
         if (statistics['維度統計'][category] && statistics['維度統計'][category][val]) {
             stats.rawData = statistics['維度統計'][category][val]; 
             stats.low = safeFloat(stats.rawData['平均最低溢價']); 
             stats.avg = safeFloat(stats.rawData['平均溢價']);
         } 
         
-        // 最終保底：如果還是 0，使用全市場平均 (避免程式崩潰)
         if (stats.low === 0 || isNaN(stats.low)) {
             stats.low = globalMarketStats.low; 
             stats.avg = globalMarketStats.avg; 
             stats.usedFallback = true; 
-            if(!stats.rawData) stats.rawData = { '平均最低溢價': stats.low, '平均溢價': stats.avg, '樣本數': '全市場(數據不足)' };
+            if(!stats.rawData) stats.rawData = { '平均最低溢價': stats.low, '平均溢價': stats.avg, '樣本數': '全市場(備援)' };
         }
     }
     return stats;
@@ -480,7 +518,7 @@ function populateSelect(id, dataObj) {
 function showStatsSummary() { 
     document.getElementById('statsSummary').innerHTML = `
     <div class="stat-box"><div class="number">${Object.keys(cbDatabase).length}</div><div class="label">資料總數</div></div>
-    <div class="stat-box"><div class="number">${auctionRawData.filter(d=>d.lowPremium!==0).length}</div><div class="label">有效競拍案</div></div>
+    <div class="stat-box"><div class="number">${auctionRawData.filter(d=>d.minBidPrice>0).length}</div><div class="label">有效競拍案</div></div>
     <div class="stat-box"><div class="number">${auctionRawData.filter(d=>d.marketHigh>0).length}</div><div class="label">掛牌行情</div></div>
     `; 
 }

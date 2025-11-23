@@ -142,6 +142,48 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 /* 警示語 */
 .warning-box { background: #fff3e0; border-left: 4px solid #ff9800; padding: 10px; margin-top: 5px; font-size: 12px; color: #e65100; font-weight: bold; border-radius: 4px; }
 
+/* 綠色卡片內的掛牌表格 */
+.card-market-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+    margin-top: 8px;
+    border-radius: 4px;
+    overflow: hidden;
+}
+.card-market-table th {
+    background: #2e7d32;
+    color: white;
+    padding: 4px 5px;
+    font-weight: 700;
+    font-size: 10px;
+    text-align: center;
+}
+.card-market-table td {
+    padding: 4px 5px;
+    text-align: center;
+    border-bottom: 1px solid #c8e6c9;
+    background: #f1f8e9;
+}
+.card-market-table .type-label {
+    font-weight: 700;
+    color: #1b5e20;
+    text-align: left;
+    padding-left: 8px;
+}
+.card-market-table .type-label .count {
+    font-size: 9px;
+    color: #666;
+    margin-left: 3px;
+}
+.card-market-table .val-blue { font-weight: 700; color: #1565c0; }
+.card-market-table .val-pink { font-weight: 700; color: #E91E63; }
+.card-market-table .total-row td {
+    background: #c8e6c9;
+    font-weight: 900;
+    border-top: 2px solid #4CAF50;
+}
+
 /* 主觀權重說明 */
 .subjective-note { background: #f5f5f5; padding: 10px; border-radius: 6px; font-size: 12px; color: #555; margin-bottom: 12px; border: 1px solid #ddd; line-height: 1.5; }
 
@@ -395,7 +437,7 @@ function getRangeLabel(category, val) {
 }
 
 let statistics = { '維度統計': { '產業': {}, '發行券商': {} }, '資料期間': {} };
-let cbDatabase = {}, auctionRawData = [], globalMarketStats = { low: 0, avg: 0 }, cbNameMap = {};
+let cbDatabase = {}, auctionRawData = [], inquiryRawData = [], globalMarketStats = { low: 0, avg: 0 }, cbNameMap = {};
 
 // ==========================================
 // 2. 資料讀取
@@ -415,15 +457,46 @@ async function loadStatistics() {
 
         const sheetAuction = getSheetData(['04', '所有CB競拍']);
         const sheetHighLow = getSheetData(['00', '掛牌', '名稱過濾']);
+        const sheetAllCB = getSheetData(['01', 'ALLCB基本']);
         
         if (!sheetAuction || sheetAuction.length === 0) throw new Error("找不到競拍資料分頁");
 
+        // 建立掛牌高低對照表
         const highLowMap = {};
         if (sheetHighLow && sheetHighLow.length > 0) {
             sheetHighLow.forEach(row => {
                 let id = row['代號'] || row['CB代號'] || row['股票代號'];
                 if(id) highLowMap[String(id).replace('.0','').trim()] = row;
             });
+        }
+        
+        // 讀取詢圈資料 (從01工作表)
+        if (sheetAllCB && sheetAllCB.length > 0) {
+            inquiryRawData = sheetAllCB.filter(row => {
+                const type = row['詢圈競拍'] || '';
+                return type.includes('詢圈');
+            }).map(row => {
+                let rawId = row['CB代號'] || row['代號'];
+                if (!rawId) return null;
+                const id = String(rawId).replace('.0','').trim();
+                const hlRow = highLowMap[id] || {};
+                
+                return {
+                    'id': id,
+                    'name': row['名稱'] || '',
+                    'industry': row['產業分類'] || '',
+                    'broker': row['承銷券商'] || '',
+                    'guarantee': row['有無擔保'] || '',
+                    'rating': row['信用擔保'] || '',
+                    'capital': safeFloat(row['股本規模']),
+                    'issueSize': safeFloat(row['發行規模']),
+                    'years': safeFloat(row['發行年期']),
+                    'conversionPrice': safeFloat(row['轉換價格']),
+                    'marketHigh': safeFloat(getSmartValue(hlRow, 'marketHigh')) || safeFloat(row['掛牌最高']),
+                    'marketLow': safeFloat(getSmartValue(hlRow, 'marketLow')) || safeFloat(row['掛牌最低']),
+                    'type': '詢圈'
+                };
+            }).filter(item => item !== null);
         }
 
         auctionRawData = sheetAuction.map(row => {
@@ -553,7 +626,7 @@ function calculateGlobalMarketStats() {
 }
 
 function getStatsSmart(category, val) {
-    let stats = { low: 0, avg: 0, usedFallback: false, rawData: null };
+    let stats = { low: 0, avg: 0, usedFallback: false, rawData: null, inquiryData: null };
     let filterFn = null;
     const v = parseFloat(val);
     let rangeLabel = "";
@@ -594,6 +667,7 @@ function getStatsSmart(category, val) {
     }
 
     if (filterFn) {
+        // 競拍數據統計
         let sumLowP = 0, sumAvgP = 0, sumLowPr = 0, sumAvgPr = 0, sumH = 0, sumL = 0, countM = 0, count = 0;
         auctionRawData.filter(filterFn).forEach(d => {
             if (d.minBidPrice > 0 || d.avgBidPrice > 0) { 
@@ -619,6 +693,22 @@ function getStatsSmart(category, val) {
             if(rangeLabel) stats.rawData['區間名稱'] = rangeLabel; 
             stats.low = stats.rawData['平均最低溢價']; 
             stats.avg = stats.rawData['平均溢價'];
+        }
+        
+        // 詢圈數據統計
+        let iSumH = 0, iSumL = 0, iCountM = 0;
+        inquiryRawData.filter(filterFn).forEach(d => {
+            if (d.marketHigh > 0 && d.marketLow > 0) { 
+                iSumH += d.marketHigh; iSumL += d.marketLow; iCountM++; 
+            }
+        });
+        
+        if (iCountM > 0) {
+            stats.inquiryData = {
+                '平均掛牌最高': iSumH / iCountM,
+                '平均掛牌最低': iSumL / iCountM,
+                '樣本數': iCountM
+            };
         }
     }
     
@@ -663,14 +753,15 @@ function generateHistoryCard(d) {
             <span><span class="hl">擔保:</span><span class="hv">${d.guarantee || '-'}</span></span>
             <span><span class="hl">信評:</span><span class="hv">${d.rating || '-'}</span></span>
             <span><span class="hl">券商:</span><span class="hv">${d.broker || '-'}</span></span>
+            <span><span class="hl">底標:</span><span class="hv">${d.floorPrice > 0 ? safeFixed(d.floorPrice,2) : '-'}</span></span>
         </div>
         
         <div class="history-info-line">
             <span><span class="hl">轉換價:</span><span class="hv">${d.conversionPrice > 0 ? safeFixed(d.conversionPrice,1) : '-'}</span></span>
             <span><span class="hl">截標收盤:</span><span class="hv">${d.closePrice > 0 ? safeFixed(d.closePrice,1) : '-'}</span></span>
             <span><span class="hl">理論價:</span><span class="hv-blue">${d.theoreticalPrice > 0 ? safeFixed(d.theoreticalPrice,2) : '-'}</span></span>
-            <span><span class="hl">底標:</span><span class="hv">${d.floorPrice > 0 ? safeFixed(d.floorPrice,2) : '-'}</span></span>
             <span><span class="hl">競拍張數:</span><span class="hv">${d.auctionShares > 0 ? d.auctionShares.toLocaleString() : '-'}</span></span>
+            <span><span class="hl">投標張數:</span><span class="hv">${d.bidShares > 0 ? d.bidShares.toLocaleString() : '-'}</span></span>
             <span><span class="hl">投標倍數:</span><span class="hv-red">${d.bidMultiple > 0 ? safeFixed(d.bidMultiple, 2) + 'x' : '-'}</span></span>
         </div>
         
@@ -698,30 +789,90 @@ function generateHistoryCard(d) {
     `;
 }
 
-function generateStandardCard(data, titleOverride=null) {
+function generateStandardCard(data, titleOverride=null, inquiryData=null) {
     if (!data) return `<div class="stat-row" style="color:#999;">查無資料</div>`;
     
     const valStr = (v, s='') => (v!==undefined && v!==null && v!=='' && v!==0) ? `${safeFixed(v,2)}${s}` : '-';
     const title = data['區間名稱'] ? `區間統計: ${data['區間名稱']}` : (titleOverride || '歷史統計');
 
+    // 計算競拍振幅
+    const aH = safeFloat(data['平均掛牌最高']);
+    const aL = safeFloat(data['平均掛牌最低']);
+    const aAmp = (aH > 0 && aL > 0) ? ((aH - aL) / aL * 100).toFixed(1) : '-';
+    
+    // 計算詢圈振幅
+    let iH = 0, iL = 0, iAmp = '-', iCount = 0;
+    if (inquiryData) {
+        iH = safeFloat(inquiryData['平均掛牌最高']);
+        iL = safeFloat(inquiryData['平均掛牌最低']);
+        iAmp = (iH > 0 && iL > 0) ? ((iH - iL) / iL * 100).toFixed(1) : '-';
+        iCount = inquiryData['樣本數'] || 0;
+    }
+    
+    // 計算合計
+    const aCount = data['樣本數'] || 0;
+    const totalCount = (typeof aCount === 'number' ? aCount : 0) + (typeof iCount === 'number' ? iCount : 0);
+    
+    let tH = 0, tL = 0, tAmp = '-';
+    if (aH > 0 && iH > 0) {
+        tH = ((aH * aCount) + (iH * iCount)) / totalCount;
+        tL = ((aL * aCount) + (iL * iCount)) / totalCount;
+    } else if (aH > 0) {
+        tH = aH; tL = aL;
+    } else if (iH > 0) {
+        tH = iH; tL = iL;
+    }
+    if (tH > 0 && tL > 0) tAmp = ((tH - tL) / tL * 100).toFixed(1);
+
     let html = `<div class="stats-header">📊 ${title}</div>`;
-    if (data['樣本數']) html += `<div class="stat-row" style="font-weight:bold;">樣本數: ${data['樣本數']} 檔</div>`;
     
-    html += `<div style="background:#f1f8e9; padding:8px; border-radius:5px; margin:8px 0;">
-    <div class="stat-row"><span class="stat-label">📉 最低得標:</span><span class="stat-value">${valStr(data['平均最低得標價'])} 元 (溢${valStr(data['平均最低溢價'], '%')})</span></div>
-    <div class="stat-row"><span class="stat-label">⚖️ 平均得標:</span><span class="stat-value">${valStr(data['平均得標價'])} 元 (溢${valStr(data['平均溢價'], '%')})</span></div>
-    </div>`;
-    
-    const h = safeFloat(data['平均掛牌最高']);
-    const l = safeFloat(data['平均掛牌最低']);
-    if (h > 0) {
-        const amp = l > 0 ? ((h - l) / l * 100).toFixed(2) : '-';
-        html += `<div style="border-top:1px dashed #ccc; padding-top:8px;">
-        <div class="stat-row"><span class="stat-label">📈 掛牌最高:</span><span class="stat-value">${valStr(h)}</span></div>
-        <div class="stat-row"><span class="stat-label">📉 掛牌最低:</span><span class="stat-value">${valStr(l)}</span></div>
-        <div class="stat-row"><span class="stat-label" style="color:#E91E63;">⚡ 振幅:</span><span class="stat-value" style="color:#E91E63;">${amp}%</span></div>
+    // 競拍得標數據
+    if (data['樣本數']) {
+        html += `<div style="background:#f1f8e9; padding:8px; border-radius:5px; margin:8px 0;">
+        <div style="font-weight:bold; color:#2e7d32; font-size:12px; margin-bottom:5px;">🎯 競拍 (${data['樣本數']}檔)</div>
+        <div class="stat-row"><span class="stat-label">最低得標:</span><span class="stat-value">${valStr(data['平均最低得標價'])}元 / 溢${valStr(data['平均最低溢價'],'%')}</span></div>
+        <div class="stat-row"><span class="stat-label">平均得標:</span><span class="stat-value">${valStr(data['平均得標價'])}元 / 溢${valStr(data['平均溢價'],'%')}</span></div>
         </div>`;
     }
+    
+    // 掛牌表格（競拍+詢圈+合計）
+    const hasAuction = aH > 0 || aL > 0;
+    const hasInquiry = iH > 0 || iL > 0;
+    
+    if (hasAuction || hasInquiry) {
+        html += `<table class="card-market-table">
+        <tr><th></th><th>掛牌高</th><th>掛牌低</th><th>振幅</th></tr>`;
+        
+        if (hasAuction) {
+            html += `<tr>
+                <td class="type-label">競拍<span class="count">${aCount}</span></td>
+                <td class="val-blue">${aH > 0 ? safeFixed(aH,1) : '-'}</td>
+                <td class="val-blue">${aL > 0 ? safeFixed(aL,1) : '-'}</td>
+                <td class="val-pink">${aAmp}%</td>
+            </tr>`;
+        }
+        
+        if (hasInquiry) {
+            html += `<tr>
+                <td class="type-label">詢圈<span class="count">${iCount}</span></td>
+                <td class="val-blue">${iH > 0 ? safeFixed(iH,1) : '-'}</td>
+                <td class="val-blue">${iL > 0 ? safeFixed(iL,1) : '-'}</td>
+                <td class="val-pink">${iAmp}%</td>
+            </tr>`;
+        }
+        
+        if (hasAuction && hasInquiry) {
+            html += `<tr class="total-row">
+                <td class="type-label">合計<span class="count">${totalCount}</span></td>
+                <td class="val-blue">${tH > 0 ? safeFixed(tH,1) : '-'}</td>
+                <td class="val-blue">${tL > 0 ? safeFixed(tL,1) : '-'}</td>
+                <td class="val-pink">${tAmp}%</td>
+            </tr>`;
+        }
+        
+        html += `</table>`;
+    }
+    
     return html;
 }
 
@@ -747,9 +898,9 @@ function populateSelect(id, dataObj) {
 
 function showStatsSummary() { 
     document.getElementById('statsSummary').innerHTML = `
-    <div class="stat-box"><div class="number">${Object.keys(cbDatabase).length}</div><div class="label">資料總數</div></div>
-    <div class="stat-box"><div class="number">${auctionRawData.filter(d=>d.minBidPrice>0).length}</div><div class="label">有效競拍</div></div>
-    <div class="stat-box"><div class="number">${auctionRawData.filter(d=>d.marketHigh>0).length}</div><div class="label">掛牌行情</div></div>
+    <div class="stat-box"><div class="number">${auctionRawData.filter(d=>d.minBidPrice>0).length}</div><div class="label">競拍案例</div></div>
+    <div class="stat-box"><div class="number">${inquiryRawData.length}</div><div class="label">詢圈案例</div></div>
+    <div class="stat-box"><div class="number">${auctionRawData.filter(d=>d.marketHigh>0).length + inquiryRawData.filter(d=>d.marketHigh>0).length}</div><div class="label">掛牌行情</div></div>
     `; 
 }
 
@@ -814,7 +965,7 @@ function bindInputEvents() {
                 let displayTitle = val;
                 if(['股本','發行規模','轉換價'].includes(cat)) displayTitle = getRangeLabel(cat, val);
                 const smartResult = getStatsSmart(cat, val);
-                show(id+'Info', generateStandardCard(smartResult.rawData, `區間統計: ${displayTitle}`));
+                show(id+'Info', generateStandardCard(smartResult.rawData, `區間統計: ${displayTitle}`, smartResult.inquiryData));
                 if(cat==='轉換價'||cat==='信評') updateSmartReminders();
             }
         };

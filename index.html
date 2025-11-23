@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.48 (專業表格版)</title>
+<title>AI智能可轉債競拍系統 v3.49 (旗艦體驗版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="embedded_data.js" onerror="console.warn('embedded_data.js not found, using defaults.')"></script>
 
@@ -13,10 +13,10 @@
 body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
 .container { max-width: 1600px; margin: 0 auto; }
 .header { background: white; border-radius: 15px; padding: 30px; margin-bottom: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); position: relative; overflow: hidden; }
-.header::before { content: ""; position: absolute; top: 0; left: 0; width: 10px; height: 100%; background: #9C27B0; }
+.header::before { content: ""; position: absolute; top: 0; left: 0; width: 10px; height: 100%; background: #FF9800; }
 .header h1 { color: #667eea; font-size: 32px; margin-bottom: 10px; }
 .header .subtitle { color: #666; font-size: 16px; display: flex; align-items: center; gap: 10px; }
-.version-badge { display: inline-block; background: #7B1FA2; color: white; padding: 4px 12px; border-radius: 20px; font-size: 14px; font-weight: bold; box-shadow: 0 2px 5px rgba(123, 31, 162, 0.3); }
+.version-badge { display: inline-block; background: #FF5722; color: white; padding: 4px 12px; border-radius: 20px; font-size: 14px; font-weight: bold; box-shadow: 0 2px 5px rgba(255, 87, 34, 0.3); }
 
 .evaluation-container { display: grid; grid-template-columns: 450px 1fr; gap: 20px; }
 .input-panel { background: white; border-radius: 15px; padding: 30px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); height: fit-content; position: sticky; top: 20px; }
@@ -27,6 +27,13 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 .form-group label { display: block; color: #555; font-size: 14px; margin-bottom: 8px; font-weight: 500; }
 .form-group input, .form-group select { width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 15px; transition: border-color 0.3s; }
 .form-group input:focus, .form-group select:focus { outline: none; border-color: #667eea; background: #fcfdff; }
+
+/* 歷史兄弟檔資料區塊 */
+.sibling-history { margin-top: 10px; background: #fff3e0; padding: 10px; border-radius: 8px; font-size: 13px; border: 1px solid #ffe0b2; }
+.sibling-item { display: flex; justify-content: space-between; border-bottom: 1px dashed #ffcc80; padding: 5px 0; }
+.sibling-item:last-child { border-bottom: none; }
+.sibling-name { font-weight: bold; color: #e65100; }
+.sibling-val { color: #333; }
 
 .info-box { background: #e8f5e9; padding: 15px; border-radius: 8px; border-left: 5px solid #4CAF50; margin-top: 10px; display: none; box-shadow: 0 2px 5px rgba(0,0,0,0.05); animation: slideDown 0.3s ease-out; }
 @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
@@ -68,12 +75,36 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 .strategy-card.ultimate h4 { color: #6a1b9a; }
 .strategy-card .price { font-size: 32px; font-weight: bold; margin: 10px 0; color: #333; }
 
-.data-table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
-.data-table th { background-color: #1A237E; color: white; padding: 15px 10px; text-align: center; font-weight: bold; border: 1px solid #0d1b5e; }
-.data-table td { padding: 12px 10px; text-align: center; border: 1px solid #e0e0e0; color: #333; }
+/* 美化表格設計 (手機優先) */
+.data-table { width: 100%; border-collapse: collapse; font-size: 15px; margin-top: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+.data-table th { 
+    background-color: #1A237E; 
+    color: white; 
+    padding: 10px 5px; 
+    text-align: center; 
+    font-weight: bold; 
+    border: 1px solid #0d1b5e; 
+    line-height: 1.3; /* 讓兩行字更緊湊 */
+}
+.data-table td { 
+    padding: 12px 8px; 
+    border: 1px solid #e0e0e0; 
+    color: #000; /* 純黑字體 */
+    font-weight: 600; /* 加粗 */
+}
+/* 數字欄位靠右對齊 */
+.data-table td:nth-child(n+3) { text-align: right; }
+/* 第一欄文字置中 */
+.data-table td:nth-child(1) { text-align: center; }
+
 .data-table tr:nth-child(even) { background-color: #f8f9fa; }
 .data-table tr:hover { background-color: #e8eaf6; }
-.data-table tfoot td { background-color: #e8eaf6; font-weight: bold; color: #1A237E; border-top: 2px solid #3f51b5; }
+.data-table tfoot td { 
+    background-color: #e8eaf6; 
+    font-weight: 900; /* 特粗 */
+    color: #D32F2F; /* 底部合計用紅色突顯 */
+    border-top: 2px solid #3f51b5; 
+}
 
 .rex-analysis { background: linear-gradient(to right, #fff3e0, #ffe0b2); border-left: 6px solid #ff9800; padding: 25px; border-radius: 8px; margin-top: 30px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
 .rex-title { font-size: 20px; font-weight: bold; color: #e65100; margin-bottom: 15px; display: flex; align-items: center; }
@@ -85,13 +116,13 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 24px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.48)...</div>
+    <div>🔄 系統啟動中 (v3.49)...</div>
     <div id="loading-detail" style="font-size: 16px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合 04競拍庫 與 00行情表...</div>
 </div>
 
 <div class="container" style="display: none;">
     <div class="header">
-        <h1>🤖 AI智能可轉債競拍系統 <span class="version-badge">v3.48 專業表格版</span></h1>
+        <h1>🤖 AI智能可轉債競拍系統 <span class="version-badge">v3.49 旗艦體驗版</span></h1>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -105,7 +136,12 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
             <form id="evaluationForm">
                 <div class="form-section">
                     <h3>📌 基本資料</h3>
-                    <div class="form-group"><label>CB名稱 *</label><input type="text" id="cbName" required placeholder="例如：台光電七"><div id="cbNameInfo" class="info-box"></div></div>
+                    <div class="form-group">
+                        <label>CB名稱 *</label>
+                        <input type="text" id="cbName" required placeholder="例如：金像電三 / 23683">
+                        <div id="cbSiblingInfo" class="sibling-history" style="display:none;"></div>
+                        <div id="cbNameInfo" class="info-box"></div>
+                    </div>
                     <div class="form-group"><label>股本 (億元) *</label><input type="number" id="capital" step="0.01" required placeholder="例如：33.80"><div id="capitalInfo" class="info-box"></div></div>
                     <div class="form-group"><label>產業分類 *</label><select id="industry" required><option value="">載入中...</option></select><div id="industryInfo" class="info-box"></div></div>
                     <div class="form-group"><label>發行券商</label><select id="broker"><option value="">載入中...</option></select><div id="brokerInfo" class="info-box"></div></div>
@@ -124,6 +160,10 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
                 </div>
                 <div class="form-section" style="background: linear-gradient(135deg, #fff9e6 0%, #ffe6cc 100%); border: 2px solid #ff9800; border-radius: 12px; padding: 20px; margin: 25px 0;">
                     <h3 style="color: #e65100;">⚖️ 主觀權重調整（選填）</h3>
+                    <div style="background: rgba(255,255,255,0.6); padding: 10px; border-radius: 8px; margin-bottom: 15px; font-size: 14px; color: #5d4037; line-height: 1.6;">
+                        <strong>💡 為什麼需要主觀權重？</strong><br>
+                        雖然 AI 統計能提供客觀數據，但投資市場往往受當下氛圍影響。如果您擁有豐富的競拍經驗，或對該標的有獨到見解，可在此加入您的「主觀判斷」來微調模型，讓最終價格更貼近您的預期。若無想法，維持 0 即可，系統將以純數據為準。
+                    </div>
                     <div class="form-group"><label>主觀權重比例 (%)</label><input type="number" id="subjectiveWeight" min="0" max="100" step="1" value="0"></div>
                     <div class="form-group"><label>主觀最低溢價率 (%)</label><input type="number" id="subjectiveLowPremium" step="0.1" value="0"></div>
                     <div class="form-group"><label>主觀平均溢價率 (%)</label><input type="number" id="subjectiveAvgPremium" step="0.1" value="0"></div>
@@ -144,8 +184,8 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
         
         <div class="result-panel">
             <div id="welcomeMsg" class="welcome-message">
-                <h2>歡迎使用AI智能競拍評估系統 (v3.48)</h2>
-                <p style="margin-top:10px; color:#666;">✅ 表格全面升級：拆分加權最低/平均，底部自動合計<br>✅ 邏輯同步：確保維度資料與輸入一致</p>
+                <h2>歡迎使用AI智能競拍評估系統 (v3.49)</h2>
+                <p style="margin-top:10px; color:#666;">✅ 新增：同公司歷史競拍數據回顧<br>✅ 優化：表格手機版美觀設計 (對稱標題/黑字加粗)</p>
                 <div class="stats-summary" id="statsSummary"></div>
             </div>
             <div id="evaluationResult" class="evaluation-result"></div>
@@ -240,6 +280,17 @@ function getRangeLabel(category, val) {
         return "大於 200 元";
     }
     return val;
+}
+
+// 擷取股票核心名稱 (去除 一二三、KY、數字等)
+function extractRootName(fullName) {
+    if (!fullName) return "";
+    // 移除數字 (代號)
+    let name = fullName.replace(/[0-9]/g, '');
+    // 移除常見後綴 (一二三四五六七八九十, KY, etc.)
+    name = name.replace(/[一二三四五六七八九十]+$/, ''); 
+    name = name.replace(/KY/i, '');
+    return name.trim();
 }
 
 let statistics = { '維度統計': { '產業': {}, '發行券商': {} }, '資料期間': {} };
@@ -467,7 +518,6 @@ function generateStandardCard(data, titleOverride=null) {
     if (!data) return `<div class="stat-row" style="color:#999;">查無資料 (已使用全市場均值)</div>`;
     
     const valStr = (v, s='') => (v!==undefined && v!==null && v!=='' && v!==0) ? `${safeFixed(v,2)}${s}` : '-';
-    
     const h = safeFloat(data['平均掛牌最高']);
     const l = safeFloat(data['平均掛牌最低']);
     let amp = '-';
@@ -518,7 +568,38 @@ function bindInputEvents() {
     const show = (id, html) => { const el = document.getElementById(id); el.innerHTML = html||''; el.style.display = html?'block':'none'; };
     
     document.getElementById('cbName').addEventListener('input', function() {
-        const val = this.value.trim(); if (!val) { show('cbNameInfo', null); return; }
+        const val = this.value.trim(); 
+        const siblingDiv = document.getElementById('cbSiblingInfo');
+        
+        // 1. 處理同公司歷史競拍數據 (Siblings)
+        if (val.length >= 2) {
+            const rootName = extractRootName(val);
+            const siblings = auctionRawData.filter(d => {
+                // 找出名稱包含 rootName 但不完全等於輸入值的 (例如輸入 金像電三，找出 金像電二)
+                // 或者輸入 2368，找出所有代號包含 2368 的
+                return (d.name && d.name.includes(rootName) && d.name !== val) || 
+                       (d.id && d.id.includes(val) && d.id !== val);
+            }).slice(0, 3); // 取最近 3 筆
+
+            if (siblings.length > 0) {
+                let html = `<div style="margin-bottom:5px;font-weight:bold;color:#e65100;">📜 歷史同名/同代號競拍參考：</div>`;
+                siblings.forEach(s => {
+                    html += `<div class="sibling-item">
+                        <span class="sibling-name">${s.name}</span>
+                        <span class="sibling-val">均得: ${safeFixed(s.avgBidPrice)} (溢${safeFixed(s.avgPremium)}%)</span>
+                    </div>`;
+                });
+                siblingDiv.innerHTML = html;
+                siblingDiv.style.display = 'block';
+            } else {
+                siblingDiv.style.display = 'none';
+            }
+        } else {
+            siblingDiv.style.display = 'none';
+        }
+
+        // 2. 處理本檔資料 (既有邏輯)
+        if (!val) { show('cbNameInfo', null); return; }
         const found = cbNameMap[val] || Object.values(cbDatabase).find(d => d.name && d.name.includes(val));
         if (found) {
             const h = safeFloat(found.marketHigh), l = safeFloat(found.marketLow);
@@ -623,7 +704,6 @@ function calculateEvaluation(d) {
     const subR = (d.subjectiveWeight||0)/100, objR = 1-subR;
     const tL = (wL*objR)+((d.subjectiveLowPremium||0)*subR), tA = (wA*objR)+((d.subjectiveAvgPremium||0)*subR), gap = tA-tL;
     
-    // 計算四種價格
     const p1 = theo*(1+tL/100);
     const p2 = theo*(1+tA/100);
     const p3 = theo*(1+(tA+gap)/100);
@@ -641,10 +721,9 @@ function displayResult(r) {
     const div = document.getElementById('evaluationResult'); div.className = 'evaluation-result active';
     let rows = ''; const nm={'industry':'產業','broker':'券商','capital':'股本','size':'規模','rating':'信評','guarantee':'擔保','years':'年期','conversion':'轉價'};
     
-    // 生成表格內容：增加「加權最低」與「加權平均」欄位
     for(const[k,d] of Object.entries(r.dimensions)) {
         rows+=`<tr>
-            <td>${nm[k]}</td>
+            <td>${nm[k]}<br>分析</td>
             <td>${d.displayRange || d.range}</td>
             <td>${safeFixed(d.low)}%</td>
             <td>${safeFixed(d.avg)}%</td>
@@ -654,11 +733,10 @@ function displayResult(r) {
         </tr>`;
     }
     
-    // 主觀權重列
     if(r.inputData.subjectiveWeight>0) {
         rows+=`<tr style="background:#fff3e0">
-            <td>主觀</td>
-            <td>自訂</td>
+            <td>主觀<br>權重</td>
+            <td>自訂<br>輸入</td>
             <td>${r.inputData.subjectiveLowPremium}%</td>
             <td>${r.inputData.subjectiveAvgPremium}%</td>
             <td>${r.inputData.subjectiveWeight}%</td>
@@ -667,10 +745,9 @@ function displayResult(r) {
         </tr>`;
     }
 
-    // 底部合計列 (平均合計)
     rows+=`<tfoot><tr>
         <td></td>
-        <td style="text-align:right">平均合計</td>
+        <td style="text-align:right">平均<br>合計</td>
         <td>-</td>
         <td>-</td>
         <td>100%</td>
@@ -694,7 +771,7 @@ function displayResult(r) {
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th>維度</th><th>條件</th><th>最低溢價</th><th>平均溢價</th><th>權重</th><th>加權最低</th><th>加權平均</th>
+                        <th>維度<br>分析</th><th>條件<br>內容</th><th>最低<br>溢價</th><th>平均<br>溢價</th><th>權重<br>比例</th><th>加權<br>最低</th><th>加權<br>平均</th>
                     </tr>
                 </thead>
                 <tbody>${rows}</tbody>

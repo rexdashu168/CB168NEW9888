@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.47 (邏輯同步版)</title>
+<title>AI智能可轉債競拍系統 v3.48 (專業表格版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="embedded_data.js" onerror="console.warn('embedded_data.js not found, using defaults.')"></script>
 
@@ -13,10 +13,10 @@
 body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
 .container { max-width: 1600px; margin: 0 auto; }
 .header { background: white; border-radius: 15px; padding: 30px; margin-bottom: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); position: relative; overflow: hidden; }
-.header::before { content: ""; position: absolute; top: 0; left: 0; width: 10px; height: 100%; background: #3F51B5; }
+.header::before { content: ""; position: absolute; top: 0; left: 0; width: 10px; height: 100%; background: #9C27B0; }
 .header h1 { color: #667eea; font-size: 32px; margin-bottom: 10px; }
 .header .subtitle { color: #666; font-size: 16px; display: flex; align-items: center; gap: 10px; }
-.version-badge { display: inline-block; background: #303F9F; color: white; padding: 4px 12px; border-radius: 20px; font-size: 14px; font-weight: bold; box-shadow: 0 2px 5px rgba(48, 63, 159, 0.3); }
+.version-badge { display: inline-block; background: #7B1FA2; color: white; padding: 4px 12px; border-radius: 20px; font-size: 14px; font-weight: bold; box-shadow: 0 2px 5px rgba(123, 31, 162, 0.3); }
 
 .evaluation-container { display: grid; grid-template-columns: 450px 1fr; gap: 20px; }
 .input-panel { background: white; border-radius: 15px; padding: 30px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); height: fit-content; position: sticky; top: 20px; }
@@ -73,6 +73,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 .data-table td { padding: 12px 10px; text-align: center; border: 1px solid #e0e0e0; color: #333; }
 .data-table tr:nth-child(even) { background-color: #f8f9fa; }
 .data-table tr:hover { background-color: #e8eaf6; }
+.data-table tfoot td { background-color: #e8eaf6; font-weight: bold; color: #1A237E; border-top: 2px solid #3f51b5; }
 
 .rex-analysis { background: linear-gradient(to right, #fff3e0, #ffe0b2); border-left: 6px solid #ff9800; padding: 25px; border-radius: 8px; margin-top: 30px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
 .rex-title { font-size: 20px; font-weight: bold; color: #e65100; margin-bottom: 15px; display: flex; align-items: center; }
@@ -84,13 +85,13 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 24px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.47)...</div>
+    <div>🔄 系統啟動中 (v3.48)...</div>
     <div id="loading-detail" style="font-size: 16px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合 04競拍庫 與 00行情表...</div>
 </div>
 
 <div class="container" style="display: none;">
     <div class="header">
-        <h1>🤖 AI智能可轉債競拍系統 <span class="version-badge">v3.47 邏輯同步版</span></h1>
+        <h1>🤖 AI智能可轉債競拍系統 <span class="version-badge">v3.48 專業表格版</span></h1>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -143,8 +144,8 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
         
         <div class="result-panel">
             <div id="welcomeMsg" class="welcome-message">
-                <h2>歡迎使用AI智能競拍評估系統 (v3.47)</h2>
-                <p style="margin-top:10px; color:#666;">✅ 邏輯同步修正：維度表直接使用您的選擇，不再反查<br>✅ 確保「券商」與「產業」欄位與輸入一致</p>
+                <h2>歡迎使用AI智能競拍評估系統 (v3.48)</h2>
+                <p style="margin-top:10px; color:#666;">✅ 表格全面升級：拆分加權最低/平均，底部自動合計<br>✅ 邏輯同步：確保維度資料與輸入一致</p>
                 <div class="stats-summary" id="statsSummary"></div>
             </div>
             <div id="evaluationResult" class="evaluation-result"></div>
@@ -204,7 +205,6 @@ function getWeightCoefficient(category, value) {
     return weights[category][value] ? weights[category][value].coefficient : 1.0;
 }
 
-// 這裡保留函數但不依賴它來做顯示
 function getBrokerName(cbName) {
     const found = auctionRawData.find(d => d['name'] === cbName);
     if (found && found['broker']) return found['broker'];
@@ -246,7 +246,7 @@ let statistics = { '維度統計': { '產業': {}, '發行券商': {} }, '資料
 let cbDatabase = {}, auctionRawData = [], globalMarketStats = { low: 0, avg: 0 }, cbNameMap = {};
 
 // ==========================================
-// 2. 資料讀取 (v3.47 保持不變)
+// 2. 資料讀取
 // ==========================================
 async function loadStatistics() {
     const loadingDiv = document.getElementById('loading');
@@ -599,7 +599,6 @@ function generateRexCommentary(r) {
 
 function calculateEvaluation(d) {
     const theo = (d.stockPrice/d.conversionPrice)*100;
-    // 【關鍵修正】直接使用表單輸入的值，不再去反查 (因為新案子查不到)
     const brokerName = d.broker || ""; 
     
     const dims = [
@@ -642,11 +641,42 @@ function displayResult(r) {
     const div = document.getElementById('evaluationResult'); div.className = 'evaluation-result active';
     let rows = ''; const nm={'industry':'產業','broker':'券商','capital':'股本','size':'規模','rating':'信評','guarantee':'擔保','years':'年期','conversion':'轉價'};
     
+    // 生成表格內容：增加「加權最低」與「加權平均」欄位
     for(const[k,d] of Object.entries(r.dimensions)) {
-        rows+=`<tr><td>${nm[k]}</td><td>${d.displayRange || d.range}</td><td>${safeFixed(d.low)}%</td><td>${safeFixed(d.avg)}%</td><td>${safeFixed(d.weight*100,0)}%</td><td>${safeFixed(d.weightedAvg)}</td></tr>`;
+        rows+=`<tr>
+            <td>${nm[k]}</td>
+            <td>${d.displayRange || d.range}</td>
+            <td>${safeFixed(d.low)}%</td>
+            <td>${safeFixed(d.avg)}%</td>
+            <td>${safeFixed(d.weight*100,0)}%</td>
+            <td>${safeFixed(d.weightedLow)}</td>
+            <td>${safeFixed(d.weightedAvg)}</td>
+        </tr>`;
     }
-    if(r.inputData.subjectiveWeight>0) rows+=`<tr style="background:#fff3e0"><td>主觀</td><td>自訂</td><td>${r.inputData.subjectiveLowPremium}%</td><td>${r.inputData.subjectiveAvgPremium}%</td><td>${r.inputData.subjectiveWeight}%</td><td>${r.weightedSubjectiveAvg}</td></tr>`;
-    rows+=`<tr style="background:#667eea;color:white"><td colspan="6" style="text-align:right">總計平均溢價: <b>${r.totalAvgPremium}%</b></td></tr>`;
+    
+    // 主觀權重列
+    if(r.inputData.subjectiveWeight>0) {
+        rows+=`<tr style="background:#fff3e0">
+            <td>主觀</td>
+            <td>自訂</td>
+            <td>${r.inputData.subjectiveLowPremium}%</td>
+            <td>${r.inputData.subjectiveAvgPremium}%</td>
+            <td>${r.inputData.subjectiveWeight}%</td>
+            <td>${r.weightedSubjectiveLow}</td>
+            <td>${r.weightedSubjectiveAvg}</td>
+        </tr>`;
+    }
+
+    // 底部合計列 (平均合計)
+    rows+=`<tfoot><tr>
+        <td></td>
+        <td style="text-align:right">平均合計</td>
+        <td>-</td>
+        <td>-</td>
+        <td>100%</td>
+        <td>${r.totalLowPremium}%</td>
+        <td>${r.totalAvgPremium}%</td>
+    </tr></tfoot>`;
     
     div.innerHTML = `
     <div class="result-header"><h2>${r.cbName}</h2><div class="subtitle">AI 評估結果</div></div>
@@ -661,7 +691,14 @@ function displayResult(r) {
         </div>
         <div class="detail-section" style="flex:2; min-width:300px;">
             <h3>📐 維度權重分析</h3>
-            <table class="data-table"><thead><tr><th>維度</th><th>條件</th><th>最低溢價</th><th>平均溢價</th><th>權重</th><th>加權貢獻</th></tr></thead><tbody>${rows}</tbody></table>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>維度</th><th>條件</th><th>最低溢價</th><th>平均溢價</th><th>權重</th><th>加權最低</th><th>加權平均</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>
         </div>
     </div>
 
@@ -708,7 +745,6 @@ document.getElementById('evaluationForm').addEventListener('submit', function(e)
             years: document.getElementById('years').value, guarantee: document.getElementById('guarantee').value, rating: document.getElementById('rating').value,
             capital: parseFloat(document.getElementById('capital').value), stockPrice: parseFloat(document.getElementById('stockPrice').value), conversionPrice: parseFloat(document.getElementById('conversionPrice').value),
             subjectiveWeight: parseFloat(document.getElementById('subjectiveWeight').value)||0, subjectiveLowPremium: parseFloat(document.getElementById('subjectiveLowPremium').value)||0, subjectiveAvgPremium: parseFloat(document.getElementById('subjectiveAvgPremium').value)||0,
-            // 確保傳入前端選單的值
             broker: document.getElementById('broker').value 
         }));
     } catch (err) {

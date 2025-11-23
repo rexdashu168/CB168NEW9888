@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>AI智能可轉債競拍系統 v3.52 (穩定修復版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
-<script src="embedded_data.js" onerror="console.warn('embedded_data.js not found, using defaults.')"></script>
 
 <style>
 /* ================= 風格設定 (v3.52 Mobile Optimized) ================= */
@@ -16,7 +15,7 @@ body {
     min-height: 100vh; 
     padding: 12px; 
     color: #333;
-    font-size: 17px; /* 基礎字體加大 */
+    font-size: 17px;
     line-height: 1.5;
 }
 .container { max-width: 800px; margin: 0 auto; }
@@ -30,6 +29,18 @@ body {
 /* Input Panel */
 .input-panel { background: white; border-radius: 16px; padding: 20px; box-shadow: 0 2px 15px rgba(0,0,0,0.03); margin-bottom: 20px; }
 .input-panel h2 { color: #1a237e; font-size: 22px; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #e8eaf6; font-weight: 800; }
+
+/* 統計總數顯示區 (修復點) */
+#statsSummary {
+    background: #e8eaf6; 
+    color: #283593; 
+    padding: 10px; 
+    border-radius: 8px; 
+    margin-bottom: 20px; 
+    text-align: center; 
+    font-weight: bold;
+    border: 1px dashed #9fa8da;
+}
 
 .form-section { margin-bottom: 35px; }
 .form-section h3 { color: #333; font-size: 19px; margin-bottom: 15px; font-weight: 800; border-left: 5px solid #3f51b5; padding-left: 10px; }
@@ -57,7 +68,7 @@ body {
 }
 .input-guide b { color: #d32f2f; }
 
-/* 歷史競拍卡片 (History Card Pro) */
+/* 歷史競拍卡片 */
 .history-list { display: flex; flex-direction: column; gap: 15px; margin-top: 15px; }
 .h-card { 
     background: white; border: 2px solid #e0e0e0; border-radius: 12px; padding: 15px; 
@@ -71,8 +82,8 @@ body {
 .h-row { display: flex; justify-content: space-between; border-bottom: 1px dashed #eceff1; padding-bottom: 5px; align-items: center; }
 .h-label { color: #78909c; font-size: 15px; }
 .h-val { font-weight: 700; color: #37474f; font-size: 17px; }
-.h-val.em { color: #d32f2f; } /* 強調紅字 */
-.h-val.mk { color: #2e7d32; } /* 市場行情綠字 */
+.h-val.em { color: #d32f2f; }
+.h-val.mk { color: #2e7d32; }
 
 /* 統計小卡 */
 .info-box { background: #e8f5e9; padding: 15px; border-radius: 10px; margin-top: 10px; border: 1px solid #c8e6c9; display: none; }
@@ -88,7 +99,7 @@ body {
     margin-top: 25px; box-shadow: 0 5px 15px rgba(63, 81, 181, 0.3);
 }
 
-/* 結果表格 (Mobile Pro Table) */
+/* 結果表格 */
 .result-panel { background: white; border-radius: 16px; padding: 20px; margin-bottom: 30px; display: none; }
 .result-panel.active { display: block; animation: popIn 0.4s; }
 @keyframes popIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
@@ -96,7 +107,6 @@ body {
 .result-header { text-align: center; background: #e8eaf6; padding: 20px; border-radius: 12px; margin-bottom: 25px; border: 2px solid #c5cae9; }
 .result-header h2 { color: #1a237e; font-size: 28px; font-weight: 900; margin: 0; }
 
-/* 表格優化：標題強制換行，內容欄加寬 */
 .data-table { width: 100%; border-collapse: collapse; font-size: 16px; table-layout: fixed; }
 .data-table th { 
     background: #283593; color: white; padding: 8px 2px; 
@@ -108,19 +118,14 @@ body {
     font-weight: 700; color: #263238; vertical-align: middle;
     word-wrap: break-word;
 }
-
-/* 欄寬配置 - 關鍵優化 */
-.data-table th:nth-child(1) { width: 12%; } /* 維度 */
-.data-table th:nth-child(2) { width: 30%; } /* 條件內容 (加大空間) */
-.data-table th:nth-child(n+3) { width: 14%; } /* 數字欄 */
-
+.data-table th:nth-child(1) { width: 12%; }
+.data-table th:nth-child(2) { width: 30%; }
+.data-table th:nth-child(n+3) { width: 14%; }
 .data-table td:nth-child(1) { text-align: center; background: #f5f5f5; color: #1a237e; font-size: 15px; }
 .data-table td:nth-child(2) { text-align: left; padding-left: 6px; font-size: 15px; }
 .data-table td:nth-child(n+3) { text-align: right; padding-right: 4px; font-size: 16px; }
-
 .data-table tfoot td { background: #e8eaf6; color: #b71c1c; border-top: 2px solid #283593; font-size: 18px; font-weight: 900; }
 
-/* 策略卡片 */
 .price-grid { display: grid; gap: 15px; margin-top: 20px; }
 .strategy-card { border: 3px solid; border-radius: 12px; padding: 20px; text-align: center; background: #fff; }
 .strategy-card h4 { font-size: 20px; margin-bottom: 5px; font-weight: 900; }
@@ -129,15 +134,14 @@ body {
 .balanced { border-color: #ff9800; background: #fff3e0; } .balanced h4 { color: #e65100; }
 .aggressive { border-color: #f44336; background: #ffebee; } .aggressive h4 { color: #c62828; }
 .ultimate { border-color: #9c27b0; background: #f3e5f5; } .ultimate h4 { color: #6a1b9a; }
-
 .note-box { background: #fff8e1; padding: 15px; border-radius: 10px; border: 1px solid #ffecb3; color: #5d4037; font-size: 15px; line-height: 1.6; margin-bottom: 20px; }
 </style>
 </head>
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #1565C0 0%, #42A5F5 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.52)...</div>
-    <div id="loading-detail" style="font-size: 16px; margin-top: 10px; opacity: 0.9;">正在載入 04競拍 與 00行情 資料庫...</div>
+    <div>🔄 系統啟動中 (v3.52)</div>
+    <div id="loading-detail" style="font-size: 16px; margin-top: 10px; opacity: 0.9;">正在連接 GitHub 資料庫 (00_CB.xlsx)...</div>
 </div>
 
 <div class="container" style="display: none;">
@@ -149,6 +153,9 @@ body {
     <div class="evaluation-container">
         <div class="input-panel">
             <h2>📋 輸入標的資料</h2>
+            
+            <div id="statsSummary">資料庫載入中...</div>
+
             <form id="evaluationForm">
                 <div class="form-section">
                     <h3>📌 基本資料 (智慧搜尋)</h3>
@@ -156,8 +163,8 @@ body {
                         <label>CB名稱 / 代號 *</label>
                         <input type="text" id="cbName" required placeholder="例：2368 或 金像電">
                         <div class="input-guide">
-                            👉 輸入 <b>股票代號 (4碼)</b>：顯示該公司所有歷史競拍 (如 2368 → 金像電一、二、三)<br>
-                            👉 輸入 <b>CB代號 (5碼)</b>：精準鎖定單一檔 (如 23683 → 金像電三)
+                            👉 輸入 <b>股票代號 (4碼)</b>：顯示該公司所有歷史競拍<br>
+                            👉 輸入 <b>CB代號 (5碼)</b>：精準鎖定單一檔
                         </div>
                         <div id="historyContainer" class="history-list"></div>
                         <div id="cbNameInfo" class="info-box"></div>
@@ -182,7 +189,7 @@ body {
                     <h3 style="color: #e65100; border-left-color: #ff9800;">⚖️ 主觀權重 (經驗微調)</h3>
                     <div class="note-box">
                         <strong>💡 為什麼需要主觀權重？</strong><br>
-                        AI 依賴歷史數據，但市場氛圍瞬息萬變。若您擁有豐富競拍經驗或對此標的有獨到見解（例如：看好後市大漲），可在此輸入權重（如 10%~30%）與預期溢價，讓系統融合您的智慧與大數據，計算出更貼近實戰的價格。若無想法，維持 0 即可。
+                        AI 依賴歷史數據，但市場氛圍瞬息萬變。若您擁有豐富競拍經驗或對此標的有獨到見解，可在此輸入權重（如 10%~30%），讓系統融合您的智慧。
                     </div>
                     <div class="form-group"><label>主觀權重比例 (%)</label><input type="number" id="subjectiveWeight" min="0" max="100" step="1" value="0"></div>
                     <div class="form-group"><label>主觀最低溢價率 (%)</label><input type="number" id="subjectiveLowPremium" step="0.1" value="0"></div>
@@ -204,9 +211,9 @@ body {
 </div>
 
 <script>
-// 確保全域變數正確宣告
+// 全域變數宣告
 window.cbDatabase = {};
-window.auctionRawData = []; // 核心資料庫
+window.auctionRawData = []; 
 window.globalMarketStats = { low: 0, avg: 0 };
 window.cbNameMap = {};
 window.statistics = { '維度統計': { '產業': {}, '發行券商': {} }, '資料期間': {} };
@@ -223,7 +230,6 @@ const FIELD_ALIASES = {
     'minBidPrice': ['最低得標', '最低得標價格', '最低得標價'], 'lowPremium': ['最低溢價', '最低得標價格_溢價率', '最低得標溢價', '最低溢價(%)'],
     'avgBidPrice': ['平均得標', '平均得標價格', '得標加權平均價格', '平均得標價'], 'avgPremium': ['平均溢價', '得標加權平均價格_溢價率', '平均得標溢價', '平均溢價(%)'],
     'marketHigh': ['掛牌最高', '掛牌最高價'], 'marketLow': ['掛牌最低', '掛牌最低價'],
-    // 歷史卡片欄位
     'closeDate': ['截標日', '開標日期'], 'bidVol': ['投標張數', '競拍張數'], 'floorPrice': ['底標價', '底標'], 
     'closePrice': ['截標收盤', '截標收盤價'], 'theoPrice': ['理論價']
 };
@@ -245,6 +251,7 @@ function safeFloat(val) { const num = parseFloat(val); return isNaN(num) ? 0 : n
 function safeFixed(val, digits=2) { const num = parseFloat(val); if (isNaN(num)) return '-'; return num.toFixed(digits); }
 
 function getWeightCoefficient(category, value) {
+    // 預留權重係數介面
     const weights = (typeof window.WEIGHT_COEFFICIENTS !== 'undefined') ? window.WEIGHT_COEFFICIENTS : {};
     if (!weights[category]) return 1.0;
     return weights[category][value] ? weights[category][value].coefficient : 1.0;
@@ -269,14 +276,22 @@ function getRangeLabel(category, val) {
 }
 
 // ==========================================
-// 2. 資料讀取
+// 2. 資料讀取 (GitHub Raw / Local)
 // ==========================================
 async function loadStatistics() {
     const loadingDiv = document.getElementById('loading');
     try {
-        const response = await fetch('00_CB.xlsx');
-        if (!response.ok) throw new Error("找不到 00_CB.xlsx");
-        const workbook = XLSX.read(await response.arrayBuffer(), { type: 'array' });
+        // 設定檔名，如果您將檔案放在 GitHub，fetch 會自動抓取相對路徑
+        const targetFile = '00_CB.xlsx'; 
+        
+        // 加上時間戳記避免快取
+        const timestamp = new Date().getTime();
+        const response = await fetch(`${targetFile}?t=${timestamp}`);
+        
+        if (!response.ok) throw new Error(`找不到 ${targetFile}，請確認檔案已上傳到 GitHub。`);
+        
+        const arrayBuffer = await response.arrayBuffer();
+        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
         
         const getSheetData = (keywords) => { 
             const n = workbook.SheetNames.find(x => keywords.some(k => x.includes(k)));
@@ -288,9 +303,9 @@ async function loadStatistics() {
         const sheetAuction = getSheetData(['04', '所有CB競拍']);
         const sheetHighLow = getSheetData(['00', '掛牌', '名稱過濾']);
         
-        if (!sheetAuction) throw new Error("缺少競拍資料庫(04)");
-        const hasHighLow = (sheetHighLow && sheetHighLow.length > 0);
+        if (!sheetAuction) throw new Error("Excel 中找不到「04競拍」相關工作表");
 
+        const hasHighLow = (sheetHighLow && sheetHighLow.length > 0);
         const highLowMap = {};
         if (hasHighLow) {
             sheetHighLow.forEach(row => {
@@ -299,7 +314,6 @@ async function loadStatistics() {
             });
         }
 
-        // 寫入全域變數
         window.auctionRawData = sheetAuction.map(row => {
             let rawId = row['CB代號'] || row['代號']; 
             if (!rawId) return null;
@@ -332,11 +346,15 @@ async function loadStatistics() {
         autoGenerateStatistics(); 
         calculateGlobalMarketStats(); 
         initializeUI();
+        
         loadingDiv.style.display = 'none'; 
         document.querySelector('.container').style.display = 'block';
+        
     } catch (error) { 
         console.error(error); 
-        loadingDiv.innerHTML = `<div style="padding:20px;background:white;color:red;">${error.message}</div>`; 
+        loadingDiv.innerHTML = `<div style="padding:20px;background:white;color:red;border-radius:10px;text-align:center;">
+            <h3>⚠️ 資料讀取失敗</h3><br>${error.message}<br><br>請確認 GitHub 上是否存在 00_CB.xlsx
+        </div>`; 
     }
 }
 
@@ -493,14 +511,25 @@ function generateStandardCard(data, title) {
 }
 
 function initializeUI() {
-    populateSelect('industry', window.statistics['維度統計']['產業']); populateSelect('broker', window.statistics['維度統計']['發行券商']);
-    showStatsSummary(); bindInputEvents();
+    populateSelect('industry', window.statistics['維度統計']['產業']); 
+    populateSelect('broker', window.statistics['維度統計']['發行券商']);
+    showStatsSummary(); 
+    bindInputEvents();
 }
 function populateSelect(id, dataObj) {
     const sel = document.getElementById(id); while (sel.options.length > 1) sel.remove(1);
     Object.keys(dataObj).sort((a,b)=>(dataObj[b].count||0)-(dataObj[a].count||0)).forEach(k=>{ const o=document.createElement('option'); o.value=k; o.text=`${k} (${dataObj[k].count})`; sel.add(o); });
 }
-function showStatsSummary() { document.getElementById('statsSummary').innerHTML = `資料總數：${Object.keys(window.cbDatabase).length} 檔`; }
+
+// 【修復】這裡加入了安全檢查，確保 id 存在才寫入
+function showStatsSummary() { 
+    const el = document.getElementById('statsSummary');
+    if (el) {
+        el.innerHTML = `📚 資料庫載入完成：共 ${Object.keys(window.cbDatabase).length} 檔歷史數據`; 
+    } else {
+        console.warn("statsSummary element missing!");
+    }
+}
 
 function bindInputEvents() {
     const show = (id, html) => { const el = document.getElementById(id); el.innerHTML = html||''; el.style.display = html?'block':'none'; };
@@ -511,37 +540,20 @@ function bindInputEvents() {
             const container = document.getElementById('historyContainer');
             container.innerHTML = '';
             
-            // 安全檢查：確保資料庫已載入
-            if (!window.auctionRawData || window.auctionRawData.length === 0) {
-                return; 
-            }
+            if (!window.auctionRawData || window.auctionRawData.length === 0) return; 
 
             if (val.length >= 2) {
                 let matches = [];
-                // 1. 輸入 4 碼 (2368)
-                if (/^\d{4}$/.test(val)) {
-                    matches = window.auctionRawData.filter(d => d.id.startsWith(val));
-                } 
-                // 2. 輸入 5 碼 (23683)
-                else if (/^\d{5}$/.test(val)) {
-                    matches = window.auctionRawData.filter(d => d.id === val);
-                }
-                // 3. 輸入中文
-                else {
-                    matches = window.auctionRawData.filter(d => d.name.includes(val));
-                }
+                if (/^\d{4}$/.test(val)) matches = window.auctionRawData.filter(d => d.id.startsWith(val));
+                else if (/^\d{5}$/.test(val)) matches = window.auctionRawData.filter(d => d.id === val);
+                else matches = window.auctionRawData.filter(d => d.name.includes(val));
                 
                 matches.sort((a, b) => a.id.localeCompare(b.id));
 
-                if (matches.length > 0) {
-                    container.innerHTML = matches.map(d => renderHistoryCard(d)).join('');
-                } else {
-                    container.innerHTML = `<div style="padding:15px;color:#78909c;text-align:center;font-weight:bold;">無符合資料</div>`;
-                }
+                if (matches.length > 0) container.innerHTML = matches.map(d => renderHistoryCard(d)).join('');
+                else container.innerHTML = `<div style="padding:15px;color:#78909c;text-align:center;font-weight:bold;">無符合資料</div>`;
             }
-        } catch(e) {
-            console.error("Search error:", e);
-        }
+        } catch(e) { console.error("Search error:", e); }
     });
 
     const bind = (id, cat) => {

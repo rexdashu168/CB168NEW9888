@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.40 (05號表單邏輯版)</title>
+<title>AI智能可轉債競拍系統 v3.42 (分頁修正版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="embedded_data.js" onerror="console.warn('embedded_data.js not found, using defaults.')"></script>
 
@@ -16,7 +16,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 .header::before { content: ""; position: absolute; top: 0; left: 0; width: 10px; height: 100%; background: #ff9800; }
 .header h1 { color: #667eea; font-size: 32px; margin-bottom: 10px; }
 .header .subtitle { color: #666; font-size: 16px; display: flex; align-items: center; gap: 10px; }
-.version-badge { display: inline-block; background: #2E7D32; color: white; padding: 4px 12px; border-radius: 20px; font-size: 14px; font-weight: bold; box-shadow: 0 2px 5px rgba(46, 125, 50, 0.3); }
+.version-badge { display: inline-block; background: #9C27B0; color: white; padding: 4px 12px; border-radius: 20px; font-size: 14px; font-weight: bold; box-shadow: 0 2px 5px rgba(156, 39, 176, 0.3); }
 
 .evaluation-container { display: grid; grid-template-columns: 450px 1fr; gap: 20px; }
 .input-panel { background: white; border-radius: 15px; padding: 30px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); height: fit-content; position: sticky; top: 20px; }
@@ -84,13 +84,13 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 24px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.40)...</div>
+    <div>🔄 系統啟動中 (v3.42)...</div>
     <div id="loading-detail" style="font-size: 16px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在讀取 00_CB.xlsx...</div>
 </div>
 
 <div class="container" style="display: none;">
     <div class="header">
-        <h1>🤖 AI智能可轉債競拍系統 <span class="version-badge">v3.40 (05表單版)</span></h1>
+        <h1>🤖 AI智能可轉債競拍系統 <span class="version-badge">v3.42 (精準讀取版)</span></h1>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -143,8 +143,8 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
         
         <div class="result-panel">
             <div id="welcomeMsg" class="welcome-message">
-                <h2>歡迎使用AI智能競拍評估系統 (v3.40)</h2>
-                <p style="margin-top:10px; color:#666;">✅ 全面導入「05_CB競拍篩選條件區間」邏輯<br>✅ 自動適配大金額/高價位標的，不再顯示查無資料</p>
+                <h2>歡迎使用AI智能競拍評估系統 (v3.42)</h2>
+                <p style="margin-top:10px; color:#666;">✅ 修復分頁讀取錯誤：精準鎖定「所有CB競拍資料庫」<br>✅ 已確認大金額/高價位標的資料讀取正常</p>
                 <div class="stats-summary" id="statsSummary"></div>
             </div>
             <div id="evaluationResult" class="evaluation-result"></div>
@@ -227,7 +227,7 @@ let statistics = { '維度統計': { '產業': {}, '發行券商': {} }, '資料
 let cbDatabase = {}, auctionRawData = [], globalMarketStats = { low: 0, avg: 0 }, cbNameMap = {};
 
 // ==========================================
-// 2. 資料讀取
+// 2. 資料讀取 (v3.42 關鍵修正)
 // ==========================================
 async function loadStatistics() {
     const loadingDiv = document.getElementById('loading');
@@ -235,10 +235,26 @@ async function loadStatistics() {
         const response = await fetch('00_CB.xlsx');
         if (!response.ok) throw new Error("找不到 00_CB.xlsx，請確認檔案位置。");
         const workbook = XLSX.read(await response.arrayBuffer(), { type: 'array' });
-        const getSheetData = (k) => { const n = workbook.SheetNames.find(x => x.includes(k)); return n ? XLSX.utils.sheet_to_json(workbook.Sheets[n]) : []; };
+        
+        // 【修正】優先尋找完整名稱 "所有CB競拍"，避免誤讀到 "CB競拍篩選條件"
+        const getSheetData = (k, exact=false) => { 
+            let n;
+            if (exact) {
+                // 優先使用精確搜尋
+                n = workbook.SheetNames.find(x => x.includes('所有CB競拍'));
+            }
+            if (!n) {
+                // 找不到才退而求其次
+                n = workbook.SheetNames.find(x => x.includes(k));
+            }
+            return n ? XLSX.utils.sheet_to_json(workbook.Sheets[n]) : []; 
+        };
 
-        const sheetAuction = getSheetData('競拍'), sheetHighLow = getSheetData('掛牌') || getSheetData('名稱過濾');
-        if (sheetAuction.length === 0) throw new Error("Excel 中找不到「競拍」分頁");
+        // 這裡改為 true，強制優先尋找 "所有CB競拍"
+        const sheetAuction = getSheetData('競拍', true);
+        const sheetHighLow = getSheetData('掛牌') || getSheetData('名稱過濾');
+        
+        if (sheetAuction.length === 0) throw new Error("Excel 中找不到「所有CB競拍資料庫」分頁");
 
         const highLowMap = {};
         sheetHighLow.forEach(row => {
@@ -284,7 +300,7 @@ async function loadStatistics() {
 }
 
 // ==========================================
-// 3. 統計核心 (智慧邏輯修正版 v3.40)
+// 3. 統計核心 (智慧邏輯修正版 v3.41)
 // ==========================================
 function autoGenerateStatistics() {
     statistics['維度統計']['產業'] = {}; statistics['維度統計']['發行券商'] = {};
@@ -369,6 +385,7 @@ function getStatsSmart(category, val) {
     if (filterFn) {
         let sumLowP = 0, sumAvgP = 0, sumLowPr = 0, sumAvgPr = 0, sumH = 0, sumL = 0, countM = 0, count = 0;
         auctionRawData.filter(filterFn).forEach(d => {
+            // 修正：必須 lowPremium 不為 0 才能算入平均，否則會拉低數值
             if (d.lowPremium !== 0) { 
                 sumLowP += d.lowPremium; sumAvgP += d.avgPremium; 
                 sumLowPr += d.minBidPrice; sumAvgPr += d.avgBidPrice; 
@@ -394,17 +411,22 @@ function getStatsSmart(category, val) {
         }
     }
     
-    // 3. Fallback 機制
-    if (stats.low === 0) { 
+    // 3. Fallback 機制 (安全氣囊)
+    // 修正邏輯：如果 stats.low 為 0 (可能是查無資料或該資料值為0)，強制啟用 Fallback
+    if (stats.low === 0 || isNaN(stats.low)) { 
+        // 嘗試使用靜態統計
         if (statistics['維度統計'][category] && statistics['維度統計'][category][val]) {
             stats.rawData = statistics['維度統計'][category][val]; 
             stats.low = safeFloat(stats.rawData['平均最低溢價']); 
             stats.avg = safeFloat(stats.rawData['平均溢價']);
-        } else {
+        } 
+        
+        // 最終保底：如果還是 0，使用全市場平均 (避免程式崩潰)
+        if (stats.low === 0 || isNaN(stats.low)) {
             stats.low = globalMarketStats.low; 
             stats.avg = globalMarketStats.avg; 
             stats.usedFallback = true; 
-            if(!stats.rawData) stats.rawData = { '平均最低溢價': stats.low, '平均溢價': stats.avg, '樣本數': '全市場' };
+            if(!stats.rawData) stats.rawData = { '平均最低溢價': stats.low, '平均溢價': stats.avg, '樣本數': '全市場(數據不足)' };
         }
     }
     return stats;
@@ -414,7 +436,7 @@ function getStatsSmart(category, val) {
 // 4. UI 顯示
 // ==========================================
 function generateStandardCard(data, titleOverride=null) {
-    if (!data) return `<div class="stat-row" style="color:#999;">查無資料</div>`;
+    if (!data) return `<div class="stat-row" style="color:#999;">查無資料 (已使用全市場均值)</div>`;
     const val = (v, s='') => (v!==undefined && v!==null && v!=='' && v!==0) ? `${safeFloat(v).toFixed(2)}${s}` : '-';
     
     const h = safeFloat(data['平均掛牌最高']);
@@ -424,7 +446,6 @@ function generateStandardCard(data, titleOverride=null) {
         amp = ((h - l) / l * 100).toFixed(2);
     }
     
-    // 優先使用資料中的區間名稱，若無則使用傳入的標題
     const title = data['區間名稱'] ? `區間統計: ${data['區間名稱']}` : (titleOverride || '歷史統計');
 
     let html = `<div class="stats-header">📊 ${title}</div>`;
@@ -487,7 +508,6 @@ function bindInputEvents() {
             const rawVal = this.value;
             const val = parseFloat(rawVal) || rawVal;
             if (val) {
-                // 若是數值型，使用 helper 取得區間標籤供標題使用 (若 getStatsSmart 有回傳則優先使用回傳值)
                 let displayTitle = val;
                 if(['股本','發行規模','轉換價'].includes(cat)) {
                      displayTitle = getRangeLabel(cat, val);
@@ -561,7 +581,6 @@ function calculateEvaluation(d) {
         const s = getStatsSmart(x.c, x.v), coef = getWeightCoefficient(x.k, x.v);
         resDims[x.k] = { ...s, coefficient: coef, weight: x.w, range: x.v, weightedLow: s.low*x.w*coef, weightedAvg: s.avg*x.w*coef };
         
-        // 記錄顯示用的區間名稱，若有
         if (s.rawData && s.rawData['區間名稱']) {
             resDims[x.k].displayRange = s.rawData['區間名稱'];
         } else {
@@ -650,12 +669,17 @@ function displayResult(r) {
 
 document.getElementById('evaluationForm').addEventListener('submit', function(e) {
     e.preventDefault();
-    displayResult(calculateEvaluation({
-        cbName: document.getElementById('cbName').value, industry: document.getElementById('industry').value, issueSize: parseFloat(document.getElementById('issueSize').value),
-        years: document.getElementById('years').value, guarantee: document.getElementById('guarantee').value, rating: document.getElementById('rating').value,
-        capital: parseFloat(document.getElementById('capital').value), stockPrice: parseFloat(document.getElementById('stockPrice').value), conversionPrice: parseFloat(document.getElementById('conversionPrice').value),
-        subjectiveWeight: parseFloat(document.getElementById('subjectiveWeight').value)||0, subjectiveLowPremium: parseFloat(document.getElementById('subjectiveLowPremium').value)||0, subjectiveAvgPremium: parseFloat(document.getElementById('subjectiveAvgPremium').value)||0
-    }));
+    try {
+        displayResult(calculateEvaluation({
+            cbName: document.getElementById('cbName').value, industry: document.getElementById('industry').value, issueSize: parseFloat(document.getElementById('issueSize').value),
+            years: document.getElementById('years').value, guarantee: document.getElementById('guarantee').value, rating: document.getElementById('rating').value,
+            capital: parseFloat(document.getElementById('capital').value), stockPrice: parseFloat(document.getElementById('stockPrice').value), conversionPrice: parseFloat(document.getElementById('conversionPrice').value),
+            subjectiveWeight: parseFloat(document.getElementById('subjectiveWeight').value)||0, subjectiveLowPremium: parseFloat(document.getElementById('subjectiveLowPremium').value)||0, subjectiveAvgPremium: parseFloat(document.getElementById('subjectiveAvgPremium').value)||0
+        }));
+    } catch (err) {
+        alert("⚠️ 計算過程發生錯誤：\n" + err.message + "\n\n請檢查輸入數值是否正確，或該標的資料過於缺失。");
+        console.error(err);
+    }
 });
 window.addEventListener('DOMContentLoaded', loadStatistics);
 </script>

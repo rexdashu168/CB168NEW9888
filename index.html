@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.46 (Null安全版)</title>
+<title>AI智能可轉債競拍系統 v3.47 (邏輯同步版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="embedded_data.js" onerror="console.warn('embedded_data.js not found, using defaults.')"></script>
 
@@ -13,10 +13,10 @@
 body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
 .container { max-width: 1600px; margin: 0 auto; }
 .header { background: white; border-radius: 15px; padding: 30px; margin-bottom: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); position: relative; overflow: hidden; }
-.header::before { content: ""; position: absolute; top: 0; left: 0; width: 10px; height: 100%; background: #FFC107; }
+.header::before { content: ""; position: absolute; top: 0; left: 0; width: 10px; height: 100%; background: #3F51B5; }
 .header h1 { color: #667eea; font-size: 32px; margin-bottom: 10px; }
 .header .subtitle { color: #666; font-size: 16px; display: flex; align-items: center; gap: 10px; }
-.version-badge { display: inline-block; background: #FF8F00; color: white; padding: 4px 12px; border-radius: 20px; font-size: 14px; font-weight: bold; box-shadow: 0 2px 5px rgba(255, 143, 0, 0.3); }
+.version-badge { display: inline-block; background: #303F9F; color: white; padding: 4px 12px; border-radius: 20px; font-size: 14px; font-weight: bold; box-shadow: 0 2px 5px rgba(48, 63, 159, 0.3); }
 
 .evaluation-container { display: grid; grid-template-columns: 450px 1fr; gap: 20px; }
 .input-panel { background: white; border-radius: 15px; padding: 30px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); height: fit-content; position: sticky; top: 20px; }
@@ -84,13 +84,13 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 24px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.46)...</div>
+    <div>🔄 系統啟動中 (v3.47)...</div>
     <div id="loading-detail" style="font-size: 16px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合 04競拍庫 與 00行情表...</div>
 </div>
 
 <div class="container" style="display: none;">
     <div class="header">
-        <h1>🤖 AI智能可轉債競拍系統 <span class="version-badge">v3.46 Null安全版</span></h1>
+        <h1>🤖 AI智能可轉債競拍系統 <span class="version-badge">v3.47 邏輯同步版</span></h1>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -143,8 +143,8 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
         
         <div class="result-panel">
             <div id="welcomeMsg" class="welcome-message">
-                <h2>歡迎使用AI智能競拍評估系統 (v3.46)</h2>
-                <p style="margin-top:10px; color:#666;">✅ 鎖定讀取 04 競拍資料庫 (轉換價/得標價)<br>✅ 鎖定讀取 00 行情表 (掛牌高低)<br>✅ Null 安全防護：修正 val.includes 錯誤</p>
+                <h2>歡迎使用AI智能競拍評估系統 (v3.47)</h2>
+                <p style="margin-top:10px; color:#666;">✅ 邏輯同步修正：維度表直接使用您的選擇，不再反查<br>✅ 確保「券商」與「產業」欄位與輸入一致</p>
                 <div class="stats-summary" id="statsSummary"></div>
             </div>
             <div id="evaluationResult" class="evaluation-result"></div>
@@ -157,7 +157,6 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 // 1. 欄位設定 & 工具函數
 // ==========================================
 const FIELD_ALIASES = {
-    // 04分頁用 'CB代號', 00分頁用 '代號'
     'cbId': ['CB代號', '代號', '股票代號'], 
     'name': ['名稱', 'CB名稱', '公司名稱'],
     'industry': ['產業分類', '產業別', '產業'], 
@@ -193,7 +192,6 @@ function getSmartValue(row, fieldKey) {
 }
 function safeFloat(val) { const num = parseFloat(val); return isNaN(num) ? 0 : num; }
 
-// 安全顯示函數
 function safeFixed(val, digits=2) {
     const num = parseFloat(val);
     if (isNaN(num)) return '-';
@@ -206,11 +204,11 @@ function getWeightCoefficient(category, value) {
     return weights[category][value] ? weights[category][value].coefficient : 1.0;
 }
 
+// 這裡保留函數但不依賴它來做顯示
 function getBrokerName(cbName) {
     const found = auctionRawData.find(d => d['name'] === cbName);
     if (found && found['broker']) return found['broker'];
     const map = (typeof window.BROKER_MAPPING !== 'undefined') ? window.BROKER_MAPPING : {};
-    // 【修正】如果沒找到，回傳 null 沒關係，但後續使用要小心
     return map[cbName] || null; 
 }
 
@@ -248,7 +246,7 @@ let statistics = { '維度統計': { '產業': {}, '發行券商': {} }, '資料
 let cbDatabase = {}, auctionRawData = [], globalMarketStats = { low: 0, avg: 0 }, cbNameMap = {};
 
 // ==========================================
-// 2. 資料讀取 (v3.46)
+// 2. 資料讀取 (v3.47 保持不變)
 // ==========================================
 async function loadStatistics() {
     const loadingDiv = document.getElementById('loading');
@@ -382,7 +380,6 @@ function getStatsSmart(category, val) {
     const v = parseFloat(val);
     let rangeLabel = "";
 
-    // 數值型判斷
     if (category === '股本') {
         if (v < 3) { rangeLabel = "小於 3 億"; filterFn = d => d.capital < 3; }
         else if (v < 6) { rangeLabel = "3 ~ 6 億"; filterFn = d => d.capital >= 3 && d.capital < 6; }
@@ -407,14 +404,9 @@ function getStatsSmart(category, val) {
         else if (v < 200) { rangeLabel = "150 ~ 200 元"; filterFn = d => d.conversionPrice >= 150 && d.conversionPrice < 200; }
         else { rangeLabel = "大於 200 元"; filterFn = d => d.conversionPrice >= 200; }
     }
-    
-    // 【核心修正】文字型篩選的 Null 安全處理
     else {
-        const safeVal = String(val || ""); // 強制轉字串，若是 null 則轉為空字串
-        if (safeVal === "") {
-            // 如果條件為空（例如找不到券商），直接回傳空統計，避免錯誤
-            return stats;
-        }
+        const safeVal = String(val || ""); 
+        if (safeVal === "") return stats;
         
         if (category === '發行券商') filterFn = d => (d.broker || '').includes(safeVal) || safeVal.includes(d.broker || '');
         else if (category === '產業') filterFn = d => d.industry === safeVal;
@@ -451,7 +443,6 @@ function getStatsSmart(category, val) {
         }
     }
     
-    // Fallback
     if (stats.low === 0 && (!stats.rawData || stats.rawData['平均得標價'] === 0)) { 
         if (statistics['維度統計'][category] && statistics['維度統計'][category][val]) {
             stats.rawData = statistics['維度統計'][category][val]; 
@@ -608,8 +599,8 @@ function generateRexCommentary(r) {
 
 function calculateEvaluation(d) {
     const theo = (d.stockPrice/d.conversionPrice)*100;
-    // 【關鍵修正】getBrokerName 回傳 null 時，這裡使用 || "" 轉為空字串，避免傳入 null
-    const brokerName = getBrokerName(d.cbName) || ""; 
+    // 【關鍵修正】直接使用表單輸入的值，不再去反查 (因為新案子查不到)
+    const brokerName = d.broker || ""; 
     
     const dims = [
         {k:'industry',c:'產業',w:0.25,v:d.industry}, {k:'broker',c:'發行券商',w:0.13,v:brokerName},
@@ -716,7 +707,9 @@ document.getElementById('evaluationForm').addEventListener('submit', function(e)
             cbName: document.getElementById('cbName').value, industry: document.getElementById('industry').value, issueSize: parseFloat(document.getElementById('issueSize').value),
             years: document.getElementById('years').value, guarantee: document.getElementById('guarantee').value, rating: document.getElementById('rating').value,
             capital: parseFloat(document.getElementById('capital').value), stockPrice: parseFloat(document.getElementById('stockPrice').value), conversionPrice: parseFloat(document.getElementById('conversionPrice').value),
-            subjectiveWeight: parseFloat(document.getElementById('subjectiveWeight').value)||0, subjectiveLowPremium: parseFloat(document.getElementById('subjectiveLowPremium').value)||0, subjectiveAvgPremium: parseFloat(document.getElementById('subjectiveAvgPremium').value)||0
+            subjectiveWeight: parseFloat(document.getElementById('subjectiveWeight').value)||0, subjectiveLowPremium: parseFloat(document.getElementById('subjectiveLowPremium').value)||0, subjectiveAvgPremium: parseFloat(document.getElementById('subjectiveAvgPremium').value)||0,
+            // 確保傳入前端選單的值
+            broker: document.getElementById('broker').value 
         }));
     } catch (err) {
         alert("⚠️ 計算過程發生錯誤：\n" + err.message + "\n\n請檢查輸入數值是否正確，或該標的資料過於缺失。");

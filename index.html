@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.49 (Rex大叔完美修正版)</title>
+<title>AI智能可轉債競拍系統 v3.49 (Rex大叔戰情升級版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="embedded_data.js" onerror="console.warn('embedded_data.js not found, using defaults.')"></script>
 
 <style>
-/* ================= 風格設定 (基於 v3.48 優化) ================= */
+/* ================= 風格設定 (基於 v3.49 優化) ================= */
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
 .container { max-width: 1600px; margin: 0 auto; }
@@ -16,7 +16,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 .header::before { content: ""; position: absolute; top: 0; left: 0; width: 10px; height: 100%; background: #9C27B0; }
 .header h1 { color: #667eea; font-size: 32px; margin-bottom: 10px; font-weight: 900; }
 .header .subtitle { color: #666; font-size: 16px; display: flex; align-items: center; gap: 10px; font-weight: bold; }
-.version-badge { display: inline-block; background: #7B1FA2; color: white; padding: 4px 12px; border-radius: 20px; font-size: 14px; font-weight: bold; box-shadow: 0 2px 5px rgba(123, 31, 162, 0.3); }
+.version-badge { display: inline-block; background: #FF5722; color: white; padding: 4px 12px; border-radius: 20px; font-size: 14px; font-weight: bold; box-shadow: 0 2px 5px rgba(255, 87, 34, 0.3); }
 
 .evaluation-container { display: grid; grid-template-columns: 450px 1fr; gap: 20px; }
 .input-panel { background: white; border-radius: 15px; padding: 30px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); height: fit-content; position: sticky; top: 20px; }
@@ -28,11 +28,11 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 .form-group input, .form-group select { width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 15px; transition: border-color 0.3s; font-weight: 600; color:#333; }
 .form-group input:focus, .form-group select:focus { outline: none; border-color: #667eea; background: #fcfdff; }
 
-/* 資訊卡片 (Info Cards) - 保持原樣 */
+/* 資訊卡片 (Info Cards) */
 .info-box { background: #e8f5e9; padding: 15px; border-radius: 8px; border-left: 5px solid #4CAF50; margin-top: 10px; display: none; box-shadow: 0 2px 5px rgba(0,0,0,0.05); animation: slideDown 0.3s ease-out; }
 @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
 
-/* 歷史搜尋結果 (新增) */
+/* 歷史搜尋結果 */
 .history-results { 
     margin-top: 10px; background: #f3e5f5; border: 1px solid #ce93d8; 
     border-radius: 8px; padding: 10px; display: none; 
@@ -44,16 +44,18 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 }
 .history-item div { display: flex; justify-content: space-between; margin-bottom: 2px; }
 
-/* 警示語 (新增) */
+/* 警示語 */
 .warning-box { background: #fff3e0; border-left: 4px solid #ff9800; padding: 10px; margin-top: 5px; font-size: 13px; color: #e65100; font-weight: bold; border-radius: 4px; }
 
-/* 主觀權重說明 (新增) */
+/* 主觀權重說明 */
 .subjective-note { background: #f5f5f5; padding: 10px; border-radius: 6px; font-size: 13px; color: #555; margin-bottom: 15px; border: 1px solid #ddd; line-height: 1.5; }
 
+/* 卡片內統計樣式 */
 .stats-header { font-size: 14px; color: #2e7d32; font-weight: bold; margin-bottom: 8px; display: flex; align-items: center; gap: 5px; border-bottom: 1px solid #c8e6c9; padding-bottom: 5px; }
 .stat-row { font-size: 13px; color: #444; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between; }
 .stat-label { color: #555; font-weight: 500; }
 .stat-value { font-weight: bold; color: #333; }
+.val-pos { font-weight: bold; color: #2e7d32; }
 
 .calculate-btn { width: 100%; padding: 18px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 10px; font-size: 20px; font-weight: bold; cursor: pointer; transition: all 0.2s; margin-top: 20px; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4); }
 .calculate-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6); filter: brightness(1.1); }
@@ -87,16 +89,14 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 .strategy-card.ultimate h4 { color: #6a1b9a; }
 .strategy-card .price { font-size: 32px; font-weight: bold; margin: 10px 0; color: #333; }
 
-/* 表格優化 (滿足要求) */
+/* 表格優化 */
 .data-table { width: 100%; border-collapse: collapse; font-size: 15px; margin-top: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
 .data-table th { 
     background-color: #1A237E; color: white; padding: 12px 5px; 
     text-align: center; font-weight: 900; border: 1px solid #0d1b5e; 
-    vertical-align: bottom; /* 標題靠下 */
-    line-height: 1.2;
+    vertical-align: bottom; line-height: 1.2;
 }
 .data-table td { padding: 12px 10px; text-align: center; border: 1px solid #e0e0e0; color: #000; font-weight: 600; }
-/* 數字欄位靠右 (第3欄起) */
 .data-table td:nth-child(n+3) { text-align: right; font-family: 'Segoe UI', monospace; }
 .data-table tr:nth-child(even) { background-color: #f8f9fa; }
 .data-table tr:hover { background-color: #e8eaf6; }
@@ -118,7 +118,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <div class="container" style="display: none;">
     <div class="header">
-        <h1>🤖 AI智能可轉債競拍系統 <span class="version-badge">v3.49 完美修正版</span></h1>
+        <h1>🤖 AI智能可轉債競拍系統 <span class="version-badge">v3.49 戰情升級版</span></h1>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -186,7 +186,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
         <div class="result-panel">
             <div id="welcomeMsg" class="welcome-message">
                 <h2>歡迎使用AI智能競拍評估系統 (v3.49)</h2>
-                <p style="margin-top:10px; color:#666;">✅ 卡片與歷史搜尋引擎已就緒<br>✅ 表格美化與數值精確化</p>
+                <p style="margin-top:10px; color:#666;">✅ 戰情室級別歷史資料卡片<br>✅ 市場熱度與理論價偵測</p>
                 <div class="stats-summary" id="statsSummary"></div>
             </div>
             <div id="evaluationResult" class="evaluation-result"></div>
@@ -209,6 +209,17 @@ const FIELD_ALIASES = {
     'issueSize': ['發行規模', '發行總額'],
     'years': ['年期', '發行年期'], 
     'conversionPrice': ['轉換價', '轉換價格'],
+    
+    // --- 新增：市場熱度與籌碼欄位 ---
+    'bidVol': ['競拍張數', '發行張數', '總張數'],
+    'qualifiedBids': ['合格件數', '投標件數'],
+    'bidMultiple': ['投標倍數', '倍數', '超額認購倍數'],
+    'bidAvgQty': ['投標均張', '平均投標張數'],
+    'stockClose': ['截標收盤', '截標價格', '截標收盤價'],
+    'theoPrice': ['理論價', '理論價格'],
+    'date': ['開標日期', '日期', '競拍日期'],
+    // -----------------------------
+
     'minBidPrice': ['最低得標', '最低得標價格', '最低得標價'], 
     'lowPremium': ['最低溢價', '最低得標價格_溢價率', '最低得標溢價', '最低溢價(%)'],
     'avgBidPrice': ['平均得標', '平均得標價格', '得標加權平均價格', '平均得標價'], 
@@ -244,13 +255,6 @@ function getWeightCoefficient(category, value) {
     const weights = (typeof window.WEIGHT_COEFFICIENTS !== 'undefined') ? window.WEIGHT_COEFFICIENTS : {};
     if (!weights[category]) return 1.0;
     return weights[category][value] ? weights[category][value].coefficient : 1.0;
-}
-
-function getBrokerName(cbName) {
-    const found = auctionRawData.find(d => d['name'] === cbName);
-    if (found && found['broker']) return found['broker'];
-    const map = (typeof window.BROKER_MAPPING !== 'undefined') ? window.BROKER_MAPPING : {};
-    return map[cbName] || null; 
 }
 
 function getRangeLabel(category, val) {
@@ -329,12 +333,14 @@ async function loadStatistics() {
 
             let lowPrem = safeFloat(getSmartValue(row, 'lowPremium'));
             let avgPrem = safeFloat(getSmartValue(row, 'avgPremium'));
+            // 保持原本的百分比修正邏輯
             if (lowPrem !== 0 && Math.abs(lowPrem) < 2) lowPrem *= 100;
             if (avgPrem !== 0 && Math.abs(avgPrem) < 2) avgPrem *= 100;
 
             return {
                 'id': id, 
-                'name': getSmartValue(row, 'name'), 
+                'name': getSmartValue(row, 'name'),
+                'date': getSmartValue(row, 'date'), // 新增日期
                 'industry': getSmartValue(row, 'industry'), 
                 'broker': getSmartValue(row, 'broker'),
                 'guarantee': getSmartValue(row, 'guarantee'), 
@@ -342,7 +348,17 @@ async function loadStatistics() {
                 'capital': safeFloat(getSmartValue(row, 'capital')), 
                 'issueSize': safeFloat(getSmartValue(row, 'issueSize')), 
                 'years': safeFloat(getSmartValue(row, 'years')),
-                'conversionPrice': safeFloat(getSmartValue(row, 'conversionPrice')), 
+                'conversionPrice': safeFloat(getSmartValue(row, 'conversionPrice')),
+                
+                // --- 新增：讀取進階籌碼數據 ---
+                'bidVol': safeFloat(getSmartValue(row, 'bidVol')),
+                'qualifiedBids': safeFloat(getSmartValue(row, 'qualifiedBids')),
+                'bidMultiple': safeFloat(getSmartValue(row, 'bidMultiple')),
+                'bidAvgQty': safeFloat(getSmartValue(row, 'bidAvgQty')),
+                'stockClose': safeFloat(getSmartValue(row, 'stockClose')),
+                'theoPrice': safeFloat(getSmartValue(row, 'theoPrice')),
+                // ---------------------------
+
                 'minBidPrice': safeFloat(getSmartValue(row, 'minBidPrice')), 
                 'avgBidPrice': safeFloat(getSmartValue(row, 'avgBidPrice')),
                 'lowPremium': lowPrem, 
@@ -558,11 +574,11 @@ function showStatsSummary() {
 function bindInputEvents() {
     const show = (id, html) => { const el = document.getElementById(id); el.innerHTML = html||''; el.style.display = html?'block':'none'; };
     
-    // 1. CB名稱：保留原本邏輯，新增歷史搜尋
+    // 1. CB名稱：歷史搜尋引擎 (升級版)
     document.getElementById('cbName').addEventListener('input', function() {
         const val = this.value.trim(); 
         
-        // A. 處理歷史搜尋清單 (新功能)
+        // A. 處理歷史搜尋清單
         const histDiv = document.getElementById('historyResults');
         if(val.length >= 2) {
              const cleanVal = val.replace(/[0-9]/g, '');
@@ -582,19 +598,92 @@ function bindInputEvents() {
             histDiv.style.display = 'none';
         }
 
-        // B. 處理原本的資訊卡 (精準比對)
+        // B. 處理原本的資訊卡 (精準比對 - 戰情室升級)
         if (!val) { show('cbNameInfo', null); return; }
         const found = cbNameMap[val] || Object.values(cbDatabase).find(d => d.name && d.name.includes(val));
+        
         if (found) {
             const h = safeFloat(found.marketHigh), l = safeFloat(found.marketLow);
             const amp = (h > 0 && l > 0) ? ((h - l) / l * 100).toFixed(2) : '-';
-            let html = `<div class="stats-header">📊 歷史資料</div><div class="stat-row">${found.id||''}</div>`;
-            html += `<div style="background:#f1f8e9; padding:8px; border-radius:5px; margin-bottom:8px;">
-            <div class="stat-row">📉 最低得標: ${safeFloat(found.minBidPrice)} (溢${safeFloat(found.lowPremium)}%)</div>
-            <div class="stat-row">⚖️ 平均得標: ${safeFloat(found.avgBidPrice)} (溢${safeFloat(found.avgPremium)}%)</div></div>`;
-            if(h>0) html += `<div style="border-top:1px dashed #ccc; padding-top:8px;"><div class="stat-row">📈 最高: ${h}</div><div class="stat-row">📉 最低: ${l}</div><div class="stat-row" style="color:#E91E63;">⚡ 振幅: ${amp}%</div></div>`;
+            
+            // 邏輯：根據投標倍數改變顏色 (大於4倍視為熱門)
+            const isHot = found.bidMultiple > 4;
+            const heatColor = isHot ? '#e65100' : '#444';
+            const heatBg = isHot ? '#fff3e0' : '#f9f9f9';
+            
+            // 處理日期顯示
+            const dateStr = found.date ? `📅 ${found.date}` : '歷史紀錄';
+
+            let html = `
+            <div style="border-left: 5px solid #667eea; padding-left: 12px; margin-bottom: 12px;">
+                <div style="font-size:18px; font-weight:900; color:#1a237e;">${found.id} ${found.name}</div>
+                <div style="font-size:13px; color:#666; margin-top:2px;">${dateStr} | ${found.industry || '產業未知'}</div>
+            </div>`;
+
+            // --- 區塊 1: 市場熱度 (新功能) ---
+            html += `
+            <div style="background:${heatBg}; padding:10px; border-radius:8px; margin-bottom:8px; border:1px solid #eee;">
+                <div class="stats-header" style="color:${heatColor}; border-bottom-color:#ddd;">🔥 市場熱度籌碼</div>
+                <div style="display:flex; justify-content:space-between; text-align:center; margin-top:5px;">
+                    <div>
+                        <div style="font-size:11px; color:#777;">投標倍數</div>
+                        <div style="font-size:15px; font-weight:bold; color:${heatColor};">${found.bidMultiple ? found.bidMultiple.toFixed(2)+'x' : '-'}</div>
+                    </div>
+                    <div style="border-left:1px solid #ddd; padding-left:10px;">
+                        <div style="font-size:11px; color:#777;">合格件數</div>
+                        <div style="font-size:15px; font-weight:bold; color:#333;">${found.qualifiedBids ? parseInt(found.qualifiedBids) : '-'}</div>
+                    </div>
+                    <div style="border-left:1px solid #ddd; padding-left:10px;">
+                        <div style="font-size:11px; color:#777;">投標均張</div>
+                        <div style="font-size:15px; font-weight:bold; color:#333;">${found.bidAvgQty ? found.bidAvgQty.toFixed(1) : '-'}</div>
+                    </div>
+                </div>
+            </div>`;
+
+            // --- 區塊 2: 當時價格水位 (新功能) ---
+            html += `
+            <div style="background:#e3f2fd; padding:10px; border-radius:8px; margin-bottom:8px; border:1px solid #bbdefb;">
+                <div class="stats-header" style="color:#0277bd; border-bottom-color:#90caf9;">💰 當時定價水位</div>
+                <div style="display:flex; justify-content:space-between; text-align:center; margin-top:5px;">
+                    <div>
+                        <div style="font-size:11px; color:#546e7a;">截標股價</div>
+                        <div style="font-size:14px; font-weight:bold; color:#01579b;">${found.stockClose || '-'}</div>
+                    </div>
+                    <div>
+                        <div style="font-size:11px; color:#546e7a;">轉換價</div>
+                        <div style="font-size:14px; font-weight:bold; color:#01579b;">${found.conversionPrice || '-'}</div>
+                    </div>
+                    <div>
+                        <div style="font-size:11px; color:#546e7a;">理論價</div>
+                        <div style="font-size:14px; font-weight:bold; color:#d81b60;">${found.theoPrice ? found.theoPrice.toFixed(2) : '-'}</div>
+                    </div>
+                </div>
+            </div>`;
+
+            // --- 區塊 3: 競拍結果 (原有功能微調) ---
+            html += `
+            <div style="background:#f1f8e9; padding:10px; border-radius:8px; margin-bottom:8px; border:1px solid #c8e6c9;">
+                <div class="stats-header">🏆 最終競拍結果</div>
+                <div class="stat-row">📉 最低得標: <span style="font-weight:bold;">${safeFloat(found.minBidPrice)}</span> <span style="font-size:13px; color:#2e7d32;">(溢 ${safeFloat(found.lowPremium)}%)</span></div>
+                <div class="stat-row">⚖️ 平均得標: <span style="font-weight:bold;">${safeFloat(found.avgBidPrice)}</span> <span style="font-size:13px; color:#2e7d32;">(溢 ${safeFloat(found.avgPremium)}%)</span></div>
+            </div>`;
+            
+            // --- 區塊 4: 掛牌表現 (原有功能) ---
+            if(h > 0) {
+                html += `
+                <div style="border-top:1px dashed #bdbdbd; padding-top:8px; margin-top:5px;">
+                    <div style="display:flex; justify-content:space-between; font-size:13px;">
+                        <div>📈 掛牌高: <span style="font-weight:bold; color:#c62828;">${h}</span></div>
+                        <div>📉 掛牌低: <span style="font-weight:bold; color:#2e7d32;">${l}</span></div>
+                    </div>
+                    <div style="text-align:right; font-size:12px; color:#E91E63; margin-top:2px;">⚡ 最大振幅: ${amp}%</div>
+                </div>`;
+            }
+            
             show('cbNameInfo', html);
-        } else show('cbNameInfo', null);
+        } else {
+            show('cbNameInfo', null);
+        }
     });
 
     // 2. 綁定其他欄位 (保留原本的卡片觸發邏輯)

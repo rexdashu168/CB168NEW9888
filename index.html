@@ -54,6 +54,45 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     gap: 6px;
 }
 
+/* 詢圈案例簡單卡片 */
+.inquiry-card {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #fff3e0;
+    border: 1px solid #ffb74d;
+    border-radius: 6px;
+    margin-bottom: 6px;
+    font-size: 12px;
+}
+.inquiry-badge {
+    background: #ff9800;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: bold;
+}
+.inquiry-name {
+    font-weight: 700;
+    color: #e65100;
+    flex: 1;
+    min-width: 120px;
+}
+.inquiry-info {
+    color: #666;
+    white-space: nowrap;
+}
+.inquiry-info b {
+    color: #333;
+    margin-left: 2px;
+}
+.inquiry-info b.pink {
+    color: #E91E63;
+}
+
 /* 單筆歷史卡片 - 緊湊版 */
 .history-card { 
     background: white; 
@@ -917,19 +956,49 @@ function bindInputEvents() {
         const histDiv = document.getElementById('historyResults');
         
         if(val.length >= 2) {
-            // 搜尋：代號開頭 或 名稱包含
-            const matches = auctionRawData.filter(d => {
+            // 搜尋競拍資料
+            const auctionMatches = auctionRawData.filter(d => {
                 const idMatch = d.id && d.id.startsWith(val);
                 const stockIdMatch = d.stockId && String(d.stockId).startsWith(val);
                 const nameMatch = d.name && d.name.includes(val);
                 return idMatch || stockIdMatch || nameMatch;
-            }).slice(0, 10); // 最多顯示10筆
+            }).slice(0, 10);
             
-            if(matches.length > 0) {
-                histDiv.innerHTML = `
-                    <div class="history-results-title">🔍 相關歷史資料 (共${matches.length}筆)</div>
-                    ${matches.map(d => generateHistoryCard(d)).join('')}
-                `;
+            // 搜尋詢圈資料
+            const inquiryMatches = inquiryRawData.filter(d => {
+                const idMatch = d.id && d.id.startsWith(val);
+                const nameMatch = d.name && d.name.includes(val);
+                return idMatch || nameMatch;
+            }).slice(0, 10);
+            
+            let html = '';
+            
+            // 顯示詢圈結果（簡單一列）
+            if(inquiryMatches.length > 0) {
+                html += `<div class="history-results-title">📋 詢圈案例 (${inquiryMatches.length}筆)</div>`;
+                inquiryMatches.forEach(d => {
+                    const h = safeFloat(d.marketHigh);
+                    const l = safeFloat(d.marketLow);
+                    const amp = (h > 0 && l > 0) ? ((h - l) / l * 100).toFixed(1) : '-';
+                    html += `
+                    <div class="inquiry-card">
+                        <span class="inquiry-badge">詢圈</span>
+                        <span class="inquiry-name">${d.name || '-'} (${d.id})</span>
+                        <span class="inquiry-info">掛牌高:<b>${h > 0 ? safeFixed(h,1) : '-'}</b></span>
+                        <span class="inquiry-info">掛牌低:<b>${l > 0 ? safeFixed(l,1) : '-'}</b></span>
+                        <span class="inquiry-info">振幅:<b class="pink">${amp}%</b></span>
+                    </div>`;
+                });
+            }
+            
+            // 顯示競拍結果（完整卡片）
+            if(auctionMatches.length > 0) {
+                html += `<div class="history-results-title" style="margin-top:${inquiryMatches.length > 0 ? '12px' : '0'}">🎯 競拍案例 (${auctionMatches.length}筆)</div>`;
+                html += auctionMatches.map(d => generateHistoryCard(d)).join('');
+            }
+            
+            if(html) {
+                histDiv.innerHTML = html;
                 histDiv.style.display = 'block';
             } else {
                 histDiv.style.display = 'none';

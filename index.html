@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.32 (自動補位修復版) - Rex大叔</title>
+<title>AI智能可轉債競拍系統 v3.30 (經典穩定版) - Rex大叔</title>
 
 <style>
 /* ================= 風格設定 ================= */
@@ -21,7 +21,7 @@ body {
 }
 .header h1 { color: #667eea; font-size: 32px; margin-bottom: 10px; }
 .header .subtitle { color: #666; font-size: 16px; }
-.version-badge { display: inline-block; background: #E91E63; color: white; padding: 5px 15px; border-radius: 20px; font-size: 14px; margin-left: 10px; }
+.version-badge { display: inline-block; background: #009688; color: white; padding: 5px 15px; border-radius: 20px; font-size: 14px; margin-left: 10px; }
 
 .evaluation-container { display: grid; grid-template-columns: 450px 1fr; gap: 20px; }
 
@@ -132,7 +132,7 @@ body {
 
 <div class="container" style="display: none;">
     <div class="header">
-        <h1>🤖 AI智能可轉債競拍系統 <span class="version-badge">v3.32</span></h1>
+        <h1>🤖 AI智能可轉債競拍系統 <span class="version-badge">v3.30</span></h1>
         <p class="subtitle" id="headerSubtitle">載入中...</p>
     </div>
 
@@ -277,16 +277,19 @@ body {
 
 <script>
 // ==========================================
-// v3.32 新增：自動補位修復 (解決載入中問題)
+// v3.30 新增：輔助函數
 // ==========================================
 
-// 權重係數
+// 獲取權重係數
 function getWeightCoefficient(category, value) {
     if (!window.WEIGHT_COEFFICIENTS || !window.WEIGHT_COEFFICIENTS[category]) {
         return 1.0;
     }
     const coefData = window.WEIGHT_COEFFICIENTS[category][value];
-    return coefData ? coefData.coefficient : 1.0;
+    if (!coefData) {
+        return 1.0;
+    }
+    return coefData.coefficient;
 }
 
 // 查詢券商
@@ -295,7 +298,7 @@ function getBrokerName(cbName) {
     return window.BROKER_MAPPING[cbName] || null;
 }
 
-// 數值分類函數
+// 分類函數
 function classifyCapital(value) {
     if (value < 3) return '<3億';
     if (value < 6) return '3~6億';
@@ -346,10 +349,8 @@ async function loadStatistics() {
 
     try {
         detailDiv.textContent = "正在同步讀取數據庫...";
-        // 增加時間戳以防止緩存
-        const timestamp = new Date().getTime();
         const [resMain, resNames] = await Promise.all([
-            fetch('cb_data_integrated.json?t=' + timestamp).then(res => res.ok ? res.json() : null).catch(e => null),
+            fetch('cb_data_integrated.json').then(res => res.ok ? res.json() : null).catch(e => null),
             fetch('cb_names_database.json').then(res => res.ok ? res.json() : null).catch(e => null)
         ]);
 
@@ -365,7 +366,7 @@ async function loadStatistics() {
             cbDatabase = mainDB;
         }
 
-        // 建立名稱索引
+        // 建立名稱索引，方便反查掛牌價
         if (cbDatabase) {
             Object.values(cbDatabase).forEach(item => {
                 if (item['名稱']) {
@@ -375,7 +376,7 @@ async function loadStatistics() {
         }
 
         calculateGlobalMarketStats();
-        initializeUI(); // 啟動UI，現在包含自動修復邏輯
+        initializeUI();
         loadingDiv.style.display = 'none';
         document.querySelector('.container').style.display = 'block';
 
@@ -440,6 +441,7 @@ function getDynamicStats(filterFn) {
     let count = 0, marketCount = 0;
 
     matches.forEach(d => {
+        // 讀取競拍數據 (支援您的欄位表)
         const lowPrice = safeFloat(d['最低得標'] || d['最低得標價格'] || d['r1']);
         const lowPrem = safeFloat(d['最低溢價'] || d['最低得標價格_溢價率'] || d['s1']);
         const avgPrice = safeFloat(d['平均得標'] || d['得標加權平均價格'] || d['t1']);
@@ -448,13 +450,12 @@ function getDynamicStats(filterFn) {
         if (lowPrice > 0 || lowPrem > 0) {
             sumLowPrice += lowPrice;
             sumAvgPrice += avgPrice;
-            let lp = lowPrem < 1 && lowPrem > -1 ? lowPrem * 100 : lowPrem;
-            let ap = avgPrem < 1 && avgPrem > -1 ? avgPrem * 100 : avgPrem;
-            sumLowPrem += lp;
-            sumAvgPrem += ap;
+            sumLowPrem += lowPrem;
+            sumAvgPrem += avgPrem;
             count++;
         }
 
+        // 讀取掛牌數據 (透過名稱反查)
         const cbName = d['名稱'] || d['CB名稱'];
         if (cbName && cbNameMap[cbName]) {
             const cbInfo = cbNameMap[cbName];
@@ -470,11 +471,18 @@ function getDynamicStats(filterFn) {
 
     if (count === 0) return null;
 
+    let finalLowPrem = sumLowPrem / count;
+    let finalAvgPrem = sumAvgPrem / count;
+
+    // 數值校正：避免將價格 (105) 誤判為溢價 (5)
+    if (finalLowPrem > 50) finalLowPrem -= 100;
+    if (finalAvgPrem > 50) finalAvgPrem -= 100;
+
     return {
         '平均最低得標': sumLowPrice / count,
-        '平均最低溢價': sumLowPrem / count,
+        '平均最低溢價': finalLowPrem,
         '平均得標價': sumAvgPrice / count,
-        '平均溢價': sumAvgPrem / count,
+        '平均溢價': finalAvgPrem,
         '平均掛牌最高': marketCount > 0 ? sumHigh / marketCount : 0,
         '平均掛牌最低': marketCount > 0 ? sumLow / marketCount : 0,
         '樣本數': count
@@ -486,6 +494,7 @@ function getStatsSmart(category, val) {
     let stats = { low: 0, avg: 0, usedFallback: false, rawData: null };
     let filterFn = null;
 
+    // 定義過濾邏輯
     if (category === '發行券商') {
         filterFn = d => {
             const name = d['發行券商'] || d['承銷券商'] || d['主辦券商'] || '';
@@ -499,23 +508,9 @@ function getStatsSmart(category, val) {
         filterFn = d => safeFloat(d['年期'] || d['發行年期']) === val;
     } else if (category === '信評') {
         filterFn = d => (d['信評'] || d['TCRI'] || '').toString().includes(val.toString());
-    } else if (category === '股本') {
-        filterFn = d => {
-            const range = typeof val === 'number' ? classifyCapital(val) : val;
-            return classifyCapital(safeFloat(d['股本'])) === range;
-        };
-    } else if (category === '發行規模') {
-        filterFn = d => {
-            const range = typeof val === 'number' ? classifySize(val) : val;
-            return classifySize(safeFloat(d['發行規模'])) === range;
-        };
-    } else if (category === '轉換價') {
-        filterFn = d => {
-            const range = typeof val === 'number' ? classifyConversionPrice(val) : val;
-            return classifyConversionPrice(safeFloat(d['轉換價'])) === range;
-        };
     }
 
+    // 嘗試即時運算
     if (filterFn) {
         const dyn = getDynamicStats(filterFn);
         if (dyn) {
@@ -525,6 +520,7 @@ function getStatsSmart(category, val) {
         }
     }
 
+    // 若即時運算無結果，嘗試讀取預統計檔
     if (stats.low === 0 && statistics['維度統計'] && statistics['維度統計'][category]) {
         let data = statistics['維度統計'][category][val];
         if (!data && typeof val === 'number') {
@@ -538,6 +534,7 @@ function getStatsSmart(category, val) {
         }
     }
 
+    // 自動替補機制 (Global Fallback)
     if (stats.low === 0 || stats.avg === 0) {
         stats.low = globalMarketStats.low;
         stats.avg = globalMarketStats.avg;
@@ -550,9 +547,7 @@ function getStatsSmart(category, val) {
 
 // 5. 卡片生成
 function generateStandardCard(data, titleOverride=null) {
-    if (!data || (!data['平均最低得標'] && !data['樣本數'])) {
-         return `<div class="stat-row" style="color:#999;">查無資料 (將使用市場均值運算)</div>`;
-    }
+    if (!data) return `<div class="stat-row" style="color:#999;">查無資料 (將使用市場均值運算)</div>`;
 
     const val = (v, suffix='') => (v !== undefined && v !== null && v !== '' && v !== 0) ? `${safeFloat(v).toFixed(2)}${suffix}` : '-';
 
@@ -597,70 +592,25 @@ function generateStandardCard(data, titleOverride=null) {
     return html;
 }
 
-// 6. 初始化與綁定 (V3.32: 修復下拉選單載入問題)
+// 6. 初始化與綁定
 function initializeUI() {
     document.getElementById('headerSubtitle').textContent = `Rex大叔的168台股投資教室 | 整合${Object.keys(cbDatabase).length}檔CB完整資料庫`;
-    
-    // 嘗試從統計數據載入選單
-    let industries = null;
-    let brokers = null;
-
-    if (statistics['維度統計'] && statistics['維度統計']['產業']) {
-        industries = Object.keys(statistics['維度統計']['產業']);
-    }
-    
-    if (statistics['維度統計'] && statistics['維度統計']['發行券商']) {
-        brokers = Object.keys(statistics['維度統計']['發行券商']);
-    }
-
-    // [自癒功能] 如果統計數據是空的，從原始資料動態抓取
-    if (!industries || industries.length === 0) {
-        console.log("⚠️ 統計數據缺失，正在從原始資料提取產業列表...");
-        const indSet = new Set();
-        auctionRawData.forEach(d => {
-            const val = d['產業分類'] || d['產業'];
-            if(val) indSet.add(val.trim());
-        });
-        industries = Array.from(indSet);
-    }
-
-    if (!brokers || brokers.length === 0) {
-        console.log("⚠️ 統計數據缺失，正在從原始資料提取券商列表...");
-        const brkSet = new Set();
-        auctionRawData.forEach(d => {
-            const val = d['發行券商'] || d['承銷券商'] || d['主辦券商'];
-            if(val) brkSet.add(val.trim());
-        });
-        brokers = Array.from(brkSet);
-    }
-
-    // 填充選單
-    populateSelectDynamic('industry', industries);
-    populateSelectDynamic('broker', brokers);
-
+    if (statistics['維度統計']['產業']) populateSelect('industry', statistics['維度統計']['產業']);
+    if (statistics['維度統計']['發行券商']) populateSelect('broker', statistics['維度統計']['發行券商']);
     showStatsSummary();
     bindInputEvents();
 }
 
-function populateSelectDynamic(id, items) {
+function populateSelect(id, dataObj) {
+    if (!dataObj) return;
     const select = document.getElementById(id);
-    if (!items || items.length === 0) {
-        select.innerHTML = '<option value="">(無資料)</option>';
-        return;
-    }
-    
-    // 清空並排序
-    while (select.options.length > 0) { select.remove(0); }
-    
-    const defaultOpt = document.createElement('option');
-    defaultOpt.value = "";
-    defaultOpt.textContent = "請選擇...";
-    select.appendChild(defaultOpt);
-
-    items.sort().forEach(item => {
+    while (select.options.length > 1) { select.remove(1); }
+    const items = Object.keys(dataObj).sort((a, b) => (dataObj[b]['樣本數'] || 0) - (dataObj[a]['樣本數'] || 0));
+    items.forEach(item => {
         const option = document.createElement('option');
         option.value = item;
-        option.textContent = item;
+        const avgHigh = dataObj[item]['平均掛牌最高'];
+        option.textContent = avgHigh ? `${item} (最高${avgHigh}元)` : item;
         select.appendChild(option);
     });
 }
@@ -668,7 +618,7 @@ function populateSelectDynamic(id, items) {
 function showStatsSummary() {
     document.getElementById('statsSummary').innerHTML = `
     <div class="stat-box"><div class="number">${Object.keys(cbDatabase).length}</div><div class="label">CB資料庫</div></div>
-    <div class="stat-box"><div class="number">${auctionRawData.length || statistics['資料期間']['總筆數'] || 0}</div><div class="label">競拍案例</div></div>
+    <div class="stat-box"><div class="number">${statistics['資料期間']['總筆數'] || 0}</div><div class="label">競拍案例</div></div>
     `;
 }
 
@@ -702,15 +652,11 @@ function bindInputEvents() {
                 let data = null;
                 let key = val;
                 
+                // 統一使用 Smart 獲取 (自動判定動態或靜態)
                 const smartResult = getStatsSmart(cat, val);
                 data = smartResult.rawData;
 
-                if (isNum) {
-                    if (cat === '股本') key = classifyCapital(val);
-                    else if (cat === '發行規模') key = classifySize(val);
-                    else if (cat === '轉換價') key = classifyConversionPrice(val);
-                    else key = findBestRangeKey(cat, val) || val;
-                }
+                if (isNum) key = findBestRangeKey(cat, val) || val;
                 
                 show(id+'Info', generateStandardCard(data, key ? `歷史統計 (${key})` : `歷史統計 (${val})`));
                 if (cat === '轉換價' || cat === '信評') updateSmartReminders();
@@ -788,7 +734,7 @@ function updateMarketSentimentDisplay() {
 }
 
 function generateRexCommentary(result) {
-    const prem = parseFloat(result.totalAvgPremium); 
+    const prem = parseFloat(result.totalAvgPremium); // 使用新版的總計平均溢價
     let comment = "", strategy = "";
 
     if (prem >= 15) {
@@ -829,8 +775,8 @@ function calculateEvaluation(data) {
     };
     
     // 券商 (13%)
-    const brokerName = getBrokerName(data.cbName) || data.broker; 
-    if (brokerName && brokerName !== '載入中...' && brokerName !== '') {
+    const brokerName = getBrokerName(data.cbName);
+    if (brokerName) {
         dimensions.broker = {
             ...getStatsSmart('發行券商', brokerName),
             coefficient: getWeightCoefficient('broker', brokerName),
@@ -839,19 +785,15 @@ function calculateEvaluation(data) {
         };
     } else {
         dimensions.broker = {
-            low: globalMarketStats.low, 
-            avg: globalMarketStats.avg, 
-            usedFallback: true,
-            coefficient: 1.0, 
-            weight: 0.13, 
-            range: '未查詢到'
+            low: 0, avg: 0, usedFallback: true,
+            coefficient: 1.0, weight: 0.13, range: '未查詢到'
         };
     }
     
     // 股本 (12%)
     const capitalRange = classifyCapital(data.capital);
     dimensions.capital = {
-        ...getStatsSmart('股本', data.capital), 
+        ...getStatsSmart('股本', capitalRange),
         coefficient: getWeightCoefficient('capital', capitalRange),
         weight: 0.12,
         range: capitalRange
@@ -860,7 +802,7 @@ function calculateEvaluation(data) {
     // 規模 (10%)
     const sizeRange = classifySize(data.issueSize);
     dimensions.size = {
-        ...getStatsSmart('發行規模', data.issueSize),
+        ...getStatsSmart('發行規模', sizeRange),
         coefficient: getWeightCoefficient('size', sizeRange),
         weight: 0.10,
         range: sizeRange
@@ -873,7 +815,7 @@ function calculateEvaluation(data) {
         ratingKey = v <= 3 ? '2-3分' : v <= 5 ? '4-5分' : v <= 7 ? '6-7分' : '8-9分';
     }
     dimensions.rating = {
-        ...getStatsSmart('信評', data.rating),
+        ...getStatsSmart('信評', ratingKey),
         coefficient: getWeightCoefficient('rating', ratingKey),
         weight: 0.15,
         range: ratingKey
@@ -919,6 +861,7 @@ function calculateEvaluation(data) {
         weightedHistoricalLow += contributionLow;
         weightedHistoricalAvg += contributionAvg;
         
+        // 記錄每個維度的貢獻
         dim.weightedLow = contributionLow;
         dim.weightedAvg = contributionAvg;
     }
@@ -1003,6 +946,7 @@ function displayResult(result) {
         return rows;
     };
     
+    // 主觀權重行（如果有輸入）
     const subjectiveRow = (result.inputData.subjectiveWeight || 0) > 0 ? `
         <tr style="background-color: #fff9e6;">
             <td><strong>主觀權重</strong></td>
@@ -1016,6 +960,7 @@ function displayResult(result) {
         </tr>
     ` : '';
     
+    // 表格HTML
     const tableHtml = `
     <table class="data-table">
     <thead>
@@ -1044,12 +989,14 @@ function displayResult(result) {
     </table>
     `;
     
+    // Rex大叔分析
     const rexCommentary = generateRexCommentary(result);
     
+    // 完整結果HTML
     resultDiv.innerHTML = `
     <div class="result-header">
         <h2>${result.cbName}</h2>
-        <div class="subtitle">資料驅動AI評估結果 (V3.32 自動補位修復版)</div>
+        <div class="subtitle">資料驅動AI評估結果 (V3.30 經典穩定版)</div>
     </div>
     
     <div class="detail-section">
@@ -1131,7 +1078,6 @@ document.getElementById('evaluationForm').addEventListener('submit', function(e)
     const formData = {
         cbName: document.getElementById('cbName').value,
         industry: document.getElementById('industry').value,
-        broker: document.getElementById('broker').value,
         issueSize: parseFloat(document.getElementById('issueSize').value),
         years: parseInt(document.getElementById('years').value),
         guarantee: document.getElementById('guarantee').value,

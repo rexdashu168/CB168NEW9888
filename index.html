@@ -497,33 +497,33 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 // 1. 欄位設定 & 工具函數
 // ==========================================
 const FIELD_ALIASES = {
-    'cbId': ['CB代號', '代號', '股票代號'], 
-    'stockId': ['股票代號'],
-    'name': ['名稱', 'CB名稱', '公司名稱'],
-    'openDate': ['開標日期', '開標日'],
-    'industry': ['產業分類', '產業別', '產業'], 
-    'broker': ['發行券商', '承銷券商', '主辦券商'],
-    'guarantee': ['擔保', '有無擔保', '擔保情形'], 
-    'rating': ['信評', '信用擔保', 'TCRI'],
-    'capital': ['股本', '股本規模', '股本(億)'], 
-    'issueSize': ['發行規模', '發行總額'],
-    'years': ['年期', '發行年期'], 
-    'conversionPrice': ['轉換價', '轉換價格'],
-    'closePrice': ['截標收盤', '截標日收盤'],
-    'theoreticalPrice': ['理論價', '理論價格'],
-    'floorPrice': ['底標價', '底標'],
-    'premiumRate': ['訂價溢價率', '溢價率'],
-    'minBidPrice': ['最低得標', '最低得標價格', '最低得標價'], 
-    'lowPremium': ['最低溢價', '最低得標價格_溢價率', '最低得標溢價', '最低溢價(%)'],
-    'avgBidPrice': ['平均得標', '平均得標價格', '得標加權平均價格', '平均得標價'], 
-    'avgPremium': ['平均溢價', '得標加權平均價格_溢價率', '平均得標溢價', '平均溢價(%)'],
-    'marketHigh': ['掛牌最高', '掛牌最高價'], 
-    'marketLow': ['掛牌最低', '掛牌最低價'],
-    'qualifiedCount': ['合格件數', '合格標單'],
-    'bidShares': ['投標張數', '投標總張數'],
-    'bidMultiple': ['投標倍數'],
-    'avgBidShares': ['投標均張', '平均投標張數'],
-    'auctionShares': ['競拍張數', '競拍總張數']
+    'cbId': ['CB代號', '代號', '股票代號', 'cb代號', 'CB 代號'], 
+    'stockId': ['股票代號', '股票 代號'],
+    'name': ['名稱', 'CB名稱', '公司名稱', 'cb名稱', 'CB 名稱'],
+    'openDate': ['開標日期', '開標日', '開標 日期'],
+    'industry': ['產業分類', '產業別', '產業', '產業類別', '行業分類'], 
+    'broker': ['發行券商', '承銷券商', '主辦券商', '券商', '發行 券商'],
+    'guarantee': ['擔保', '有無擔保', '擔保情形', '擔保狀況', '擔保情況'], 
+    'rating': ['信評', '信用擔保', 'TCRI', '信用評等', '評等', '信評等級', 'tcri', '信用評級'],
+    'capital': ['股本', '股本規模', '股本(億)', '股本（億）', '股本(億元)', '股本 規模'], 
+    'issueSize': ['發行規模', '發行總額', '發行 規模', '發行金額'],
+    'years': ['年期', '發行年期', '發行 年期', '存續年期'], 
+    'conversionPrice': ['轉換價', '轉換價格', '轉換 價格', '轉換 價'],
+    'closePrice': ['截標收盤', '截標日收盤', '截標 收盤', '收盤價'],
+    'theoreticalPrice': ['理論價', '理論價格', '理論 價格'],
+    'floorPrice': ['底標價', '底標', '底標 價'],
+    'premiumRate': ['訂價溢價率', '溢價率', '訂價 溢價率'],
+    'minBidPrice': ['最低得標', '最低得標價格', '最低得標價', '最低 得標', '最低得標價 格'], 
+    'lowPremium': ['最低溢價', '最低得標價格_溢價率', '最低得標溢價', '最低溢價(%)', '最低 溢價', '最低得標_溢價率'],
+    'avgBidPrice': ['平均得標', '平均得標價格', '得標加權平均價格', '平均得標價', '平均 得標', '加權平均得標價'], 
+    'avgPremium': ['平均溢價', '得標加權平均價格_溢價率', '平均得標溢價', '平均溢價(%)', '平均 溢價', '平均得標_溢價率'],
+    'marketHigh': ['掛牌最高', '掛牌最高價', '掛牌 最高', '最高價'], 
+    'marketLow': ['掛牌最低', '掛牌最低價', '掛牌 最低', '最低價'],
+    'qualifiedCount': ['合格件數', '合格標單', '合格 件數'],
+    'bidShares': ['投標張數', '投標總張數', '投標 張數'],
+    'bidMultiple': ['投標倍數', '投標 倍數'],
+    'avgBidShares': ['投標均張', '平均投標張數', '投標 均張'],
+    'auctionShares': ['競拍張數', '競拍總張數', '競拍 張數']
 };
 
 function normalizeKeys(obj) {
@@ -638,28 +638,38 @@ async function loadStatistics() {
         
         if (sheetAllCB && sheetAllCB.length > 0) {
             inquiryRawData = sheetAllCB.filter(row => {
-                const type = row['詢圈競拍'] || '';
+                const type = row['詢圈競拍'] || row['類型'] || row['發行方式'] || '';
                 return type.includes('詢圈');
             }).map(row => {
-                let rawId = row['CB代號'] || row['代號'];
+                let rawId = row['CB代號'] || row['代號'] || row['股票代號'];
                 if (!rawId) return null;
                 const id = String(rawId).replace('.0','').trim();
                 const hlRow = highLowMap[id] || {};
                 
+                // 使用多重欄位名稱匹配
+                const getField = (names) => {
+                    for (const name of names) {
+                        if (row[name] !== undefined && row[name] !== null && row[name] !== '') {
+                            return row[name];
+                        }
+                    }
+                    return '';
+                };
+                
                 return {
                     'id': id,
-                    'name': row['名稱'] || '',
-                    'industry': row['產業分類'] || '',
-                    'broker': row['承銷券商'] || '',
-                    'guarantee': row['有無擔保'] || '',
-                    'rating': row['信用擔保'] || '',
-                    'capital': safeFloat(row['股本規模']),
-                    'issueSize': safeFloat(row['發行規模']),
-                    'years': safeFloat(row['發行年期']),
-                    'conversionPrice': safeFloat(row['轉換價格']),
-                    'marketHigh': safeFloat(getSmartValue(hlRow, 'marketHigh')) || safeFloat(row['掛牌最高']),
-                    'marketLow': safeFloat(getSmartValue(hlRow, 'marketLow')) || safeFloat(row['掛牌最低']),
-                    'premiumRate': safeFloat(row['訂價溢價率']),
+                    'name': getField(['名稱', 'CB名稱', '公司名稱']),
+                    'industry': getField(['產業分類', '產業別', '產業', '產業類別']),
+                    'broker': getField(['承銷券商', '發行券商', '主辦券商', '券商']),
+                    'guarantee': getField(['有無擔保', '擔保', '擔保情形', '擔保狀況']),
+                    'rating': getField(['信用擔保', '信評', 'TCRI', '信用評等', '評等']),
+                    'capital': safeFloat(getField(['股本規模', '股本', '股本(億)'])),
+                    'issueSize': safeFloat(getField(['發行規模', '發行總額', '發行金額'])),
+                    'years': safeFloat(getField(['發行年期', '年期', '存續年期'])),
+                    'conversionPrice': safeFloat(getField(['轉換價格', '轉換價'])),
+                    'marketHigh': safeFloat(getSmartValue(hlRow, 'marketHigh')) || safeFloat(getField(['掛牌最高', '掛牌最高價', '最高價'])),
+                    'marketLow': safeFloat(getSmartValue(hlRow, 'marketLow')) || safeFloat(getField(['掛牌最低', '掛牌最低價', '最低價'])),
+                    'premiumRate': safeFloat(getField(['訂價溢價率', '溢價率'])),
                     'type': '詢圈'
                 };
             }).filter(item => item !== null);
@@ -991,7 +1001,18 @@ function getStatsSmart(category, val) {
         else if (category === '產業') filterFn = d => d.industry === safeVal;
         else if (category === '擔保') filterFn = d => (d.guarantee || '').includes(safeVal);
         else if (category === '年期') filterFn = d => d.years == safeVal;
-        else if (category === '信評') filterFn = d => (d.rating || '').toString().includes(safeVal);
+        else if (category === '信評') {
+            // 改進信評匹配：支援數字和字符串格式
+            filterFn = d => {
+                const rating = d.rating;
+                if (rating === undefined || rating === null || rating === '') return false;
+                const ratingStr = String(rating).trim();
+                // 匹配完全相等（數字或字符串）
+                if (ratingStr === safeVal || ratingStr === `TCRI ${safeVal}` || ratingStr === `TCRI${safeVal}`) return true;
+                // 匹配包含關係
+                return ratingStr.includes(safeVal);
+            };
+        }
     }
 
     if (filterFn) {

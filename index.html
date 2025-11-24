@@ -103,90 +103,85 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 .iq-low { width: 70px; }    /* 掛牌低:100.0 */
 .iq-amp { width: 78px; }    /* 振幅:323.6% */
 
-/* 單筆歷史卡片 - 緊湊版 */
+/* 單筆歷史卡片 - 精簡版 */
 .history-card { 
-    background: white; 
-    padding: 12px; 
+    background: #f3e5f5; 
+    padding: 10px 12px; 
     border-radius: 8px; 
-    margin-bottom: 10px; 
-    border: 1px solid #ce93d8;
-    box-shadow: 0 2px 6px rgba(156, 39, 176, 0.12);
-    font-size: 12px;
+    margin-bottom: 8px; 
+    border: 1px solid #ba68c8;
+    font-size: 11px;
 }
 .history-card:last-child { margin-bottom: 0; }
 
 /* 卡片標題列 */
-.history-card-header {
+.hc-header {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    margin-bottom: 8px;
-    padding-bottom: 6px;
-    border-bottom: 1px solid #e1bee7;
+    gap: 6px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
 }
-.history-card-title {
-    font-size: 14px;
-    font-weight: 900;
-    color: #4a148c;
-}
-.history-card-date {
-    font-size: 11px;
-    color: #666;
-    background: #f5f5f5;
+.hc-badge {
+    background: #9C27B0;
+    color: white;
     padding: 2px 6px;
-    border-radius: 3px;
+    border-radius: 4px;
+    font-size: 9px;
+    font-weight: bold;
+}
+.hc-name {
+    font-weight: 700;
+    color: #6a1b9a;
+    flex: 1;
+}
+.hc-date {
+    font-size: 10px;
+    color: #999;
 }
 
 /* 資訊列 - 橫向緊湊排列 */
-.history-info-line {
+.hc-line {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px 12px;
+    gap: 4px 8px;
     margin-bottom: 6px;
-    line-height: 1.6;
 }
-.history-info-line span {
+.hc-info {
+    color: #666;
+    font-size: 11px;
     white-space: nowrap;
 }
-.history-info-line .hl { color: #888; }
-.history-info-line .hv { font-weight: 700; color: #333; }
-.history-info-line .hv-red { font-weight: 700; color: #d32f2f; }
-.history-info-line .hv-blue { font-weight: 700; color: #1565c0; }
-.history-info-line .hv-green { font-weight: 700; color: #2e7d32; }
+.hc-info b {
+    color: #333;
+    margin-left: 2px;
+}
 
 /* 卡片內表格 - 得標+掛牌合併 */
-.history-table {
+.hc-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 11px;
-    margin-top: 8px;
-    background: linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%);
+    margin-top: 6px;
+    background: white;
     border-radius: 4px;
     overflow: hidden;
 }
-.history-table th {
-    background: #7b1fa2;
+.hc-table th {
+    background: #7B1FA2;
     color: white;
-    padding: 4px 6px;
+    padding: 5px 4px;
     font-weight: 700;
-    font-size: 10px;
     text-align: center;
 }
-.history-table td {
-    padding: 4px 6px;
+.hc-table td {
+    padding: 5px 4px;
     text-align: center;
-    border-bottom: 1px solid #e0e0e0;
+    border: 1px solid #e0e0e0;
+    font-weight: 600;
 }
-.history-table .row-label {
-    background: #f3e5f5;
-    font-weight: 700;
-    color: #6a1b9a;
-    width: 35px;
-}
-.history-table .val-main { font-weight: 700; color: #333; }
-.history-table .val-red { font-weight: 700; color: #d32f2f; }
-.history-table .val-blue { font-weight: 700; color: #1565c0; }
-.history-table .val-pink { font-weight: 900; color: #E91E63; background: #fce4ec; }
+.val-red { color: #d32f2f; font-weight: 700; }
+.val-pink { color: #E91E63; font-weight: 900; }
 
 /* 警示語 */
 .warning-box { background: #fff3e0; border-left: 4px solid #ff9800; padding: 10px; margin-top: 5px; font-size: 12px; color: #e65100; font-weight: bold; border-radius: 4px; }
@@ -848,56 +843,58 @@ function getStatsSmart(category, val) {
 // 4. UI 顯示
 // ==========================================
 
-// v3.50 強化版：歷史搜尋卡片生成 - 緊湊表格版
+// v3.50 強化版：歷史搜尋卡片生成 - 精簡緊湊版
 function generateHistoryCard(d) {
     const h = safeFloat(d.marketHigh);
     const l = safeFloat(d.marketLow);
     const amp = (h > 0 && l > 0) ? ((h - l) / l * 100).toFixed(1) : '-';
     
+    // 擔保簡化
+    let guarantee = d.guarantee || '-';
+    if (guarantee.includes('有')) guarantee = '有';
+    else if (guarantee.includes('無')) guarantee = '無';
+    
     return `
     <div class="history-card">
-        <div class="history-card-header">
-            <div class="history-card-title">${d.name || '-'} (${d.id})</div>
-            <div class="history-card-date">${formatDate(d.openDate)}</div>
+        <div class="hc-header">
+            <span class="hc-badge">競拍</span>
+            <span class="hc-name">${d.name || '-'} (${d.id})</span>
+            <span class="hc-date">${formatDate(d.openDate)}</span>
         </div>
         
-        <div class="history-info-line">
-            <span><span class="hl">產業:</span><span class="hv">${d.industry || '-'}</span></span>
-            <span><span class="hl">規模:</span><span class="hv">${d.issueSize > 0 ? d.issueSize + '億' : '-'}</span></span>
-            <span><span class="hl">年期:</span><span class="hv">${d.years > 0 ? d.years + '年' : '-'}</span></span>
-            <span><span class="hl">擔保:</span><span class="hv">${d.guarantee || '-'}</span></span>
-            <span><span class="hl">信評:</span><span class="hv">${d.rating || '-'}</span></span>
-            <span><span class="hl">券商:</span><span class="hv">${d.broker || '-'}</span></span>
-            <span><span class="hl">底標:</span><span class="hv">${d.floorPrice > 0 ? safeFixed(d.floorPrice,2) : '-'}</span></span>
+        <div class="hc-line">
+            <span class="hc-info">產業:<b>${d.industry || '-'}</b></span>
+            <span class="hc-info">規模:<b>${d.issueSize > 0 ? d.issueSize + '億' : '-'}</b></span>
+            <span class="hc-info">年期:<b>${d.years > 0 ? d.years + '年' : '-'}</b></span>
+            <span class="hc-info">擔保:<b>${guarantee}</b></span>
+            <span class="hc-info">信評:<b>${d.rating || '-'}</b></span>
+            <span class="hc-info">券商:<b>${d.broker || '-'}</b></span>
+            <span class="hc-info">底標:<b>${d.floorPrice > 0 ? safeFixed(d.floorPrice,2) : '-'}</b></span>
         </div>
         
-        <div class="history-info-line">
-            <span><span class="hl">轉換價:</span><span class="hv">${d.conversionPrice > 0 ? safeFixed(d.conversionPrice,1) : '-'}</span></span>
-            <span><span class="hl">截標收盤:</span><span class="hv">${d.closePrice > 0 ? safeFixed(d.closePrice,1) : '-'}</span></span>
-            <span><span class="hl">理論價:</span><span class="hv-blue">${d.theoreticalPrice > 0 ? safeFixed(d.theoreticalPrice,2) : '-'}</span></span>
-            <span><span class="hl">競拍張數:</span><span class="hv">${d.auctionShares > 0 ? d.auctionShares.toLocaleString() : '-'}</span></span>
-            <span><span class="hl">投標張數:</span><span class="hv">${d.bidShares > 0 ? d.bidShares.toLocaleString() : '-'}</span></span>
-            <span><span class="hl">投標倍數:</span><span class="hv-red">${d.bidMultiple > 0 ? safeFixed(d.bidMultiple, 2) + 'x' : '-'}</span></span>
+        <div class="hc-line">
+            <span class="hc-info">轉換價:<b>${d.conversionPrice > 0 ? safeFixed(d.conversionPrice,1) : '-'}</b></span>
+            <span class="hc-info">截標收盤:<b>${d.closePrice > 0 ? safeFixed(d.closePrice,1) : '-'}</b></span>
+            <span class="hc-info">理論價:<b style="color:#1565c0">${d.theoreticalPrice > 0 ? safeFixed(d.theoreticalPrice,2) : '-'}</b></span>
+            <span class="hc-info">競拍張數:<b>${d.auctionShares > 0 ? d.auctionShares.toLocaleString() : '-'}</b></span>
+            <span class="hc-info">投標張數:<b>${d.bidShares > 0 ? d.bidShares.toLocaleString() : '-'}</b></span>
+            <span class="hc-info">投標倍數:<b style="color:#d32f2f">${d.bidMultiple > 0 ? safeFixed(d.bidMultiple, 2) + 'x' : '-'}</b></span>
         </div>
         
-        <table class="history-table">
+        <table class="hc-table">
             <tr>
-                <th></th><th>得標價</th><th>溢價率</th><th></th><th>掛牌價</th><th>振幅</th>
+                <th>得標價</th><th>溢價率</th><th>掛牌價</th><th>振幅</th>
             </tr>
             <tr>
-                <td class="row-label">最低</td>
-                <td class="val-main">${d.minBidPrice > 0 ? safeFixed(d.minBidPrice, 2) : '-'}</td>
+                <td>${d.minBidPrice > 0 ? safeFixed(d.minBidPrice, 2) : '-'}</td>
                 <td class="val-red">${d.lowPremium !== 0 ? safeFixed(d.lowPremium, 2) + '%' : '-'}</td>
-                <td class="row-label">高</td>
-                <td class="val-blue">${h > 0 ? safeFixed(h, 1) : '-'}</td>
+                <td>${h > 0 ? safeFixed(h, 1) : '-'}</td>
                 <td class="val-pink" rowspan="2">${amp}%</td>
             </tr>
             <tr>
-                <td class="row-label">平均</td>
-                <td class="val-main">${d.avgBidPrice > 0 ? safeFixed(d.avgBidPrice, 2) : '-'}</td>
+                <td>${d.avgBidPrice > 0 ? safeFixed(d.avgBidPrice, 2) : '-'}</td>
                 <td class="val-red">${d.avgPremium !== 0 ? safeFixed(d.avgPremium, 2) + '%' : '-'}</td>
-                <td class="row-label">低</td>
-                <td class="val-blue">${l > 0 ? safeFixed(l, 1) : '-'}</td>
+                <td>${l > 0 ? safeFixed(l, 1) : '-'}</td>
             </tr>
         </table>
     </div>

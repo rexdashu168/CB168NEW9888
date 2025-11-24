@@ -56,60 +56,57 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 /* 詢圈案例簡單卡片 */
 .inquiry-card {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    padding: 10px 12px;
     background: #fff3e0;
     border: 1px solid #ffb74d;
     border-radius: 6px;
     margin-bottom: 6px;
+    padding: 8px 12px;
     font-size: 12px;
-    gap: 6px 0;
+}
+.inquiry-line1, .inquiry-line2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.inquiry-line2 {
+    margin-top: 4px;
+    padding-left: 42px;
 }
 .inquiry-badge {
     background: #ff9800;
     color: white;
-    padding: 2px 8px;
+    padding: 2px 6px;
     border-radius: 4px;
     font-size: 10px;
     font-weight: bold;
-    margin-right: 8px;
-    flex-shrink: 0;
 }
 .inquiry-name {
     font-weight: 700;
     color: #e65100;
-    width: 140px;
-    flex-shrink: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 .inquiry-info {
     color: #666;
     white-space: nowrap;
-    width: 80px;
-    flex-shrink: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 .inquiry-info b {
     color: #333;
-    margin-left: 2px;
 }
 .inquiry-info b.pink {
     color: #E91E63;
 }
-.inquiry-row {
-    width: 100%;
-    display: flex;
-    gap: 0;
-    margin-top: 4px;
-    padding-left: 50px;
-}
-.inquiry-row .inquiry-info {
-    width: 100px;
+/* 固定各欄位寬度（剛好容納最大內容） */
+.iq-size { width: 70px; }   /* 規模:100億 */
+.iq-year { width: 55px; }   /* 年期:5年 */
+.iq-guar { width: 50px; }   /* 擔保:無 */
+.iq-high { width: 85px; }   /* 掛牌高:388.0 */
+.iq-low { width: 85px; }    /* 掛牌低:100.0 */
+.iq-amp { width: 85px; }    /* 振幅:323.6% */
+
+@media (max-width: 500px) {
+    .inquiry-line2 {
+        padding-left: 0;
+    }
 }
 
 /* 單筆歷史卡片 - 緊湊版 */
@@ -999,17 +996,24 @@ function bindInputEvents() {
                     const h = safeFloat(d.marketHigh);
                     const l = safeFloat(d.marketLow);
                     const amp = (h > 0 && l > 0) ? ((h - l) / l * 100).toFixed(1) : '-';
+                    // 擔保簡化：有擔保->有，無擔保->無
+                    let guarantee = '-';
+                    if (d.guarantee) {
+                        guarantee = d.guarantee.includes('有') ? '有' : (d.guarantee.includes('無') ? '無' : d.guarantee);
+                    }
                     html += `
                     <div class="inquiry-card">
-                        <span class="inquiry-badge">詢圈</span>
-                        <span class="inquiry-name">${d.name || '-'} (${d.id})</span>
-                        <span class="inquiry-info">規模:<b>${d.issueSize > 0 ? d.issueSize + '億' : '-'}</b></span>
-                        <span class="inquiry-info">年期:<b>${d.years > 0 ? d.years + '年' : '-'}</b></span>
-                        <span class="inquiry-info">擔保:<b>${d.guarantee || '-'}</b></span>
-                        <div class="inquiry-row">
-                            <span class="inquiry-info">掛牌高:<b>${h > 0 ? safeFixed(h,1) : '-'}</b></span>
-                            <span class="inquiry-info">掛牌低:<b>${l > 0 ? safeFixed(l,1) : '-'}</b></span>
-                            <span class="inquiry-info">振幅:<b class="pink">${amp}%</b></span>
+                        <div class="inquiry-line1">
+                            <span class="inquiry-badge">詢圈</span>
+                            <span class="inquiry-name">${d.name || '-'} (${d.id})</span>
+                            <span class="inquiry-info iq-size">規模:<b>${d.issueSize > 0 ? d.issueSize + '億' : '-'}</b></span>
+                            <span class="inquiry-info iq-year">年期:<b>${d.years > 0 ? d.years + '年' : '-'}</b></span>
+                            <span class="inquiry-info iq-guar">擔保:<b>${guarantee}</b></span>
+                        </div>
+                        <div class="inquiry-line2">
+                            <span class="inquiry-info iq-high">掛牌高:<b>${h > 0 ? safeFixed(h,1) : '-'}</b></span>
+                            <span class="inquiry-info iq-low">掛牌低:<b>${l > 0 ? safeFixed(l,1) : '-'}</b></span>
+                            <span class="inquiry-info iq-amp">振幅:<b class="pink">${amp}%</b></span>
                         </div>
                     </div>`;
                 });

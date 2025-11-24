@@ -102,6 +102,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 .iq-high { width: 72px; }   /* 掛牌高:388.0 */
 .iq-low { width: 70px; }    /* 掛牌低:100.0 */
 .iq-amp { width: 78px; }    /* 振幅:323.6% */
+.iq-prem { width: 85px; }   /* 溢價率:109.1% */
 
 /* 單筆歷史卡片 - 精簡版 */
 .history-card { 
@@ -610,6 +611,7 @@ async function loadStatistics() {
                     'conversionPrice': safeFloat(row['轉換價格']),
                     'marketHigh': safeFloat(getSmartValue(hlRow, 'marketHigh')) || safeFloat(row['掛牌最高']),
                     'marketLow': safeFloat(getSmartValue(hlRow, 'marketLow')) || safeFloat(row['掛牌最低']),
+                    'premiumRate': safeFloat(row['訂價溢價率']),
                     'type': '詢圈'
                 };
             }).filter(item => item !== null);
@@ -855,6 +857,10 @@ function generateHistoryCard(d) {
     const l = safeFloat(d.marketLow);
     const amp = (h > 0 && l > 0) ? ((h - l) / l * 100).toFixed(1) : '-';
     
+    // 處理溢價率
+    const premium = safeFloat(d.premiumRate);
+    const premiumStr = premium > 0 ? (premium < 2 ? (premium * 100).toFixed(1) : premium.toFixed(1)) : '-';
+    
     // 擔保簡化
     let guarantee = d.guarantee || '-';
     if (guarantee.includes('有')) guarantee = '有';
@@ -876,6 +882,7 @@ function generateHistoryCard(d) {
             <span class="hc-info">信評:<b>${d.rating || '-'}</b></span>
             <span class="hc-info">券商:<b>${d.broker || '-'}</b></span>
             <span class="hc-info">底標:<b>${d.floorPrice > 0 ? safeFixed(d.floorPrice,2) : '-'}</b></span>
+            <span class="hc-info">溢價率:<b class="pink">${premiumStr}%</b></span>
         </div>
         
         <div class="hc-line">
@@ -902,6 +909,14 @@ function generateHistoryCard(d) {
             <tr>
                 <td class="td-label">平均</td>
                 <td>${d.avgBidPrice > 0 ? safeFixed(d.avgBidPrice, 2) : '-'}</td>
+                <td class="val-red">${d.avgPremium !== 0 ? safeFixed(d.avgPremium, 2) + '%' : '-'}</td>
+                <td class="td-label">低</td>
+                <td>${l > 0 ? safeFixed(l, 1) : '-'}</td>
+            </tr>
+        </table>
+    </div>
+    `;
+}
                 <td class="val-red">${d.avgPremium !== 0 ? safeFixed(d.avgPremium, 2) + '%' : '-'}</td>
                 <td class="td-label">低</td>
                 <td>${l > 0 ? safeFixed(l, 1) : '-'}</td>
@@ -1063,6 +1078,8 @@ function bindInputEvents() {
                     const h = safeFloat(d.marketHigh);
                     const l = safeFloat(d.marketLow);
                     const amp = (h > 0 && l > 0) ? ((h - l) / l * 100).toFixed(1) : '-';
+                    const premium = safeFloat(d.premiumRate);
+                    const premiumStr = premium > 0 ? (premium < 2 ? (premium * 100).toFixed(1) : premium.toFixed(1)) : '-';
                     // 擔保簡化：有擔保->有，無擔保->無
                     let guarantee = '-';
                     if (d.guarantee) {
@@ -1081,6 +1098,7 @@ function bindInputEvents() {
                             <span class="inquiry-info iq-high">掛牌高:<b>${h > 0 ? safeFixed(h,1) : '-'}</b></span>
                             <span class="inquiry-info iq-low">掛牌低:<b>${l > 0 ? safeFixed(l,1) : '-'}</b></span>
                             <span class="inquiry-info iq-amp">振幅:<b class="pink">${amp}%</b></span>
+                            <span class="inquiry-info iq-prem">溢價率:<b class="pink">${premiumStr}%</b></span>
                         </div>
                     </div>`;
                 });

@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.50 (詢圈修正版)</title>
+<title>AI智能可轉債競拍系統 v3.50 (歷史卡片強化版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="embedded_data.js" onerror="console.warn('embedded_data.js not found, using defaults.')"></script>
 
@@ -96,13 +96,13 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     color: #E91E63;
 }
 /* 固定各欄位寬度（緊湊版） */
-.iq-size { width: 58px; }
-.iq-year { width: 48px; }
-.iq-guar { width: 42px; }
-.iq-high { width: 72px; }
-.iq-low { width: 70px; }
-.iq-amp { width: 78px; }
-.iq-prem { width: 85px; }
+.iq-size { width: 58px; }   /* 規模:100億 */
+.iq-year { width: 48px; }   /* 年期:5年 */
+.iq-guar { width: 42px; }   /* 擔保:無 */
+.iq-high { width: 72px; }   /* 掛牌高:388.0 */
+.iq-low { width: 70px; }    /* 掛牌低:100.0 */
+.iq-amp { width: 78px; }    /* 振幅:323.6% */
+.iq-prem { width: 85px; }   /* 溢價率:109.1% */
 
 /* 單筆歷史卡片 - 精簡版 */
 .history-card { 
@@ -505,10 +505,12 @@ function safeFixed(val, digits=2) { const num = parseFloat(val); return isNaN(nu
 
 function formatDate(dateVal) {
     if (!dateVal) return '-';
+    // 處理 Excel 日期序號
     if (typeof dateVal === 'number') {
         const date = new Date((dateVal - 25569) * 86400 * 1000);
         return `${date.getFullYear()}/${(date.getMonth()+1).toString().padStart(2,'0')}/${date.getDate().toString().padStart(2,'0')}`;
     }
+    // 處理字串日期
     if (typeof dateVal === 'string') {
         return dateVal.replace(/-/g, '/');
     }
@@ -555,7 +557,7 @@ let statistics = { '維度統計': { '產業': {}, '發行券商': {} }, '資料
 let cbDatabase = {}, auctionRawData = [], inquiryRawData = [], globalMarketStats = { low: 0, avg: 0 }, cbNameMap = {};
 
 // ==========================================
-// 2. 資料讀取 (修正版：詢圈資料從00工作表補充)
+// 2. 資料讀取
 // ==========================================
 async function loadStatistics() {
     const loadingDiv = document.getElementById('loading');
@@ -576,27 +578,16 @@ async function loadStatistics() {
         
         if (!sheetAuction || sheetAuction.length === 0) throw new Error("找不到競拍資料分頁");
 
-        // ===== 修正重點：建立完整的對照表，包含掛牌高低+股本+擔保+信評 =====
-        const masterDataMap = {};
+        // 建立掛牌高低對照表
+        const highLowMap = {};
         if (sheetHighLow && sheetHighLow.length > 0) {
             sheetHighLow.forEach(row => {
                 let id = row['代號'] || row['CB代號'] || row['股票代號'];
-                if(id) {
-                    const key = String(id).replace('.0','').trim();
-                    masterDataMap[key] = {
-                        // 掛牌高低
-                        marketHigh: safeFloat(getSmartValue(row, 'marketHigh')),
-                        marketLow: safeFloat(getSmartValue(row, 'marketLow')),
-                        // 股本、擔保、信評 (從00工作表讀取)
-                        capital: safeFloat(row['股本規模'] || row['股本'] || row['股本(億)']),
-                        guarantee: row['有無擔保'] || row['擔保'] || row['擔保情形'] || '',
-                        rating: row['信用擔保'] || row['信評'] || row['TCRI'] || ''
-                    };
-                }
+                if(id) highLowMap[String(id).replace('.0','').trim()] = row;
             });
         }
         
-        // 讀取詢圈資料 (從01工作表，並用00工作表補充缺失資料)
+        // 讀取詢圈資料 (從01工作表)
         if (sheetAllCB && sheetAllCB.length > 0) {
             inquiryRawData = sheetAllCB.filter(row => {
                 const type = row['詢圈競拍'] || '';
@@ -605,29 +596,21 @@ async function loadStatistics() {
                 let rawId = row['CB代號'] || row['代號'];
                 if (!rawId) return null;
                 const id = String(rawId).replace('.0','').trim();
-                const masterRow = masterDataMap[id] || {};
-                
-                // ===== 修正重點：優先用01工作表的值，空的話用00工作表補充 =====
-                const capital01 = safeFloat(row['股本規模']);
-                const guarantee01 = row['有無擔保'] || '';
-                const rating01 = row['信用擔保'] || '';
+                const hlRow = highLowMap[id] || {};
                 
                 return {
                     'id': id,
                     'name': row['名稱'] || '',
                     'industry': row['產業分類'] || '',
                     'broker': row['承銷券商'] || '',
-                    // 股本：優先01，為0則用00補充
-                    'capital': capital01 > 0 ? capital01 : (masterRow.capital || 0),
-                    // 擔保：優先01，空則用00補充
-                    'guarantee': guarantee01 || masterRow.guarantee || '',
-                    // 信評：優先01，空則用00補充
-                    'rating': rating01 || masterRow.rating || '',
+                    'guarantee': row['有無擔保'] || '',
+                    'rating': row['信用擔保'] || '',
+                    'capital': safeFloat(row['股本規模']),
                     'issueSize': safeFloat(row['發行規模']),
                     'years': safeFloat(row['發行年期']),
                     'conversionPrice': safeFloat(row['轉換價格']),
-                    'marketHigh': masterRow.marketHigh || safeFloat(row['掛牌最高']),
-                    'marketLow': masterRow.marketLow || safeFloat(row['掛牌最低']),
+                    'marketHigh': safeFloat(getSmartValue(hlRow, 'marketHigh')) || safeFloat(row['掛牌最高']),
+                    'marketLow': safeFloat(getSmartValue(hlRow, 'marketLow')) || safeFloat(row['掛牌最低']),
                     'premiumRate': safeFloat(row['訂價溢價率']),
                     'type': '詢圈'
                 };
@@ -639,10 +622,11 @@ async function loadStatistics() {
             if (!rawId) return null;
             
             const id = String(rawId).replace('.0','').trim();
-            const masterRow = masterDataMap[id] || {}; 
+            const hlRow = highLowMap[id] || {}; 
 
             let lowPrem = safeFloat(getSmartValue(row, 'lowPremium'));
             let avgPrem = safeFloat(getSmartValue(row, 'avgPremium'));
+            // 處理小數格式 (0.15 -> 15%)
             if (lowPrem !== 0 && Math.abs(lowPrem) < 2) lowPrem *= 100;
             if (avgPrem !== 0 && Math.abs(avgPrem) < 2) avgPrem *= 100;
 
@@ -667,8 +651,8 @@ async function loadStatistics() {
                 'avgBidPrice': safeFloat(getSmartValue(row, 'avgBidPrice')),
                 'lowPremium': lowPrem, 
                 'avgPremium': avgPrem,
-                'marketHigh': masterRow.marketHigh || safeFloat(getSmartValue(row, 'marketHigh')), 
-                'marketLow': masterRow.marketLow || safeFloat(getSmartValue(row, 'marketLow')),
+                'marketHigh': safeFloat(getSmartValue(hlRow, 'marketHigh')) || safeFloat(getSmartValue(row, 'marketHigh')), 
+                'marketLow': safeFloat(getSmartValue(hlRow, 'marketLow')) || safeFloat(getSmartValue(row, 'marketLow')),
                 'qualifiedCount': safeFloat(getSmartValue(row, 'qualifiedCount')),
                 'bidShares': safeFloat(getSmartValue(row, 'bidShares')),
                 'bidMultiple': safeFloat(getSmartValue(row, 'bidMultiple')),
@@ -683,13 +667,6 @@ async function loadStatistics() {
                 cbNameMap[item.name] = item; 
             } 
         });
-        
-        // Debug: 顯示詢圈資料讀取狀況
-        console.log('詢圈總數:', inquiryRawData.length);
-        console.log('詢圈有股本:', inquiryRawData.filter(d => d.capital > 0).length);
-        console.log('詢圈有擔保:', inquiryRawData.filter(d => d.guarantee).length);
-        console.log('詢圈有信評:', inquiryRawData.filter(d => d.rating).length);
-        console.log('詢圈有掛牌高低:', inquiryRawData.filter(d => d.marketHigh > 0).length);
         
         autoGenerateStatistics(); 
         calculateGlobalMarketStats(); 
@@ -773,7 +750,7 @@ function getStatsSmart(category, val) {
     let rangeLabel = "";
 
     if (category === '股本') {
-        if (v < 3) { rangeLabel = "< 3 億"; filterFn = d => d.capital < 3 && d.capital > 0; }
+        if (v < 3) { rangeLabel = "< 3 億"; filterFn = d => d.capital < 3; }
         else if (v < 6) { rangeLabel = "3~6 億"; filterFn = d => d.capital >= 3 && d.capital < 6; }
         else if (v < 10) { rangeLabel = "6~10 億"; filterFn = d => d.capital >= 6 && d.capital < 10; }
         else if (v < 15) { rangeLabel = "10~15 億"; filterFn = d => d.capital >= 10 && d.capital < 15; }
@@ -781,7 +758,7 @@ function getStatsSmart(category, val) {
         else { rangeLabel = "> 20 億"; filterFn = d => d.capital >= 20; }
     }
     else if (category === '發行規模') {
-        if (v < 2) { rangeLabel = "< 2 億"; filterFn = d => d.issueSize < 2 && d.issueSize > 0; }
+        if (v < 2) { rangeLabel = "< 2 億"; filterFn = d => d.issueSize < 2; }
         else if (v < 5) { rangeLabel = "2~5 億"; filterFn = d => d.issueSize >= 2 && d.issueSize < 5; }
         else if (v < 10) { rangeLabel = "5~10 億"; filterFn = d => d.issueSize >= 5 && d.issueSize < 10; }
         else if (v < 15) { rangeLabel = "10~15 億"; filterFn = d => d.issueSize >= 10 && d.issueSize < 15; }
@@ -789,7 +766,7 @@ function getStatsSmart(category, val) {
         else { rangeLabel = "> 20 億"; filterFn = d => d.issueSize >= 20; }
     }
     else if (category === '轉換價') {
-        if (v < 20) { rangeLabel = "< 20 元"; filterFn = d => d.conversionPrice < 20 && d.conversionPrice > 0; }
+        if (v < 20) { rangeLabel = "< 20 元"; filterFn = d => d.conversionPrice < 20; }
         else if (v < 50) { rangeLabel = "20~50 元"; filterFn = d => d.conversionPrice >= 20 && d.conversionPrice < 50; }
         else if (v < 100) { rangeLabel = "50~100 元"; filterFn = d => d.conversionPrice >= 50 && d.conversionPrice < 100; }
         else if (v < 150) { rangeLabel = "100~150 元"; filterFn = d => d.conversionPrice >= 100 && d.conversionPrice < 150; }
@@ -874,14 +851,17 @@ function getStatsSmart(category, val) {
 // 4. UI 顯示
 // ==========================================
 
+// v3.50 強化版：歷史搜尋卡片生成 - 精簡緊湊版
 function generateHistoryCard(d) {
     const h = safeFloat(d.marketHigh);
     const l = safeFloat(d.marketLow);
     const amp = (h > 0 && l > 0) ? ((h - l) / l * 100).toFixed(1) : '-';
     
+    // 處理溢價率
     const premium = safeFloat(d.premiumRate);
     const premiumStr = premium > 0 ? (premium < 2 ? (premium * 100).toFixed(1) : premium.toFixed(1)) : '-';
     
+    // 擔保簡化
     let guarantee = d.guarantee || '-';
     if (guarantee.includes('有')) guarantee = '有';
     else if (guarantee.includes('無')) guarantee = '無';
@@ -944,10 +924,12 @@ function generateStandardCard(data, titleOverride=null, inquiryData=null) {
     const valStr = (v, s='') => (v!==undefined && v!==null && v!=='' && v!==0) ? `${safeFixed(v,2)}${s}` : '-';
     const title = data['區間名稱'] ? `區間統計: ${data['區間名稱']}` : (titleOverride || '歷史統計');
 
+    // 計算競拍振幅
     const aH = safeFloat(data['平均掛牌最高']);
     const aL = safeFloat(data['平均掛牌最低']);
     const aAmp = (aH > 0 && aL > 0) ? ((aH - aL) / aL * 100).toFixed(1) : '-';
     
+    // 計算詢圈振幅
     let iH = 0, iL = 0, iAmp = '-', iCount = 0;
     if (inquiryData) {
         iH = safeFloat(inquiryData['平均掛牌最高']);
@@ -956,6 +938,7 @@ function generateStandardCard(data, titleOverride=null, inquiryData=null) {
         iCount = inquiryData['樣本數'] || 0;
     }
     
+    // 計算合計
     const aCount = data['樣本數'] || 0;
     const totalCount = (typeof aCount === 'number' ? aCount : 0) + (typeof iCount === 'number' ? iCount : 0);
     
@@ -972,6 +955,7 @@ function generateStandardCard(data, titleOverride=null, inquiryData=null) {
 
     let html = `<div class="stats-header">📊 ${title}</div>`;
     
+    // 競拍得標數據
     if (data['樣本數']) {
         html += `<div style="background:#f1f8e9; padding:8px; border-radius:5px; margin:8px 0;">
         <div style="font-weight:bold; color:#2e7d32; font-size:12px; margin-bottom:5px;">🎯 競拍 (${data['樣本數']}檔)</div>
@@ -980,6 +964,7 @@ function generateStandardCard(data, titleOverride=null, inquiryData=null) {
         </div>`;
     }
     
+    // 掛牌表格（競拍+詢圈+合計）
     const hasAuction = aH > 0 || aL > 0;
     const hasInquiry = iH > 0 || iL > 0;
     
@@ -1055,11 +1040,13 @@ function bindInputEvents() {
         el.style.display = html?'block':'none'; 
     };
     
+    // CB名稱搜尋 (v3.50 強化版)
     document.getElementById('cbName').addEventListener('input', function() {
         const val = this.value.trim(); 
         const histDiv = document.getElementById('historyResults');
         
         if(val.length >= 2) {
+            // 搜尋競拍資料
             const auctionMatches = auctionRawData.filter(d => {
                 const idMatch = d.id && d.id.startsWith(val);
                 const stockIdMatch = d.stockId && String(d.stockId).startsWith(val);
@@ -1067,6 +1054,7 @@ function bindInputEvents() {
                 return idMatch || stockIdMatch || nameMatch;
             }).slice(0, 10);
             
+            // 搜尋詢圈資料
             const inquiryMatches = inquiryRawData.filter(d => {
                 const idMatch = d.id && d.id.startsWith(val);
                 const nameMatch = d.name && d.name.includes(val);
@@ -1075,6 +1063,7 @@ function bindInputEvents() {
             
             let html = '';
             
+            // 顯示詢圈結果（兩行整齊排列）
             if(inquiryMatches.length > 0) {
                 html += `<div class="history-results-title">📋 詢圈案例 (${inquiryMatches.length}筆)</div>`;
                 inquiryMatches.forEach(d => {
@@ -1083,6 +1072,7 @@ function bindInputEvents() {
                     const amp = (h > 0 && l > 0) ? ((h - l) / l * 100).toFixed(1) : '-';
                     const premium = safeFloat(d.premiumRate);
                     const premiumStr = premium > 0 ? (premium < 2 ? (premium * 100).toFixed(1) : premium.toFixed(1)) : '-';
+                    // 擔保簡化：有擔保->有，無擔保->無
                     let guarantee = '-';
                     if (d.guarantee) {
                         guarantee = d.guarantee.includes('有') ? '有' : (d.guarantee.includes('無') ? '無' : d.guarantee);
@@ -1106,6 +1096,7 @@ function bindInputEvents() {
                 });
             }
             
+            // 顯示競拍結果（完整卡片）
             if(auctionMatches.length > 0) {
                 html += `<div class="history-results-title" style="margin-top:${inquiryMatches.length > 0 ? '12px' : '0'}">🎯 競拍案例 (${auctionMatches.length}筆)</div>`;
                 html += auctionMatches.map(d => generateHistoryCard(d)).join('');
@@ -1121,6 +1112,7 @@ function bindInputEvents() {
             histDiv.style.display = 'none';
         }
 
+        // 精準比對資訊卡
         if (!val) { show('cbNameInfo', null); return; }
         const found = cbNameMap[val] || Object.values(cbDatabase).find(d => d.name && d.name === val);
         if (found) {
@@ -1138,6 +1130,7 @@ function bindInputEvents() {
         }
     });
 
+    // 其他欄位綁定
     const bind = (id, cat) => {
         const handler = function() {
             const rawVal = this.value;
@@ -1304,7 +1297,7 @@ function displayResult(r) {
             </div>
         </div>
         <div class="detail-section" style="flex:2; min-width:280px;">
-            <h3>🔍 維度權重分析</h3>
+            <h3>📐 維度權重分析</h3>
             <div style="overflow-x:auto;">
                 <table class="data-table">
                     <thead><tr>
@@ -1377,13 +1370,16 @@ document.getElementById('evaluationForm').addEventListener('submit', function(e)
     }
 });
 
+// 瀏覽人數計數器（使用 localStorage 模擬，實際部署可串接後端API）
 function updateVisitorCount() {
     let count = parseInt(localStorage.getItem('rex_cb_visitor_count') || '0');
+    // 檢查是否為新訪客（使用 sessionStorage 判斷）
     if (!sessionStorage.getItem('rex_cb_visited')) {
         count++;
         localStorage.setItem('rex_cb_visitor_count', count.toString());
         sessionStorage.setItem('rex_cb_visited', 'true');
     }
+    document.getElementById('visitorCount').textContent = count.toLocaleString();
 }
 
 window.addEventListener('DOMContentLoaded', function() {

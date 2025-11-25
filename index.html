@@ -972,7 +972,7 @@ function generateHistoryCard(d) {
     `;
 }
 
-// v3.51 修改：generateStandardCard 增加排除前三的參數
+// v3.51 修改：generateStandardCard 增加排除前三的參數，獨立成兩個表格
 function generateStandardCard(data, titleOverride=null, inquiryData=null, excludeTop3Data=null, excludeTop3InquiryData=null) {
     if (!data) return `<div class="stat-row" style="color:#999;">查無資料</div>`;
     
@@ -993,7 +993,7 @@ function generateStandardCard(data, titleOverride=null, inquiryData=null, exclud
         iCount = inquiryData['樣本數'] || 0;
     }
     
-    // v3.51 新增：計算排除前三的競拍振幅
+    // v3.51：計算排除前三的競拍振幅
     let exAH = 0, exAL = 0, exAAmp = '-', exACount = 0;
     if (excludeTop3Data) {
         exAH = safeFloat(excludeTop3Data['平均掛牌最高']);
@@ -1002,7 +1002,7 @@ function generateStandardCard(data, titleOverride=null, inquiryData=null, exclud
         exACount = excludeTop3Data['樣本數'] || 0;
     }
     
-    // v3.51 新增：計算排除前三的詢圈振幅
+    // v3.51：計算排除前三的詢圈振幅
     let exIH = 0, exIL = 0, exIAmp = '-', exICount = 0;
     if (excludeTop3InquiryData) {
         exIH = safeFloat(excludeTop3InquiryData['平均掛牌最高']);
@@ -1011,7 +1011,7 @@ function generateStandardCard(data, titleOverride=null, inquiryData=null, exclud
         exICount = excludeTop3InquiryData['樣本數'] || 0;
     }
     
-    // 計算合計
+    // 計算合計（完整數據）
     const aCount = data['樣本數'] || 0;
     const totalCount = (typeof aCount === 'number' ? aCount : 0) + (typeof iCount === 'number' ? iCount : 0);
     
@@ -1025,6 +1025,19 @@ function generateStandardCard(data, titleOverride=null, inquiryData=null, exclud
         tH = iH; tL = iL;
     }
     if (tH > 0 && tL > 0) tAmp = ((tH - tL) / tL * 100).toFixed(1);
+    
+    // 計算排除前三的合計
+    const exTotalCount = exACount + exICount;
+    let exTH = 0, exTL = 0, exTAmp = '-';
+    if (exAH > 0 && exIH > 0) {
+        exTH = ((exAH * exACount) + (exIH * exICount)) / exTotalCount;
+        exTL = ((exAL * exACount) + (exIL * exICount)) / exTotalCount;
+    } else if (exAH > 0) {
+        exTH = exAH; exTL = exAL;
+    } else if (exIH > 0) {
+        exTH = exIH; exTL = exIL;
+    }
+    if (exTH > 0 && exTL > 0) exTAmp = ((exTH - exTL) / exTL * 100).toFixed(1);
 
     let html = `<div class="stats-header">📊 ${title}</div>`;
     
@@ -1037,13 +1050,12 @@ function generateStandardCard(data, titleOverride=null, inquiryData=null, exclud
         </div>`;
     }
     
-    // 掛牌表格(競拍+詢圈+排除前三+合計)
+    // === 第一個表格：完整數據 ===
     const hasAuction = aH > 0 || aL > 0;
     const hasInquiry = iH > 0 || iL > 0;
-    const hasExcludeAuction = exAH > 0 || exAL > 0;
-    const hasExcludeInquiry = exIH > 0 || exIL > 0;
     
     if (hasAuction || hasInquiry) {
+        html += `<div style="font-size:11px; color:#2e7d32; font-weight:bold; margin:8px 0 4px 0;">📈 掛牌統計（全部）</div>`;
         html += `<table class="card-market-table">
         <tr><th></th><th>掛牌高</th><th>掛牌低</th><th>振幅</th></tr>`;
         
@@ -1056,32 +1068,12 @@ function generateStandardCard(data, titleOverride=null, inquiryData=null, exclud
             </tr>`;
         }
         
-        // v3.51 新增：競拍排除前三高
-        if (hasExcludeAuction) {
-            html += `<tr class="exclude-row">
-                <td class="type-label" style="font-size:9px; color:#1976d2;">⤷ 除前3高<span class="count">${exACount}</span></td>
-                <td class="val-blue">${exAH > 0 ? safeFixed(exAH,1) : '-'}</td>
-                <td class="val-blue">${exAL > 0 ? safeFixed(exAL,1) : '-'}</td>
-                <td class="val-pink">${exAAmp}%</td>
-            </tr>`;
-        }
-        
         if (hasInquiry) {
             html += `<tr>
                 <td class="type-label">詢圈<span class="count">${iCount}</span></td>
                 <td class="val-blue">${iH > 0 ? safeFixed(iH,1) : '-'}</td>
                 <td class="val-blue">${iL > 0 ? safeFixed(iL,1) : '-'}</td>
                 <td class="val-pink">${iAmp}%</td>
-            </tr>`;
-        }
-        
-        // v3.51 新增：詢圈排除前三高
-        if (hasExcludeInquiry) {
-            html += `<tr class="exclude-row">
-                <td class="type-label" style="font-size:9px; color:#1976d2;">⤷ 除前3高<span class="count">${exICount}</span></td>
-                <td class="val-blue">${exIH > 0 ? safeFixed(exIH,1) : '-'}</td>
-                <td class="val-blue">${exIL > 0 ? safeFixed(exIL,1) : '-'}</td>
-                <td class="val-pink">${exIAmp}%</td>
             </tr>`;
         }
         
@@ -1095,6 +1087,76 @@ function generateStandardCard(data, titleOverride=null, inquiryData=null, exclud
         }
         
         html += `</table>`;
+    }
+    
+    // === 第二個表格：排除前三高 ===
+    const hasExcludeAuction = exAH > 0 || exAL > 0;
+    const hasExcludeInquiry = exIH > 0 || exIL > 0;
+    
+    if (hasExcludeAuction || hasExcludeInquiry) {
+        html += `<div style="font-size:11px; color:#1565c0; font-weight:bold; margin:12px 0 4px 0;">📉 掛牌統計（排除前3高）</div>`;
+        html += `<table class="card-market-table" style="background:#e3f2fd;">
+        <tr><th style="background:#1565c0;"></th><th style="background:#1565c0;">掛牌高</th><th style="background:#1565c0;">掛牌低</th><th style="background:#1565c0;">振幅</th></tr>`;
+        
+        if (hasExcludeAuction) {
+            html += `<tr>
+                <td class="type-label" style="color:#1565c0;">競拍<span class="count">${exACount}</span></td>
+                <td class="val-blue">${exAH > 0 ? safeFixed(exAH,1) : '-'}</td>
+                <td class="val-blue">${exAL > 0 ? safeFixed(exAL,1) : '-'}</td>
+                <td class="val-pink">${exAAmp}%</td>
+            </tr>`;
+        }
+        
+        if (hasExcludeInquiry) {
+            html += `<tr>
+                <td class="type-label" style="color:#1565c0;">詢圈<span class="count">${exICount}</span></td>
+                <td class="val-blue">${exIH > 0 ? safeFixed(exIH,1) : '-'}</td>
+                <td class="val-blue">${exIL > 0 ? safeFixed(exIL,1) : '-'}</td>
+                <td class="val-pink">${exIAmp}%</td>
+            </tr>`;
+        }
+        
+        if (hasExcludeAuction && hasExcludeInquiry) {
+            html += `<tr class="total-row" style="background:#bbdefb;">
+                <td class="type-label" style="color:#1565c0;">合計<span class="count">${exTotalCount}</span></td>
+                <td class="val-blue">${exTH > 0 ? safeFixed(exTH,1) : '-'}</td>
+                <td class="val-blue">${exTL > 0 ? safeFixed(exTL,1) : '-'}</td>
+                <td class="val-pink">${exTAmp}%</td>
+            </tr>`;
+        }
+        
+        html += `</table>`;
+        
+        // === 計算落差並顯示提醒 ===
+        // 比較完整數據 vs 排除前三的差異
+        let showWarning = false;
+        let warningMsg = '';
+        
+        // 計算振幅落差百分比
+        const fullAmp = parseFloat(hasAuction && hasInquiry ? tAmp : (hasAuction ? aAmp : iAmp));
+        const exAmpVal = parseFloat(hasExcludeAuction && hasExcludeInquiry ? exTAmp : (hasExcludeAuction ? exAAmp : exIAmp));
+        
+        if (!isNaN(fullAmp) && !isNaN(exAmpVal) && fullAmp > 0) {
+            const ampDiffPct = ((fullAmp - exAmpVal) / fullAmp) * 100;
+            
+            if (ampDiffPct > 15) {
+                showWarning = true;
+                const ampDiff = (fullAmp - exAmpVal).toFixed(1);
+                
+                // 計算掛牌高的價差
+                const fullHigh = hasAuction && hasInquiry ? tH : (hasAuction ? aH : iH);
+                const exHigh = hasExcludeAuction && hasExcludeInquiry ? exTH : (hasExcludeAuction ? exAH : exIH);
+                const highDiff = (fullHigh - exHigh).toFixed(1);
+                
+                warningMsg = `⚠️ 前3高對整體影響顯著：振幅落差 ${ampDiff}%（降幅${ampDiffPct.toFixed(0)}%），掛牌高均價差 ${highDiff} 元`;
+            }
+        }
+        
+        if (showWarning) {
+            html += `<div style="margin-top:6px; padding:6px 8px; background:#fff3e0; border-left:3px solid #ff9800; border-radius:4px; font-size:10px; color:#e65100; line-height:1.4;">
+                ${warningMsg}
+            </div>`;
+        }
     }
     
     return html;

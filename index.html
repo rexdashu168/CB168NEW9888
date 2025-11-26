@@ -1127,34 +1127,45 @@ function generateStandardCard(data, titleOverride=null, inquiryData=null, exclud
         
         html += `</table>`;
         
-        // === 計算落差並顯示提醒 ===
-        // 比較完整數據 vs 排除前三的差異
-        let showWarning = false;
-        let warningMsg = '';
+        // === 計算落差並顯示提醒（分開競拍和詢圈）===
+        let warnings = [];
         
-        // 計算振幅落差百分比
-        const fullAmp = parseFloat(hasAuction && hasInquiry ? tAmp : (hasAuction ? aAmp : iAmp));
-        const exAmpVal = parseFloat(hasExcludeAuction && hasExcludeInquiry ? exTAmp : (hasExcludeAuction ? exAAmp : exIAmp));
-        
-        if (!isNaN(fullAmp) && !isNaN(exAmpVal) && fullAmp > 0) {
-            const ampDiffPct = ((fullAmp - exAmpVal) / fullAmp) * 100;
+        // 競拍落差檢查
+        if (hasAuction && hasExcludeAuction) {
+            const aAmpNum = parseFloat(aAmp);
+            const exAAmpNum = parseFloat(exAAmp);
             
-            if (ampDiffPct > 15) {
-                showWarning = true;
-                const ampDiff = (fullAmp - exAmpVal).toFixed(1);
+            if (!isNaN(aAmpNum) && !isNaN(exAAmpNum) && aAmpNum > 0) {
+                const aAmpDiffPct = ((aAmpNum - exAAmpNum) / aAmpNum) * 100;
                 
-                // 計算掛牌高的價差
-                const fullHigh = hasAuction && hasInquiry ? tH : (hasAuction ? aH : iH);
-                const exHigh = hasExcludeAuction && hasExcludeInquiry ? exTH : (hasExcludeAuction ? exAH : exIH);
-                const highDiff = (fullHigh - exHigh).toFixed(1);
-                
-                warningMsg = `⚠️ 前3高對整體影響顯著：振幅落差 ${ampDiff}%（降幅${ampDiffPct.toFixed(0)}%），掛牌高均價差 ${highDiff} 元`;
+                if (aAmpDiffPct > 15) {
+                    const aAmpDiff = (aAmpNum - exAAmpNum).toFixed(1);
+                    const aHighDiff = (aH - exAH).toFixed(1);
+                    warnings.push(`🎯 競拍：振幅落差 ${aAmpDiff}%（降幅${aAmpDiffPct.toFixed(0)}%），掛牌高均價差 ${aHighDiff} 元`);
+                }
             }
         }
         
-        if (showWarning) {
-            html += `<div style="margin-top:6px; padding:6px 8px; background:#fff3e0; border-left:3px solid #ff9800; border-radius:4px; font-size:10px; color:#e65100; line-height:1.4;">
-                ${warningMsg}
+        // 詢圈落差檢查
+        if (hasInquiry && hasExcludeInquiry) {
+            const iAmpNum = parseFloat(iAmp);
+            const exIAmpNum = parseFloat(exIAmp);
+            
+            if (!isNaN(iAmpNum) && !isNaN(exIAmpNum) && iAmpNum > 0) {
+                const iAmpDiffPct = ((iAmpNum - exIAmpNum) / iAmpNum) * 100;
+                
+                if (iAmpDiffPct > 15) {
+                    const iAmpDiff = (iAmpNum - exIAmpNum).toFixed(1);
+                    const iHighDiff = (iH - exIH).toFixed(1);
+                    warnings.push(`📋 詢圈：振幅落差 ${iAmpDiff}%（降幅${iAmpDiffPct.toFixed(0)}%），掛牌高均價差 ${iHighDiff} 元`);
+                }
+            }
+        }
+        
+        if (warnings.length > 0) {
+            html += `<div style="margin-top:6px; padding:6px 8px; background:#fff3e0; border-left:3px solid #ff9800; border-radius:4px; font-size:10px; color:#e65100; line-height:1.6;">
+                <div style="font-weight:bold; margin-bottom:3px;">⚠️ 前3高對整體影響顯著：</div>
+                ${warnings.join('<br>')}
             </div>`;
         }
     }

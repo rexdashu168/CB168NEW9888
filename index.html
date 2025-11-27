@@ -664,23 +664,29 @@ async function loadStatistics() {
                 
                 return {
                     'id': id,
-                    'name': row['名稱'] || '',
-                    'industry': row['產業分類'] || '',
-                    'broker': row['承銷券商'] || '',
-                    'guarantee': row['有無擔保'] || '',
+                    'name': getSmartValue(row, 'name') || row['名稱'] || '',
+                    'industry': getSmartValue(row, 'industry') || row['產業分類'] || '',
+                    'broker': getSmartValue(row, 'broker') || row['承銷券商'] || '',
+                    'guarantee': getSmartValue(row, 'guarantee') || row['有無擔保'] || '',
                     'rating': normalizedRating,
-                    'capital': safeFloat(row['股本規模']),
-                    'issueSize': safeFloat(row['發行規模']),
-                    'years': safeFloat(row['發行年期']),
-                    'conversionPrice': safeFloat(row['轉換價格']),
-                    'marketHigh': safeFloat(getSmartValue(hlRow, 'marketHigh')) || safeFloat(row['掛牌最高']),
-                    'marketLow': safeFloat(getSmartValue(hlRow, 'marketLow')) || safeFloat(row['掛牌最低']),
-                    'premiumRate': safeFloat(row['訂價溢價率']),
+                    'capital': safeFloat(getSmartValue(row, 'capital')) || safeFloat(row['股本規模']),
+                    'issueSize': safeFloat(getSmartValue(row, 'issueSize')) || safeFloat(row['發行規模']),
+                    'years': safeFloat(getSmartValue(row, 'years')) || safeFloat(row['發行年期']),
+                    'conversionPrice': safeFloat(getSmartValue(row, 'conversionPrice')) || safeFloat(row['轉換價格']),
+                    'marketHigh': safeFloat(getSmartValue(hlRow, 'marketHigh')) || safeFloat(getSmartValue(row, 'marketHigh')) || safeFloat(row['掛牌最高']),
+                    'marketLow': safeFloat(getSmartValue(hlRow, 'marketLow')) || safeFloat(getSmartValue(row, 'marketLow')) || safeFloat(row['掛牌最低']),
+                    'premiumRate': safeFloat(getSmartValue(row, 'premiumRate')) || safeFloat(row['訂價溢價率']),
                     'type': '詢圈'
                 };
             }).filter(item => item !== null);
             
             console.log(`載入詢圈資料: ${inquiryRawData.length} 筆`);
+            // 除錯：檢查詢圈資料的 capital 值
+            const withCapital = inquiryRawData.filter(d => d.capital > 0);
+            console.log(`詢圈資料中有股本數據: ${withCapital.length} 筆`);
+            if (withCapital.length > 0) {
+                console.log('詢圈股本範例:', withCapital.slice(0, 3).map(d => ({name: d.name, capital: d.capital})));
+            }
         }
 
         auctionRawData = sheetAuction.map(row => {

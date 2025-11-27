@@ -951,7 +951,7 @@ const FIELD_ALIASES = {
     'broker': ['發行券商', '承銷券商', '主辦券商'],
     'guarantee': ['擔保', '有無擔保', '擔保情形'], 
     'rating': ['信評', '信用擔保', 'TCRI'],
-    'capital': ['股本', '股本規模', '股本(億)'], 
+    'capital': ['股本大小', '股本', '股本規模', '股本(億)'], 
     'issueSize': ['發行規模', '發行總額'],
     'years': ['年期', '發行年期'], 
     'conversionPrice': ['轉換價', '轉換價格'],
@@ -1090,15 +1090,21 @@ async function loadStatistics() {
                 const id = String(rawId).replace('.0','').trim();
                 const hlRow = highLowMap[id] || {};
                 
-                // 處理信評格式：TCRI1 -> 1, TCRI5 -> 5
-                let rawRating = row['信用擔保'] || '';
+                // 處理信評格式：統一轉為數字
+                let rawRating = row['信評'] || row['信用擔保'] || '';
                 let normalizedRating = '';
                 if (rawRating) {
+                    rawRating = String(rawRating).trim();
                     const match = rawRating.match(/TCRI(\d+)/i);
                     if (match) {
                         normalizedRating = match[1]; // 提取數字部分
-                    } else if (rawRating.includes('BBB')) {
+                    } else if (rawRating.match(/^\d+$/)) {
+                        normalizedRating = rawRating; // 已經是純數字
+                    } else if (rawRating.toUpperCase().includes('BBB')) {
                         normalizedRating = 'BBB';
+                    } else {
+                        // 有擔保的情況，信評欄位可能是銀行名稱
+                        normalizedRating = rawRating;
                     }
                 }
                 
@@ -1106,16 +1112,16 @@ async function loadStatistics() {
                     'id': id,
                     'name': getSmartValue(row, 'name') || row['名稱'] || '',
                     'industry': getSmartValue(row, 'industry') || row['產業分類'] || '',
-                    'broker': getSmartValue(row, 'broker') || row['承銷券商'] || '',
-                    'guarantee': getSmartValue(row, 'guarantee') || row['有無擔保'] || '',
+                    'broker': getSmartValue(row, 'broker') || row['發行券商'] || row['承銷券商'] || '',
+                    'guarantee': getSmartValue(row, 'guarantee') || row['擔保'] || row['有無擔保'] || '',
                     'rating': normalizedRating,
-                    'capital': safeFloat(getSmartValue(row, 'capital')) || safeFloat(row['股本規模']),
-                    'issueSize': safeFloat(getSmartValue(row, 'issueSize')) || safeFloat(row['發行規模']),
-                    'years': safeFloat(getSmartValue(row, 'years')) || safeFloat(row['發行年期']),
-                    'conversionPrice': safeFloat(getSmartValue(row, 'conversionPrice')) || safeFloat(row['轉換價格']),
-                    'marketHigh': safeFloat(getSmartValue(hlRow, 'marketHigh')) || safeFloat(getSmartValue(row, 'marketHigh')) || safeFloat(row['掛牌最高']),
-                    'marketLow': safeFloat(getSmartValue(hlRow, 'marketLow')) || safeFloat(getSmartValue(row, 'marketLow')) || safeFloat(row['掛牌最低']),
-                    'premiumRate': safeFloat(getSmartValue(row, 'premiumRate')) || safeFloat(row['訂價溢價率']),
+                    'capital': safeFloat(row['股本大小']) || safeFloat(getSmartValue(row, 'capital')),
+                    'issueSize': safeFloat(row['發行規模']) || safeFloat(getSmartValue(row, 'issueSize')),
+                    'years': safeFloat(row['發行年期']) || safeFloat(getSmartValue(row, 'years')),
+                    'conversionPrice': safeFloat(row['轉換價格']) || safeFloat(getSmartValue(row, 'conversionPrice')),
+                    'marketHigh': safeFloat(hlRow['掛牌最高']) || safeFloat(row['掛牌最高']) || 0,
+                    'marketLow': safeFloat(hlRow['掛牌最低']) || safeFloat(row['掛牌最低']) || 0,
+                    'premiumRate': safeFloat(row['訂價溢價率']) || safeFloat(getSmartValue(row, 'premiumRate')),
                     'type': '詢圈'
                 };
             }).filter(item => item !== null);
@@ -1303,7 +1309,7 @@ function getStatsSmart(category, val) {
     let rangeLabel = "";
 
     if (category === '股本') {
-        if (v < 3) { rangeLabel = "< 3 億"; filterFn = d => d.capital < 3; }
+        if (v < 3) { rangeLabel = "< 3 億"; filterFn = d => d.capital > 0 && d.capital < 3; }
         else if (v < 6) { rangeLabel = "3~6 億"; filterFn = d => d.capital >= 3 && d.capital < 6; }
         else if (v < 10) { rangeLabel = "6~10 億"; filterFn = d => d.capital >= 6 && d.capital < 10; }
         else if (v < 15) { rangeLabel = "10~15 億"; filterFn = d => d.capital >= 10 && d.capital < 15; }

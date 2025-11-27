@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.51 (排除極端值版)</title>
+<title>AI智能可轉債競拍系統 v3.52 (擔保細分排除極端值版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="embedded_data.js" onerror="console.warn('embedded_data.js not found, using defaults.')"></script>
 
@@ -336,13 +336,13 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.51)...</div>
+    <div>🔄 系統啟動中 (v3.52)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
 <div class="container" style="display: none;">
     <div class="header">
-        <h1>🤖 AI智能可轉債競拍系統 <span class="version-badge">v3.51</span></h1>
+        <h1>🤖 AI智能可轉債競拍系統 <span class="version-badge">v3.52</span></h1>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -410,7 +410,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     <div class="result-panel">
         <div id="welcomeMsg" class="welcome-message">
             <h2>歡迎使用AI智能競拍評估系統</h2>
-            <p style="margin-top:10px; color:#666; font-size: 14px;">v3.51 排除極端值版<br>✅ 新增「排除前三高」統計<br>✅ 避免極端值扭曲平均數據</p>
+            <p style="margin-top:10px; color:#666; font-size: 14px;">v3.52 擔保細分排除極端值版<br>✅ 新增「有擔保/無擔保排除前3高」<br>✅ 更精準的擔保類型分析</p>
             <div class="stats-summary" id="statsSummary"></div>
         </div>
         <div id="evaluationResult" class="evaluation-result"></div>
@@ -790,7 +790,12 @@ function getStatsSmart(category, val) {
         guaranteedAuctionData: null,
         guaranteedInquiryData: null,
         unguaranteedAuctionData: null,
-        unguaranteedInquiryData: null
+        unguaranteedInquiryData: null,
+        // v3.52 新增：擔保類型排除前三高
+        guaranteedAuctionEx3: null,
+        guaranteedInquiryEx3: null,
+        unguaranteedAuctionEx3: null,
+        unguaranteedInquiryEx3: null
     };
     let filterFn = null;
     const v = parseFloat(val);
@@ -1012,6 +1017,43 @@ function getStatsSmart(category, val) {
                 };
             }
         }
+        
+        // v3.52 新增：擔保類型排除前三高計算
+        // 有擔保-競拍 排除前三高
+        const gaWithMarket = guaranteedAuction.filter(d => d.marketHigh > 0 && d.marketLow > 0);
+        if (gaWithMarket.length > 3) {
+            const sortedGA = [...gaWithMarket].sort((a, b) => b.marketHigh - a.marketHigh).slice(3);
+            let exGASumH = 0, exGASumL = 0;
+            sortedGA.forEach(d => { exGASumH += d.marketHigh; exGASumL += d.marketLow; });
+            stats.guaranteedAuctionEx3 = { '平均掛牌最高': exGASumH / sortedGA.length, '平均掛牌最低': exGASumL / sortedGA.length, '樣本數': sortedGA.length };
+        }
+        
+        // 有擔保-詢圈 排除前三高
+        const giWithMarket = guaranteedInquiry.filter(d => d.marketHigh > 0 && d.marketLow > 0);
+        if (giWithMarket.length > 3) {
+            const sortedGI = [...giWithMarket].sort((a, b) => b.marketHigh - a.marketHigh).slice(3);
+            let exGISumH = 0, exGISumL = 0;
+            sortedGI.forEach(d => { exGISumH += d.marketHigh; exGISumL += d.marketLow; });
+            stats.guaranteedInquiryEx3 = { '平均掛牌最高': exGISumH / sortedGI.length, '平均掛牌最低': exGISumL / sortedGI.length, '樣本數': sortedGI.length };
+        }
+        
+        // 無擔保-競拍 排除前三高
+        const uaWithMarket = unguaranteedAuction.filter(d => d.marketHigh > 0 && d.marketLow > 0);
+        if (uaWithMarket.length > 3) {
+            const sortedUA = [...uaWithMarket].sort((a, b) => b.marketHigh - a.marketHigh).slice(3);
+            let exUASumH = 0, exUASumL = 0;
+            sortedUA.forEach(d => { exUASumH += d.marketHigh; exUASumL += d.marketLow; });
+            stats.unguaranteedAuctionEx3 = { '平均掛牌最高': exUASumH / sortedUA.length, '平均掛牌最低': exUASumL / sortedUA.length, '樣本數': sortedUA.length };
+        }
+        
+        // 無擔保-詢圈 排除前三高
+        const uiWithMarket = unguaranteedInquiry.filter(d => d.marketHigh > 0 && d.marketLow > 0);
+        if (uiWithMarket.length > 3) {
+            const sortedUI = [...uiWithMarket].sort((a, b) => b.marketHigh - a.marketHigh).slice(3);
+            let exUISumH = 0, exUISumL = 0;
+            sortedUI.forEach(d => { exUISumH += d.marketHigh; exUISumL += d.marketLow; });
+            stats.unguaranteedInquiryEx3 = { '平均掛牌最高': exUISumH / sortedUI.length, '平均掛牌最低': exUISumL / sortedUI.length, '樣本數': sortedUI.length };
+        }
     }
     
     if (stats.low === 0 && (!stats.rawData || stats.rawData['平均得標價'] === 0)) { 
@@ -1101,7 +1143,7 @@ function generateHistoryCard(d) {
 }
 
 // v3.51 修改：generateStandardCard 增加排除前三的參數，獨立成兩個表格，並加入擔保類型細分
-function generateStandardCard(data, titleOverride=null, inquiryData=null, excludeTop3Data=null, excludeTop3InquiryData=null, guaranteedAuctionData=null, guaranteedInquiryData=null, unguaranteedAuctionData=null, unguaranteedInquiryData=null) {
+function generateStandardCard(data, titleOverride=null, inquiryData=null, excludeTop3Data=null, excludeTop3InquiryData=null, guaranteedAuctionData=null, guaranteedInquiryData=null, unguaranteedAuctionData=null, unguaranteedInquiryData=null, guaranteedAuctionEx3=null, guaranteedInquiryEx3=null, unguaranteedAuctionEx3=null, unguaranteedInquiryEx3=null) {
     if (!data) return `<div class="stat-row" style="color:#999;">查無資料</div>`;
     
     const valStr = (v, s='') => (v!==undefined && v!==null && v!=='' && v!==0) ? `${safeFixed(v,2)}${s}` : '-';
@@ -1370,6 +1412,44 @@ function generateStandardCard(data, titleOverride=null, inquiryData=null, exclud
         html += `</table>`;
     }
     
+    // === v3.52 新增：第四個表格 - 依擔保類型排除前3高 ===
+    const hasGAEx3 = guaranteedAuctionEx3 && safeFloat(guaranteedAuctionEx3['平均掛牌最高']) > 0;
+    const hasGIEx3 = guaranteedInquiryEx3 && safeFloat(guaranteedInquiryEx3['平均掛牌最高']) > 0;
+    const hasUAEx3 = unguaranteedAuctionEx3 && safeFloat(unguaranteedAuctionEx3['平均掛牌最高']) > 0;
+    const hasUIEx3 = unguaranteedInquiryEx3 && safeFloat(unguaranteedInquiryEx3['平均掛牌最高']) > 0;
+    
+    if (hasGAEx3 || hasGIEx3 || hasUAEx3 || hasUIEx3) {
+        html += `<div style="font-size:11px; color:#00695c; font-weight:bold; margin:12px 0 4px 0;">🎯 依擔保類型（排除前3高）</div>`;
+        html += `<table class="card-market-table" style="background:#e0f2f1;">
+        <tr><th style="background:#00695c;"></th><th style="background:#00695c;">掛牌高</th><th style="background:#00695c;">掛牌低</th><th style="background:#00695c;">振幅</th></tr>`;
+        
+        if (hasGAEx3) {
+            const gaExH = safeFloat(guaranteedAuctionEx3['平均掛牌最高']);
+            const gaExL = safeFloat(guaranteedAuctionEx3['平均掛牌最低']);
+            const gaExAmp = (gaExH > 0 && gaExL > 0) ? ((gaExH - gaExL) / gaExL * 100).toFixed(1) : '-';
+            html += `<tr><td class="type-label" style="color:#00695c;">有擔保-競拍<span class="count">${guaranteedAuctionEx3['樣本數']}</span></td><td class="val-blue">${safeFixed(gaExH,1)}</td><td class="val-blue">${safeFixed(gaExL,1)}</td><td class="val-pink">${gaExAmp}%</td></tr>`;
+        }
+        if (hasGIEx3) {
+            const giExH = safeFloat(guaranteedInquiryEx3['平均掛牌最高']);
+            const giExL = safeFloat(guaranteedInquiryEx3['平均掛牌最低']);
+            const giExAmp = (giExH > 0 && giExL > 0) ? ((giExH - giExL) / giExL * 100).toFixed(1) : '-';
+            html += `<tr><td class="type-label" style="color:#00695c;">有擔保-詢圈<span class="count">${guaranteedInquiryEx3['樣本數']}</span></td><td class="val-blue">${safeFixed(giExH,1)}</td><td class="val-blue">${safeFixed(giExL,1)}</td><td class="val-pink">${giExAmp}%</td></tr>`;
+        }
+        if (hasUAEx3) {
+            const uaExH = safeFloat(unguaranteedAuctionEx3['平均掛牌最高']);
+            const uaExL = safeFloat(unguaranteedAuctionEx3['平均掛牌最低']);
+            const uaExAmp = (uaExH > 0 && uaExL > 0) ? ((uaExH - uaExL) / uaExL * 100).toFixed(1) : '-';
+            html += `<tr style="background:#b2dfdb;"><td class="type-label" style="color:#004d40;">無擔保-競拍<span class="count">${unguaranteedAuctionEx3['樣本數']}</span></td><td class="val-blue">${safeFixed(uaExH,1)}</td><td class="val-blue">${safeFixed(uaExL,1)}</td><td class="val-pink">${uaExAmp}%</td></tr>`;
+        }
+        if (hasUIEx3) {
+            const uiExH = safeFloat(unguaranteedInquiryEx3['平均掛牌最高']);
+            const uiExL = safeFloat(unguaranteedInquiryEx3['平均掛牌最低']);
+            const uiExAmp = (uiExH > 0 && uiExL > 0) ? ((uiExH - uiExL) / uiExL * 100).toFixed(1) : '-';
+            html += `<tr style="background:#b2dfdb;"><td class="type-label" style="color:#004d40;">無擔保-詢圈<span class="count">${unguaranteedInquiryEx3['樣本數']}</span></td><td class="val-blue">${safeFixed(uiExH,1)}</td><td class="val-blue">${safeFixed(uiExL,1)}</td><td class="val-pink">${uiExAmp}%</td></tr>`;
+        }
+        html += `</table>`;
+    }
+    
     return html;
 }
 
@@ -1502,7 +1582,7 @@ function bindInputEvents() {
                 if(['股本','發行規模','轉換價'].includes(cat)) displayTitle = getRangeLabel(cat, val);
                 
                 const smartResult = getStatsSmart(cat, val);
-                // v3.51: 傳入排除前三 + 擔保類型細分數據
+                // v3.52: 傳入排除前三 + 擔保類型細分 + 擔保類型排除前三高
                 show(id+'Info', generateStandardCard(
                     smartResult.rawData, 
                     `區間統計: ${displayTitle}`, 
@@ -1512,7 +1592,11 @@ function bindInputEvents() {
                     smartResult.guaranteedAuctionData,
                     smartResult.guaranteedInquiryData,
                     smartResult.unguaranteedAuctionData,
-                    smartResult.unguaranteedInquiryData
+                    smartResult.unguaranteedInquiryData,
+                    smartResult.guaranteedAuctionEx3,
+                    smartResult.guaranteedInquiryEx3,
+                    smartResult.unguaranteedAuctionEx3,
+                    smartResult.unguaranteedInquiryEx3
                 ));
                 if(cat==='轉換價'||cat==='信評') updateSmartReminders();
             }

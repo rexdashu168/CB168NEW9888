@@ -747,20 +747,27 @@ function calculateGlobalMarketStats() {
     }
 }
 
-// v3.51 修改：增加排除前三高的統計
-function getStatsSmart(category, val) {
+// v3.51 修改：增加排除前三高的統計 + 擔保條件交叉篩選
+function getStatsSmart(category, val, guaranteeFilter = null) {
     let stats = { 
         low: 0, 
         avg: 0, 
         usedFallback: false, 
         rawData: null, 
         inquiryData: null,
-        excludeTop3Data: null,        // v3.51 新增
-        excludeTop3InquiryData: null  // v3.51 新增
+        excludeTop3Data: null,
+        excludeTop3InquiryData: null,
+        guaranteeLabel: guaranteeFilter // 記錄篩選條件
     };
     let filterFn = null;
     const v = parseFloat(val);
     let rangeLabel = "";
+    
+    // 擔保條件篩選函數
+    const guaranteeFilterFn = (d) => {
+        if (!guaranteeFilter) return true;
+        return (d.guarantee || '').includes(guaranteeFilter);
+    };
 
     if (category === '股本') {
         if (v < 3) { rangeLabel = "< 3 億"; filterFn = d => d.capital < 3; }
@@ -798,8 +805,8 @@ function getStatsSmart(category, val) {
     }
 
     if (filterFn) {
-        // === 競拍數據統計 ===
-        const auctionFiltered = auctionRawData.filter(filterFn);
+        // === 競拍數據統計（加入擔保條件）===
+        const auctionFiltered = auctionRawData.filter(d => filterFn(d) && guaranteeFilterFn(d));
         let sumLowP = 0, sumAvgP = 0, sumLowPr = 0, sumAvgPr = 0, sumH = 0, sumL = 0, countM = 0, count = 0;
         
         auctionFiltered.forEach(d => {
@@ -848,8 +855,8 @@ function getStatsSmart(category, val) {
             };
         }
         
-        // === 詢圈數據統計 ===
-        const inquiryFiltered = inquiryRawData.filter(filterFn);
+        // === 詢圈數據統計（加入擔保條件）===
+        const inquiryFiltered = inquiryRawData.filter(d => filterFn(d) && guaranteeFilterFn(d));
         let iSumH = 0, iSumL = 0, iCountM = 0;
         
         inquiryFiltered.forEach(d => {
@@ -1292,19 +1299,30 @@ function bindInputEvents() {
         }
     });
 
-    // v3.51 修改：其他欄位綁定，傳入排除前三的參數
+    // v3.51 修改：其他欄位綁定，傳入排除前三的參數 + 擔保條件
     const bind = (id, cat) => {
         const handler = function() {
             const rawVal = this.value;
             const val = parseFloat(rawVal) || rawVal;
             if (val) {
+                // 取得目前選擇的擔保條件
+                const guaranteeVal = document.getElementById('guarantee').value;
+                const guaranteeFilter = (guaranteeVal && cat !== '擔保') ? guaranteeVal : null;
+                
                 let displayTitle = val;
                 if(['股本','發行規模','轉換價'].includes(cat)) displayTitle = getRangeLabel(cat, val);
-                const smartResult = getStatsSmart(cat, val);
+                
+                // 如果有擔保篩選，標題加上擔保條件
+                let titleSuffix = '';
+                if (guaranteeFilter) {
+                    titleSuffix = guaranteeFilter.includes('有') ? '（有擔保）' : '（無擔保）';
+                }
+                
+                const smartResult = getStatsSmart(cat, val, guaranteeFilter);
                 // v3.51: 傳入排除前三名的數據
                 show(id+'Info', generateStandardCard(
                     smartResult.rawData, 
-                    `區間統計: ${displayTitle}`, 
+                    `區間統計: ${displayTitle}${titleSuffix}`, 
                     smartResult.inquiryData,
                     smartResult.excludeTop3Data,
                     smartResult.excludeTop3InquiryData
@@ -1325,6 +1343,17 @@ function bindInputEvents() {
     bind('years','年期'); 
     bind('guarantee','擔保'); 
     bind('rating','信評');
+    
+    // v3.51: 當擔保選項改變時，重新觸發其他欄位的統計更新
+    document.getElementById('guarantee').addEventListener('change', function() {
+        const fieldsToUpdate = ['capital', 'issueSize', 'conversionPrice', 'industry', 'broker', 'years', 'rating'];
+        fieldsToUpdate.forEach(fieldId => {
+            const el = document.getElementById(fieldId);
+            if (el && el.value) {
+                el.dispatchEvent(new Event('change'));
+            }
+        });
+    });
     
     document.getElementById('guarantee').addEventListener('change', function() {
         const val = this.value, div = document.getElementById('marketSentiment');

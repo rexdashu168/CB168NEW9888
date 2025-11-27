@@ -481,50 +481,63 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 .ranking-box.bottom .ranking-box-title {
     color: #c62828;
 }
-.ranking-item {
-    display: flex;
-    align-items: center;
-    padding: 4px 0;
-    border-bottom: 1px solid #f5f5f5;
-    font-size: 10px;
-}
-.ranking-item:last-child {
-    border-bottom: none;
-}
-.ranking-rank {
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 900;
+.ranking-table {
+    width: 100%;
+    border-collapse: collapse;
     font-size: 9px;
-    margin-right: 6px;
-    flex-shrink: 0;
 }
-.ranking-box.top .ranking-rank {
+.ranking-table th {
     background: #e8f5e9;
     color: #2e7d32;
+    padding: 4px 3px;
+    font-weight: 700;
+    text-align: center;
+    border-bottom: 1px solid #c8e6c9;
+    font-size: 8px;
 }
-.ranking-box.bottom .ranking-rank {
+.ranking-box.bottom .ranking-table th {
     background: #ffebee;
     color: #c62828;
 }
-.ranking-name {
-    flex: 1;
-    font-weight: 600;
-    color: #333;
-    white-space: nowrap;
+.ranking-table td {
+    padding: 4px 3px;
+    text-align: center;
+    border-bottom: 1px solid #f5f5f5;
+    font-weight: 500;
+}
+.ranking-table td:first-child {
+    text-align: center;
+    font-weight: 700;
+}
+.ranking-table td:nth-child(2) {
+    text-align: left;
+    max-width: 60px;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ranking-table .rank-num {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+    font-weight: 900;
+}
+.ranking-box.top .rank-num {
+    background: #c8e6c9;
+    color: #2e7d32;
+}
+.ranking-box.bottom .rank-num {
+    background: #ffcdd2;
+    color: #c62828;
 }
 .ranking-type {
-    font-size: 8px;
-    padding: 1px 4px;
+    font-size: 7px;
+    padding: 1px 3px;
     border-radius: 3px;
-    margin-right: 4px;
-    flex-shrink: 0;
 }
 .ranking-type.auction {
     background: #ff9800;
@@ -534,16 +547,17 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     background: #9c27b0;
     color: white;
 }
-.ranking-gain {
-    font-weight: 700;
-    min-width: 50px;
-    text-align: right;
-}
-.ranking-box.top .ranking-gain {
+.ranking-box.top .val-gain {
     color: #2e7d32;
+    font-weight: 700;
 }
-.ranking-box.bottom .ranking-gain {
+.ranking-box.bottom .val-gain {
     color: #c62828;
+    font-weight: 700;
+}
+.val-amp {
+    color: #1565c0;
+    font-weight: 600;
 }
 .ranking-summary {
     margin-top: 10px;
@@ -690,10 +704,10 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
                 <div id="rankingSection" class="ranking-section">
                     <div class="ranking-header">📊 2022-2025年掛牌表現TOP5 / BOTTOM5</div>
                     <div class="ranking-tabs">
-                        <button class="ranking-tab active" onclick="showRankingYear(2022)">2022</button>
-                        <button class="ranking-tab" onclick="showRankingYear(2023)">2023</button>
-                        <button class="ranking-tab" onclick="showRankingYear(2024)">2024</button>
-                        <button class="ranking-tab" onclick="showRankingYear(2025)">2025</button>
+                        <button type="button" class="ranking-tab active" onclick="showRankingYear(2022, event)">2022</button>
+                        <button type="button" class="ranking-tab" onclick="showRankingYear(2023, event)">2023</button>
+                        <button type="button" class="ranking-tab" onclick="showRankingYear(2024, event)">2024</button>
+                        <button type="button" class="ranking-tab" onclick="showRankingYear(2025, event)">2025</button>
                     </div>
                     <div id="rankingContent">載入中...</div>
                 </div>
@@ -1978,79 +1992,79 @@ function generateSupplyAnalysis() {
 let yearlyRankingData = {};
 
 function generateYearlyRanking() {
-    // 硬編碼的年度績效數據
+    // 硬編碼的年度績效數據（含掛牌最高、最低、振幅）
     yearlyRankingData = {
         2022: {
             total: 95,
             top5: [
-                { name: '材料三K', type: '競拍', amount: 5.0, industry: '化學工業', high: 601.0, gain: 501.0 },
-                { name: '萬潤四', type: '競拍', amount: 10.0, industry: '其他業電子業', high: 467.0, gain: 367.0 },
-                { name: '東科一K', type: '競拍', amount: 3.5, industry: '其他業電子業', high: 456.0, gain: 356.0 },
-                { name: '群翊一', type: '詢圈', amount: 5.0, industry: '電子零組件業', high: 403.0, gain: 303.0 },
-                { name: '台光電五', type: '詢圈', amount: 35.0, industry: '電子零組件業', high: 388.0, gain: 288.0 }
+                { name: '材料三K', type: '競拍', high: 601.0, low: 100.0, amp: 501.0 },
+                { name: '萬潤四', type: '競拍', high: 467.0, low: 98.0, amp: 376.5 },
+                { name: '東科一K', type: '競拍', high: 456.0, low: 104.1, amp: 338.0 },
+                { name: '群翊一', type: '詢圈', high: 403.0, low: 102.0, amp: 295.1 },
+                { name: '台光電五', type: '詢圈', high: 388.0, low: 97.0, amp: 300.0 }
             ],
             bottom5: [
-                { name: '桓鼎三K', type: '詢圈', amount: 1.0, industry: '建材營造業', high: 102.0, gain: 2.0 },
-                { name: '福貞二K', type: '詢圈', amount: 4.0, industry: '其他業', high: 102.7, gain: 2.7 },
-                { name: '全宇生技一K', type: '詢圈', amount: 5.0, industry: '生技醫療業', high: 104.5, gain: 4.5 },
-                { name: '廣越二', type: '競拍', amount: 15.0, industry: '紡織纖維', high: 108.8, gain: 8.8 },
-                { name: '宏佳騰一', type: '競拍', amount: 3.0, industry: '電機機械', high: 109.0, gain: 9.0 }
+                { name: '桓鼎三K', type: '詢圈', high: 102.0, low: 101.0, amp: 1.0 },
+                { name: '福貞二K', type: '詢圈', high: 102.7, low: 89.1, amp: 15.3 },
+                { name: '全宇生技一K', type: '詢圈', high: 104.5, low: 91.0, amp: 14.8 },
+                { name: '廣越二', type: '競拍', high: 108.8, low: 98.7, amp: 10.2 },
+                { name: '宏佳騰一', type: '競拍', high: 109.0, low: 99.1, amp: 10.0 }
             ],
-            summary: '2022年冠軍材料三K漲幅高達501%，前5名平均漲幅343%。表現最差的多為KY股和傳產股。'
+            summary: '冠軍材料三K漲幅501%，前5名平均振幅362%。墊底多為KY股和傳產。'
         },
         2023: {
             total: 91,
             top5: [
-                { name: '泰茂四', type: '競拍', amount: 3.0, industry: '電機機械', high: 470.0, gain: 370.0 },
-                { name: '欣巴巴一', type: '競拍', amount: 2.0, industry: '建材營造業', high: 454.0, gain: 354.0 },
-                { name: '鑫科三', type: '競拍', amount: 2.0, industry: '其他業電子業', high: 420.0, gain: 320.0 },
-                { name: '雲豹能源一', type: '詢圈', amount: 8.5, industry: '綠能環保', high: 365.0, gain: 265.0 },
-                { name: 'IET二K', type: '詢圈', amount: 2.0, industry: '半導體業', high: 302.0, gain: 202.0 }
+                { name: '泰茂四', type: '競拍', high: 470.0, low: 121.5, amp: 287.0 },
+                { name: '欣巴巴一', type: '競拍', high: 454.0, low: 111.2, amp: 308.3 },
+                { name: '鑫科三', type: '競拍', high: 420.0, low: 114.0, amp: 268.4 },
+                { name: '雲豹能源一', type: '詢圈', high: 365.0, low: 106.6, amp: 242.4 },
+                { name: 'IET二K', type: '詢圈', high: 302.0, low: 104.0, amp: 190.4 }
             ],
             bottom5: [
-                { name: '裕融二', type: '詢圈', amount: 80.0, industry: '其他業', high: 102.5, gain: 2.5 },
-                { name: '日馳一', type: '競拍', amount: 5.0, industry: '電機機械', high: 104.8, gain: 4.8 },
-                { name: '國際中橡三', type: '詢圈', amount: 35.0, industry: '橡膠工業', high: 106.4, gain: 6.4 },
-                { name: '進泰電子四', type: '詢圈', amount: 4.0, industry: '電子零組件業', high: 107.0, gain: 7.0 },
-                { name: '明係一', type: '競拍', amount: 2.0, industry: '運動休閒', high: 111.0, gain: 11.0 }
+                { name: '裕融二', type: '詢圈', high: 102.5, low: 93.3, amp: 9.9 },
+                { name: '日馳一', type: '競拍', high: 104.8, low: 90.1, amp: 16.3 },
+                { name: '國際中橡三', type: '詢圈', high: 106.4, low: 94.1, amp: 13.1 },
+                { name: '進泰電子四', type: '詢圈', high: 107.0, low: 97.1, amp: 10.2 },
+                { name: '明係一', type: '競拍', high: 111.0, low: 93.8, amp: 18.4 }
             ],
-            summary: '2023年綠能題材表現亮眼，冠軍泰茂四漲幅370%。大型案件如裕融二(80億)表現墊底僅2.5%。'
+            summary: '綠能題材亮眼，冠軍泰茂四漲幅370%。大型案件裕融二(80億)僅2.5%。'
         },
         2024: {
             total: 139,
             top5: [
-                { name: '亞翔四', type: '詢圈', amount: 5.0, industry: '其他業電子業', high: 310.0, gain: 210.0 },
-                { name: '佳必琪三', type: '競拍', amount: 10.0, industry: '電子零組件業', high: 268.0, gain: 168.0 },
-                { name: '欣巴巴二', type: '詢圈', amount: 1.0, industry: '建材營造業', high: 247.0, gain: 147.0 },
-                { name: '勤誠一', type: '競拍', amount: 10.0, industry: '電腦週邊', high: 240.0, gain: 140.0 },
-                { name: '台光電六', type: '詢圈', amount: 30.0, industry: '電子零組件業', high: 230.0, gain: 130.0 }
+                { name: '亞翔四', type: '詢圈', high: 310.0, low: 110.0, amp: 181.8 },
+                { name: '佳必琪三', type: '競拍', high: 268.0, low: 101.8, amp: 163.4 },
+                { name: '欣巴巴二', type: '詢圈', high: 247.0, low: 110.0, amp: 124.5 },
+                { name: '勤誠一', type: '競拍', high: 240.0, low: 99.1, amp: 142.2 },
+                { name: '台光電六', type: '詢圈', high: 230.0, low: 101.8, amp: 126.0 }
             ],
             bottom5: [
-                { name: '遠東新E2永', type: '詢圈', amount: 15.0, industry: '貿易百貨業', high: 104.4, gain: 4.4 },
-                { name: '麗清六', type: '競拍', amount: 3.0, industry: '汽車工業', high: 104.7, gain: 4.7 },
-                { name: '大聯大三', type: '競拍', amount: 20.0, industry: '電子通路業', high: 104.9, gain: 4.9 },
-                { name: '華固三', type: '詢圈', amount: 40.0, industry: '建材營造業', high: 105.8, gain: 5.8 },
-                { name: '華固四', type: '競拍', amount: 20.0, industry: '建材營造業', high: 106.2, gain: 6.2 }
+                { name: '遠東新E2永', type: '詢圈', high: 104.4, low: 95.0, amp: 9.9 },
+                { name: '麗清六', type: '競拍', high: 104.7, low: 93.6, amp: 11.9 },
+                { name: '大聯大三', type: '競拍', high: 104.9, low: 96.1, amp: 9.2 },
+                { name: '華固三', type: '詢圈', high: 105.8, low: 96.0, amp: 10.2 },
+                { name: '華固四', type: '競拍', high: 106.2, low: 98.0, amp: 8.4 }
             ],
-            summary: '2024年AI/CCL概念領漲，但冠軍漲幅已降至210%。大型傳產案件(華固、大聯大)表現不佳。'
+            summary: 'AI/CCL概念領漲，冠軍漲幅降至210%。大型傳產案件表現不佳。'
         },
         2025: {
             total: 94,
             top5: [
-                { name: '良維十', type: '詢圈', amount: 8.0, industry: '電子零組件業', high: 254.0, gain: 154.0 },
-                { name: '旺矽五', type: '詢圈', amount: 35.0, industry: '半導體業', high: 232.0, gain: 132.0 },
-                { name: '哲固一', type: '競拍', amount: 1.5, industry: '光電業', high: 219.0, gain: 119.0 },
-                { name: '健策五', type: '競拍', amount: 20.0, industry: '電子零組件業', high: 198.0, gain: 98.0 },
-                { name: '健策四', type: '詢圈', amount: 30.0, industry: '電子零組件業', high: 197.0, gain: 97.0 }
+                { name: '良維十', type: '詢圈', high: 254.0, low: 117.9, amp: 115.5 },
+                { name: '旺矽五', type: '詢圈', high: 232.0, low: 96.5, amp: 140.4 },
+                { name: '哲固一', type: '競拍', high: 219.0, low: 107.0, amp: 104.7 },
+                { name: '健策五', type: '競拍', high: 198.0, low: 115.0, amp: 72.2 },
+                { name: '健策四', type: '詢圈', high: 197.0, low: 108.5, amp: 81.6 }
             ],
             bottom5: [
-                { name: '安集五', type: '競拍', amount: 6.0, industry: '光電業', high: 98.7, gain: -1.3 },
-                { name: '華建三', type: '詢圈', amount: 5.0, industry: '建材營造業', high: 98.8, gain: -1.2 },
-                { name: '三洋實業三', type: '詢圈', amount: 4.0, industry: '紡織纖維', high: 99.5, gain: -0.5 },
-                { name: '鑫龍騰二', type: '詢圈', amount: 6.0, industry: '建材營造業', high: 99.5, gain: -0.5 },
-                { name: '弘裕三', type: '競拍', amount: 3.0, industry: '紡織纖維', high: 100.0, gain: 0.0 }
+                { name: '安集五', type: '競拍', high: 98.7, low: 95.8, amp: 3.0 },
+                { name: '華建三', type: '詢圈', high: 98.8, low: 91.0, amp: 8.6 },
+                { name: '三洋實業三', type: '詢圈', high: 99.5, low: 95.3, amp: 4.4 },
+                { name: '鑫龍騰二', type: '詢圈', high: 99.5, low: 91.0, amp: 9.3 },
+                { name: '弘裕三', type: '競拍', high: 100.0, low: 89.5, amp: 11.7 }
             ],
-            summary: '2025年冠軍漲幅再降至154%，且出現多檔跌破面額(安集五、華建三等)。建材、紡織表現最弱。'
+            summary: '冠軍漲幅再降至154%，多檔跌破面額。建材、紡織表現最弱。'
         }
     };
     
@@ -2058,7 +2072,13 @@ function generateYearlyRanking() {
     showRankingYear(2022);
 }
 
-function showRankingYear(year) {
+function showRankingYear(year, event) {
+    // 防止頁面跳動
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    
     // 更新tab狀態
     document.querySelectorAll('.ranking-tab').forEach(tab => {
         tab.classList.remove('active');
@@ -2070,40 +2090,72 @@ function showRankingYear(year) {
     const data = yearlyRankingData[year];
     if (!data) return;
     
+    // 建立TOP5表格
     let html = `
     <div class="ranking-grid">
         <div class="ranking-box top">
-            <div class="ranking-box-title">🏆 表現最佳 TOP 5</div>`;
+            <div class="ranking-box-title">🏆 表現最佳 TOP 5</div>
+            <table class="ranking-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>名稱</th>
+                        <th>類型</th>
+                        <th>掛牌高</th>
+                        <th>掛牌低</th>
+                        <th>振幅</th>
+                    </tr>
+                </thead>
+                <tbody>`;
     
     data.top5.forEach((item, idx) => {
         const typeClass = item.type === '競拍' ? 'auction' : 'inquiry';
         html += `
-            <div class="ranking-item">
-                <div class="ranking-rank">${idx + 1}</div>
-                <span class="ranking-type ${typeClass}">${item.type}</span>
-                <span class="ranking-name" title="${item.industry}">${item.name}</span>
-                <span class="ranking-gain">+${item.gain.toFixed(0)}%</span>
-            </div>`;
+                    <tr>
+                        <td><span class="rank-num">${idx + 1}</span></td>
+                        <td title="${item.name}">${item.name}</td>
+                        <td><span class="ranking-type ${typeClass}">${item.type}</span></td>
+                        <td class="val-gain">${item.high.toFixed(1)}</td>
+                        <td>${item.low.toFixed(1)}</td>
+                        <td class="val-amp">${item.amp.toFixed(1)}%</td>
+                    </tr>`;
     });
     
     html += `
+                </tbody>
+            </table>
         </div>
         <div class="ranking-box bottom">
-            <div class="ranking-box-title">📉 表現最差 BOTTOM 5</div>`;
+            <div class="ranking-box-title">📉 表現最差 BOTTOM 5</div>
+            <table class="ranking-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>名稱</th>
+                        <th>類型</th>
+                        <th>掛牌高</th>
+                        <th>掛牌低</th>
+                        <th>振幅</th>
+                    </tr>
+                </thead>
+                <tbody>`;
     
     data.bottom5.forEach((item, idx) => {
         const typeClass = item.type === '競拍' ? 'auction' : 'inquiry';
-        const gainStr = item.gain >= 0 ? `+${item.gain.toFixed(1)}%` : `${item.gain.toFixed(1)}%`;
         html += `
-            <div class="ranking-item">
-                <div class="ranking-rank">${idx + 1}</div>
-                <span class="ranking-type ${typeClass}">${item.type}</span>
-                <span class="ranking-name" title="${item.industry}">${item.name}</span>
-                <span class="ranking-gain">${gainStr}</span>
-            </div>`;
+                    <tr>
+                        <td><span class="rank-num">${idx + 1}</span></td>
+                        <td title="${item.name}">${item.name}</td>
+                        <td><span class="ranking-type ${typeClass}">${item.type}</span></td>
+                        <td class="val-gain">${item.high.toFixed(1)}</td>
+                        <td>${item.low.toFixed(1)}</td>
+                        <td class="val-amp">${item.amp.toFixed(1)}%</td>
+                    </tr>`;
     });
     
     html += `
+                </tbody>
+            </table>
         </div>
     </div>
     <div class="ranking-summary">

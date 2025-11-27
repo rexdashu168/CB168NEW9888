@@ -1,9 +1,10 @@
 <!DOCTYPE html>
+
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.52 (擔保細分排除極端值版)</title>
+<title>AI智能可轉債競拍系統 v3.52 (年度績效分析版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="embedded_data.js" onerror="console.warn('embedded_data.js not found, using defaults.')"></script>
 
@@ -329,7 +330,125 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     .history-info-line { gap: 2px 8px; }
     .history-bid-row { flex-direction: column; gap: 6px; }
 }
+
+/* v3.52 年度績效分析樣式 */
+.yearly-performance {
+    margin-top: 25px;
+    background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+    border-radius: 12px;
+    padding: 20px;
+    border: 2px solid #4CAF50;
+}
+.yearly-performance-title {
+    font-size: 16px;
+    font-weight: bold;
+    color: #2e7d32;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 2px solid #4CAF50;
+    padding-bottom: 10px;
+}
+.yearly-section {
+    margin-bottom: 20px;
+}
+.yearly-section:last-child {
+    margin-bottom: 0;
+}
+.yearly-section-title {
+    font-size: 14px;
+    font-weight: bold;
+    color: #1565c0;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.yearly-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+}
+.yearly-table th {
+    background: #2e7d32;
+    color: white;
+    padding: 8px 6px;
+    font-weight: 700;
+    text-align: center;
+}
+.yearly-table td {
+    padding: 8px 6px;
+    text-align: center;
+    border-bottom: 1px solid #e0e0e0;
+}
+.yearly-table tr:hover {
+    background: #f1f8e9;
+}
+.yearly-table .year-cell {
+    font-weight: bold;
+    color: #2e7d32;
+    background: #e8f5e9;
+}
+.yearly-table .positive {
+    color: #d32f2f;
+    font-weight: bold;
+}
+.yearly-table .negative {
+    color: #1565c0;
+    font-weight: bold;
+}
+.yearly-table .count-cell {
+    color: #666;
+    font-size: 11px;
+}
+
+/* 績效排行榜樣式 */
+.ranking-section {
+    margin-top: 15px;
+    padding: 12px;
+    background: #fff;
+    border-radius: 8px;
+    border: 1px solid #c8e6c9;
+}
+.ranking-title {
+    font-size: 12px;
+    font-weight: bold;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.ranking-title.best { color: #d32f2f; }
+.ranking-title.worst { color: #1565c0; }
+.ranking-title.loss { color: #ff9800; }
+.ranking-items {
+    font-size: 11px;
+    line-height: 1.8;
+    color: #333;
+}
+.ranking-item {
+    display: inline-block;
+    margin-right: 10px;
+    white-space: nowrap;
+}
+.ranking-item .name {
+    font-weight: 600;
+}
+.ranking-item .year {
+    color: #9e9e9e;
+    font-size: 10px;
+}
+.ranking-item .return {
+    font-weight: bold;
+}
+.ranking-item .return.positive { color: #d32f2f; }
+.ranking-item .return.negative { color: #1565c0; }
 </style>
+
 </head>
 
 <body>
@@ -348,100 +467,91 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
         </div>
     </div>
 
-    <div class="evaluation-container">
-        <div class="input-panel">
-            <h2>📋 輸入標的資料</h2>
-            <form id="evaluationForm">
-                <div class="form-section">
-                    <h3>📌 基本資料</h3>
-                    <div class="form-group">
-                        <label>CB名稱 / 代號 *</label>
-                        <input type="text" id="cbName" required placeholder="輸入代號(如2383)或名稱搜尋歷史">
-                        <div id="historyResults" class="history-results"></div>
-                        <div id="cbNameInfo" class="info-box"></div>
-                    </div>
-                    
-                    <div class="form-group"><label>股本 (億元) *</label><input type="number" id="capital" step="0.01" required placeholder="例如：33.80"><div id="capitalInfo" class="info-box"></div></div>
-                    <div class="form-group"><label>產業分類 *</label><select id="industry" required><option value="">載入中...</option></select><div id="industryInfo" class="info-box"></div></div>
-                    <div class="form-group"><label>發行券商</label><select id="broker"><option value="">載入中...</option></select><div id="brokerInfo" class="info-box"></div></div>
+```
+<div class="evaluation-container">
+    <div class="input-panel">
+        <h2>📋 輸入標的資料</h2>
+        <form id="evaluationForm">
+            <div class="form-section">
+                <h3>📌 基本資料</h3>
+                <div class="form-group">
+                    <label>CB名稱 / 代號 *</label>
+                    <input type="text" id="cbName" required placeholder="輸入代號(如2383)或名稱搜尋歷史">
+                    <div id="historyResults" class="history-results"></div>
+                    <div id="cbNameInfo" class="info-box"></div>
                 </div>
-                <div class="form-section">
-                    <h3>💰 發行條件</h3>
-                    <div class="form-group"><label>發行規模 (億元) *</label><input type="number" id="issueSize" step="0.1" required placeholder="例如：30"><div id="issueSizeInfo" class="info-box"></div></div>
-                    <div class="form-group"><label>轉換價格 (元) *</label><input type="number" id="conversionPrice" step="0.01" required placeholder="例如：450"><div id="conversionPriceInfo" class="info-box"></div></div>
-                    <div class="form-group"><label>發行年期 *</label><select id="years" required><option value="">請選擇...</option><option value="3">3年期</option><option value="5">5年期</option><option value="7">7年期</option></select><div id="yearsInfo" class="info-box"></div></div>
-                    <div class="form-group"><label>擔保情況 *</label><select id="guarantee" required><option value="">請選擇...</option><option value="有擔保">有擔保</option><option value="無擔保">無擔保</option></select><div id="guaranteeInfo" class="info-box"></div></div>
-                    <div class="form-group"><label>信用評等 (TCRI) *</label><select id="rating" required><option value="">請選擇...</option><option value="1">TCRI 1</option><option value="2">TCRI 2</option><option value="3">TCRI 3</option><option value="4">TCRI 4</option><option value="5">TCRI 5</option><option value="6">TCRI 6</option><option value="7">TCRI 7</option><option value="8">TCRI 8</option><option value="9">TCRI 9</option><option value="BBB">BBB級</option></select><div id="ratingInfo" class="info-box"></div></div>
-                </div>
-                <div class="form-section">
-                    <h3>🎯 競拍資料</h3>
-                    <div class="form-group">
-                        <label>競拍截止日1:30收盤價格 (元) *</label>
-                        <input type="number" id="stockPrice" step="0.01" required placeholder="例如：461.5">
-                        <div class="warning-box">⚠️ 理論價格隨股價變動，建議於 13:30 截標前再進行最終試算</div>
-                    </div>
-                </div>
-                <div class="form-section" style="background: linear-gradient(135deg, #fff9e6 0%, #ffe6cc 100%); border: 2px solid #ff9800; border-radius: 12px; padding: 15px;">
-                    <h3 style="color: #e65100; margin-bottom: 10px;">⚖️ 主觀權重(選填)</h3>
-                    <div class="subjective-note">
-                        💡 預設為 0 表示完全依據歷史數據；若您有獨到見解，可調整此處注入主觀判斷。
-                    </div>
-                    <div class="form-group"><label>主觀權重 (%)</label><input type="number" id="subjectiveWeight" min="0" max="100" step="1" value="0"></div>
-                    <div class="form-group"><label>主觀最低溢價 (%)</label><input type="number" id="subjectiveLowPremium" step="0.1" value="0"></div>
-                    <div class="form-group"><label>主觀平均溢價 (%)</label><input type="number" id="subjectiveAvgPremium" step="0.1" value="0"></div>
-                </div>
-                <div class="form-section">
-                    <h3>📊 近期市場氛圍</h3>
-                    <div id="marketSentiment" class="info-box" style="display: block; background:#e3f2fd; border-left: 4px solid #2196F3;">
-                        <div class="stat-row">請先選擇「擔保情況」</div>
-                    </div>
-                </div>
-                <div class="form-section">
-                    <h3>📊 市場供給與歷史表現</h3>
-                    <div id="supplyAnalysis" class="info-box" style="display: block; background:#efebe9; border-left: 4px solid #795548;">
-                        <div class="stat-row" style="color:#5d4037;">載入中...</div>
-                    </div>
-                </div>
-                <div class="form-section">
-                    <h3>📈 競拍績效矩陣</h3>
-                    <div id="performanceMatrix" class="info-box" style="display: block; background:#e8f5e9; border-left: 4px solid #4CAF50;">
-                        <div class="stat-row" style="color:#2e7d32;">載入中...</div>
-                    </div>
-                </div>
-                <div id="smartReminders" style="display:none; margin: 15px 0; padding: 12px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 8px;">
-                    <div style="font-weight: bold; color: #856404; font-size: 13px;">💡 Rex大叔提醒</div>
-                    <div id="reminderContent" style="font-size: 12px; line-height: 1.7; color: #856404; margin-top:5px;"></div>
-                </div>
-                <button type="submit" class="calculate-btn">🎯 開始AI評估</button>
-            </form>
-        </div>
-        
-        <div class="result-panel">
-            <div id="welcomeMsg" class="welcome-message">
-                <h2>歡迎使用AI智能競拍評估系統</h2>
-                <p style="margin-top:10px; color:#666; font-size: 14px;">v3.52 績效矩陣分析版<br>✅ 各期績效矩陣 (得標→掛牌高/低/現價)<br>✅ 2022-2025歷史表現追蹤<br>✅ 待發行量與供給壓力分析</p>
-                <div class="stats-summary" id="statsSummary"></div>
+                
+                <div class="form-group"><label>股本 (億元) *</label><input type="number" id="capital" step="0.01" required placeholder="例如：33.80"><div id="capitalInfo" class="info-box"></div></div>
+                <div class="form-group"><label>產業分類 *</label><select id="industry" required><option value="">載入中...</option></select><div id="industryInfo" class="info-box"></div></div>
+                <div class="form-group"><label>發行券商</label><select id="broker"><option value="">載入中...</option></select><div id="brokerInfo" class="info-box"></div></div>
             </div>
-            <div id="evaluationResult" class="evaluation-result"></div>
-        </div>
+            <div class="form-section">
+                <h3>💰 發行條件</h3>
+                <div class="form-group"><label>發行規模 (億元) *</label><input type="number" id="issueSize" step="0.1" required placeholder="例如：30"><div id="issueSizeInfo" class="info-box"></div></div>
+                <div class="form-group"><label>轉換價格 (元) *</label><input type="number" id="conversionPrice" step="0.01" required placeholder="例如：450"><div id="conversionPriceInfo" class="info-box"></div></div>
+                <div class="form-group"><label>發行年期 *</label><select id="years" required><option value="">請選擇...</option><option value="3">3年期</option><option value="5">5年期</option><option value="7">7年期</option></select><div id="yearsInfo" class="info-box"></div></div>
+                <div class="form-group"><label>擔保情況 *</label><select id="guarantee" required><option value="">請選擇...</option><option value="有擔保">有擔保</option><option value="無擔保">無擔保</option></select><div id="guaranteeInfo" class="info-box"></div></div>
+                <div class="form-group"><label>信用評等 (TCRI) *</label><select id="rating" required><option value="">請選擇...</option><option value="1">TCRI 1</option><option value="2">TCRI 2</option><option value="3">TCRI 3</option><option value="4">TCRI 4</option><option value="5">TCRI 5</option><option value="6">TCRI 6</option><option value="7">TCRI 7</option><option value="8">TCRI 8</option><option value="9">TCRI 9</option><option value="BBB">BBB級</option></select><div id="ratingInfo" class="info-box"></div></div>
+            </div>
+            <div class="form-section">
+                <h3>🎯 競拍資料</h3>
+                <div class="form-group">
+                    <label>競拍截止日1:30收盤價格 (元) *</label>
+                    <input type="number" id="stockPrice" step="0.01" required placeholder="例如：461.5">
+                    <div class="warning-box">⚠️ 理論價格隨股價變動，建議於 13:30 截標前再進行最終試算</div>
+                </div>
+            </div>
+            <div class="form-section" style="background: linear-gradient(135deg, #fff9e6 0%, #ffe6cc 100%); border: 2px solid #ff9800; border-radius: 12px; padding: 15px;">
+                <h3 style="color: #e65100; margin-bottom: 10px;">⚖️ 主觀權重(選填)</h3>
+                <div class="subjective-note">
+                    💡 預設為 0 表示完全依據歷史數據；若您有獨到見解，可調整此處注入主觀判斷。
+                </div>
+                <div class="form-group"><label>主觀權重 (%)</label><input type="number" id="subjectiveWeight" min="0" max="100" step="1" value="0"></div>
+                <div class="form-group"><label>主觀最低溢價 (%)</label><input type="number" id="subjectiveLowPremium" step="0.1" value="0"></div>
+                <div class="form-group"><label>主觀平均溢價 (%)</label><input type="number" id="subjectiveAvgPremium" step="0.1" value="0"></div>
+            </div>
+            <div class="form-section">
+                <h3>📊 近期市場氛圍</h3>
+                <div id="marketSentiment" class="info-box" style="display: block; background:#e3f2fd; border-left: 4px solid #2196F3;">
+                    <div class="stat-row">請先選擇「擔保情況」</div>
+                </div>
+            </div>
+            <div id="smartReminders" style="display:none; margin: 15px 0; padding: 12px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 8px;">
+                <div style="font-weight: bold; color: #856404; font-size: 13px;">💡 Rex大叔提醒</div>
+                <div id="reminderContent" style="font-size: 12px; line-height: 1.7; color: #856404; margin-top:5px;"></div>
+            </div>
+            <button type="submit" class="calculate-btn">🎯 開始AI評估</button>
+        </form>
     </div>
     
-    <!-- 版權宣告與瀏覽人數 -->
-    <footer class="site-footer">
-        <div class="footer-content">
-            <div class="visitor-count">
-                👁️ 瀏覽人數：
-                <a href="https://www.hitwebcounter.com" target="_blank">
-                    <img src="https://hitwebcounter.com/counter/counter.php?page=16839468&style=0006&nbdigits=6&type=page&initCount=0" 
-                         title="Counter Widget" alt="Visit counter" border="0" style="vertical-align: middle;"/>
-                </a>
-            </div>
-            <div class="copyright">
-                © 2025 Rex大叔的168台股投資教室 版權所有<br>
-                <span style="font-size:11px; color:#999;">本系統僅供參考，投資有風險，請自負盈虧</span>
-            </div>
+    <div class="result-panel">
+        <div id="welcomeMsg" class="welcome-message">
+            <h2>歡迎使用AI智能競拍評估系統</h2>
+            <p style="margin-top:10px; color:#666; font-size: 14px;">v3.52 年度績效分析版<br>✅ 各年度掛牌績效統計<br>✅ 得標→現價報酬追蹤</p>
+            <div class="stats-summary" id="statsSummary"></div>
         </div>
-    </footer>
+        <div id="evaluationResult" class="evaluation-result"></div>
+    </div>
+</div>
+
+<!-- 版權宣告與瀏覽人數 -->
+<footer class="site-footer">
+    <div class="footer-content">
+        <div class="visitor-count">
+            👁️ 瀏覽人數：
+            <a href="https://www.hitwebcounter.com" target="_blank">
+                <img src="https://hitwebcounter.com/counter/counter.php?page=16839468&style=0006&nbdigits=6&type=page&initCount=0" 
+                     title="Counter Widget" alt="Visit counter" border="0" style="vertical-align: middle;"/>
+            </a>
+        </div>
+        <div class="copyright">
+            © 2025 Rex大叔的168台股投資教室 版權所有<br>
+            <span style="font-size:11px; color:#999;">本系統僅供參考，投資有風險，請自負盈虧</span>
+        </div>
+    </div>
+</footer>
+```
+
 </div>
 
 <script>
@@ -570,6 +680,8 @@ function getRangeLabel(category, val) {
 
 let statistics = { '維度統計': { '產業': {}, '發行券商': {} }, '資料期間': {} };
 let cbDatabase = {}, auctionRawData = [], inquiryRawData = [], globalMarketStats = { low: 0, avg: 0 }, cbNameMap = {};
+// v3.52 新增：現價和掛牌日期對照表
+let currentPriceMap = {}, listingDateMap = {};
 
 // ==========================================
 // 2. 資料讀取
@@ -590,49 +702,21 @@ async function loadStatistics() {
         const sheetAuction = getSheetData(['04', '所有CB競拍']);
         const sheetHighLow = getSheetData(['00', '掛牌', '名稱過濾']);
         const sheetAllCB = getSheetData(['01', 'ALLCB基本']);
-        
-        // v3.52 新增：讀取 06 和 07 工作表（近期承銷案件）
-        const sheet06 = getSheetData(['06']);
-        const sheet07 = getSheetData(['07']);
-        
-        // v3.52 新增：讀取 09 工作表（最新行情）
-        const sheet09 = getSheetData(['09', '最新動態每週日行情']);
-        
-        // 建立最新收盤價對照表
-        window.closePriceMap = {};
-        if (sheet09 && sheet09.length > 0) {
-            sheet09.forEach(row => {
-                let id = row['代碼'] || row['代號'];
-                if (id) {
-                    window.closePriceMap[String(id).replace('.0','').trim()] = {
-                        closePrice: parseFloat(row['CB收盤價']) || 0,
-                        stockPrice: parseFloat(row['股價']) || 0,
-                        conversionValue: parseFloat(row['轉換價值']) || 0
-                    };
-                }
-            });
-            console.log('收盤價對照表筆數:', Object.keys(window.closePriceMap).length);
-        }
-        
-        // 輸出 06/07 工作表結構供分析
-        if (sheet06 && sheet06.length > 0) {
-            console.log('=== 工作表 06 ===');
-            console.log('欄位名稱:', Object.keys(sheet06[0]));
-            console.log('資料筆數:', sheet06.length);
-            console.log('前3筆資料:', sheet06.slice(0, 3));
-        }
-        if (sheet07 && sheet07.length > 0) {
-            console.log('=== 工作表 07 ===');
-            console.log('欄位名稱:', Object.keys(sheet07[0]));
-            console.log('資料筆數:', sheet07.length);
-            console.log('前3筆資料:', sheet07.slice(0, 3));
-        }
-        
-        // 儲存到全域變數供後續使用
-        window.upcomingSheet06 = sheet06 || [];
-        window.upcomingSheet07 = sheet07 || [];
+        const sheetCurrentPrice = getSheetData(['09', '最新動態每週日行情']);
         
         if (!sheetAuction || sheetAuction.length === 0) throw new Error("找不到競拍資料分頁");
+
+        // v3.52: 建立現價對照表 (從09工作表)
+        if (sheetCurrentPrice && sheetCurrentPrice.length > 0) {
+            sheetCurrentPrice.forEach(row => {
+                let id = row['代碼'] || row['代號'];
+                if (id) {
+                    const cleanId = String(id).replace('.0','').trim();
+                    currentPriceMap[cleanId] = safeFloat(row['CB收盤價']);
+                }
+            });
+            console.log(`載入現價資料: ${Object.keys(currentPriceMap).length} 筆`);
+        }
 
         // 建立掛牌高低對照表
         const highLowMap = {};
@@ -645,6 +729,19 @@ async function loadStatistics() {
         
         // 讀取詢圈資料 (從01工作表)
         if (sheetAllCB && sheetAllCB.length > 0) {
+            // v3.52: 先建立掛牌日期對照表
+            sheetAllCB.forEach(row => {
+                let rawId = row['CB代號'] || row['代號'];
+                if (rawId) {
+                    const id = String(rawId).replace('.0','').trim();
+                    const listingDate = row['掛牌日期'];
+                    if (listingDate) {
+                        listingDateMap[id] = listingDate;
+                    }
+                }
+            });
+            console.log(`載入掛牌日期: ${Object.keys(listingDateMap).length} 筆`);
+            
             inquiryRawData = sheetAllCB.filter(row => {
                 const type = row['詢圈競拍'] || '';
                 return type.includes('詢圈');
@@ -666,16 +763,19 @@ async function loadStatistics() {
                     }
                 }
                 
-                // v3.52: 取得最新CB收盤價
-                const latestData = window.closePriceMap[id] || {};
-                
-                // 取得掛牌日期
-                let listDate = row['掛牌日期'];
-                let listYear = null, listMonth = null;
-                if (typeof listDate === 'number') {
-                    const d = new Date((listDate - 25569) * 86400 * 1000);
-                    listYear = d.getFullYear();
-                    listMonth = d.getMonth() + 1;
+                // v3.52: 處理掛牌日期和現價
+                const listingDate = row['掛牌日期'];
+                let listingYear = null;
+                if (listingDate) {
+                    if (typeof listingDate === 'number') {
+                        const d = new Date((listingDate - 25569) * 86400 * 1000);
+                        listingYear = d.getFullYear();
+                    } else if (typeof listingDate === 'string') {
+                        const match = listingDate.match(/(\d{4})/);
+                        if (match) listingYear = parseInt(match[1]);
+                    } else if (listingDate instanceof Date) {
+                        listingYear = listingDate.getFullYear();
+                    }
                 }
                 
                 return {
@@ -694,9 +794,9 @@ async function loadStatistics() {
                     'premiumRate': safeFloat(row['訂價溢價率']),
                     'type': '詢圈',
                     // v3.52 新增
-                    'latestCBPrice': latestData.closePrice || 0,
-                    'listYear': listYear,
-                    'listMonth': listMonth
+                    'listingDate': listingDate,
+                    'listingYear': listingYear,
+                    'currentPrice': currentPriceMap[id] || 0
                 };
             }).filter(item => item !== null);
             
@@ -726,9 +826,6 @@ async function loadStatistics() {
                     normalizedRating = rawRating;
                 }
             }
-            
-            // v3.52: 取得最新CB收盤價
-            const latestData = window.closePriceMap[id] || {};
 
             return {
                 'id': id, 
@@ -758,10 +855,9 @@ async function loadStatistics() {
                 'bidMultiple': safeFloat(getSmartValue(row, 'bidMultiple')),
                 'avgBidShares': safeFloat(getSmartValue(row, 'avgBidShares')),
                 'auctionShares': safeFloat(getSmartValue(row, 'auctionShares')),
-                // v3.52 新增：最新CB收盤價
-                'latestCBPrice': latestData.closePrice || 0,
-                'latestStockPrice': latestData.stockPrice || 0,
-                'latestConversionValue': latestData.conversionValue || 0
+                // v3.52 新增：掛牌日期和現價
+                'listingYear': getListingYear(listingDateMap[id]),
+                'currentPrice': currentPriceMap[id] || 0
             };
         }).filter(item => item !== null);
 
@@ -784,6 +880,21 @@ async function loadStatistics() {
         <h3>⚠️ 系統啟動失敗</h3><p style="margin:10px 0;">${error.message}</p>
         <button onclick="location.reload()" style="padding:8px 20px;cursor:pointer;">重試</button></div>`; 
     }
+}
+
+// v3.52: 提取掛牌年份的輔助函數
+function getListingYear(listingDate) {
+    if (!listingDate) return null;
+    if (typeof listingDate === 'number') {
+        const d = new Date((listingDate - 25569) * 86400 * 1000);
+        return d.getFullYear();
+    } else if (typeof listingDate === 'string') {
+        const match = listingDate.match(/(\d{4})/);
+        if (match) return parseInt(match[1]);
+    } else if (listingDate instanceof Date) {
+        return listingDate.getFullYear();
+    }
+    return null;
 }
 
 // ==========================================
@@ -861,15 +972,7 @@ function getStatsSmart(category, val) {
         guaranteedAuctionData: null,
         guaranteedInquiryData: null,
         unguaranteedAuctionData: null,
-        unguaranteedInquiryData: null,
-        // v3.52 新增：擔保類型排除前三高
-        guaranteedAuctionEx3: null,
-        guaranteedInquiryEx3: null,
-        unguaranteedAuctionEx3: null,
-        unguaranteedInquiryEx3: null,
-        // v3.52 新增：依擔保類型的得標統計
-        guaranteedBidData: null,
-        unguaranteedBidData: null
+        unguaranteedInquiryData: null
     };
     let filterFn = null;
     const v = parseFloat(val);
@@ -952,23 +1055,6 @@ function getStatsSmart(category, val) {
             if(rangeLabel) stats.rawData['區間名稱'] = rangeLabel; 
             stats.low = stats.rawData['平均最低溢價']; 
             stats.avg = stats.rawData['平均溢價'];
-        }
-        
-        // === v3.52 新增：依擔保類型的得標統計 ===
-        // 有擔保得標統計
-        const guaranteedBidArr = auctionFiltered.filter(d => (d.guarantee || '').includes('有') && (d.minBidPrice > 0 || d.avgBidPrice > 0));
-        if (guaranteedBidArr.length > 0) {
-            let gSumLP = 0, gSumAP = 0, gSumLPr = 0, gSumAPr = 0;
-            guaranteedBidArr.forEach(d => { gSumLP += d.lowPremium; gSumAP += d.avgPremium; gSumLPr += d.minBidPrice; gSumAPr += d.avgBidPrice; });
-            stats.guaranteedBidData = { '平均最低溢價': gSumLP / guaranteedBidArr.length, '平均溢價': gSumAP / guaranteedBidArr.length, '平均最低得標價': gSumLPr / guaranteedBidArr.length, '平均得標價': gSumAPr / guaranteedBidArr.length, '樣本數': guaranteedBidArr.length };
-        }
-        
-        // 無擔保得標統計
-        const unguaranteedBidArr = auctionFiltered.filter(d => (d.guarantee || '').includes('無') && (d.minBidPrice > 0 || d.avgBidPrice > 0));
-        if (unguaranteedBidArr.length > 0) {
-            let uSumLP = 0, uSumAP = 0, uSumLPr = 0, uSumAPr = 0;
-            unguaranteedBidArr.forEach(d => { uSumLP += d.lowPremium; uSumAP += d.avgPremium; uSumLPr += d.minBidPrice; uSumAPr += d.avgBidPrice; });
-            stats.unguaranteedBidData = { '平均最低溢價': uSumLP / unguaranteedBidArr.length, '平均溢價': uSumAP / unguaranteedBidArr.length, '平均最低得標價': uSumLPr / unguaranteedBidArr.length, '平均得標價': uSumAPr / unguaranteedBidArr.length, '樣本數': unguaranteedBidArr.length };
         }
         
         // === v3.51 新增：競拍排除前三高的計算 ===
@@ -1108,43 +1194,6 @@ function getStatsSmart(category, val) {
                 };
             }
         }
-        
-        // v3.52 新增：擔保類型排除前三高計算
-        // 有擔保-競拍 排除前三高
-        const gaWithMarket = guaranteedAuction.filter(d => d.marketHigh > 0 && d.marketLow > 0);
-        if (gaWithMarket.length > 3) {
-            const sortedGA = [...gaWithMarket].sort((a, b) => b.marketHigh - a.marketHigh).slice(3);
-            let exGASumH = 0, exGASumL = 0;
-            sortedGA.forEach(d => { exGASumH += d.marketHigh; exGASumL += d.marketLow; });
-            stats.guaranteedAuctionEx3 = { '平均掛牌最高': exGASumH / sortedGA.length, '平均掛牌最低': exGASumL / sortedGA.length, '樣本數': sortedGA.length };
-        }
-        
-        // 有擔保-詢圈 排除前三高
-        const giWithMarket = guaranteedInquiry.filter(d => d.marketHigh > 0 && d.marketLow > 0);
-        if (giWithMarket.length > 3) {
-            const sortedGI = [...giWithMarket].sort((a, b) => b.marketHigh - a.marketHigh).slice(3);
-            let exGISumH = 0, exGISumL = 0;
-            sortedGI.forEach(d => { exGISumH += d.marketHigh; exGISumL += d.marketLow; });
-            stats.guaranteedInquiryEx3 = { '平均掛牌最高': exGISumH / sortedGI.length, '平均掛牌最低': exGISumL / sortedGI.length, '樣本數': sortedGI.length };
-        }
-        
-        // 無擔保-競拍 排除前三高
-        const uaWithMarket = unguaranteedAuction.filter(d => d.marketHigh > 0 && d.marketLow > 0);
-        if (uaWithMarket.length > 3) {
-            const sortedUA = [...uaWithMarket].sort((a, b) => b.marketHigh - a.marketHigh).slice(3);
-            let exUASumH = 0, exUASumL = 0;
-            sortedUA.forEach(d => { exUASumH += d.marketHigh; exUASumL += d.marketLow; });
-            stats.unguaranteedAuctionEx3 = { '平均掛牌最高': exUASumH / sortedUA.length, '平均掛牌最低': exUASumL / sortedUA.length, '樣本數': sortedUA.length };
-        }
-        
-        // 無擔保-詢圈 排除前三高
-        const uiWithMarket = unguaranteedInquiry.filter(d => d.marketHigh > 0 && d.marketLow > 0);
-        if (uiWithMarket.length > 3) {
-            const sortedUI = [...uiWithMarket].sort((a, b) => b.marketHigh - a.marketHigh).slice(3);
-            let exUISumH = 0, exUISumL = 0;
-            sortedUI.forEach(d => { exUISumH += d.marketHigh; exUISumL += d.marketLow; });
-            stats.unguaranteedInquiryEx3 = { '平均掛牌最高': exUISumH / sortedUI.length, '平均掛牌最低': exUISumL / sortedUI.length, '樣本數': sortedUI.length };
-        }
     }
     
     if (stats.low === 0 && (!stats.rawData || stats.rawData['平均得標價'] === 0)) { 
@@ -1234,7 +1283,7 @@ function generateHistoryCard(d) {
 }
 
 // v3.51 修改：generateStandardCard 增加排除前三的參數，獨立成兩個表格，並加入擔保類型細分
-function generateStandardCard(data, titleOverride=null, inquiryData=null, excludeTop3Data=null, excludeTop3InquiryData=null, guaranteedAuctionData=null, guaranteedInquiryData=null, unguaranteedAuctionData=null, unguaranteedInquiryData=null, guaranteedAuctionEx3=null, guaranteedInquiryEx3=null, unguaranteedAuctionEx3=null, unguaranteedInquiryEx3=null, guaranteedBidData=null, unguaranteedBidData=null) {
+function generateStandardCard(data, titleOverride=null, inquiryData=null, excludeTop3Data=null, excludeTop3InquiryData=null, guaranteedAuctionData=null, guaranteedInquiryData=null, unguaranteedAuctionData=null, unguaranteedInquiryData=null) {
     if (!data) return `<div class="stat-row" style="color:#999;">查無資料</div>`;
     
     const valStr = (v, s='') => (v!==undefined && v!==null && v!=='' && v!==0) ? `${safeFixed(v,2)}${s}` : '-';
@@ -1302,57 +1351,13 @@ function generateStandardCard(data, titleOverride=null, inquiryData=null, exclud
 
     let html = `<div class="stats-header">📊 ${title}</div>`;
     
-    // v3.52 改版：競拍得標數據改為表格，細分全部/有擔保/無擔保
-    const hasAllBid = data && data['樣本數'];
-    const hasGBid = guaranteedBidData && guaranteedBidData['樣本數'] > 0;
-    const hasUBid = unguaranteedBidData && unguaranteedBidData['樣本數'] > 0;
-    
-    if (hasAllBid || hasGBid || hasUBid) {
-        html += `<div style="background:#f1f8e9; padding:10px; border-radius:5px; margin:8px 0;">
-        <div style="font-weight:bold; color:#2e7d32; font-size:12px; margin-bottom:8px;">🎯 競拍得標統計</div>
-        <table style="width:100%; border-collapse:collapse; font-size:11px;">
-        <tr style="background:#c8e6c9;">
-            <th style="padding:4px 6px; text-align:left; font-weight:700; color:#1b5e20; border:1px solid #a5d6a7;"></th>
-            <th style="padding:4px 6px; text-align:center; font-weight:700; color:#1b5e20; border:1px solid #a5d6a7;">最低得標</th>
-            <th style="padding:4px 6px; text-align:center; font-weight:700; color:#1b5e20; border:1px solid #a5d6a7;">最低溢價</th>
-            <th style="padding:4px 6px; text-align:center; font-weight:700; color:#1b5e20; border:1px solid #a5d6a7;">平均得標</th>
-            <th style="padding:4px 6px; text-align:center; font-weight:700; color:#1b5e20; border:1px solid #a5d6a7;">平均溢價</th>
-        </tr>`;
-        
-        // 全部合計
-        if (hasAllBid) {
-            html += `<tr style="background:#e8f5e9;">
-                <td style="padding:4px 6px; font-weight:700; color:#2e7d32; border:1px solid #c8e6c9;">全部<span style="font-size:9px; color:#666; margin-left:3px;">${data['樣本數']}</span></td>
-                <td style="padding:4px 6px; text-align:right; border:1px solid #c8e6c9; font-weight:600;">${valStr(data['平均最低得標價'])}</td>
-                <td style="padding:4px 6px; text-align:right; border:1px solid #c8e6c9; font-weight:700; color:#d32f2f;">${valStr(data['平均最低溢價'],'%')}</td>
-                <td style="padding:4px 6px; text-align:right; border:1px solid #c8e6c9; font-weight:600;">${valStr(data['平均得標價'])}</td>
-                <td style="padding:4px 6px; text-align:right; border:1px solid #c8e6c9; font-weight:700; color:#d32f2f;">${valStr(data['平均溢價'],'%')}</td>
-            </tr>`;
-        }
-        
-        // 有擔保
-        if (hasGBid) {
-            html += `<tr style="background:#fff;">
-                <td style="padding:4px 6px; font-weight:700; color:#7b1fa2; border:1px solid #c8e6c9;">有擔保<span style="font-size:9px; color:#666; margin-left:3px;">${guaranteedBidData['樣本數']}</span></td>
-                <td style="padding:4px 6px; text-align:right; border:1px solid #c8e6c9; font-weight:600;">${valStr(guaranteedBidData['平均最低得標價'])}</td>
-                <td style="padding:4px 6px; text-align:right; border:1px solid #c8e6c9; font-weight:700; color:#d32f2f;">${valStr(guaranteedBidData['平均最低溢價'],'%')}</td>
-                <td style="padding:4px 6px; text-align:right; border:1px solid #c8e6c9; font-weight:600;">${valStr(guaranteedBidData['平均得標價'])}</td>
-                <td style="padding:4px 6px; text-align:right; border:1px solid #c8e6c9; font-weight:700; color:#d32f2f;">${valStr(guaranteedBidData['平均溢價'],'%')}</td>
-            </tr>`;
-        }
-        
-        // 無擔保
-        if (hasUBid) {
-            html += `<tr style="background:#fce4ec;">
-                <td style="padding:4px 6px; font-weight:700; color:#c2185b; border:1px solid #c8e6c9;">無擔保<span style="font-size:9px; color:#666; margin-left:3px;">${unguaranteedBidData['樣本數']}</span></td>
-                <td style="padding:4px 6px; text-align:right; border:1px solid #c8e6c9; font-weight:600;">${valStr(unguaranteedBidData['平均最低得標價'])}</td>
-                <td style="padding:4px 6px; text-align:right; border:1px solid #c8e6c9; font-weight:700; color:#d32f2f;">${valStr(unguaranteedBidData['平均最低溢價'],'%')}</td>
-                <td style="padding:4px 6px; text-align:right; border:1px solid #c8e6c9; font-weight:600;">${valStr(unguaranteedBidData['平均得標價'])}</td>
-                <td style="padding:4px 6px; text-align:right; border:1px solid #c8e6c9; font-weight:700; color:#d32f2f;">${valStr(unguaranteedBidData['平均溢價'],'%')}</td>
-            </tr>`;
-        }
-        
-        html += `</table></div>`;
+    // 競拍得標數據
+    if (data['樣本數']) {
+        html += `<div style="background:#f1f8e9; padding:8px; border-radius:5px; margin:8px 0;">
+        <div style="font-weight:bold; color:#2e7d32; font-size:12px; margin-bottom:5px;">🎯 競拍 (${data['樣本數']}檔)</div>
+        <div class="stat-row"><span class="stat-label">最低得標:</span><span class="stat-value">${valStr(data['平均最低得標價'])}元 / 溢${valStr(data['平均最低溢價'],'%')}</span></div>
+        <div class="stat-row"><span class="stat-label">平均得標:</span><span class="stat-value">${valStr(data['平均得標價'])}元 / 溢${valStr(data['平均溢價'],'%')}</span></div>
+        </div>`;
     }
     
     // === 第一個表格：完整數據 ===
@@ -1547,44 +1552,6 @@ function generateStandardCard(data, titleOverride=null, inquiryData=null, exclud
         html += `</table>`;
     }
     
-    // === v3.52 新增：第四個表格 - 依擔保類型排除前3高 ===
-    const hasGAEx3 = guaranteedAuctionEx3 && safeFloat(guaranteedAuctionEx3['平均掛牌最高']) > 0;
-    const hasGIEx3 = guaranteedInquiryEx3 && safeFloat(guaranteedInquiryEx3['平均掛牌最高']) > 0;
-    const hasUAEx3 = unguaranteedAuctionEx3 && safeFloat(unguaranteedAuctionEx3['平均掛牌最高']) > 0;
-    const hasUIEx3 = unguaranteedInquiryEx3 && safeFloat(unguaranteedInquiryEx3['平均掛牌最高']) > 0;
-    
-    if (hasGAEx3 || hasGIEx3 || hasUAEx3 || hasUIEx3) {
-        html += `<div style="font-size:11px; color:#00695c; font-weight:bold; margin:12px 0 4px 0;">🎯 依擔保類型（排除前3高）</div>`;
-        html += `<table class="card-market-table" style="background:#e0f2f1;">
-        <tr><th style="background:#00695c;"></th><th style="background:#00695c;">掛牌高</th><th style="background:#00695c;">掛牌低</th><th style="background:#00695c;">振幅</th></tr>`;
-        
-        if (hasGAEx3) {
-            const gaExH = safeFloat(guaranteedAuctionEx3['平均掛牌最高']);
-            const gaExL = safeFloat(guaranteedAuctionEx3['平均掛牌最低']);
-            const gaExAmp = (gaExH > 0 && gaExL > 0) ? ((gaExH - gaExL) / gaExL * 100).toFixed(1) : '-';
-            html += `<tr><td class="type-label" style="color:#00695c;">有擔保-競拍<span class="count">${guaranteedAuctionEx3['樣本數']}</span></td><td class="val-blue">${safeFixed(gaExH,1)}</td><td class="val-blue">${safeFixed(gaExL,1)}</td><td class="val-pink">${gaExAmp}%</td></tr>`;
-        }
-        if (hasGIEx3) {
-            const giExH = safeFloat(guaranteedInquiryEx3['平均掛牌最高']);
-            const giExL = safeFloat(guaranteedInquiryEx3['平均掛牌最低']);
-            const giExAmp = (giExH > 0 && giExL > 0) ? ((giExH - giExL) / giExL * 100).toFixed(1) : '-';
-            html += `<tr><td class="type-label" style="color:#00695c;">有擔保-詢圈<span class="count">${guaranteedInquiryEx3['樣本數']}</span></td><td class="val-blue">${safeFixed(giExH,1)}</td><td class="val-blue">${safeFixed(giExL,1)}</td><td class="val-pink">${giExAmp}%</td></tr>`;
-        }
-        if (hasUAEx3) {
-            const uaExH = safeFloat(unguaranteedAuctionEx3['平均掛牌最高']);
-            const uaExL = safeFloat(unguaranteedAuctionEx3['平均掛牌最低']);
-            const uaExAmp = (uaExH > 0 && uaExL > 0) ? ((uaExH - uaExL) / uaExL * 100).toFixed(1) : '-';
-            html += `<tr style="background:#b2dfdb;"><td class="type-label" style="color:#004d40;">無擔保-競拍<span class="count">${unguaranteedAuctionEx3['樣本數']}</span></td><td class="val-blue">${safeFixed(uaExH,1)}</td><td class="val-blue">${safeFixed(uaExL,1)}</td><td class="val-pink">${uaExAmp}%</td></tr>`;
-        }
-        if (hasUIEx3) {
-            const uiExH = safeFloat(unguaranteedInquiryEx3['平均掛牌最高']);
-            const uiExL = safeFloat(unguaranteedInquiryEx3['平均掛牌最低']);
-            const uiExAmp = (uiExH > 0 && uiExL > 0) ? ((uiExH - uiExL) / uiExL * 100).toFixed(1) : '-';
-            html += `<tr style="background:#b2dfdb;"><td class="type-label" style="color:#004d40;">無擔保-詢圈<span class="count">${unguaranteedInquiryEx3['樣本數']}</span></td><td class="val-blue">${safeFixed(uiExH,1)}</td><td class="val-blue">${safeFixed(uiExL,1)}</td><td class="val-pink">${uiExAmp}%</td></tr>`;
-        }
-        html += `</table>`;
-    }
-    
     return html;
 }
 
@@ -1594,8 +1561,6 @@ function initializeUI() {
     populateSelect('broker', statistics['維度統計']['發行券商']);
     showStatsSummary(); 
     bindInputEvents();
-    showSupplyAnalysis(); // v3.52 新增：市場供給與歷史表現
-    showPerformanceMatrix(); // v3.52 新增：競拍績效矩陣
 }
 
 function populateSelect(id, dataObj) {
@@ -1611,512 +1576,214 @@ function populateSelect(id, dataObj) {
 }
 
 function showStatsSummary() { 
-    document.getElementById('statsSummary').innerHTML = `
+    // 基本統計
+    let html = `
     <div class="stat-box"><div class="number">${auctionRawData.filter(d=>d.minBidPrice>0).length}</div><div class="label">競拍案例</div></div>
     <div class="stat-box"><div class="number">${inquiryRawData.length}</div><div class="label">詢圈案例</div></div>
     <div class="stat-box"><div class="number">${auctionRawData.filter(d=>d.marketHigh>0).length + inquiryRawData.filter(d=>d.marketHigh>0).length}</div><div class="label">掛牌行情</div></div>
-    `; 
+    `;
+    
+    // v3.52: 年度績效分析
+    html += generateYearlyPerformance();
+    
+    document.getElementById('statsSummary').innerHTML = html;
 }
 
-// v3.52 新增：歷史半年度競拍表現分析
-function show2024H2Analysis() {
-    const div = document.getElementById('h2Analysis');
-    if (!div) return;
+// v3.52: 生成年度績效分析
+function generateYearlyPerformance() {
+    const years = [2022, 2023, 2024, 2025];
     
-    // 日期解析函數
-    function parseDateInfo(dateVal) {
-        if (!dateVal) return null;
-        let year, month;
-        if (typeof dateVal === 'number') {
-            const d = new Date((dateVal - 25569) * 86400 * 1000);
-            year = d.getFullYear();
-            month = d.getMonth() + 1;
-        } else if (typeof dateVal === 'string') {
-            const parts = dateVal.replace(/-/g, '/').split('/');
-            if (parts.length >= 2) {
-                year = parseInt(parts[0]);
-                month = parseInt(parts[1]);
-            }
-        }
-        if (!year) return null;
-        return { year, month, half: month <= 6 ? 'H1' : 'H2' };
-    }
-    
-    // 統計各半年度
-    const halfYearStats = {};
+    // 競拍績效計算
+    const auctionPerf = {};
+    const auctionRankings = { best: [], worst: [], loss: [] };
     
     auctionRawData.forEach(d => {
-        const dateInfo = parseDateInfo(d.openDate);
-        if (!dateInfo || dateInfo.year < 2022) return;
+        if (!d.listingYear || d.listingYear < 2022 || !d.currentPrice || d.currentPrice <= 0) return;
+        if (!d.minBidPrice || d.minBidPrice <= 0) return;
         
-        const key = `${dateInfo.year}${dateInfo.half}`;
-        if (!halfYearStats[key]) {
-            halfYearStats[key] = { cases: [], count: 0, volume: 0, year: dateInfo.year, half: dateInfo.half };
+        const year = d.listingYear;
+        if (!auctionPerf[year]) {
+            auctionPerf[year] = { count: 0, sumMinReturn: 0, sumAvgReturn: 0, sumHighReturn: 0, sumLowReturn: 0, countHigh: 0 };
         }
         
-        halfYearStats[key].count++;
-        halfYearStats[key].volume += (d.issueSize || 0);
+        const minReturn = (d.currentPrice - d.minBidPrice) / d.minBidPrice * 100;
+        const avgReturn = d.avgBidPrice > 0 ? (d.currentPrice - d.avgBidPrice) / d.avgBidPrice * 100 : 0;
+        const highReturn = d.marketHigh > 0 ? (d.marketHigh - d.minBidPrice) / d.minBidPrice * 100 : 0;
+        const lowReturn = d.marketLow > 0 ? (d.marketLow - d.minBidPrice) / d.minBidPrice * 100 : 0;
         
-        if (d.avgBidPrice > 0 && d.marketHigh > 0) {
-            const returnPct = ((d.marketHigh - d.avgBidPrice) / d.avgBidPrice) * 100;
-            halfYearStats[key].cases.push({
-                name: d.name,
-                id: d.id,
-                returnPct,
-                guarantee: (d.guarantee || '').includes('有') ? '有擔保' : '無擔保'
-            });
-        }
-    });
-    
-    const sortedKeys = Object.keys(halfYearStats).sort();
-    
-    if (sortedKeys.length === 0) {
-        div.innerHTML = `<div class="stat-row" style="color:#e65100;">無歷史資料</div>`;
-        return;
-    }
-    
-    let html = `
-    <div style="font-size:11px; font-weight:bold; color:#e65100; margin-bottom:6px;">
-        📊 歷年競拍掛牌表現追蹤
-    </div>
-    <div style="overflow-x:auto;">
-    <table style="width:100%; border-collapse:collapse; font-size:9px; min-width:400px;">
-        <tr style="background:#ffe0b2;">
-            <th style="padding:3px 4px; text-align:left; border:1px solid #ffcc80; color:#e65100;">期間</th>
-            <th style="padding:3px 4px; text-align:center; border:1px solid #ffcc80; color:#e65100;">發行量</th>
-            <th style="padding:3px 4px; text-align:center; border:1px solid #ffcc80; color:#e65100;">檔數</th>
-            <th style="padding:3px 4px; text-align:center; border:1px solid #ffcc80; color:#2e7d32;">≥20%</th>
-            <th style="padding:3px 4px; text-align:center; border:1px solid #ffcc80; color:#1565c0;">0~20%</th>
-            <th style="padding:3px 4px; text-align:center; border:1px solid #ffcc80; color:#c62828;"><0%</th>
-            <th style="padding:3px 4px; text-align:center; border:1px solid #ffcc80; color:#e65100;">平均</th>
-        </tr>`;
-    
-    sortedKeys.forEach(key => {
-        const stats = halfYearStats[key];
-        const cases = stats.cases;
-        
-        const avgReturn = cases.length > 0 ? cases.reduce((s, c) => s + c.returnPct, 0) / cases.length : 0;
-        const above20 = cases.filter(c => c.returnPct >= 20).length;
-        const between = cases.filter(c => c.returnPct >= 0 && c.returnPct < 20).length;
-        const below0 = cases.filter(c => c.returnPct < 0).length;
-        
-        // 判斷是否為警示期間（2024H2之後且報酬下降）
-        const isWarning = (key === '2024H2' || key === '2025H1' || key === '2025H2');
-        const bgColor = isWarning ? '#fff3e0' : '#fff8e1';
-        const returnColor = avgReturn >= 30 ? '#2e7d32' : (avgReturn >= 15 ? '#ff9800' : '#c62828');
-        
-        // 格式化期間顯示
-        const periodLabel = `${stats.year}${stats.half === 'H1' ? '上' : '下'}`;
-        
-        html += `
-        <tr style="background:${bgColor};">
-            <td style="padding:3px 4px; font-weight:700; border:1px solid #ffcc80;">${periodLabel}</td>
-            <td style="padding:3px 4px; text-align:right; border:1px solid #ffcc80;">${stats.volume.toFixed(0)}億</td>
-            <td style="padding:3px 4px; text-align:center; border:1px solid #ffcc80;">${cases.length}</td>
-            <td style="padding:3px 4px; text-align:center; border:1px solid #ffcc80; color:#2e7d32;">${above20}</td>
-            <td style="padding:3px 4px; text-align:center; border:1px solid #ffcc80; color:#1565c0;">${between}</td>
-            <td style="padding:3px 4px; text-align:center; border:1px solid #ffcc80; color:#c62828; font-weight:${below0>0?'700':'400'};">${below0}</td>
-            <td style="padding:3px 4px; text-align:right; border:1px solid #ffcc80; font-weight:700; color:${returnColor};">${avgReturn.toFixed(1)}%</td>
-        </tr>`;
-    });
-    
-    html += `</table></div>`;
-    
-    // 2024H2 詳細分析（有擔保/無擔保）
-    const h2Key = '2024H2';
-    if (halfYearStats[h2Key] && halfYearStats[h2Key].cases.length > 0) {
-        const h2Cases = halfYearStats[h2Key].cases;
-        const gCases = h2Cases.filter(c => c.guarantee === '有擔保');
-        const uCases = h2Cases.filter(c => c.guarantee === '無擔保');
-        
-        const gAvg = gCases.length > 0 ? gCases.reduce((s,c)=>s+c.returnPct,0)/gCases.length : 0;
-        const uAvg = uCases.length > 0 ? uCases.reduce((s,c)=>s+c.returnPct,0)/uCases.length : 0;
-        const gBelow0 = gCases.filter(c => c.returnPct < 0).length;
-        const uBelow0 = uCases.filter(c => c.returnPct < 0).length;
-        
-        html += `
-        <div style="margin-top:8px; padding:6px; background:#ffebee; border-radius:4px; font-size:9px;">
-            <div style="font-weight:bold; color:#c62828; margin-bottom:4px;">⚠️ 2024下半年細分（發行量暴增期）</div>
-            <div style="display:flex; gap:10px;">
-                <span>有擔保(${gCases.length}): 平均<b style="color:${gAvg>=15?'#2e7d32':'#c62828'}">${gAvg.toFixed(1)}%</b> 虧損${gBelow0}檔</span>
-                <span>無擔保(${uCases.length}): 平均<b style="color:${uAvg>=15?'#2e7d32':'#c62828'}">${uAvg.toFixed(1)}%</b> 虧損${uBelow0}檔</span>
-            </div>
-        </div>`;
-    }
-    
-    // 趨勢警示
-    html += `
-    <div style="margin-top:6px; padding:5px; background:#fff3e0; border-radius:4px; font-size:9px; color:#e65100; line-height:1.4;">
-        💡 <b>觀察重點</b>：2024H2發行量523億創歷史新高，平均報酬從36%降至20%；2025年持續走弱，報酬率已低於15%，虧損案例增加。大量供給壓縮獲利空間。
-    </div>`;
-    
-    div.innerHTML = html;
-}
-
-// v3.52 新增：市場供給量與半年度表現分析
-function showSupplyAnalysis() {
-    const div = document.getElementById('supplyAnalysis');
-    if (!div) return;
-    
-    const sheet06 = window.upcomingSheet06 || [];
-    const sheet07 = window.upcomingSheet07 || [];
-    
-    // 計算半年度統計
-    const byHalfYear = {};
-    
-    auctionRawData.forEach(d => {
-        if (!d.openDate) return;
-        let year, month;
-        if (typeof d.openDate === 'number') {
-            const dt = new Date((d.openDate - 25569) * 86400 * 1000);
-            year = dt.getFullYear();
-            month = dt.getMonth() + 1;
-        } else if (typeof d.openDate === 'string') {
-            const parts = d.openDate.split(/[\/\-]/);
-            year = parseInt(parts[0]);
-            month = parseInt(parts[1]);
+        auctionPerf[year].count++;
+        auctionPerf[year].sumMinReturn += minReturn;
+        auctionPerf[year].sumAvgReturn += avgReturn;
+        if (d.marketHigh > 0) {
+            auctionPerf[year].sumHighReturn += highReturn;
+            auctionPerf[year].sumLowReturn += lowReturn;
+            auctionPerf[year].countHigh++;
         }
         
-        if (!year || year < 2022) return;
-        
-        const half = month <= 6 ? 'H1' : 'H2';
-        const key = `${year}${half}`;
-        
-        if (!byHalfYear[key]) {
-            byHalfYear[key] = { cases: [], count: 0, volume: 0 };
-        }
-        
-        byHalfYear[key].count++;
-        byHalfYear[key].volume += (d.issueSize || 0);
-        
-        if (d.avgBidPrice > 0 && d.marketHigh > 0) {
-            const returnPct = ((d.marketHigh - d.avgBidPrice) / d.avgBidPrice) * 100;
-            byHalfYear[key].cases.push({
-                returnPct: returnPct,
-                isGuaranteed: (d.guarantee || '').includes('有')
-            });
+        // 排行榜資料
+        auctionRankings.best.push({ name: d.name, year: year, return: highReturn, type: '競拍' });
+        auctionRankings.worst.push({ name: d.name, year: year, return: lowReturn, type: '競拍' });
+        if (minReturn < 0) {
+            auctionRankings.loss.push({ name: d.name, year: year, return: minReturn, type: '競拍' });
         }
     });
     
-    // 計算即將發行
-    const total06 = sheet06.reduce((s, r) => s + (parseFloat(r['發行量']) || 0), 0);
-    const total07 = sheet07.reduce((s, r) => s + (parseFloat(r['發行量']) || 0), 0);
-    const pendingTotal = total06 + total07;
-    
-    let html = `
-    <div style="font-size:12px; font-weight:bold; color:#5d4037; margin-bottom:8px;">
-        📦 市場供給與歷史表現
-    </div>`;
-    
-    // 待發行量
-    if (sheet06.length > 0 || sheet07.length > 0) {
-        html += `<div style="font-size:10px; background:#ffebee; padding:6px; border-radius:4px; margin-bottom:8px; border-left:3px solid #c62828;">
-            <div style="font-weight:bold; color:#c62828; margin-bottom:3px;">⚠️ 待發行量</div>
-            <div style="display:flex; justify-content:space-between;">
-                <span>即將發行(06):</span>
-                <span><b>${sheet06.length}</b>檔 / <b>${total06.toFixed(0)}</b>億</span>
-            </div>
-            <div style="display:flex; justify-content:space-between;">
-                <span>董事會決議(07):</span>
-                <span><b>${sheet07.length}</b>檔 / <b>${total07.toFixed(0)}</b>億</span>
-            </div>
-            <div style="display:flex; justify-content:space-between; margin-top:3px; padding-top:3px; border-top:1px dashed #e57373;">
-                <span style="font-weight:bold;">合計:</span>
-                <span style="font-weight:bold; color:#c62828;">${sheet06.length + sheet07.length}檔 / ${pendingTotal.toFixed(0)}億</span>
-            </div>
-        </div>`;
-    }
-    
-    // 半年度表現表格
-    html += `<div style="font-size:10px; margin-bottom:4px; font-weight:bold; color:#5d4037;">📊 各期競拍掛牌表現</div>`;
-    html += `<table style="width:100%; border-collapse:collapse; font-size:9px;">
-        <tr style="background:#d7ccc8;">
-            <th style="padding:3px 4px; border:1px solid #bcaaa4; text-align:left;">期間</th>
-            <th style="padding:3px 4px; border:1px solid #bcaaa4; text-align:right;">檔</th>
-            <th style="padding:3px 4px; border:1px solid #bcaaa4; text-align:right;">量</th>
-            <th style="padding:3px 4px; border:1px solid #bcaaa4; text-align:center; color:#2e7d32;">≥20%</th>
-            <th style="padding:3px 4px; border:1px solid #bcaaa4; text-align:center; color:#1565c0;">0-20%</th>
-            <th style="padding:3px 4px; border:1px solid #bcaaa4; text-align:center; color:#c62828;"><0%</th>
-            <th style="padding:3px 4px; border:1px solid #bcaaa4; text-align:right;">平均</th>
-        </tr>`;
-    
-    const periods = ['2022H1', '2022H2', '2023H1', '2023H2', '2024H1', '2024H2', '2025H1', '2025H2'];
-    const periodNames = {'2022H1':'22上','2022H2':'22下','2023H1':'23上','2023H2':'23下','2024H1':'24上','2024H2':'24下','2025H1':'25上','2025H2':'25下'};
-    
-    periods.forEach(key => {
-        const data = byHalfYear[key];
-        if (!data) return;
-        
-        const cases = data.cases;
-        const avgReturn = cases.length > 0 ? cases.reduce((s, c) => s + c.returnPct, 0) / cases.length : 0;
-        const above20 = cases.filter(c => c.returnPct >= 20).length;
-        const between0and20 = cases.filter(c => c.returnPct >= 0 && c.returnPct < 20).length;
-        const below0 = cases.filter(c => c.returnPct < 0).length;
-        
-        // 判斷是否為警示期間（2024H2之後）
-        const isWarning = key === '2024H2' || key === '2025H1' || key === '2025H2';
-        const bgColor = isWarning ? '#fff3e0' : '#efebe9';
-        const volumeColor = data.volume > 200 ? '#c62828' : '#5d4037';
-        const avgColor = avgReturn >= 40 ? '#2e7d32' : (avgReturn >= 20 ? '#1565c0' : '#c62828');
-        
-        html += `<tr style="background:${bgColor};">
-            <td style="padding:3px 4px; border:1px solid #bcaaa4; font-weight:${isWarning ? 'bold' : 'normal'};">${periodNames[key]}</td>
-            <td style="padding:3px 4px; border:1px solid #bcaaa4; text-align:right;">${cases.length}</td>
-            <td style="padding:3px 4px; border:1px solid #bcaaa4; text-align:right; color:${volumeColor}; font-weight:${data.volume > 200 ? 'bold' : 'normal'};">${data.volume.toFixed(0)}</td>
-            <td style="padding:3px 4px; border:1px solid #bcaaa4; text-align:center; color:#2e7d32; font-weight:600;">${above20}</td>
-            <td style="padding:3px 4px; border:1px solid #bcaaa4; text-align:center; color:#1565c0;">${between0and20}</td>
-            <td style="padding:3px 4px; border:1px solid #bcaaa4; text-align:center; color:${below0 > 0 ? '#c62828' : '#666'}; font-weight:${below0 > 0 ? 'bold' : 'normal'};">${below0}</td>
-            <td style="padding:3px 4px; border:1px solid #bcaaa4; text-align:right; color:${avgColor}; font-weight:bold;">${avgReturn.toFixed(0)}%</td>
-        </tr>`;
-    });
-    
-    html += `</table>`;
-    
-    // 說明文字
-    html += `<div style="font-size:9px; color:#666; margin-top:6px; line-height:1.4; padding:4px; background:#fff8e1; border-radius:3px;">
-        <b style="color:#e65100;">⚠️ 關鍵觀察：</b><br>
-        • 2022-2023年平均報酬50-80%，幾乎零虧損<br>
-        • 2024H2起發行量暴增，平均報酬降至20%以下<br>
-        • 目前待發行 <b style="color:#c62828;">${pendingTotal.toFixed(0)}億</b>，供給壓力持續
-    </div>`;
-    
-    div.innerHTML = html;
-}
-
-// v3.52 新增：競拍績效矩陣分析
-function showPerformanceMatrix() {
-    const div = document.getElementById('performanceMatrix');
-    if (!div) return;
-    
-    // ========== 競拍各期績效 ==========
-    const auctionPeriods = {};
-    
-    auctionRawData.forEach(d => {
-        if (!d.openDate || d.minBidPrice <= 0) return;
-        
-        let year, month;
-        if (typeof d.openDate === 'number') {
-            const dt = new Date((d.openDate - 25569) * 86400 * 1000);
-            year = dt.getFullYear();
-            month = dt.getMonth() + 1;
-        } else if (typeof d.openDate === 'string') {
-            const parts = d.openDate.split(/[\/\-]/);
-            year = parseInt(parts[0]);
-            month = parseInt(parts[1]);
-        }
-        
-        if (!year || year < 2022) return;
-        
-        const half = month <= 6 ? 'H1' : 'H2';
-        const key = `${year}${half}`;
-        
-        if (!auctionPeriods[key]) auctionPeriods[key] = [];
-        
-        const minBid = d.minBidPrice || 0;
-        const avgBid = d.avgBidPrice || 0;
-        const marketHigh = d.marketHigh || 0;
-        const marketLow = d.marketLow || 0;
-        const latestCB = d.latestCBPrice || 0;
-        
-        auctionPeriods[key].push({
-            name: d.name, id: d.id,
-            minToHigh: (minBid > 0 && marketHigh > 0) ? ((marketHigh - minBid) / minBid * 100) : null,
-            minToLow: (minBid > 0 && marketLow > 0) ? ((marketLow - minBid) / minBid * 100) : null,
-            avgToHigh: (avgBid > 0 && marketHigh > 0) ? ((marketHigh - avgBid) / avgBid * 100) : null,
-            avgToLow: (avgBid > 0 && marketLow > 0) ? ((marketLow - avgBid) / avgBid * 100) : null,
-            avgToClose: (avgBid > 0 && latestCB > 0) ? ((latestCB - avgBid) / avgBid * 100) : null
-        });
-    });
-    
-    // ========== 詢圈各期績效 ==========
-    const inquiryPeriods = {};
+    // 詢圈績效計算
+    const inquiryPerf = {};
+    const inquiryRankings = { best: [], worst: [], loss: [] };
     
     inquiryRawData.forEach(d => {
-        if (!d.listYear || d.listYear < 2022 || d.marketHigh <= 0) return;
+        if (!d.listingYear || d.listingYear < 2022 || !d.currentPrice || d.currentPrice <= 0) return;
         
-        const half = d.listMonth <= 6 ? 'H1' : 'H2';
-        const key = `${d.listYear}${half}`;
+        const year = d.listingYear;
+        if (!inquiryPerf[year]) {
+            inquiryPerf[year] = { count: 0, sumReturn: 0, sumHighReturn: 0, sumLowReturn: 0, countHigh: 0 };
+        }
         
-        if (!inquiryPeriods[key]) inquiryPeriods[key] = [];
+        const issueReturn = (d.currentPrice - 100) / 100 * 100;
+        const highReturn = d.marketHigh > 0 ? (d.marketHigh - 100) / 100 * 100 : 0;
+        const lowReturn = d.marketLow > 0 ? (d.marketLow - 100) / 100 * 100 : 0;
         
-        const latestCB = d.latestCBPrice || 0;
+        inquiryPerf[year].count++;
+        inquiryPerf[year].sumReturn += issueReturn;
+        if (d.marketHigh > 0) {
+            inquiryPerf[year].sumHighReturn += highReturn;
+            inquiryPerf[year].sumLowReturn += lowReturn;
+            inquiryPerf[year].countHigh++;
+        }
         
-        inquiryPeriods[key].push({
-            name: d.name, id: d.id,
-            toHigh: ((d.marketHigh - 100) / 100 * 100),
-            toLow: d.marketLow > 0 ? ((d.marketLow - 100) / 100 * 100) : null,
-            toClose: latestCB > 0 ? ((latestCB - 100) / 100 * 100) : null
-        });
+        // 排行榜資料
+        if (d.marketHigh > 0) {
+            inquiryRankings.best.push({ name: d.name, year: year, return: highReturn, type: '詢圈' });
+            inquiryRankings.worst.push({ name: d.name, year: year, return: lowReturn, type: '詢圈' });
+        }
+        if (issueReturn < 0) {
+            inquiryRankings.loss.push({ name: d.name, year: year, return: issueReturn, type: '詢圈' });
+        }
     });
     
-    // 計算平均
-    function calcAvg(arr, field) {
-        const valid = arr.filter(r => r[field] !== null);
-        if (valid.length === 0) return '-';
-        return (valid.reduce((s, r) => s + r[field], 0) / valid.length).toFixed(0);
-    }
+    // 排序排行榜
+    auctionRankings.best.sort((a, b) => b.return - a.return);
+    auctionRankings.worst.sort((a, b) => a.return - b.return);
+    auctionRankings.loss.sort((a, b) => a.return - b.return);
+    inquiryRankings.best.sort((a, b) => b.return - a.return);
+    inquiryRankings.worst.sort((a, b) => a.return - b.return);
+    inquiryRankings.loss.sort((a, b) => a.return - b.return);
     
-    const getColor = (v) => {
-        if (v === '-') return '#666';
-        const num = parseFloat(v);
-        if (num >= 20) return '#2e7d32';
-        if (num >= 0) return '#1565c0';
-        return '#c62828';
+    const formatReturn = (val) => {
+        if (val === null || val === undefined || isNaN(val)) return '-';
+        const cls = val >= 0 ? 'positive' : 'negative';
+        const sign = val >= 0 ? '+' : '';
+        return `<span class="${cls}">${sign}${val.toFixed(1)}%</span>`;
+    };
+    
+    const formatRankItem = (item, index) => {
+        const cls = item.return >= 0 ? 'positive' : 'negative';
+        const sign = item.return >= 0 ? '+' : '';
+        return `<span class="ranking-item">${index+1}.${item.name}<span class="year">(${item.year})</span><span class="return ${cls}">${sign}${item.return.toFixed(0)}%</span></span>`;
     };
     
     let html = `
-    <div style="font-size:11px; font-weight:bold; color:#2e7d32; margin-bottom:6px;">
-        📈 各期績效矩陣比較
+    <div class="yearly-performance" style="grid-column: 1 / -1;">
+        <div class="yearly-performance-title">📊 各年度掛牌績效分析</div>
+        
+        <!-- 競拍績效 -->
+        <div class="yearly-section">
+            <div class="yearly-section-title">🎯 競拍績效排行</div>
+            <table class="yearly-table">
+                <tr>
+                    <th>掛牌年度</th>
+                    <th>檔數</th>
+                    <th>最低得標→現價</th>
+                    <th>平均得標→現價</th>
+                    <th>最低得標→掛牌高</th>
+                    <th>最低得標→掛牌低</th>
+                </tr>`;
+    
+    years.forEach(year => {
+        const p = auctionPerf[year];
+        if (p && p.count > 0) {
+            const avgMin = p.sumMinReturn / p.count;
+            const avgAvg = p.sumAvgReturn / p.count;
+            const avgHigh = p.countHigh > 0 ? p.sumHighReturn / p.countHigh : null;
+            const avgLow = p.countHigh > 0 ? p.sumLowReturn / p.countHigh : null;
+            html += `<tr>
+                <td class="year-cell">${year}年</td>
+                <td class="count-cell">${p.count}檔</td>
+                <td>${formatReturn(avgMin)}</td>
+                <td>${formatReturn(avgAvg)}</td>
+                <td>${formatReturn(avgHigh)}</td>
+                <td>${formatReturn(avgLow)}</td>
+            </tr>`;
+        }
+    });
+    
+    html += `</table>
+            
+            <div class="ranking-section">
+                <div class="ranking-title best">🏆 最佳5檔 (最低得標→掛牌高)：</div>
+                <div class="ranking-items">${auctionRankings.best.slice(0, 5).map((d, i) => formatRankItem(d, i)).join(' ')}</div>
+            </div>
+            <div class="ranking-section">
+                <div class="ranking-title worst">📉 最差5檔 (最低得標→掛牌低)：</div>
+                <div class="ranking-items">${auctionRankings.worst.slice(0, 5).map((d, i) => formatRankItem(d, i)).join(' ')}</div>
+            </div>
+            <div class="ranking-section">
+                <div class="ranking-title loss">⚠️ 目前虧損 (最低得標→現價)：</div>
+                <div class="ranking-items">${auctionRankings.loss.slice(0, 5).map((d, i) => formatRankItem(d, i)).join(' ') || '<span style="color:#666;">無</span>'}</div>
+            </div>
+        </div>
+        
+        <!-- 詢圈績效 -->
+        <div class="yearly-section">
+            <div class="yearly-section-title">📋 詢圈績效排行 (發行價100元)</div>
+            <table class="yearly-table">
+                <tr>
+                    <th>掛牌年度</th>
+                    <th>檔數</th>
+                    <th>100→現價</th>
+                    <th>100→掛牌高</th>
+                    <th>100→掛牌低</th>
+                </tr>`;
+    
+    years.forEach(year => {
+        const p = inquiryPerf[year];
+        if (p && p.count > 0) {
+            const avgReturn = p.sumReturn / p.count;
+            const avgHigh = p.countHigh > 0 ? p.sumHighReturn / p.countHigh : null;
+            const avgLow = p.countHigh > 0 ? p.sumLowReturn / p.countHigh : null;
+            html += `<tr>
+                <td class="year-cell">${year}年</td>
+                <td class="count-cell">${p.count}檔</td>
+                <td>${formatReturn(avgReturn)}</td>
+                <td>${formatReturn(avgHigh)}</td>
+                <td>${formatReturn(avgLow)}</td>
+            </tr>`;
+        }
+    });
+    
+    html += `</table>
+            
+            <div class="ranking-section">
+                <div class="ranking-title best">🏆 最佳5檔 (100→掛牌高)：</div>
+                <div class="ranking-items">${inquiryRankings.best.slice(0, 5).map((d, i) => formatRankItem(d, i)).join(' ')}</div>
+            </div>
+            <div class="ranking-section">
+                <div class="ranking-title worst">📉 最差5檔 (100→掛牌低)：</div>
+                <div class="ranking-items">${inquiryRankings.worst.slice(0, 5).map((d, i) => formatRankItem(d, i)).join(' ')}</div>
+            </div>
+            <div class="ranking-section">
+                <div class="ranking-title loss">⚠️ 目前虧損 (100→現價)：</div>
+                <div class="ranking-items">${inquiryRankings.loss.slice(0, 5).map((d, i) => formatRankItem(d, i)).join(' ') || '<span style="color:#666;">無</span>'}</div>
+            </div>
+        </div>
+        
+        <div style="font-size:10px; color:#666; margin-top:10px; padding-top:8px; border-top:1px solid #c8e6c9;">
+            💡 表格數字為平均報酬率 | 掛牌高/低=歷史極值 | 現價=最新收盤
+        </div>
     </div>`;
     
-    // ========== 競拍 vs 詢圈 對照表 ==========
-    html += `<div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:8px; min-width:420px;">
-        <tr style="background:#c8e6c9;">
-            <th style="padding:2px 3px; border:1px solid #a5d6a7; color:#1b5e20;" rowspan="2">期間</th>
-            <th style="padding:2px 3px; border:1px solid #a5d6a7; color:#667eea;" colspan="3">🎯 競拍 (得標→)</th>
-            <th style="padding:2px 3px; border:1px solid #a5d6a7; color:#ff9800;" colspan="3">📋 詢圈 (100→)</th>
-        </tr>
-        <tr style="background:#e8f5e9;">
-            <th style="padding:2px; border:1px solid #a5d6a7; font-size:7px; color:#2e7d32;">掛牌高</th>
-            <th style="padding:2px; border:1px solid #a5d6a7; font-size:7px; color:#c62828;">掛牌低</th>
-            <th style="padding:2px; border:1px solid #a5d6a7; font-size:7px; color:#1565c0;">現價</th>
-            <th style="padding:2px; border:1px solid #a5d6a7; font-size:7px; color:#2e7d32;">掛牌高</th>
-            <th style="padding:2px; border:1px solid #a5d6a7; font-size:7px; color:#c62828;">掛牌低</th>
-            <th style="padding:2px; border:1px solid #a5d6a7; font-size:7px; color:#1565c0;">現價</th>
-        </tr>`;
-    
-    const periodKeys = ['2022H1', '2022H2', '2023H1', '2023H2', '2024H1', '2024H2', '2025H1', '2025H2'];
-    
-    periodKeys.forEach(key => {
-        const aData = auctionPeriods[key] || [];
-        const iData = inquiryPeriods[key] || [];
-        
-        if (aData.length === 0 && iData.length === 0) return;
-        
-        const aAvgToHigh = calcAvg(aData, 'avgToHigh');
-        const aAvgToLow = calcAvg(aData, 'avgToLow');
-        const aAvgToClose = calcAvg(aData, 'avgToClose');
-        const iToHigh = calcAvg(iData, 'toHigh');
-        const iToLow = calcAvg(iData, 'toLow');
-        const iToClose = calcAvg(iData, 'toClose');
-        
-        const isWarning = key === '2024H2' || key === '2025H1' || key === '2025H2';
-        const bgColor = isWarning ? '#fff3e0' : '#fff';
-        
-        html += `
-        <tr style="background:${bgColor};">
-            <td style="padding:2px 3px; border:1px solid #c8e6c9; font-weight:700; font-size:9px;">
-                ${key.replace('H1','上').replace('H2','下')}
-                <span style="font-size:7px; color:#888;">(${aData.length}/${iData.length})</span>
-            </td>
-            <td style="padding:2px; border:1px solid #c8e6c9; text-align:right; color:${getColor(aAvgToHigh)}; font-weight:600;">${aAvgToHigh}%</td>
-            <td style="padding:2px; border:1px solid #c8e6c9; text-align:right; color:${getColor(aAvgToLow)}; font-weight:600;">${aAvgToLow}%</td>
-            <td style="padding:2px; border:1px solid #c8e6c9; text-align:right; color:${getColor(aAvgToClose)}; font-weight:700;">${aAvgToClose}%</td>
-            <td style="padding:2px; border:1px solid #c8e6c9; text-align:right; color:${getColor(iToHigh)}; font-weight:600;">${iToHigh}%</td>
-            <td style="padding:2px; border:1px solid #c8e6c9; text-align:right; color:${getColor(iToLow)}; font-weight:600;">${iToLow}%</td>
-            <td style="padding:2px; border:1px solid #c8e6c9; text-align:right; color:${getColor(iToClose)}; font-weight:700;">${iToClose}%</td>
-        </tr>`;
-    });
-    
-    html += `</table></div>`;
-    
-    // ========== 競拍 TOP5 排行榜 ==========
-    const allAuction = auctionRawData.filter(d => d.avgBidPrice > 0 && d.marketHigh > 0 && d.marketLow > 0)
-        .map(d => ({
-            name: d.name, id: d.id,
-            avgBid: d.avgBidPrice,
-            marketHigh: d.marketHigh,
-            marketLow: d.marketLow,
-            latestCB: d.latestCBPrice || 0,
-            toHigh: ((d.marketHigh - d.avgBidPrice) / d.avgBidPrice * 100),
-            toLow: ((d.marketLow - d.avgBidPrice) / d.avgBidPrice * 100),
-            toClose: d.latestCBPrice > 0 ? ((d.latestCBPrice - d.avgBidPrice) / d.avgBidPrice * 100) : null
-        }));
-    
-    html += `<div style="margin-top:8px; border-top:2px solid #667eea; padding-top:6px;">
-        <div style="font-size:10px; font-weight:bold; color:#667eea; margin-bottom:4px;">🎯 競拍績效排行 (2022年後)</div>
-    </div>`;
-    
-    // 競拍最佳 TOP5
-    const topAuction = [...allAuction].sort((a, b) => b.toHigh - a.toHigh).slice(0, 5);
-    html += `<div style="font-size:8px; margin-bottom:3px;">
-        <span style="font-weight:bold; color:#2e7d32;">🏆 最佳5檔 (得標→掛牌高)：</span>`;
-    topAuction.forEach((r, i) => {
-        html += `<span style="background:#e8f5e9; padding:0 3px; border-radius:2px; margin-left:2px;">${i+1}.${r.name}<b style="color:#2e7d32;">+${r.toHigh.toFixed(0)}%</b></span>`;
-    });
-    html += `</div>`;
-    
-    // 競拍最差 TOP5 (掛牌低)
-    const worstAuction = [...allAuction].sort((a, b) => a.toLow - b.toLow).slice(0, 5);
-    html += `<div style="font-size:8px; margin-bottom:3px;">
-        <span style="font-weight:bold; color:#c62828;">📉 最差5檔 (得標→掛牌低)：</span>`;
-    worstAuction.forEach((r, i) => {
-        html += `<span style="background:#ffebee; padding:0 3px; border-radius:2px; margin-left:2px;">${i+1}.${r.name}<b style="color:#c62828;">${r.toLow.toFixed(0)}%</b></span>`;
-    });
-    html += `</div>`;
-    
-    // 競拍目前虧損
-    const losingAuction = allAuction.filter(r => r.toClose !== null && r.toClose < -5).sort((a, b) => a.toClose - b.toClose).slice(0, 5);
-    if (losingAuction.length > 0) {
-        html += `<div style="font-size:8px; margin-bottom:3px;">
-            <span style="font-weight:bold; color:#e65100;">⚠️ 目前虧損 (得標→現價)：</span>`;
-        losingAuction.forEach((r, i) => {
-            html += `<span style="background:#fff3e0; padding:0 3px; border-radius:2px; margin-left:2px;">${r.name}<b style="color:#c62828;">${r.toClose.toFixed(0)}%</b></span>`;
-        });
-        html += `</div>`;
-    }
-    
-    // ========== 詢圈 TOP5 排行榜 ==========
-    const allInquiry = inquiryRawData.filter(d => d.marketHigh > 0 && d.listYear >= 2022)
-        .map(d => ({
-            name: d.name, id: d.id,
-            marketHigh: d.marketHigh,
-            marketLow: d.marketLow || 0,
-            latestCB: d.latestCBPrice || 0,
-            toHigh: ((d.marketHigh - 100) / 100 * 100),
-            toLow: d.marketLow > 0 ? ((d.marketLow - 100) / 100 * 100) : null,
-            toClose: d.latestCBPrice > 0 ? ((d.latestCBPrice - 100) / 100 * 100) : null
-        }));
-    
-    html += `<div style="margin-top:6px; border-top:2px solid #ff9800; padding-top:6px;">
-        <div style="font-size:10px; font-weight:bold; color:#ff9800; margin-bottom:4px;">📋 詢圈績效排行 (2022年後，發行價100元)</div>
-    </div>`;
-    
-    // 詢圈最佳 TOP5
-    const topInquiry = [...allInquiry].sort((a, b) => b.toHigh - a.toHigh).slice(0, 5);
-    html += `<div style="font-size:8px; margin-bottom:3px;">
-        <span style="font-weight:bold; color:#2e7d32;">🏆 最佳5檔 (100→掛牌高)：</span>`;
-    topInquiry.forEach((r, i) => {
-        html += `<span style="background:#e8f5e9; padding:0 3px; border-radius:2px; margin-left:2px;">${i+1}.${r.name}<b style="color:#2e7d32;">+${r.toHigh.toFixed(0)}%</b></span>`;
-    });
-    html += `</div>`;
-    
-    // 詢圈最差 TOP5
-    const worstInquiry = [...allInquiry].filter(r => r.toLow !== null).sort((a, b) => a.toLow - b.toLow).slice(0, 5);
-    html += `<div style="font-size:8px; margin-bottom:3px;">
-        <span style="font-weight:bold; color:#c62828;">📉 最差5檔 (100→掛牌低)：</span>`;
-    worstInquiry.forEach((r, i) => {
-        html += `<span style="background:#ffebee; padding:0 3px; border-radius:2px; margin-left:2px;">${i+1}.${r.name}<b style="color:#c62828;">${r.toLow.toFixed(0)}%</b></span>`;
-    });
-    html += `</div>`;
-    
-    // 詢圈目前虧損
-    const losingInquiry = allInquiry.filter(r => r.toClose !== null && r.toClose < 0).sort((a, b) => a.toClose - b.toClose).slice(0, 5);
-    if (losingInquiry.length > 0) {
-        html += `<div style="font-size:8px;">
-            <span style="font-weight:bold; color:#e65100;">⚠️ 目前虧損 (100→現價)：</span>`;
-        losingInquiry.forEach((r, i) => {
-            html += `<span style="background:#fff3e0; padding:0 3px; border-radius:2px; margin-left:2px;">${r.name}<b style="color:#c62828;">${r.toClose.toFixed(0)}%</b></span>`;
-        });
-        html += `</div>`;
-    }
-    
-    // 說明
-    html += `<div style="margin-top:6px; font-size:7px; color:#888; line-height:1.3; padding:3px; background:#f5f5f5; border-radius:3px;">
-        💡 表格數字為平均報酬率 | 括號內(競拍/詢圈)為各期檔數 | 掛牌高/低=歷史極值 | 現價=最新收盤
-    </div>`;
-    
-    div.innerHTML = html;
+    return html;
 }
 
 function bindInputEvents() {
@@ -2220,7 +1887,7 @@ function bindInputEvents() {
                 if(['股本','發行規模','轉換價'].includes(cat)) displayTitle = getRangeLabel(cat, val);
                 
                 const smartResult = getStatsSmart(cat, val);
-                // v3.52: 傳入排除前三 + 擔保類型細分 + 擔保類型排除前三高 + 得標統計細分
+                // v3.51: 傳入排除前三 + 擔保類型細分數據
                 show(id+'Info', generateStandardCard(
                     smartResult.rawData, 
                     `區間統計: ${displayTitle}`, 
@@ -2230,13 +1897,7 @@ function bindInputEvents() {
                     smartResult.guaranteedAuctionData,
                     smartResult.guaranteedInquiryData,
                     smartResult.unguaranteedAuctionData,
-                    smartResult.unguaranteedInquiryData,
-                    smartResult.guaranteedAuctionEx3,
-                    smartResult.guaranteedInquiryEx3,
-                    smartResult.unguaranteedAuctionEx3,
-                    smartResult.unguaranteedInquiryEx3,
-                    smartResult.guaranteedBidData,
-                    smartResult.unguaranteedBidData
+                    smartResult.unguaranteedInquiryData
                 ));
                 if(cat==='轉換價'||cat==='信評') updateSmartReminders();
             }
@@ -2473,5 +2134,6 @@ window.addEventListener('DOMContentLoaded', function() {
     loadStatistics();
 });
 </script>
+
 </body>
 </html>

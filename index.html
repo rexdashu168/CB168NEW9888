@@ -747,8 +747,8 @@ function calculateGlobalMarketStats() {
     }
 }
 
-// v3.51 修改：增加排除前三高的統計 + 擔保條件交叉篩選
-function getStatsSmart(category, val, guaranteeFilter = null) {
+// v3.51 修改：增加排除前三高的統計 + 擔保類型細分統計
+function getStatsSmart(category, val) {
     let stats = { 
         low: 0, 
         avg: 0, 
@@ -757,17 +757,15 @@ function getStatsSmart(category, val, guaranteeFilter = null) {
         inquiryData: null,
         excludeTop3Data: null,
         excludeTop3InquiryData: null,
-        guaranteeLabel: guaranteeFilter // 記錄篩選條件
+        // v3.51 新增：依擔保類型細分
+        guaranteedAuctionData: null,
+        guaranteedInquiryData: null,
+        unguaranteedAuctionData: null,
+        unguaranteedInquiryData: null
     };
     let filterFn = null;
     const v = parseFloat(val);
     let rangeLabel = "";
-    
-    // 擔保條件篩選函數
-    const guaranteeFilterFn = (d) => {
-        if (!guaranteeFilter) return true;
-        return (d.guarantee || '').includes(guaranteeFilter);
-    };
 
     if (category === '股本') {
         if (v < 3) { rangeLabel = "< 3 億"; filterFn = d => d.capital < 3; }
@@ -805,8 +803,8 @@ function getStatsSmart(category, val, guaranteeFilter = null) {
     }
 
     if (filterFn) {
-        // === 競拍數據統計（加入擔保條件）===
-        const auctionFiltered = auctionRawData.filter(d => filterFn(d) && guaranteeFilterFn(d));
+        // === 競拍數據統計（全部）===
+        const auctionFiltered = auctionRawData.filter(filterFn);
         let sumLowP = 0, sumAvgP = 0, sumLowPr = 0, sumAvgPr = 0, sumH = 0, sumL = 0, countM = 0, count = 0;
         
         auctionFiltered.forEach(d => {
@@ -855,8 +853,8 @@ function getStatsSmart(category, val, guaranteeFilter = null) {
             };
         }
         
-        // === 詢圈數據統計（加入擔保條件）===
-        const inquiryFiltered = inquiryRawData.filter(d => filterFn(d) && guaranteeFilterFn(d));
+        // === 詢圈數據統計（全部）===
+        const inquiryFiltered = inquiryRawData.filter(filterFn);
         let iSumH = 0, iSumL = 0, iCountM = 0;
         
         inquiryFiltered.forEach(d => {
@@ -890,6 +888,87 @@ function getStatsSmart(category, val, guaranteeFilter = null) {
                 '平均掛牌最低': exISumL / excludedInquiry.length,
                 '樣本數': excludedInquiry.length
             };
+        }
+        
+        // === v3.51 新增：依擔保類型細分統計 ===
+        // 有擔保 - 競拍
+        const guaranteedAuction = auctionFiltered.filter(d => (d.guarantee || '').includes('有'));
+        if (guaranteedAuction.length > 0) {
+            let gaSumH = 0, gaSumL = 0, gaCountM = 0;
+            guaranteedAuction.forEach(d => {
+                if (d.marketHigh > 0 && d.marketLow > 0) {
+                    gaSumH += d.marketHigh;
+                    gaSumL += d.marketLow;
+                    gaCountM++;
+                }
+            });
+            if (gaCountM > 0) {
+                stats.guaranteedAuctionData = {
+                    '平均掛牌最高': gaSumH / gaCountM,
+                    '平均掛牌最低': gaSumL / gaCountM,
+                    '樣本數': gaCountM
+                };
+            }
+        }
+        
+        // 有擔保 - 詢圈
+        const guaranteedInquiry = inquiryFiltered.filter(d => (d.guarantee || '').includes('有'));
+        if (guaranteedInquiry.length > 0) {
+            let giSumH = 0, giSumL = 0, giCountM = 0;
+            guaranteedInquiry.forEach(d => {
+                if (d.marketHigh > 0 && d.marketLow > 0) {
+                    giSumH += d.marketHigh;
+                    giSumL += d.marketLow;
+                    giCountM++;
+                }
+            });
+            if (giCountM > 0) {
+                stats.guaranteedInquiryData = {
+                    '平均掛牌最高': giSumH / giCountM,
+                    '平均掛牌最低': giSumL / giCountM,
+                    '樣本數': giCountM
+                };
+            }
+        }
+        
+        // 無擔保 - 競拍
+        const unguaranteedAuction = auctionFiltered.filter(d => (d.guarantee || '').includes('無'));
+        if (unguaranteedAuction.length > 0) {
+            let uaSumH = 0, uaSumL = 0, uaCountM = 0;
+            unguaranteedAuction.forEach(d => {
+                if (d.marketHigh > 0 && d.marketLow > 0) {
+                    uaSumH += d.marketHigh;
+                    uaSumL += d.marketLow;
+                    uaCountM++;
+                }
+            });
+            if (uaCountM > 0) {
+                stats.unguaranteedAuctionData = {
+                    '平均掛牌最高': uaSumH / uaCountM,
+                    '平均掛牌最低': uaSumL / uaCountM,
+                    '樣本數': uaCountM
+                };
+            }
+        }
+        
+        // 無擔保 - 詢圈
+        const unguaranteedInquiry = inquiryFiltered.filter(d => (d.guarantee || '').includes('無'));
+        if (unguaranteedInquiry.length > 0) {
+            let uiSumH = 0, uiSumL = 0, uiCountM = 0;
+            unguaranteedInquiry.forEach(d => {
+                if (d.marketHigh > 0 && d.marketLow > 0) {
+                    uiSumH += d.marketHigh;
+                    uiSumL += d.marketLow;
+                    uiCountM++;
+                }
+            });
+            if (uiCountM > 0) {
+                stats.unguaranteedInquiryData = {
+                    '平均掛牌最高': uiSumH / uiCountM,
+                    '平均掛牌最低': uiSumL / uiCountM,
+                    '樣本數': uiCountM
+                };
+            }
         }
     }
     
@@ -979,8 +1058,8 @@ function generateHistoryCard(d) {
     `;
 }
 
-// v3.51 修改：generateStandardCard 增加排除前三的參數，獨立成兩個表格
-function generateStandardCard(data, titleOverride=null, inquiryData=null, excludeTop3Data=null, excludeTop3InquiryData=null) {
+// v3.51 修改：generateStandardCard 增加排除前三的參數，獨立成兩個表格，並加入擔保類型細分
+function generateStandardCard(data, titleOverride=null, inquiryData=null, excludeTop3Data=null, excludeTop3InquiryData=null, guaranteedAuctionData=null, guaranteedInquiryData=null, unguaranteedAuctionData=null, unguaranteedInquiryData=null) {
     if (!data) return `<div class="stat-row" style="color:#999;">查無資料</div>`;
     
     const valStr = (v, s='') => (v!==undefined && v!==null && v!=='' && v!==0) ? `${safeFixed(v,2)}${s}` : '-';
@@ -1177,6 +1256,78 @@ function generateStandardCard(data, titleOverride=null, inquiryData=null, exclud
         }
     }
     
+    // === 第三個表格：依擔保類型細分 ===
+    const hasGuaranteedAuction = guaranteedAuctionData && safeFloat(guaranteedAuctionData['平均掛牌最高']) > 0;
+    const hasGuaranteedInquiry = guaranteedInquiryData && safeFloat(guaranteedInquiryData['平均掛牌最高']) > 0;
+    const hasUnguaranteedAuction = unguaranteedAuctionData && safeFloat(unguaranteedAuctionData['平均掛牌最高']) > 0;
+    const hasUnguaranteedInquiry = unguaranteedInquiryData && safeFloat(unguaranteedInquiryData['平均掛牌最高']) > 0;
+    
+    if (hasGuaranteedAuction || hasGuaranteedInquiry || hasUnguaranteedAuction || hasUnguaranteedInquiry) {
+        html += `<div style="font-size:11px; color:#7b1fa2; font-weight:bold; margin:12px 0 4px 0;">🏷️ 依擔保類型細分</div>`;
+        html += `<table class="card-market-table" style="background:#f3e5f5;">
+        <tr><th style="background:#7b1fa2;"></th><th style="background:#7b1fa2;">掛牌高</th><th style="background:#7b1fa2;">掛牌低</th><th style="background:#7b1fa2;">振幅</th></tr>`;
+        
+        // 有擔保
+        if (hasGuaranteedAuction || hasGuaranteedInquiry) {
+            // 有擔保 - 競拍
+            if (hasGuaranteedAuction) {
+                const gaH = safeFloat(guaranteedAuctionData['平均掛牌最高']);
+                const gaL = safeFloat(guaranteedAuctionData['平均掛牌最低']);
+                const gaAmp = (gaH > 0 && gaL > 0) ? ((gaH - gaL) / gaL * 100).toFixed(1) : '-';
+                html += `<tr>
+                    <td class="type-label" style="color:#7b1fa2;">有擔保-競拍<span class="count">${guaranteedAuctionData['樣本數']}</span></td>
+                    <td class="val-blue">${gaH > 0 ? safeFixed(gaH,1) : '-'}</td>
+                    <td class="val-blue">${gaL > 0 ? safeFixed(gaL,1) : '-'}</td>
+                    <td class="val-pink">${gaAmp}%</td>
+                </tr>`;
+            }
+            
+            // 有擔保 - 詢圈
+            if (hasGuaranteedInquiry) {
+                const giH = safeFloat(guaranteedInquiryData['平均掛牌最高']);
+                const giL = safeFloat(guaranteedInquiryData['平均掛牌最低']);
+                const giAmp = (giH > 0 && giL > 0) ? ((giH - giL) / giL * 100).toFixed(1) : '-';
+                html += `<tr>
+                    <td class="type-label" style="color:#7b1fa2;">有擔保-詢圈<span class="count">${guaranteedInquiryData['樣本數']}</span></td>
+                    <td class="val-blue">${giH > 0 ? safeFixed(giH,1) : '-'}</td>
+                    <td class="val-blue">${giL > 0 ? safeFixed(giL,1) : '-'}</td>
+                    <td class="val-pink">${giAmp}%</td>
+                </tr>`;
+            }
+        }
+        
+        // 無擔保
+        if (hasUnguaranteedAuction || hasUnguaranteedInquiry) {
+            // 無擔保 - 競拍
+            if (hasUnguaranteedAuction) {
+                const uaH = safeFloat(unguaranteedAuctionData['平均掛牌最高']);
+                const uaL = safeFloat(unguaranteedAuctionData['平均掛牌最低']);
+                const uaAmp = (uaH > 0 && uaL > 0) ? ((uaH - uaL) / uaL * 100).toFixed(1) : '-';
+                html += `<tr style="background:#ede7f6;">
+                    <td class="type-label" style="color:#512da8;">無擔保-競拍<span class="count">${unguaranteedAuctionData['樣本數']}</span></td>
+                    <td class="val-blue">${uaH > 0 ? safeFixed(uaH,1) : '-'}</td>
+                    <td class="val-blue">${uaL > 0 ? safeFixed(uaL,1) : '-'}</td>
+                    <td class="val-pink">${uaAmp}%</td>
+                </tr>`;
+            }
+            
+            // 無擔保 - 詢圈
+            if (hasUnguaranteedInquiry) {
+                const uiH = safeFloat(unguaranteedInquiryData['平均掛牌最高']);
+                const uiL = safeFloat(unguaranteedInquiryData['平均掛牌最低']);
+                const uiAmp = (uiH > 0 && uiL > 0) ? ((uiH - uiL) / uiL * 100).toFixed(1) : '-';
+                html += `<tr style="background:#ede7f6;">
+                    <td class="type-label" style="color:#512da8;">無擔保-詢圈<span class="count">${unguaranteedInquiryData['樣本數']}</span></td>
+                    <td class="val-blue">${uiH > 0 ? safeFixed(uiH,1) : '-'}</td>
+                    <td class="val-blue">${uiL > 0 ? safeFixed(uiL,1) : '-'}</td>
+                    <td class="val-pink">${uiAmp}%</td>
+                </tr>`;
+            }
+        }
+        
+        html += `</table>`;
+    }
+    
     return html;
 }
 
@@ -1299,33 +1450,27 @@ function bindInputEvents() {
         }
     });
 
-    // v3.51 修改：其他欄位綁定，傳入排除前三的參數 + 擔保條件
+    // v3.51 修改：其他欄位綁定，傳入排除前三 + 擔保類型細分
     const bind = (id, cat) => {
         const handler = function() {
             const rawVal = this.value;
             const val = parseFloat(rawVal) || rawVal;
             if (val) {
-                // 取得目前選擇的擔保條件
-                const guaranteeVal = document.getElementById('guarantee').value;
-                const guaranteeFilter = (guaranteeVal && cat !== '擔保') ? guaranteeVal : null;
-                
                 let displayTitle = val;
                 if(['股本','發行規模','轉換價'].includes(cat)) displayTitle = getRangeLabel(cat, val);
                 
-                // 如果有擔保篩選，標題加上擔保條件
-                let titleSuffix = '';
-                if (guaranteeFilter) {
-                    titleSuffix = guaranteeFilter.includes('有') ? '（有擔保）' : '（無擔保）';
-                }
-                
-                const smartResult = getStatsSmart(cat, val, guaranteeFilter);
-                // v3.51: 傳入排除前三名的數據
+                const smartResult = getStatsSmart(cat, val);
+                // v3.51: 傳入排除前三 + 擔保類型細分數據
                 show(id+'Info', generateStandardCard(
                     smartResult.rawData, 
-                    `區間統計: ${displayTitle}${titleSuffix}`, 
+                    `區間統計: ${displayTitle}`, 
                     smartResult.inquiryData,
                     smartResult.excludeTop3Data,
-                    smartResult.excludeTop3InquiryData
+                    smartResult.excludeTop3InquiryData,
+                    smartResult.guaranteedAuctionData,
+                    smartResult.guaranteedInquiryData,
+                    smartResult.unguaranteedAuctionData,
+                    smartResult.unguaranteedInquiryData
                 ));
                 if(cat==='轉換價'||cat==='信評') updateSmartReminders();
             }
@@ -1343,17 +1488,6 @@ function bindInputEvents() {
     bind('years','年期'); 
     bind('guarantee','擔保'); 
     bind('rating','信評');
-    
-    // v3.51: 當擔保選項改變時，重新觸發其他欄位的統計更新
-    document.getElementById('guarantee').addEventListener('change', function() {
-        const fieldsToUpdate = ['capital', 'issueSize', 'conversionPrice', 'industry', 'broker', 'years', 'rating'];
-        fieldsToUpdate.forEach(fieldId => {
-            const el = document.getElementById(fieldId);
-            if (el && el.value) {
-                el.dispatchEvent(new Event('change'));
-            }
-        });
-    });
     
     document.getElementById('guarantee').addEventListener('change', function() {
         const val = this.value, div = document.getElementById('marketSentiment');

@@ -2493,6 +2493,15 @@ function performScoringSearch() {
         return;
     }
     
+    console.log('搜尋查詢:', query);
+    console.log('可用資料源:', {
+        issuingData: window.issuingData?.length || 0,
+        currentListingData: window.currentListingData?.length || 0,
+        allCBData: window.allCBData?.length || 0,
+        auctionData: window.auctionData?.length || 0,
+        qualityConditions: window.qualityConditions?.length || 0
+    });
+    
     // 搜尋順序：06(正在發行) → 09(目前掛牌) → 01(所有CB) → 04(競拍)
     let foundData = null;
     let dataSource = '';
@@ -2506,6 +2515,7 @@ function performScoringSearch() {
         });
         if (foundData) {
             dataSource = '正在發行 (06工作表)';
+            console.log('在06找到:', foundData);
             foundData = normalizeIssuingData(foundData);
         }
     }
@@ -2519,6 +2529,7 @@ function performScoringSearch() {
         });
         if (foundData) {
             dataSource = '目前掛牌 (09工作表)';
+            console.log('在09找到:', foundData);
             foundData = normalizeListingData(foundData);
         }
     }
@@ -2532,6 +2543,7 @@ function performScoringSearch() {
         });
         if (foundData) {
             dataSource = '歷史資料 (01工作表)';
+            console.log('在01找到:', foundData);
             foundData = normalizeAllCBData(foundData);
         }
     }
@@ -2545,6 +2557,7 @@ function performScoringSearch() {
         });
         if (foundData) {
             dataSource = '競拍資料 (04工作表)';
+            console.log('在04找到:', foundData);
             foundData = normalizeAuctionData(foundData);
         }
     }
@@ -2554,6 +2567,8 @@ function performScoringSearch() {
         resultDiv.classList.add('active');
         return;
     }
+    
+    console.log('標準化後資料:', foundData);
     
     // 顯示評分結果
     displayScoringResult(foundData, dataSource, resultDiv);
@@ -2741,14 +2756,38 @@ function normalizeAuctionData(row) {
 
 // 顯示評分結果
 function displayScoringResult(data, dataSource, resultDiv) {
-    // 確保有優質條件組合
-    if (!window.qualityConditions || window.qualityConditions.length === 0) {
-        resultDiv.innerHTML = '<div class="no-result-msg">⚠️ 請先等待系統分析優質條件組合</div>';
+    // 取得優質條件組合
+    const qualityCombos = window.qualityConditions || [];
+    
+    // 如果沒有優質條件，顯示基本資訊
+    if (qualityCombos.length === 0) {
+        resultDiv.innerHTML = `
+        <div class="scoring-header">
+            <span class="scoring-cb-name">${data.name}</span>
+            <span class="scoring-cb-id">${data.id}</span>
+            <span class="scoring-source">📁 ${dataSource}</span>
+        </div>
+        <div class="scoring-conditions">
+            <div class="scoring-conditions-title">📋 標的基本條件</div>
+            <div class="scoring-condition-row">
+                <span class="scoring-condition-tag">擔保: ${data.guarantee || '未知'}</span>
+                <span class="scoring-condition-tag">年期: ${data.yearRange || '未知'}</span>
+                <span class="scoring-condition-tag">規模: ${data.sizeRange || '未知'} ${data.issueSize ? '(' + data.issueSize + '億)' : ''}</span>
+                ${data.industry ? `<span class="scoring-condition-tag">產業: ${data.industry}</span>` : ''}
+                ${data.rating ? `<span class="scoring-condition-tag">信評: TCRI${data.rating}</span>` : ''}
+                ${data.type ? `<span class="scoring-condition-tag">類型: ${data.type}</span>` : ''}
+            </div>
+        </div>
+        <div class="scoring-prediction">
+            <div class="scoring-prediction-title">📝 說明</div>
+            <div class="scoring-prediction-content">
+                已找到標的資料，但系統尚未完成優質條件分析。<br>
+                請稍後再試，或往下滾動查看「多維度交集分析」是否已完成載入。
+            </div>
+        </div>`;
         resultDiv.classList.add('active');
         return;
     }
-    
-    const qualityCombos = window.qualityConditions;
     
     // 建立檢查對象
     const checkObj = {
@@ -2762,17 +2801,22 @@ function displayScoringResult(data, dataSource, resultDiv) {
     const unmatchedGood = [];
     
     qualityCombos.forEach(combo => {
-        if (combo.check(checkObj)) {
-            matchedGood.push({
-                name: combo.name,
-                topRatio: combo.topRatio,
-                avgReturn: combo.avgReturn
-            });
-        } else {
-            unmatchedGood.push({
-                name: combo.name,
-                topRatio: combo.topRatio
-            });
+        try {
+            if (combo.check && combo.check(checkObj)) {
+                matchedGood.push({
+                    name: combo.name,
+                    topRatio: combo.topRatio,
+                    avgReturn: combo.avgReturn
+                });
+            } else {
+                unmatchedGood.push({
+                    name: combo.name,
+                    topRatio: combo.topRatio
+                });
+            }
+        } catch (e) {
+            console.error('條件檢查錯誤:', combo.name, e);
+            unmatchedGood.push({ name: combo.name, topRatio: combo.topRatio || 0 });
         }
     });
     
@@ -2792,7 +2836,7 @@ function displayScoringResult(data, dataSource, resultDiv) {
     // 計算平均預期報酬
     let expectedReturn = 0;
     if (matchedGood.length > 0) {
-        expectedReturn = matchedGood.reduce((s, c) => s + c.avgReturn, 0) / matchedGood.length;
+        expectedReturn = matchedGood.reduce((s, c) => s + (c.avgReturn || 0), 0) / matchedGood.length;
     }
     
     let html = `
@@ -2817,9 +2861,9 @@ function displayScoringResult(data, dataSource, resultDiv) {
     <div class="scoring-conditions">
         <div class="scoring-conditions-title">📋 標的基本條件</div>
         <div class="scoring-condition-row">
-            <span class="scoring-condition-tag">擔保: ${data.guarantee}</span>
-            <span class="scoring-condition-tag">年期: ${data.yearRange}</span>
-            <span class="scoring-condition-tag">規模: ${data.sizeRange} (${data.issueSize}億)</span>
+            <span class="scoring-condition-tag">擔保: ${data.guarantee || '未知'}</span>
+            <span class="scoring-condition-tag">年期: ${data.yearRange || '未知'}</span>
+            <span class="scoring-condition-tag">規模: ${data.sizeRange || '未知'} ${data.issueSize ? '(' + data.issueSize + '億)' : ''}</span>
             ${data.industry ? `<span class="scoring-condition-tag">產業: ${data.industry}</span>` : ''}
             ${data.rating ? `<span class="scoring-condition-tag">信評: TCRI${data.rating}</span>` : ''}
             ${data.type ? `<span class="scoring-condition-tag">類型: ${data.type}</span>` : ''}
@@ -2833,7 +2877,7 @@ function displayScoringResult(data, dataSource, resultDiv) {
     
     if (matchedGood.length > 0) {
         matchedGood.forEach(c => {
-            html += `<div class="scoring-detail-item"><span class="check">✓</span> ${c.name} <small style="color:#2e7d32;">(績優率${c.topRatio.toFixed(0)}%, 報酬+${c.avgReturn.toFixed(0)}%)</small></div>`;
+            html += `<div class="scoring-detail-item"><span class="check">✓</span> ${c.name} <small style="color:#2e7d32;">(績優率${(c.topRatio || 0).toFixed(0)}%, 報酬+${(c.avgReturn || 0).toFixed(0)}%)</small></div>`;
         });
     } else {
         html += `<div style="color:#999;">未符合任何優質條件組合</div>`;
@@ -2981,6 +3025,7 @@ function generateMultiDimensionAnalysis() {
     });
     
     if (allWithPerf.length < 30) {
+        window.qualityConditions = []; // 確保設定空陣列
         return `<div class="trait-analysis" style="grid-column: 1 / -1;">
             <div class="trait-analysis-title">🔬 多維度交集分析</div>
             <div style="color:#999; padding:20px; text-align:center;">樣本數不足，無法進行分析</div>

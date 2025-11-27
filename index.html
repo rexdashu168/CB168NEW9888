@@ -680,8 +680,8 @@ function getRangeLabel(category, val) {
 
 let statistics = { '維度統計': { '產業': {}, '發行券商': {} }, '資料期間': {} };
 let cbDatabase = {}, auctionRawData = [], inquiryRawData = [], globalMarketStats = { low: 0, avg: 0 }, cbNameMap = {};
-// v3.52 新增：現價和掛牌日期對照表
-let currentPriceMap = {}, listingDateMap = {};
+// v3.52 新增：掛牌日期對照表
+let listingDateMap = {};
 
 // ==========================================
 // 2. 資料讀取
@@ -702,21 +702,8 @@ async function loadStatistics() {
         const sheetAuction = getSheetData(['04', '所有CB競拍']);
         const sheetHighLow = getSheetData(['00', '掛牌', '名稱過濾']);
         const sheetAllCB = getSheetData(['01', 'ALLCB基本']);
-        const sheetCurrentPrice = getSheetData(['09', '最新動態每週日行情']);
         
         if (!sheetAuction || sheetAuction.length === 0) throw new Error("找不到競拍資料分頁");
-
-        // v3.52: 建立現價對照表 (從09工作表)
-        if (sheetCurrentPrice && sheetCurrentPrice.length > 0) {
-            sheetCurrentPrice.forEach(row => {
-                let id = row['代碼'] || row['代號'];
-                if (id) {
-                    const cleanId = String(id).replace('.0','').trim();
-                    currentPriceMap[cleanId] = safeFloat(row['CB收盤價']);
-                }
-            });
-            console.log(`載入現價資料: ${Object.keys(currentPriceMap).length} 筆`);
-        }
 
         // 建立掛牌高低對照表
         const highLowMap = {};
@@ -795,8 +782,7 @@ async function loadStatistics() {
                     'type': '詢圈',
                     // v3.52 新增
                     'listingDate': listingDate,
-                    'listingYear': listingYear,
-                    'currentPrice': currentPriceMap[id] || 0
+                    'listingYear': listingYear
                 };
             }).filter(item => item !== null);
             
@@ -855,9 +841,8 @@ async function loadStatistics() {
                 'bidMultiple': safeFloat(getSmartValue(row, 'bidMultiple')),
                 'avgBidShares': safeFloat(getSmartValue(row, 'avgBidShares')),
                 'auctionShares': safeFloat(getSmartValue(row, 'auctionShares')),
-                // v3.52 新增：掛牌日期和現價
-                'listingYear': getListingYear(listingDateMap[id]),
-                'currentPrice': currentPriceMap[id] || 0
+                // v3.52 新增：掛牌年度
+                'listingYear': getListingYear(listingDateMap[id])
             };
         }).filter(item => item !== null);
 
@@ -1583,92 +1568,72 @@ function showStatsSummary() {
     <div class="stat-box"><div class="number">${auctionRawData.filter(d=>d.marketHigh>0).length + inquiryRawData.filter(d=>d.marketHigh>0).length}</div><div class="label">掛牌行情</div></div>
     `;
     
-    // v3.52: 年度績效分析
+    // v3.52: 年度績效分析（只用掛牌高/低）
     html += generateYearlyPerformance();
     
     document.getElementById('statsSummary').innerHTML = html;
 }
 
-// v3.52: 生成年度績效分析
+// v3.52: 生成年度績效分析（只用掛牌高/低，不用現價）
 function generateYearlyPerformance() {
     const years = [2022, 2023, 2024, 2025];
     
     // 競拍績效計算
     const auctionPerf = {};
-    const auctionRankings = { best: [], worst: [], loss: [] };
+    const auctionRankings = { best: [], worst: [] };
     
     auctionRawData.forEach(d => {
-        if (!d.listingYear || d.listingYear < 2022 || !d.currentPrice || d.currentPrice <= 0) return;
+        if (!d.listingYear || d.listingYear < 2022) return;
         if (!d.minBidPrice || d.minBidPrice <= 0) return;
+        if (!d.marketHigh || d.marketHigh <= 0) return;
         
         const year = d.listingYear;
         if (!auctionPerf[year]) {
-            auctionPerf[year] = { count: 0, sumMinReturn: 0, sumAvgReturn: 0, sumHighReturn: 0, sumLowReturn: 0, countHigh: 0 };
+            auctionPerf[year] = { count: 0, sumHighReturn: 0, sumLowReturn: 0 };
         }
         
-        const minReturn = (d.currentPrice - d.minBidPrice) / d.minBidPrice * 100;
-        const avgReturn = d.avgBidPrice > 0 ? (d.currentPrice - d.avgBidPrice) / d.avgBidPrice * 100 : 0;
-        const highReturn = d.marketHigh > 0 ? (d.marketHigh - d.minBidPrice) / d.minBidPrice * 100 : 0;
+        const highReturn = (d.marketHigh - d.minBidPrice) / d.minBidPrice * 100;
         const lowReturn = d.marketLow > 0 ? (d.marketLow - d.minBidPrice) / d.minBidPrice * 100 : 0;
         
         auctionPerf[year].count++;
-        auctionPerf[year].sumMinReturn += minReturn;
-        auctionPerf[year].sumAvgReturn += avgReturn;
-        if (d.marketHigh > 0) {
-            auctionPerf[year].sumHighReturn += highReturn;
-            auctionPerf[year].sumLowReturn += lowReturn;
-            auctionPerf[year].countHigh++;
-        }
+        auctionPerf[year].sumHighReturn += highReturn;
+        auctionPerf[year].sumLowReturn += lowReturn;
         
         // 排行榜資料
-        auctionRankings.best.push({ name: d.name, year: year, return: highReturn, type: '競拍' });
-        auctionRankings.worst.push({ name: d.name, year: year, return: lowReturn, type: '競拍' });
-        if (minReturn < 0) {
-            auctionRankings.loss.push({ name: d.name, year: year, return: minReturn, type: '競拍' });
-        }
+        auctionRankings.best.push({ name: d.name, year: year, return: highReturn });
+        auctionRankings.worst.push({ name: d.name, year: year, return: lowReturn });
     });
     
-    // 詢圈績效計算
+    // 詢圈績效計算（100元發行價）
     const inquiryPerf = {};
-    const inquiryRankings = { best: [], worst: [], loss: [] };
+    const inquiryRankings = { best: [], worst: [] };
     
     inquiryRawData.forEach(d => {
-        if (!d.listingYear || d.listingYear < 2022 || !d.currentPrice || d.currentPrice <= 0) return;
+        if (!d.listingYear || d.listingYear < 2022) return;
+        if (!d.marketHigh || d.marketHigh <= 0) return;
         
         const year = d.listingYear;
         if (!inquiryPerf[year]) {
-            inquiryPerf[year] = { count: 0, sumReturn: 0, sumHighReturn: 0, sumLowReturn: 0, countHigh: 0 };
+            inquiryPerf[year] = { count: 0, sumHighReturn: 0, sumLowReturn: 0 };
         }
         
-        const issueReturn = (d.currentPrice - 100) / 100 * 100;
-        const highReturn = d.marketHigh > 0 ? (d.marketHigh - 100) / 100 * 100 : 0;
+        const highReturn = (d.marketHigh - 100) / 100 * 100;
         const lowReturn = d.marketLow > 0 ? (d.marketLow - 100) / 100 * 100 : 0;
         
         inquiryPerf[year].count++;
-        inquiryPerf[year].sumReturn += issueReturn;
-        if (d.marketHigh > 0) {
-            inquiryPerf[year].sumHighReturn += highReturn;
-            inquiryPerf[year].sumLowReturn += lowReturn;
-            inquiryPerf[year].countHigh++;
-        }
+        inquiryPerf[year].sumHighReturn += highReturn;
+        inquiryPerf[year].sumLowReturn += lowReturn;
         
         // 排行榜資料
-        if (d.marketHigh > 0) {
-            inquiryRankings.best.push({ name: d.name, year: year, return: highReturn, type: '詢圈' });
-            inquiryRankings.worst.push({ name: d.name, year: year, return: lowReturn, type: '詢圈' });
-        }
-        if (issueReturn < 0) {
-            inquiryRankings.loss.push({ name: d.name, year: year, return: issueReturn, type: '詢圈' });
-        }
+        inquiryRankings.best.push({ name: d.name, year: year, return: highReturn });
+        inquiryRankings.worst.push({ name: d.name, year: year, return: lowReturn });
     });
     
     // 排序排行榜
     auctionRankings.best.sort((a, b) => b.return - a.return);
     auctionRankings.worst.sort((a, b) => a.return - b.return);
-    auctionRankings.loss.sort((a, b) => a.return - b.return);
     inquiryRankings.best.sort((a, b) => b.return - a.return);
     inquiryRankings.worst.sort((a, b) => a.return - b.return);
-    inquiryRankings.loss.sort((a, b) => a.return - b.return);
     
     const formatReturn = (val) => {
         if (val === null || val === undefined || isNaN(val)) return '-';
@@ -1689,13 +1654,11 @@ function generateYearlyPerformance() {
         
         <!-- 競拍績效 -->
         <div class="yearly-section">
-            <div class="yearly-section-title">🎯 競拍績效排行</div>
+            <div class="yearly-section-title">🎯 競拍績效排行 (得標→掛牌)</div>
             <table class="yearly-table">
                 <tr>
                     <th>掛牌年度</th>
                     <th>檔數</th>
-                    <th>最低得標→現價</th>
-                    <th>平均得標→現價</th>
                     <th>最低得標→掛牌高</th>
                     <th>最低得標→掛牌低</th>
                 </tr>`;
@@ -1703,15 +1666,11 @@ function generateYearlyPerformance() {
     years.forEach(year => {
         const p = auctionPerf[year];
         if (p && p.count > 0) {
-            const avgMin = p.sumMinReturn / p.count;
-            const avgAvg = p.sumAvgReturn / p.count;
-            const avgHigh = p.countHigh > 0 ? p.sumHighReturn / p.countHigh : null;
-            const avgLow = p.countHigh > 0 ? p.sumLowReturn / p.countHigh : null;
+            const avgHigh = p.sumHighReturn / p.count;
+            const avgLow = p.sumLowReturn / p.count;
             html += `<tr>
                 <td class="year-cell">${year}年</td>
                 <td class="count-cell">${p.count}檔</td>
-                <td>${formatReturn(avgMin)}</td>
-                <td>${formatReturn(avgAvg)}</td>
                 <td>${formatReturn(avgHigh)}</td>
                 <td>${formatReturn(avgLow)}</td>
             </tr>`;
@@ -1721,27 +1680,22 @@ function generateYearlyPerformance() {
     html += `</table>
             
             <div class="ranking-section">
-                <div class="ranking-title best">🏆 最佳5檔 (最低得標→掛牌高)：</div>
+                <div class="ranking-title best">🏆 最佳5檔 (得標→掛牌高)：</div>
                 <div class="ranking-items">${auctionRankings.best.slice(0, 5).map((d, i) => formatRankItem(d, i)).join(' ')}</div>
             </div>
             <div class="ranking-section">
-                <div class="ranking-title worst">📉 最差5檔 (最低得標→掛牌低)：</div>
+                <div class="ranking-title worst">📉 最差5檔 (得標→掛牌低)：</div>
                 <div class="ranking-items">${auctionRankings.worst.slice(0, 5).map((d, i) => formatRankItem(d, i)).join(' ')}</div>
-            </div>
-            <div class="ranking-section">
-                <div class="ranking-title loss">⚠️ 目前虧損 (最低得標→現價)：</div>
-                <div class="ranking-items">${auctionRankings.loss.slice(0, 5).map((d, i) => formatRankItem(d, i)).join(' ') || '<span style="color:#666;">無</span>'}</div>
             </div>
         </div>
         
         <!-- 詢圈績效 -->
         <div class="yearly-section">
-            <div class="yearly-section-title">📋 詢圈績效排行 (發行價100元)</div>
+            <div class="yearly-section-title">📋 詢圈績效排行 (發行價100元→掛牌)</div>
             <table class="yearly-table">
                 <tr>
                     <th>掛牌年度</th>
                     <th>檔數</th>
-                    <th>100→現價</th>
                     <th>100→掛牌高</th>
                     <th>100→掛牌低</th>
                 </tr>`;
@@ -1749,13 +1703,11 @@ function generateYearlyPerformance() {
     years.forEach(year => {
         const p = inquiryPerf[year];
         if (p && p.count > 0) {
-            const avgReturn = p.sumReturn / p.count;
-            const avgHigh = p.countHigh > 0 ? p.sumHighReturn / p.countHigh : null;
-            const avgLow = p.countHigh > 0 ? p.sumLowReturn / p.countHigh : null;
+            const avgHigh = p.sumHighReturn / p.count;
+            const avgLow = p.sumLowReturn / p.count;
             html += `<tr>
                 <td class="year-cell">${year}年</td>
                 <td class="count-cell">${p.count}檔</td>
-                <td>${formatReturn(avgReturn)}</td>
                 <td>${formatReturn(avgHigh)}</td>
                 <td>${formatReturn(avgLow)}</td>
             </tr>`;
@@ -1772,14 +1724,10 @@ function generateYearlyPerformance() {
                 <div class="ranking-title worst">📉 最差5檔 (100→掛牌低)：</div>
                 <div class="ranking-items">${inquiryRankings.worst.slice(0, 5).map((d, i) => formatRankItem(d, i)).join(' ')}</div>
             </div>
-            <div class="ranking-section">
-                <div class="ranking-title loss">⚠️ 目前虧損 (100→現價)：</div>
-                <div class="ranking-items">${inquiryRankings.loss.slice(0, 5).map((d, i) => formatRankItem(d, i)).join(' ') || '<span style="color:#666;">無</span>'}</div>
-            </div>
         </div>
         
         <div style="font-size:10px; color:#666; margin-top:10px; padding-top:8px; border-top:1px solid #c8e6c9;">
-            💡 表格數字為平均報酬率 | 掛牌高/低=歷史極值 | 現價=最新收盤
+            💡 表格數字為平均報酬率 | 掛牌高/低=歷史極值
         </div>
     </div>`;
     

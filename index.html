@@ -1,9 +1,10 @@
 <!DOCTYPE html>
+
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.51 (排除極端值版)</title>
+<title>AI智能可轉債競拍系統 v3.52 (條件評估版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="embedded_data.js" onerror="console.warn('embedded_data.js not found, using defaults.')"></script>
 
@@ -32,7 +33,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 .info-box { background: #e8f5e9; padding: 12px; border-radius: 8px; border-left: 5px solid #4CAF50; margin-top: 8px; display: none; box-shadow: 0 2px 5px rgba(0,0,0,0.05); animation: slideDown 0.3s ease-out; }
 @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
 
-/* ===== 歷史搜尋結果卡片 (v3.51 排除極端值版) ===== */
+/* ===== 歷史搜尋結果卡片 (v3.52 條件評估版) ===== */
 .history-results { 
     margin-top: 10px; 
     background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
@@ -233,7 +234,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     font-weight: 900;
     border-top: 2px solid #4CAF50;
 }
-/* v3.51 新增：排除前三的淺色底 */
+/* v3.52 新增：排除前三的淺色底 */
 .card-market-table .exclude-row td {
     background: #e3f2fd;
     font-style: italic;
@@ -330,17 +331,18 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     .history-bid-row { flex-direction: column; gap: 6px; }
 }
 </style>
+
 </head>
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.51)...</div>
+    <div>🔄 系統啟動中 (v3.52)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
 <div class="container" style="display: none;">
     <div class="header">
-        <h1>🤖 AI智能可轉債競拍系統 <span class="version-badge">v3.51</span></h1>
+        <h1>🤖 AI智能可轉債競拍系統 <span class="version-badge">v3.52</span></h1>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -348,88 +350,91 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
         </div>
     </div>
 
-    <div class="evaluation-container">
-        <div class="input-panel">
-            <h2>📋 輸入標的資料</h2>
-            <form id="evaluationForm">
-                <div class="form-section">
-                    <h3>📌 基本資料</h3>
-                    <div class="form-group">
-                        <label>CB名稱 / 代號 *</label>
-                        <input type="text" id="cbName" required placeholder="輸入代號(如2383)或名稱搜尋歷史">
-                        <div id="historyResults" class="history-results"></div>
-                        <div id="cbNameInfo" class="info-box"></div>
-                    </div>
-                    
-                    <div class="form-group"><label>股本 (億元) *</label><input type="number" id="capital" step="0.01" required placeholder="例如：33.80"><div id="capitalInfo" class="info-box"></div></div>
-                    <div class="form-group"><label>產業分類 *</label><select id="industry" required><option value="">載入中...</option></select><div id="industryInfo" class="info-box"></div></div>
-                    <div class="form-group"><label>發行券商</label><select id="broker"><option value="">載入中...</option></select><div id="brokerInfo" class="info-box"></div></div>
+```
+<div class="evaluation-container">
+    <div class="input-panel">
+        <h2>📋 輸入標的資料</h2>
+        <form id="evaluationForm">
+            <div class="form-section">
+                <h3>📌 基本資料</h3>
+                <div class="form-group">
+                    <label>CB名稱 / 代號 *</label>
+                    <input type="text" id="cbName" required placeholder="輸入代號(如2383)或名稱搜尋歷史">
+                    <div id="historyResults" class="history-results"></div>
+                    <div id="cbNameInfo" class="info-box"></div>
                 </div>
-                <div class="form-section">
-                    <h3>💰 發行條件</h3>
-                    <div class="form-group"><label>發行規模 (億元) *</label><input type="number" id="issueSize" step="0.1" required placeholder="例如：30"><div id="issueSizeInfo" class="info-box"></div></div>
-                    <div class="form-group"><label>轉換價格 (元) *</label><input type="number" id="conversionPrice" step="0.01" required placeholder="例如：450"><div id="conversionPriceInfo" class="info-box"></div></div>
-                    <div class="form-group"><label>發行年期 *</label><select id="years" required><option value="">請選擇...</option><option value="3">3年期</option><option value="5">5年期</option><option value="7">7年期</option></select><div id="yearsInfo" class="info-box"></div></div>
-                    <div class="form-group"><label>擔保情況 *</label><select id="guarantee" required><option value="">請選擇...</option><option value="有擔保">有擔保</option><option value="無擔保">無擔保</option></select><div id="guaranteeInfo" class="info-box"></div></div>
-                    <div class="form-group"><label>信用評等 (TCRI) *</label><select id="rating" required><option value="">請選擇...</option><option value="1">TCRI 1</option><option value="2">TCRI 2</option><option value="3">TCRI 3</option><option value="4">TCRI 4</option><option value="5">TCRI 5</option><option value="6">TCRI 6</option><option value="7">TCRI 7</option><option value="8">TCRI 8</option><option value="9">TCRI 9</option><option value="BBB">BBB級</option></select><div id="ratingInfo" class="info-box"></div></div>
-                </div>
-                <div class="form-section">
-                    <h3>🎯 競拍資料</h3>
-                    <div class="form-group">
-                        <label>競拍截止日1:30收盤價格 (元) *</label>
-                        <input type="number" id="stockPrice" step="0.01" required placeholder="例如：461.5">
-                        <div class="warning-box">⚠️ 理論價格隨股價變動，建議於 13:30 截標前再進行最終試算</div>
-                    </div>
-                </div>
-                <div class="form-section" style="background: linear-gradient(135deg, #fff9e6 0%, #ffe6cc 100%); border: 2px solid #ff9800; border-radius: 12px; padding: 15px;">
-                    <h3 style="color: #e65100; margin-bottom: 10px;">⚖️ 主觀權重(選填)</h3>
-                    <div class="subjective-note">
-                        💡 預設為 0 表示完全依據歷史數據；若您有獨到見解，可調整此處注入主觀判斷。
-                    </div>
-                    <div class="form-group"><label>主觀權重 (%)</label><input type="number" id="subjectiveWeight" min="0" max="100" step="1" value="0"></div>
-                    <div class="form-group"><label>主觀最低溢價 (%)</label><input type="number" id="subjectiveLowPremium" step="0.1" value="0"></div>
-                    <div class="form-group"><label>主觀平均溢價 (%)</label><input type="number" id="subjectiveAvgPremium" step="0.1" value="0"></div>
-                </div>
-                <div class="form-section">
-                    <h3>📊 近期市場氛圍</h3>
-                    <div id="marketSentiment" class="info-box" style="display: block; background:#e3f2fd; border-left: 4px solid #2196F3;">
-                        <div class="stat-row">請先選擇「擔保情況」</div>
-                    </div>
-                </div>
-                <div id="smartReminders" style="display:none; margin: 15px 0; padding: 12px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 8px;">
-                    <div style="font-weight: bold; color: #856404; font-size: 13px;">💡 Rex大叔提醒</div>
-                    <div id="reminderContent" style="font-size: 12px; line-height: 1.7; color: #856404; margin-top:5px;"></div>
-                </div>
-                <button type="submit" class="calculate-btn">🎯 開始AI評估</button>
-            </form>
-        </div>
-        
-        <div class="result-panel">
-            <div id="welcomeMsg" class="welcome-message">
-                <h2>歡迎使用AI智能競拍評估系統</h2>
-                <p style="margin-top:10px; color:#666; font-size: 14px;">v3.51 排除極端值版<br>✅ 新增「排除前三高」統計<br>✅ 避免極端值扭曲平均數據</p>
-                <div class="stats-summary" id="statsSummary"></div>
+                
+                <div class="form-group"><label>股本 (億元) *</label><input type="number" id="capital" step="0.01" required placeholder="例如：33.80"><div id="capitalInfo" class="info-box"></div></div>
+                <div class="form-group"><label>產業分類 *</label><select id="industry" required><option value="">載入中...</option></select><div id="industryInfo" class="info-box"></div></div>
+                <div class="form-group"><label>發行券商</label><select id="broker"><option value="">載入中...</option></select><div id="brokerInfo" class="info-box"></div></div>
             </div>
-            <div id="evaluationResult" class="evaluation-result"></div>
-        </div>
+            <div class="form-section">
+                <h3>💰 發行條件</h3>
+                <div class="form-group"><label>發行規模 (億元) *</label><input type="number" id="issueSize" step="0.1" required placeholder="例如：30"><div id="issueSizeInfo" class="info-box"></div></div>
+                <div class="form-group"><label>轉換價格 (元) *</label><input type="number" id="conversionPrice" step="0.01" required placeholder="例如：450"><div id="conversionPriceInfo" class="info-box"></div></div>
+                <div class="form-group"><label>發行年期 *</label><select id="years" required><option value="">請選擇...</option><option value="3">3年期</option><option value="5">5年期</option><option value="7">7年期</option></select><div id="yearsInfo" class="info-box"></div></div>
+                <div class="form-group"><label>擔保情況 *</label><select id="guarantee" required><option value="">請選擇...</option><option value="有擔保">有擔保</option><option value="無擔保">無擔保</option></select><div id="guaranteeInfo" class="info-box"></div></div>
+                <div class="form-group"><label>信用評等 (TCRI) *</label><select id="rating" required><option value="">請選擇...</option><option value="1">TCRI 1</option><option value="2">TCRI 2</option><option value="3">TCRI 3</option><option value="4">TCRI 4</option><option value="5">TCRI 5</option><option value="6">TCRI 6</option><option value="7">TCRI 7</option><option value="8">TCRI 8</option><option value="9">TCRI 9</option><option value="BBB">BBB級</option></select><div id="ratingInfo" class="info-box"></div></div>
+            </div>
+            <div class="form-section">
+                <h3>🎯 競拍資料</h3>
+                <div class="form-group">
+                    <label>競拍截止日1:30收盤價格 (元) *</label>
+                    <input type="number" id="stockPrice" step="0.01" required placeholder="例如：461.5">
+                    <div class="warning-box">⚠️ 理論價格隨股價變動，建議於 13:30 截標前再進行最終試算</div>
+                </div>
+            </div>
+            <div class="form-section" style="background: linear-gradient(135deg, #fff9e6 0%, #ffe6cc 100%); border: 2px solid #ff9800; border-radius: 12px; padding: 15px;">
+                <h3 style="color: #e65100; margin-bottom: 10px;">⚖️ 主觀權重(選填)</h3>
+                <div class="subjective-note">
+                    💡 預設為 0 表示完全依據歷史數據；若您有獨到見解，可調整此處注入主觀判斷。
+                </div>
+                <div class="form-group"><label>主觀權重 (%)</label><input type="number" id="subjectiveWeight" min="0" max="100" step="1" value="0"></div>
+                <div class="form-group"><label>主觀最低溢價 (%)</label><input type="number" id="subjectiveLowPremium" step="0.1" value="0"></div>
+                <div class="form-group"><label>主觀平均溢價 (%)</label><input type="number" id="subjectiveAvgPremium" step="0.1" value="0"></div>
+            </div>
+            <div class="form-section">
+                <h3>📊 近期市場氛圍</h3>
+                <div id="marketSentiment" class="info-box" style="display: block; background:#e3f2fd; border-left: 4px solid #2196F3;">
+                    <div class="stat-row">請先選擇「擔保情況」</div>
+                </div>
+            </div>
+            <div id="smartReminders" style="display:none; margin: 15px 0; padding: 12px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 8px;">
+                <div style="font-weight: bold; color: #856404; font-size: 13px;">💡 Rex大叔提醒</div>
+                <div id="reminderContent" style="font-size: 12px; line-height: 1.7; color: #856404; margin-top:5px;"></div>
+            </div>
+            <button type="submit" class="calculate-btn">🎯 開始AI評估</button>
+        </form>
     </div>
     
-    <!-- 版權宣告與瀏覽人數 -->
-    <footer class="site-footer">
-        <div class="footer-content">
-            <div class="visitor-count">
-                👁️ 瀏覽人數：
-                <a href="https://www.hitwebcounter.com" target="_blank">
-                    <img src="https://hitwebcounter.com/counter/counter.php?page=16839468&style=0006&nbdigits=6&type=page&initCount=0" 
-                         title="Counter Widget" alt="Visit counter" border="0" style="vertical-align: middle;"/>
-                </a>
-            </div>
-            <div class="copyright">
-                © 2025 Rex大叔的168台股投資教室 版權所有<br>
-                <span style="font-size:11px; color:#999;">本系統僅供參考，投資有風險，請自負盈虧</span>
-            </div>
+    <div class="result-panel">
+        <div id="welcomeMsg" class="welcome-message">
+            <h2>歡迎使用AI智能競拍評估系統</h2>
+            <p style="margin-top:10px; color:#666; font-size: 14px;">v3.52 條件評估版<br>✅ 保留排除前三高統計<br>✅ 新增標的條件快速評估</p>
+            <div class="stats-summary" id="statsSummary"></div>
         </div>
-    </footer>
+        <div id="evaluationResult" class="evaluation-result"></div>
+    </div>
+</div>
+
+<!-- 版權宣告與瀏覽人數 -->
+<footer class="site-footer">
+    <div class="footer-content">
+        <div class="visitor-count">
+            👁️ 瀏覽人數：
+            <a href="https://www.hitwebcounter.com" target="_blank">
+                <img src="https://hitwebcounter.com/counter/counter.php?page=16839468&style=0006&nbdigits=6&type=page&initCount=0" 
+                     title="Counter Widget" alt="Visit counter" border="0" style="vertical-align: middle;"/>
+            </a>
+        </div>
+        <div class="copyright">
+            © 2025 Rex大叔的168台股投資教室 版權所有<br>
+            <span style="font-size:11px; color:#999;">本系統僅供參考，投資有風險，請自負盈虧</span>
+        </div>
+    </div>
+</footer>
+```
+
 </div>
 
 <script>
@@ -771,7 +776,7 @@ function calculateGlobalMarketStats() {
     }
 }
 
-// v3.51 修改：增加排除前三高的統計 + 擔保類型細分統計
+// v3.52 修改：增加排除前三高的統計 + 擔保類型細分統計
 function getStatsSmart(category, val) {
     let stats = { 
         low: 0, 
@@ -781,7 +786,7 @@ function getStatsSmart(category, val) {
         inquiryData: null,
         excludeTop3Data: null,
         excludeTop3InquiryData: null,
-        // v3.51 新增：依擔保類型細分
+        // v3.52 新增：依擔保類型細分
         guaranteedAuctionData: null,
         guaranteedInquiryData: null,
         unguaranteedAuctionData: null,
@@ -870,7 +875,7 @@ function getStatsSmart(category, val) {
             stats.avg = stats.rawData['平均溢價'];
         }
         
-        // === v3.51 新增：競拍排除前三高的計算 ===
+        // === v3.52 新增：競拍排除前三高的計算 ===
         const auctionWithMarket = auctionFiltered.filter(d => d.marketHigh > 0 && d.marketLow > 0);
         if (auctionWithMarket.length > 3) {
             // 按掛牌最高排序，排除前三名
@@ -908,7 +913,7 @@ function getStatsSmart(category, val) {
             };
         }
         
-        // === v3.51 新增：詢圈排除前三高的計算 ===
+        // === v3.52 新增：詢圈排除前三高的計算 ===
         const inquiryWithMarket = inquiryFiltered.filter(d => d.marketHigh > 0 && d.marketLow > 0);
         if (inquiryWithMarket.length > 3) {
             const sortedInquiry = [...inquiryWithMarket].sort((a, b) => b.marketHigh - a.marketHigh);
@@ -927,7 +932,7 @@ function getStatsSmart(category, val) {
             };
         }
         
-        // === v3.51 新增：依擔保類型細分統計 ===
+        // === v3.52 新增：依擔保類型細分統計 ===
         // 有擔保 - 競拍
         const guaranteedAuction = auctionFiltered.filter(d => (d.guarantee || '').includes('有'));
         if (guaranteedAuction.length > 0) {
@@ -1030,7 +1035,7 @@ function getStatsSmart(category, val) {
 // 4. UI 顯示
 // ==========================================
 
-// v3.51 強化版：歷史搜尋卡片生成
+// v3.52 強化版：歷史搜尋卡片生成
 function generateHistoryCard(d) {
     const h = safeFloat(d.marketHigh);
     const l = safeFloat(d.marketLow);
@@ -1095,7 +1100,7 @@ function generateHistoryCard(d) {
     `;
 }
 
-// v3.51 修改：generateStandardCard 增加排除前三的參數，獨立成兩個表格，並加入擔保類型細分
+// v3.52 修改：generateStandardCard 增加排除前三的參數，獨立成兩個表格，並加入擔保類型細分
 function generateStandardCard(data, titleOverride=null, inquiryData=null, excludeTop3Data=null, excludeTop3InquiryData=null, guaranteedAuctionData=null, guaranteedInquiryData=null, unguaranteedAuctionData=null, unguaranteedInquiryData=null) {
     if (!data) return `<div class="stat-row" style="color:#999;">查無資料</div>`;
     
@@ -1116,7 +1121,7 @@ function generateStandardCard(data, titleOverride=null, inquiryData=null, exclud
         iCount = inquiryData['樣本數'] || 0;
     }
     
-    // v3.51：計算排除前三的競拍振幅
+    // v3.52：計算排除前三的競拍振幅
     let exAH = 0, exAL = 0, exAAmp = '-', exACount = 0;
     if (excludeTop3Data) {
         exAH = safeFloat(excludeTop3Data['平均掛牌最高']);
@@ -1125,7 +1130,7 @@ function generateStandardCard(data, titleOverride=null, inquiryData=null, exclud
         exACount = excludeTop3Data['樣本數'] || 0;
     }
     
-    // v3.51：計算排除前三的詢圈振幅
+    // v3.52：計算排除前三的詢圈振幅
     let exIH = 0, exIL = 0, exIAmp = '-', exICount = 0;
     if (excludeTop3InquiryData) {
         exIH = safeFloat(excludeTop3InquiryData['平均掛牌最高']);
@@ -1487,7 +1492,7 @@ function bindInputEvents() {
         }
     });
 
-    // v3.51 修改：其他欄位綁定，傳入排除前三 + 擔保類型細分
+    // v3.52 修改：其他欄位綁定，傳入排除前三 + 擔保類型細分
     const bind = (id, cat) => {
         const handler = function() {
             const rawVal = this.value;
@@ -1497,7 +1502,7 @@ function bindInputEvents() {
                 if(['股本','發行規模','轉換價'].includes(cat)) displayTitle = getRangeLabel(cat, val);
                 
                 const smartResult = getStatsSmart(cat, val);
-                // v3.51: 傳入排除前三 + 擔保類型細分數據
+                // v3.52: 傳入排除前三 + 擔保類型細分數據
                 show(id+'Info', generateStandardCard(
                     smartResult.rawData, 
                     `區間統計: ${displayTitle}`, 
@@ -1744,5 +1749,6 @@ window.addEventListener('DOMContentLoaded', function() {
     loadStatistics();
 });
 </script>
+
 </body>
 </html>

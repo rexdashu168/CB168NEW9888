@@ -2494,84 +2494,95 @@ function performScoringSearch() {
     }
     
     console.log('搜尋查詢:', query);
-    console.log('可用資料源:', {
-        issuingData: window.issuingData?.length || 0,
-        currentListingData: window.currentListingData?.length || 0,
-        allCBData: window.allCBData?.length || 0,
-        auctionData: window.auctionData?.length || 0,
-        qualityConditions: window.qualityConditions?.length || 0
-    });
     
-    // 搜尋順序：06(正在發行) → 09(目前掛牌) → 01(所有CB) → 04(競拍)
-    let foundData = null;
+    // 新邏輯：分開搜尋「發行條件」和「即時價格」
+    // 發行條件優先順序：06(正在發行) → 04(競拍) → 01(所有CB)
+    // 即時價格：09(目前掛牌)
+    
+    let conditionData = null;
+    let priceData = null;
     let dataSource = '';
     
-    // 1. 搜尋06工作表（正在發行）
+    // === 1. 搜尋06工作表（正在發行）===
     if (window.issuingData) {
-        foundData = window.issuingData.find(row => {
+        conditionData = window.issuingData.find(row => {
             const id = String(row['標的代號'] || row['股票代號'] || '').trim();
             const name = String(row['發行標的'] || '').trim();
             return id.includes(query) || name.includes(query) || query.includes(id);
         });
-        if (foundData) {
+        if (conditionData) {
             dataSource = '正在發行 (06工作表)';
-            console.log('在06找到:', foundData);
-            foundData = normalizeIssuingData(foundData);
+            console.log('在06找到:', conditionData);
         }
     }
     
-    // 2. 搜尋09工作表（目前掛牌）
-    if (!foundData && window.currentListingData) {
-        foundData = window.currentListingData.find(row => {
-            const id = String(row['代碼'] || '').trim();
-            const name = String(row['名稱  '] || row['名稱'] || '').trim();
-            return id.includes(query) || name.includes(query) || query.includes(id);
-        });
-        if (foundData) {
-            dataSource = '目前掛牌 (09工作表)';
-            console.log('在09找到:', foundData);
-            foundData = normalizeListingData(foundData);
-        }
-    }
-    
-    // 3. 搜尋01工作表（所有CB）
-    if (!foundData && window.allCBData) {
-        foundData = window.allCBData.find(row => {
-            const id = String(row['CB代號'] || row['代號'] || '').replace('.0', '').trim();
-            const name = String(row['名稱'] || '').trim();
-            return id.includes(query) || name.includes(query) || query.includes(id);
-        });
-        if (foundData) {
-            dataSource = '歷史資料 (01工作表)';
-            console.log('在01找到:', foundData);
-            foundData = normalizeAllCBData(foundData);
-        }
-    }
-    
-    // 4. 搜尋04工作表（競拍）
-    if (!foundData && window.auctionData) {
-        foundData = window.auctionData.find(row => {
+    // === 2. 搜尋04工作表（競拍資料，有完整發行條件）===
+    if (!conditionData && window.auctionData) {
+        conditionData = window.auctionData.find(row => {
             const id = String(row['CB代號'] || row['代號'] || '').replace('.0', '').trim();
             const name = String(row['名稱'] || row['CB名稱'] || '').trim();
             return id.includes(query) || name.includes(query) || query.includes(id);
         });
-        if (foundData) {
+        if (conditionData) {
             dataSource = '競拍資料 (04工作表)';
-            console.log('在04找到:', foundData);
-            foundData = normalizeAuctionData(foundData);
+            console.log('在04找到:', conditionData);
         }
     }
     
-    if (!foundData) {
+    // === 3. 搜尋01工作表（所有CB基本資料）===
+    if (!conditionData && window.allCBData) {
+        conditionData = window.allCBData.find(row => {
+            const id = String(row['CB代號'] || row['代號'] || '').replace('.0', '').trim();
+            const name = String(row['名稱'] || '').trim();
+            return id.includes(query) || name.includes(query) || query.includes(id);
+        });
+        if (conditionData) {
+            dataSource = '歷史資料 (01工作表)';
+            console.log('在01找到:', conditionData);
+        }
+    }
+    
+    // === 4. 搜尋09工作表取得即時價格（補充資訊）===
+    if (window.currentListingData) {
+        priceData = window.currentListingData.find(row => {
+            const id = String(row['代碼'] || '').trim();
+            const name = String(row['名稱  '] || row['名稱'] || '').trim();
+            return id.includes(query) || name.includes(query) || query.includes(id);
+        });
+        if (priceData) {
+            console.log('在09找到價格資料:', priceData);
+        }
+    }
+    
+    if (!conditionData) {
         resultDiv.innerHTML = `<div class="no-result-msg">❌ 找不到「${query}」的相關資料<br><small style="color:#999;">請確認代號或名稱是否正確</small></div>`;
         resultDiv.classList.add('active');
         return;
     }
     
-    console.log('標準化後資料:', foundData);
+    // 標準化資料
+    let normalizedData;
+    if (dataSource.includes('06')) {
+        normalizedData = normalizeIssuingData(conditionData);
+    } else if (dataSource.includes('04')) {
+        normalizedData = normalizeAuctionData(conditionData);
+    } else {
+        normalizedData = normalizeAllCBData(conditionData);
+    }
+    
+    // 補充即時價格
+    if (priceData) {
+        normalizedData.currentPrice = priceData['CB收盤價'] || '';
+        normalizedData.currentPremium = priceData['溢(折)價%'] || '';
+        if (priceData['產業']) {
+            normalizedData.industry = priceData['產業'];
+        }
+    }
+    
+    console.log('標準化後資料:', normalizedData);
     
     // 顯示評分結果
-    displayScoringResult(foundData, dataSource, resultDiv);
+    displayScoringResult(normalizedData, dataSource, resultDiv);
 }
 
 // 標準化06工作表資料
@@ -2671,11 +2682,13 @@ function normalizeListingData(row) {
     };
 }
 
-// 標準化01工作表資料
+// 標準化01工作表資料（所有CB基本資料）
 function normalizeAllCBData(row) {
+    // 01工作表欄位：有無擔保, 信用擔保, 發行規模(億), 發行年期
     const guaranteeRaw = row['有無擔保'] || '';
     const guarantee = guaranteeRaw.includes('有') ? '有擔保' : '無擔保';
     
+    // 發行規模單位是「億」
     const issueSize = parseFloat(row['發行規模']) || 0;
     const years = parseFloat(row['發行年期']) || 0;
     
@@ -2694,12 +2707,20 @@ function normalizeAllCBData(row) {
         else sizeRange = '大型(≥20億)';
     }
     
-    // 處理信評
+    // 處理信評：可能是「TCRI5」或「土地銀行」等
     let rating = '';
     const ratingRaw = row['信用擔保'] || '';
-    const ratingMatch = String(ratingRaw).match(/TCRI(\d+)/i);
-    if (ratingMatch) rating = ratingMatch[1];
-    else if (ratingRaw.match(/^\d+$/)) rating = ratingRaw;
+    if (ratingRaw) {
+        const ratingMatch = String(ratingRaw).match(/TCRI(\d+)/i);
+        if (ratingMatch) {
+            rating = ratingMatch[1];
+        } else if (String(ratingRaw).match(/^\d+$/)) {
+            rating = ratingRaw;
+        } else {
+            // 有擔保的情況下，信用擔保欄位可能是銀行名稱
+            rating = guarantee === '有擔保' ? '有擔保' : ratingRaw;
+        }
+    }
     
     return {
         id: String(row['CB代號'] || row['代號'] || '').replace('.0', '').trim(),
@@ -2713,17 +2734,20 @@ function normalizeAllCBData(row) {
         industry: row['產業分類'] || '',
         broker: row['承銷券商'] || '',
         type: row['詢圈競拍'] || '',
-        capital: row['股本規模'] || ''
+        capital: row['股本規模'] || '',
+        conversionPrice: row['轉換價格'] || ''
     };
 }
 
-// 標準化04工作表資料
+// 標準化04工作表資料（競拍資料，最完整）
 function normalizeAuctionData(row) {
-    const guaranteeRaw = row['擔保'] || row['有無擔保'] || row['擔保情形'] || '';
+    // 04工作表欄位：擔保, 信評, 發行規模(億), 年期
+    const guaranteeRaw = row['擔保'] || '';
     const guarantee = guaranteeRaw.includes('有') ? '有擔保' : '無擔保';
     
-    const issueSize = parseFloat(row['發行規模'] || row['發行總額'] || 0);
-    const years = parseFloat(row['年期'] || row['發行年期'] || 0);
+    // 發行規模單位是「億」
+    const issueSize = parseFloat(row['發行規模']) || 0;
+    const years = parseFloat(row['年期']) || 0;
     
     let yearRange = '未知';
     if (years > 0) {
@@ -2740,6 +2764,13 @@ function normalizeAuctionData(row) {
         else sizeRange = '大型(≥20億)';
     }
     
+    // 信評可能是數字
+    let rating = '';
+    const ratingRaw = row['信評'] || '';
+    if (ratingRaw) {
+        rating = String(ratingRaw).trim();
+    }
+    
     return {
         id: String(row['CB代號'] || row['代號'] || '').replace('.0', '').trim(),
         name: row['名稱'] || row['CB名稱'] || '',
@@ -2748,9 +2779,15 @@ function normalizeAuctionData(row) {
         sizeRange,
         issueSize,
         years,
-        rating: row['信評'] || row['信用擔保'] || '',
-        industry: row['產業分類'] || row['產業別'] || '',
-        broker: row['發行券商'] || row['承銷券商'] || ''
+        rating,
+        industry: row['產業分類'] || '',
+        broker: row['發行券商'] || row['承銷券商'] || '',
+        capital: row['股本'] || '',
+        conversionPrice: row['轉換價'] || '',
+        floorPrice: row['底標價'] || '',
+        minBid: row['最低得標'] || '',
+        avgBid: row['平均得標'] || '',
+        bidMultiple: row['投標倍數'] || ''
     };
 }
 
@@ -2865,9 +2902,17 @@ function displayScoringResult(data, dataSource, resultDiv) {
             <span class="scoring-condition-tag">年期: ${data.yearRange || '未知'}</span>
             <span class="scoring-condition-tag">規模: ${data.sizeRange || '未知'} ${data.issueSize ? '(' + data.issueSize + '億)' : ''}</span>
             ${data.industry ? `<span class="scoring-condition-tag">產業: ${data.industry}</span>` : ''}
-            ${data.rating ? `<span class="scoring-condition-tag">信評: TCRI${data.rating}</span>` : ''}
+            ${data.rating ? `<span class="scoring-condition-tag">信評: ${data.rating.includes('TCRI') || data.rating.includes('擔保') ? data.rating : 'TCRI' + data.rating}</span>` : ''}
             ${data.type ? `<span class="scoring-condition-tag">類型: ${data.type}</span>` : ''}
         </div>
+        ${data.currentPrice || data.bidMultiple ? `
+        <div class="scoring-condition-row" style="margin-top:8px; padding-top:8px; border-top:1px dashed #ddd;">
+            ${data.currentPrice ? `<span class="scoring-condition-tag" style="background:#e3f2fd;">目前價格: ${data.currentPrice}</span>` : ''}
+            ${data.currentPremium ? `<span class="scoring-condition-tag" style="background:#fff3e0;">溢價率: ${parseFloat(data.currentPremium).toFixed(1)}%</span>` : ''}
+            ${data.bidMultiple ? `<span class="scoring-condition-tag" style="background:#f3e5f5;">投標倍數: ${parseFloat(data.bidMultiple).toFixed(2)}x</span>` : ''}
+            ${data.minBid ? `<span class="scoring-condition-tag" style="background:#e8f5e9;">最低得標: ${data.minBid}</span>` : ''}
+        </div>
+        ` : ''}
     </div>
     
     <div class="scoring-details">

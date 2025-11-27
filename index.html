@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.58 (市場趨勢分析)</title>
+<title>AI智能可轉債競拍系統 v3.59 (理論價區間分析)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="embedded_data.js" onerror="console.warn('embedded_data.js not found, using defaults.')"></script>
 
@@ -436,6 +436,94 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 /* 主觀權重說明 */
 .subjective-note { background: #f5f5f5; padding: 10px; border-radius: 6px; font-size: 12px; color: #555; margin-bottom: 12px; border: 1px solid #ddd; line-height: 1.5; }
+
+/* v3.59 新增：理論價區間分析卡片 */
+.theo-price-section {
+    background: linear-gradient(135deg, #e8eaf6 0%, #c5cae9 100%);
+    border: 2px solid #3f51b5;
+    border-radius: 12px;
+    padding: 15px;
+    margin-top: 10px;
+}
+.theo-price-header {
+    font-size: 13px;
+    font-weight: bold;
+    color: #283593;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.theo-price-display {
+    background: white;
+    border-radius: 8px;
+    padding: 10px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.theo-price-value {
+    font-size: 24px;
+    font-weight: 900;
+    color: #3f51b5;
+}
+.theo-price-range {
+    background: #3f51b5;
+    color: white;
+    padding: 4px 10px;
+    border-radius: 15px;
+    font-size: 11px;
+    font-weight: 700;
+}
+.theo-price-stats {
+    background: white;
+    border-radius: 8px;
+    padding: 10px;
+}
+.theo-stats-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10px;
+}
+.theo-stats-table th {
+    background: #3f51b5;
+    color: white;
+    padding: 5px 4px;
+    font-weight: 700;
+    text-align: center;
+}
+.theo-stats-table td {
+    padding: 5px 4px;
+    text-align: center;
+    border-bottom: 1px solid #c5cae9;
+}
+.theo-stats-table .label-cell {
+    text-align: left;
+    padding-left: 8px;
+    font-weight: 700;
+    color: #283593;
+}
+.theo-stats-table .val-premium {
+    color: #d32f2f;
+    font-weight: 700;
+}
+.theo-stats-table .val-price {
+    color: #2e7d32;
+    font-weight: 700;
+}
+.theo-insight {
+    margin-top: 8px;
+    padding: 8px;
+    background: #e3f2fd;
+    border-left: 3px solid #2196f3;
+    border-radius: 0 6px 6px 0;
+    font-size: 10px;
+    color: #0d47a1;
+    line-height: 1.5;
+}
 
 /* Footer 版權宣告 */
 .site-footer {
@@ -1118,13 +1206,13 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.58)...</div>
+    <div>🔄 系統啟動中 (v3.59)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
 <div class="container" style="display: none;">
     <div class="header">
-        <h1>🤖 AI智能可轉債競拍系統 <span class="version-badge">v3.58</span></h1>
+        <h1>🤖 AI智能可轉債競拍系統 <span class="version-badge">v3.59</span></h1>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -1164,6 +1252,11 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
                     <label>競拍截止日1:30收盤價格 (元) *</label>
                     <input type="number" id="stockPrice" step="0.01" required placeholder="例如：461.5">
                     <div class="warning-box">⚠️ 理論價格隨股價變動，建議於 13:30 截標前再進行最終試算</div>
+                </div>
+                <!-- v3.59 新增：理論價區間統計 -->
+                <div id="theoPriceStats" class="theo-price-section" style="display:none;">
+                    <div class="theo-price-header">📊 理論價區間歷史統計</div>
+                    <div id="theoPriceContent"></div>
                 </div>
             </div>
             <div class="form-section" style="background: linear-gradient(135deg, #fff9e6 0%, #ffe6cc 100%); border: 2px solid #ff9800; border-radius: 12px; padding: 15px;">
@@ -1240,7 +1333,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     <div class="result-panel">
         <div id="welcomeMsg" class="welcome-message">
             <h2>歡迎使用AI智能競拍評估系統</h2>
-            <p style="margin-top:10px; color:#666; font-size: 14px;">v3.58 市場趨勢分析版<br>✅ 自動化年度趨勢統計<br>✅ 條件組合績效比較<br>✅ 即時數據更新</p>
+            <p style="margin-top:10px; color:#666; font-size: 14px;">v3.59 理論價區間分析版<br>✅ 新增理論價區間統計<br>✅ 自動計算歷史溢價數據<br>✅ 輔助判斷投標策略</p>
             <div class="stats-summary" id="statsSummary"></div>
             
             <!-- v3.58 市場趨勢分析 -->
@@ -1408,6 +1501,9 @@ function getRangeLabel(category, val) {
 
 let statistics = { '維度統計': { '產業': {}, '發行券商': {} }, '資料期間': {} };
 let cbDatabase = {}, auctionRawData = [], inquiryRawData = [], globalMarketStats = { low: 0, avg: 0 }, cbNameMap = {};
+
+// v3.59 新增：理論價區間統計數據
+let theoPriceRangeStats = {};
 
 // ==========================================
 // 2. 資料讀取
@@ -2326,6 +2422,7 @@ function initializeUI() {
     generateRealPerformance(); // v3.56 新增
     generateDimensionAnalysis(); // v3.57 新增
     generateMarketTrendAnalysis(); // v3.58 新增
+    calculateTheoPriceRangeStats(); // v3.59 新增
 }
 
 function populateSelect(id, dataObj) {
@@ -3456,6 +3553,146 @@ function generateMarketTrendAnalysis() {
     showMarketTrendTab('yearly');
 }
 
+// v3.59 新增：理論價區間統計函數
+function getTheoPriceRangeLabel(theoPrice) {
+    const v = parseFloat(theoPrice);
+    if (isNaN(v)) return null;
+    if (v < 90) return "< 90";
+    if (v < 100) return "90~100";
+    if (v < 110) return "100~110";
+    if (v < 120) return "110~120";
+    return "≥ 120";
+}
+
+function calculateTheoPriceRangeStats() {
+    // 初始化各區間統計
+    const ranges = ["< 90", "90~100", "100~110", "110~120", "≥ 120"];
+    ranges.forEach(r => {
+        theoPriceRangeStats[r] = {
+            count: 0,
+            sumLowPremium: 0,
+            sumAvgPremium: 0,
+            sumMinBidPrice: 0,
+            sumAvgBidPrice: 0
+        };
+    });
+    
+    // 遍歷競拍資料，按理論價區間統計
+    auctionRawData.forEach(d => {
+        const theo = safeFloat(d.theoreticalPrice);
+        if (theo <= 0) return; // 跳過沒有理論價的資料
+        
+        const rangeLabel = getTheoPriceRangeLabel(theo);
+        if (!rangeLabel || !theoPriceRangeStats[rangeLabel]) return;
+        
+        // 只統計有得標數據的案例
+        if (d.minBidPrice > 0 || d.avgBidPrice > 0) {
+            const stats = theoPriceRangeStats[rangeLabel];
+            stats.count++;
+            stats.sumLowPremium += safeFloat(d.lowPremium);
+            stats.sumAvgPremium += safeFloat(d.avgPremium);
+            stats.sumMinBidPrice += safeFloat(d.minBidPrice);
+            stats.sumAvgBidPrice += safeFloat(d.avgBidPrice);
+        }
+    });
+    
+    // 計算各區間平均值
+    ranges.forEach(r => {
+        const stats = theoPriceRangeStats[r];
+        if (stats.count > 0) {
+            stats.avgLowPremium = stats.sumLowPremium / stats.count;
+            stats.avgPremium = stats.sumAvgPremium / stats.count;
+            stats.avgMinBidPrice = stats.sumMinBidPrice / stats.count;
+            stats.avgBidPrice = stats.sumAvgBidPrice / stats.count;
+        } else {
+            stats.avgLowPremium = 0;
+            stats.avgPremium = 0;
+            stats.avgMinBidPrice = 0;
+            stats.avgBidPrice = 0;
+        }
+    });
+    
+    console.log('理論價區間統計完成:', theoPriceRangeStats);
+}
+
+function displayTheoPriceRangeStats(theoPrice) {
+    const container = document.getElementById('theoPriceStats');
+    const content = document.getElementById('theoPriceContent');
+    
+    if (!theoPrice || theoPrice <= 0) {
+        container.style.display = 'none';
+        return;
+    }
+    
+    const rangeLabel = getTheoPriceRangeLabel(theoPrice);
+    const stats = theoPriceRangeStats[rangeLabel];
+    
+    if (!stats || stats.count === 0) {
+        content.innerHTML = `
+            <div class="theo-price-display">
+                <div>
+                    <div style="font-size:11px; color:#666;">目前理論價格</div>
+                    <div class="theo-price-value">${theoPrice.toFixed(2)}</div>
+                </div>
+                <span class="theo-price-range">${rangeLabel}</span>
+            </div>
+            <div class="theo-insight">
+                ⚠️ 此區間歷史案例不足，建議參考其他維度統計
+            </div>
+        `;
+        container.style.display = 'block';
+        return;
+    }
+    
+    // 生成洞察文字
+    let insight = '';
+    if (theoPrice < 90) {
+        insight = '💡 理論價低於90，底標100元已含至少10%溢價。建議重點參考「平均得標價」而非溢價率計算。';
+    } else if (theoPrice < 100) {
+        insight = '📊 理論價在90~100區間，市場議價空間有限，建議採較保守策略。';
+    } else if (theoPrice < 110) {
+        insight = '✨ 理論價在100~110區間，為競拍主流區間，可參考歷史平均溢價投標。';
+    } else if (theoPrice < 120) {
+        insight = '🔥 理論價在110~120區間，市場參與意願較高，需注意競爭可能加劇。';
+    } else {
+        insight = '⚠️ 理論價≥120，市場參與意願可能降低，注意是否出現折價或低溢價情況。';
+    }
+    
+    content.innerHTML = `
+        <div class="theo-price-display">
+            <div>
+                <div style="font-size:11px; color:#666;">目前理論價格</div>
+                <div class="theo-price-value">${theoPrice.toFixed(2)}</div>
+            </div>
+            <span class="theo-price-range">${rangeLabel}</span>
+        </div>
+        <div class="theo-price-stats">
+            <table class="theo-stats-table">
+                <tr>
+                    <th></th>
+                    <th>最低得標</th>
+                    <th>平均得標</th>
+                </tr>
+                <tr>
+                    <td class="label-cell">得標價格</td>
+                    <td class="val-price">${stats.avgMinBidPrice.toFixed(2)}</td>
+                    <td class="val-price">${stats.avgBidPrice.toFixed(2)}</td>
+                </tr>
+                <tr>
+                    <td class="label-cell">溢價率</td>
+                    <td class="val-premium">${stats.avgLowPremium.toFixed(2)}%</td>
+                    <td class="val-premium">${stats.avgPremium.toFixed(2)}%</td>
+                </tr>
+            </table>
+            <div style="text-align:right; font-size:9px; color:#999; margin-top:5px;">
+                樣本數：${stats.count} 筆
+            </div>
+        </div>
+        <div class="theo-insight">${insight}</div>
+    `;
+    container.style.display = 'block';
+}
+
 function showMarketTrendTab(tab, event) {
     if (event) {
         event.preventDefault();
@@ -4024,6 +4261,23 @@ function bindInputEvents() {
     });
     
     document.getElementById('stockPrice').addEventListener('input', updateSmartReminders);
+    
+    // v3.59 新增：股價或轉換價輸入時，更新理論價區間統計
+    const updateTheoPriceStats = function() {
+        const stockPrice = parseFloat(document.getElementById('stockPrice').value);
+        const convPrice = parseFloat(document.getElementById('conversionPrice').value);
+        
+        if (stockPrice > 0 && convPrice > 0) {
+            const theoPrice = (stockPrice / convPrice) * 100;
+            displayTheoPriceRangeStats(theoPrice);
+        } else {
+            document.getElementById('theoPriceStats').style.display = 'none';
+        }
+    };
+    
+    document.getElementById('stockPrice').addEventListener('input', updateTheoPriceStats);
+    document.getElementById('conversionPrice').addEventListener('input', updateTheoPriceStats);
+    document.getElementById('conversionPrice').addEventListener('change', updateTheoPriceStats);
 }
 
 function updateSmartReminders() {

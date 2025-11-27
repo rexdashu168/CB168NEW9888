@@ -606,13 +606,25 @@ async function loadStatistics() {
                 const id = String(rawId).replace('.0','').trim();
                 const hlRow = highLowMap[id] || {};
                 
+                // 處理信評格式：TCRI1 -> 1, TCRI5 -> 5
+                let rawRating = row['信用擔保'] || '';
+                let normalizedRating = '';
+                if (rawRating) {
+                    const match = rawRating.match(/TCRI(\d+)/i);
+                    if (match) {
+                        normalizedRating = match[1]; // 提取數字部分
+                    } else if (rawRating.includes('BBB')) {
+                        normalizedRating = 'BBB';
+                    }
+                }
+                
                 return {
                     'id': id,
                     'name': row['名稱'] || '',
                     'industry': row['產業分類'] || '',
                     'broker': row['承銷券商'] || '',
                     'guarantee': row['有無擔保'] || '',
-                    'rating': row['信用擔保'] || '',
+                    'rating': normalizedRating,
                     'capital': safeFloat(row['股本規模']),
                     'issueSize': safeFloat(row['發行規模']),
                     'years': safeFloat(row['發行年期']),
@@ -633,6 +645,23 @@ async function loadStatistics() {
             
             const id = String(rawId).replace('.0','').trim();
             const hlRow = highLowMap[id] || {}; 
+            
+            // 處理信評格式：統一轉為數字格式
+            let rawRating = getSmartValue(row, 'rating') || '';
+            let normalizedRating = '';
+            if (rawRating) {
+                rawRating = String(rawRating).trim();
+                const match = rawRating.match(/TCRI(\d+)/i);
+                if (match) {
+                    normalizedRating = match[1];
+                } else if (rawRating.match(/^\d+$/)) {
+                    normalizedRating = rawRating; // 已經是數字
+                } else if (rawRating.toUpperCase().includes('BBB')) {
+                    normalizedRating = 'BBB';
+                } else {
+                    normalizedRating = rawRating;
+                }
+            }
 
             return {
                 'id': id, 
@@ -642,7 +671,7 @@ async function loadStatistics() {
                 'industry': getSmartValue(row, 'industry'), 
                 'broker': getSmartValue(row, 'broker'),
                 'guarantee': getSmartValue(row, 'guarantee'), 
-                'rating': getSmartValue(row, 'rating'),
+                'rating': normalizedRating,
                 'capital': safeFloat(getSmartValue(row, 'capital')), 
                 'issueSize': safeFloat(getSmartValue(row, 'issueSize')), 
                 'years': safeFloat(getSmartValue(row, 'years')),
@@ -799,7 +828,20 @@ function getStatsSmart(category, val) {
         else if (category === '產業') filterFn = d => d.industry === safeVal;
         else if (category === '擔保') filterFn = d => (d.guarantee || '').includes(safeVal);
         else if (category === '年期') filterFn = d => d.years == safeVal;
-        else if (category === '信評') filterFn = d => (d.rating || '').toString().includes(safeVal);
+        else if (category === '信評') {
+            // 信評比對：用戶選 "5" 要能比對到 rating 為 "5" 或 "TCRI5" 的資料
+            filterFn = d => {
+                const rating = (d.rating || '').toString().trim();
+                if (!rating) return false;
+                // 精確比對數字
+                if (rating === safeVal) return true;
+                // 比對 TCRI 格式
+                if (rating.toUpperCase() === 'TCRI' + safeVal) return true;
+                // BBB 特殊處理
+                if (safeVal === 'BBB' && rating.toUpperCase().includes('BBB')) return true;
+                return false;
+            };
+        }
     }
 
     if (filterFn) {

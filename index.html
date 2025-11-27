@@ -681,12 +681,28 @@ async function loadStatistics() {
             }).filter(item => item !== null);
             
             console.log(`載入詢圈資料: ${inquiryRawData.length} 筆`);
-            // 除錯：檢查詢圈資料的 capital 值
+            // 除錯：檢查詢圈資料
             const withCapital = inquiryRawData.filter(d => d.capital > 0);
+            const withMarket = inquiryRawData.filter(d => d.marketHigh > 0 && d.marketLow > 0);
             console.log(`詢圈資料中有股本數據: ${withCapital.length} 筆`);
+            console.log(`詢圈資料中有掛牌數據: ${withMarket.length} 筆`);
+            console.log(`00工作表(highLowMap)筆數: ${Object.keys(highLowMap).length}`);
             if (withCapital.length > 0) {
-                console.log('詢圈股本範例:', withCapital.slice(0, 3).map(d => ({name: d.name, capital: d.capital})));
+                console.log('詢圈範例(含股本):', withCapital.slice(0, 3).map(d => ({
+                    id: d.id, 
+                    name: d.name, 
+                    capital: d.capital,
+                    marketHigh: d.marketHigh,
+                    marketLow: d.marketLow
+                })));
             }
+            // 檢查 highLowMap 範例
+            const hlKeys = Object.keys(highLowMap).slice(0, 3);
+            console.log('highLowMap範例:', hlKeys.map(k => ({
+                id: k,
+                high: highLowMap[k]['掛牌最高'] || highLowMap[k]['掛牌最高價'],
+                low: highLowMap[k]['掛牌最低'] || highLowMap[k]['掛牌最低價']
+            })));
         }
 
         auctionRawData = sheetAuction.map(row => {

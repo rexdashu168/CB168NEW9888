@@ -795,7 +795,10 @@ function getStatsSmart(category, val) {
         guaranteedAuctionEx3: null,
         guaranteedInquiryEx3: null,
         unguaranteedAuctionEx3: null,
-        unguaranteedInquiryEx3: null
+        unguaranteedInquiryEx3: null,
+        // v3.52 新增：依擔保類型的得標統計
+        guaranteedBidData: null,
+        unguaranteedBidData: null
     };
     let filterFn = null;
     const v = parseFloat(val);
@@ -878,6 +881,23 @@ function getStatsSmart(category, val) {
             if(rangeLabel) stats.rawData['區間名稱'] = rangeLabel; 
             stats.low = stats.rawData['平均最低溢價']; 
             stats.avg = stats.rawData['平均溢價'];
+        }
+        
+        // === v3.52 新增：依擔保類型的得標統計 ===
+        // 有擔保得標統計
+        const guaranteedBidArr = auctionFiltered.filter(d => (d.guarantee || '').includes('有') && (d.minBidPrice > 0 || d.avgBidPrice > 0));
+        if (guaranteedBidArr.length > 0) {
+            let gSumLP = 0, gSumAP = 0, gSumLPr = 0, gSumAPr = 0;
+            guaranteedBidArr.forEach(d => { gSumLP += d.lowPremium; gSumAP += d.avgPremium; gSumLPr += d.minBidPrice; gSumAPr += d.avgBidPrice; });
+            stats.guaranteedBidData = { '平均最低溢價': gSumLP / guaranteedBidArr.length, '平均溢價': gSumAP / guaranteedBidArr.length, '平均最低得標價': gSumLPr / guaranteedBidArr.length, '平均得標價': gSumAPr / guaranteedBidArr.length, '樣本數': guaranteedBidArr.length };
+        }
+        
+        // 無擔保得標統計
+        const unguaranteedBidArr = auctionFiltered.filter(d => (d.guarantee || '').includes('無') && (d.minBidPrice > 0 || d.avgBidPrice > 0));
+        if (unguaranteedBidArr.length > 0) {
+            let uSumLP = 0, uSumAP = 0, uSumLPr = 0, uSumAPr = 0;
+            unguaranteedBidArr.forEach(d => { uSumLP += d.lowPremium; uSumAP += d.avgPremium; uSumLPr += d.minBidPrice; uSumAPr += d.avgBidPrice; });
+            stats.unguaranteedBidData = { '平均最低溢價': uSumLP / unguaranteedBidArr.length, '平均溢價': uSumAP / unguaranteedBidArr.length, '平均最低得標價': uSumLPr / unguaranteedBidArr.length, '平均得標價': uSumAPr / unguaranteedBidArr.length, '樣本數': unguaranteedBidArr.length };
         }
         
         // === v3.51 新增：競拍排除前三高的計算 ===
@@ -1143,7 +1163,7 @@ function generateHistoryCard(d) {
 }
 
 // v3.51 修改：generateStandardCard 增加排除前三的參數，獨立成兩個表格，並加入擔保類型細分
-function generateStandardCard(data, titleOverride=null, inquiryData=null, excludeTop3Data=null, excludeTop3InquiryData=null, guaranteedAuctionData=null, guaranteedInquiryData=null, unguaranteedAuctionData=null, unguaranteedInquiryData=null, guaranteedAuctionEx3=null, guaranteedInquiryEx3=null, unguaranteedAuctionEx3=null, unguaranteedInquiryEx3=null) {
+function generateStandardCard(data, titleOverride=null, inquiryData=null, excludeTop3Data=null, excludeTop3InquiryData=null, guaranteedAuctionData=null, guaranteedInquiryData=null, unguaranteedAuctionData=null, unguaranteedInquiryData=null, guaranteedAuctionEx3=null, guaranteedInquiryEx3=null, unguaranteedAuctionEx3=null, unguaranteedInquiryEx3=null, guaranteedBidData=null, unguaranteedBidData=null) {
     if (!data) return `<div class="stat-row" style="color:#999;">查無資料</div>`;
     
     const valStr = (v, s='') => (v!==undefined && v!==null && v!=='' && v!==0) ? `${safeFixed(v,2)}${s}` : '-';
@@ -1211,13 +1231,57 @@ function generateStandardCard(data, titleOverride=null, inquiryData=null, exclud
 
     let html = `<div class="stats-header">📊 ${title}</div>`;
     
-    // 競拍得標數據
-    if (data['樣本數']) {
-        html += `<div style="background:#f1f8e9; padding:8px; border-radius:5px; margin:8px 0;">
-        <div style="font-weight:bold; color:#2e7d32; font-size:12px; margin-bottom:5px;">🎯 競拍 (${data['樣本數']}檔)</div>
-        <div class="stat-row"><span class="stat-label">最低得標:</span><span class="stat-value">${valStr(data['平均最低得標價'])}元 / 溢${valStr(data['平均最低溢價'],'%')}</span></div>
-        <div class="stat-row"><span class="stat-label">平均得標:</span><span class="stat-value">${valStr(data['平均得標價'])}元 / 溢${valStr(data['平均溢價'],'%')}</span></div>
-        </div>`;
+    // v3.52 改版：競拍得標數據改為表格，細分全部/有擔保/無擔保
+    const hasAllBid = data && data['樣本數'];
+    const hasGBid = guaranteedBidData && guaranteedBidData['樣本數'] > 0;
+    const hasUBid = unguaranteedBidData && unguaranteedBidData['樣本數'] > 0;
+    
+    if (hasAllBid || hasGBid || hasUBid) {
+        html += `<div style="background:#f1f8e9; padding:10px; border-radius:5px; margin:8px 0;">
+        <div style="font-weight:bold; color:#2e7d32; font-size:12px; margin-bottom:8px;">🎯 競拍得標統計</div>
+        <table style="width:100%; border-collapse:collapse; font-size:11px;">
+        <tr style="background:#c8e6c9;">
+            <th style="padding:4px 6px; text-align:left; font-weight:700; color:#1b5e20; border:1px solid #a5d6a7;"></th>
+            <th style="padding:4px 6px; text-align:center; font-weight:700; color:#1b5e20; border:1px solid #a5d6a7;">最低得標</th>
+            <th style="padding:4px 6px; text-align:center; font-weight:700; color:#1b5e20; border:1px solid #a5d6a7;">最低溢價</th>
+            <th style="padding:4px 6px; text-align:center; font-weight:700; color:#1b5e20; border:1px solid #a5d6a7;">平均得標</th>
+            <th style="padding:4px 6px; text-align:center; font-weight:700; color:#1b5e20; border:1px solid #a5d6a7;">平均溢價</th>
+        </tr>`;
+        
+        // 全部合計
+        if (hasAllBid) {
+            html += `<tr style="background:#e8f5e9;">
+                <td style="padding:4px 6px; font-weight:700; color:#2e7d32; border:1px solid #c8e6c9;">全部<span style="font-size:9px; color:#666; margin-left:3px;">${data['樣本數']}</span></td>
+                <td style="padding:4px 6px; text-align:right; border:1px solid #c8e6c9; font-weight:600;">${valStr(data['平均最低得標價'])}</td>
+                <td style="padding:4px 6px; text-align:right; border:1px solid #c8e6c9; font-weight:700; color:#d32f2f;">${valStr(data['平均最低溢價'],'%')}</td>
+                <td style="padding:4px 6px; text-align:right; border:1px solid #c8e6c9; font-weight:600;">${valStr(data['平均得標價'])}</td>
+                <td style="padding:4px 6px; text-align:right; border:1px solid #c8e6c9; font-weight:700; color:#d32f2f;">${valStr(data['平均溢價'],'%')}</td>
+            </tr>`;
+        }
+        
+        // 有擔保
+        if (hasGBid) {
+            html += `<tr style="background:#fff;">
+                <td style="padding:4px 6px; font-weight:700; color:#7b1fa2; border:1px solid #c8e6c9;">有擔保<span style="font-size:9px; color:#666; margin-left:3px;">${guaranteedBidData['樣本數']}</span></td>
+                <td style="padding:4px 6px; text-align:right; border:1px solid #c8e6c9; font-weight:600;">${valStr(guaranteedBidData['平均最低得標價'])}</td>
+                <td style="padding:4px 6px; text-align:right; border:1px solid #c8e6c9; font-weight:700; color:#d32f2f;">${valStr(guaranteedBidData['平均最低溢價'],'%')}</td>
+                <td style="padding:4px 6px; text-align:right; border:1px solid #c8e6c9; font-weight:600;">${valStr(guaranteedBidData['平均得標價'])}</td>
+                <td style="padding:4px 6px; text-align:right; border:1px solid #c8e6c9; font-weight:700; color:#d32f2f;">${valStr(guaranteedBidData['平均溢價'],'%')}</td>
+            </tr>`;
+        }
+        
+        // 無擔保
+        if (hasUBid) {
+            html += `<tr style="background:#fce4ec;">
+                <td style="padding:4px 6px; font-weight:700; color:#c2185b; border:1px solid #c8e6c9;">無擔保<span style="font-size:9px; color:#666; margin-left:3px;">${unguaranteedBidData['樣本數']}</span></td>
+                <td style="padding:4px 6px; text-align:right; border:1px solid #c8e6c9; font-weight:600;">${valStr(unguaranteedBidData['平均最低得標價'])}</td>
+                <td style="padding:4px 6px; text-align:right; border:1px solid #c8e6c9; font-weight:700; color:#d32f2f;">${valStr(unguaranteedBidData['平均最低溢價'],'%')}</td>
+                <td style="padding:4px 6px; text-align:right; border:1px solid #c8e6c9; font-weight:600;">${valStr(unguaranteedBidData['平均得標價'])}</td>
+                <td style="padding:4px 6px; text-align:right; border:1px solid #c8e6c9; font-weight:700; color:#d32f2f;">${valStr(unguaranteedBidData['平均溢價'],'%')}</td>
+            </tr>`;
+        }
+        
+        html += `</table></div>`;
     }
     
     // === 第一個表格：完整數據 ===
@@ -1582,7 +1646,7 @@ function bindInputEvents() {
                 if(['股本','發行規模','轉換價'].includes(cat)) displayTitle = getRangeLabel(cat, val);
                 
                 const smartResult = getStatsSmart(cat, val);
-                // v3.52: 傳入排除前三 + 擔保類型細分 + 擔保類型排除前三高
+                // v3.52: 傳入排除前三 + 擔保類型細分 + 擔保類型排除前三高 + 得標統計細分
                 show(id+'Info', generateStandardCard(
                     smartResult.rawData, 
                     `區間統計: ${displayTitle}`, 
@@ -1596,7 +1660,9 @@ function bindInputEvents() {
                     smartResult.guaranteedAuctionEx3,
                     smartResult.guaranteedInquiryEx3,
                     smartResult.unguaranteedAuctionEx3,
-                    smartResult.unguaranteedInquiryEx3
+                    smartResult.unguaranteedInquiryEx3,
+                    smartResult.guaranteedBidData,
+                    smartResult.unguaranteedBidData
                 ));
                 if(cat==='轉換價'||cat==='信評') updateSmartReminders();
             }

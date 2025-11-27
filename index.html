@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.52 (條件評估版)</title>
+<title>AI智能可轉債競拍系統 v3.53 (得標數據表格化)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="embedded_data.js" onerror="console.warn('embedded_data.js not found, using defaults.')"></script>
 
@@ -240,6 +240,50 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     font-style: italic;
 }
 
+/* v3.53 新增：競拍得標表格 */
+.card-bid-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10px;
+    margin-top: 6px;
+    border-radius: 4px;
+    overflow: hidden;
+}
+.card-bid-table th {
+    background: #2e7d32;
+    color: white;
+    padding: 4px 3px;
+    font-weight: 700;
+    font-size: 9px;
+    text-align: center;
+}
+.card-bid-table td {
+    padding: 4px 3px;
+    text-align: center;
+    border-bottom: 1px solid #c8e6c9;
+    background: #f1f8e9;
+    font-weight: 600;
+}
+.card-bid-table .type-label {
+    font-weight: 700;
+    color: #1b5e20;
+    text-align: left;
+    padding-left: 6px;
+    white-space: nowrap;
+}
+.card-bid-table .type-label .count {
+    font-size: 8px;
+    color: #666;
+    margin-left: 2px;
+}
+.card-bid-table .val-green { font-weight: 700; color: #2e7d32; }
+.card-bid-table .val-red { font-weight: 700; color: #d32f2f; }
+.card-bid-table .total-row td {
+    background: #c8e6c9;
+    font-weight: 900;
+    border-top: 2px solid #4CAF50;
+}
+
 /* 主觀權重說明 */
 .subjective-note { background: #f5f5f5; padding: 10px; border-radius: 6px; font-size: 12px; color: #555; margin-bottom: 12px; border: 1px solid #ddd; line-height: 1.5; }
 
@@ -336,13 +380,13 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.52)...</div>
+    <div>🔄 系統啟動中 (v3.53)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
 <div class="container" style="display: none;">
     <div class="header">
-        <h1>🤖 AI智能可轉債競拍系統 <span class="version-badge">v3.52</span></h1>
+        <h1>🤖 AI智能可轉債競拍系統 <span class="version-badge">v3.53</span></h1>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -410,7 +454,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     <div class="result-panel">
         <div id="welcomeMsg" class="welcome-message">
             <h2>歡迎使用AI智能競拍評估系統</h2>
-            <p style="margin-top:10px; color:#666; font-size: 14px;">v3.52 條件評估版<br>✅ 保留排除前三高統計<br>✅ 新增標的條件快速評估</p>
+            <p style="margin-top:10px; color:#666; font-size: 14px;">v3.53 得標數據表格化版<br>✅ 競拍得標依擔保類型細分<br>✅ 有擔保/無擔保/全部一目了然</p>
             <div class="stats-summary" id="statsSummary"></div>
         </div>
         <div id="evaluationResult" class="evaluation-result"></div>
@@ -932,25 +976,36 @@ function getStatsSmart(category, val) {
             };
         }
         
-        // === v3.52 新增：依擔保類型細分統計 ===
+        // === v3.53 修改：依擔保類型細分統計（含得標數據）===
         // 有擔保 - 競拍
         const guaranteedAuction = auctionFiltered.filter(d => (d.guarantee || '').includes('有'));
         if (guaranteedAuction.length > 0) {
             let gaSumH = 0, gaSumL = 0, gaCountM = 0;
+            let gaSumLowP = 0, gaSumAvgP = 0, gaSumLowPr = 0, gaSumAvgPr = 0, gaCountBid = 0;
             guaranteedAuction.forEach(d => {
                 if (d.marketHigh > 0 && d.marketLow > 0) {
                     gaSumH += d.marketHigh;
                     gaSumL += d.marketLow;
                     gaCountM++;
                 }
+                if (d.minBidPrice > 0 || d.avgBidPrice > 0) {
+                    gaSumLowP += d.lowPremium;
+                    gaSumAvgP += d.avgPremium;
+                    gaSumLowPr += d.minBidPrice;
+                    gaSumAvgPr += d.avgBidPrice;
+                    gaCountBid++;
+                }
             });
-            if (gaCountM > 0) {
-                stats.guaranteedAuctionData = {
-                    '平均掛牌最高': gaSumH / gaCountM,
-                    '平均掛牌最低': gaSumL / gaCountM,
-                    '樣本數': gaCountM
-                };
-            }
+            stats.guaranteedAuctionData = {
+                '平均掛牌最高': gaCountM > 0 ? gaSumH / gaCountM : 0,
+                '平均掛牌最低': gaCountM > 0 ? gaSumL / gaCountM : 0,
+                '樣本數': gaCountM,
+                '平均最低得標價': gaCountBid > 0 ? gaSumLowPr / gaCountBid : 0,
+                '平均最低溢價': gaCountBid > 0 ? gaSumLowP / gaCountBid : 0,
+                '平均得標價': gaCountBid > 0 ? gaSumAvgPr / gaCountBid : 0,
+                '平均溢價': gaCountBid > 0 ? gaSumAvgP / gaCountBid : 0,
+                '得標樣本數': gaCountBid
+            };
         }
         
         // 有擔保 - 詢圈
@@ -977,20 +1032,31 @@ function getStatsSmart(category, val) {
         const unguaranteedAuction = auctionFiltered.filter(d => (d.guarantee || '').includes('無'));
         if (unguaranteedAuction.length > 0) {
             let uaSumH = 0, uaSumL = 0, uaCountM = 0;
+            let uaSumLowP = 0, uaSumAvgP = 0, uaSumLowPr = 0, uaSumAvgPr = 0, uaCountBid = 0;
             unguaranteedAuction.forEach(d => {
                 if (d.marketHigh > 0 && d.marketLow > 0) {
                     uaSumH += d.marketHigh;
                     uaSumL += d.marketLow;
                     uaCountM++;
                 }
+                if (d.minBidPrice > 0 || d.avgBidPrice > 0) {
+                    uaSumLowP += d.lowPremium;
+                    uaSumAvgP += d.avgPremium;
+                    uaSumLowPr += d.minBidPrice;
+                    uaSumAvgPr += d.avgBidPrice;
+                    uaCountBid++;
+                }
             });
-            if (uaCountM > 0) {
-                stats.unguaranteedAuctionData = {
-                    '平均掛牌最高': uaSumH / uaCountM,
-                    '平均掛牌最低': uaSumL / uaCountM,
-                    '樣本數': uaCountM
-                };
-            }
+            stats.unguaranteedAuctionData = {
+                '平均掛牌最高': uaCountM > 0 ? uaSumH / uaCountM : 0,
+                '平均掛牌最低': uaCountM > 0 ? uaSumL / uaCountM : 0,
+                '樣本數': uaCountM,
+                '平均最低得標價': uaCountBid > 0 ? uaSumLowPr / uaCountBid : 0,
+                '平均最低溢價': uaCountBid > 0 ? uaSumLowP / uaCountBid : 0,
+                '平均得標價': uaCountBid > 0 ? uaSumAvgPr / uaCountBid : 0,
+                '平均溢價': uaCountBid > 0 ? uaSumAvgP / uaCountBid : 0,
+                '得標樣本數': uaCountBid
+            };
         }
         
         // 無擔保 - 詢圈
@@ -1169,13 +1235,56 @@ function generateStandardCard(data, titleOverride=null, inquiryData=null, exclud
 
     let html = `<div class="stats-header">📊 ${title}</div>`;
     
-    // 競拍得標數據
-    if (data['樣本數']) {
+    // v3.53 修改：競拍得標數據表格化（有擔保/無擔保/全部）
+    const hasBidData = data['樣本數'] && data['樣本數'] > 0;
+    const hasGuaranteedBid = guaranteedAuctionData && guaranteedAuctionData['得標樣本數'] > 0;
+    const hasUnguaranteedBid = unguaranteedAuctionData && unguaranteedAuctionData['得標樣本數'] > 0;
+    
+    if (hasBidData || hasGuaranteedBid || hasUnguaranteedBid) {
         html += `<div style="background:#f1f8e9; padding:8px; border-radius:5px; margin:8px 0;">
-        <div style="font-weight:bold; color:#2e7d32; font-size:12px; margin-bottom:5px;">🎯 競拍 (${data['樣本數']}檔)</div>
-        <div class="stat-row"><span class="stat-label">最低得標:</span><span class="stat-value">${valStr(data['平均最低得標價'])}元 / 溢${valStr(data['平均最低溢價'],'%')}</span></div>
-        <div class="stat-row"><span class="stat-label">平均得標:</span><span class="stat-value">${valStr(data['平均得標價'])}元 / 溢${valStr(data['平均溢價'],'%')}</span></div>
-        </div>`;
+        <div style="font-weight:bold; color:#2e7d32; font-size:12px; margin-bottom:6px;">🎯 競拍得標統計</div>
+        <table class="card-bid-table">
+        <tr><th></th><th>檔數</th><th>最低得標</th><th>最低溢價</th><th>平均得標</th><th>平均溢價</th></tr>`;
+        
+        // 有擔保
+        if (hasGuaranteedBid) {
+            const ga = guaranteedAuctionData;
+            html += `<tr>
+                <td class="type-label">有擔保</td>
+                <td>${ga['得標樣本數']}</td>
+                <td class="val-green">${safeFixed(ga['平均最低得標價'],2)}</td>
+                <td class="val-red">${safeFixed(ga['平均最低溢價'],2)}%</td>
+                <td class="val-green">${safeFixed(ga['平均得標價'],2)}</td>
+                <td class="val-red">${safeFixed(ga['平均溢價'],2)}%</td>
+            </tr>`;
+        }
+        
+        // 無擔保
+        if (hasUnguaranteedBid) {
+            const ua = unguaranteedAuctionData;
+            html += `<tr>
+                <td class="type-label">無擔保</td>
+                <td>${ua['得標樣本數']}</td>
+                <td class="val-green">${safeFixed(ua['平均最低得標價'],2)}</td>
+                <td class="val-red">${safeFixed(ua['平均最低溢價'],2)}%</td>
+                <td class="val-green">${safeFixed(ua['平均得標價'],2)}</td>
+                <td class="val-red">${safeFixed(ua['平均溢價'],2)}%</td>
+            </tr>`;
+        }
+        
+        // 全部（合計列）
+        if (hasBidData) {
+            html += `<tr class="total-row">
+                <td class="type-label">全部</td>
+                <td>${data['樣本數']}</td>
+                <td class="val-green">${safeFixed(data['平均最低得標價'],2)}</td>
+                <td class="val-red">${safeFixed(data['平均最低溢價'],2)}%</td>
+                <td class="val-green">${safeFixed(data['平均得標價'],2)}</td>
+                <td class="val-red">${safeFixed(data['平均溢價'],2)}%</td>
+            </tr>`;
+        }
+        
+        html += `</table></div>`;
     }
     
     // === 第一個表格：完整數據 ===

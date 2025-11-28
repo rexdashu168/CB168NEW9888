@@ -360,10 +360,15 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     border-top: 2px solid #ff9800;
 }
 .trend-compare-grid {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 10px;
     margin-top: 10px;
+}
+@media (max-width: 600px) {
+    .trend-compare-grid {
+        grid-template-columns: 1fr;
+    }
 }
 .trend-compare-card {
     background: #fff8e1;
@@ -1216,7 +1221,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     <div class="result-panel">
         <div id="welcomeMsg" class="welcome-message">
             <h2>歡迎使用AI智能競拍評估系統</h2>
-            <p style="margin-top:10px; color:#666; font-size: 14px;">v3.59 UI優化版<br>✅ 搜尋卡片緊湊化<br>✅ 統計區塊上下排列<br>✅ 左右紫色邊框對稱</p>
+            <p style="margin-top:10px; color:#666; font-size: 14px;">v3.59 UI優化版<br>✅ 搜尋卡片緊湊化<br>✅ 排行表格加入代號/類型/狀態<br>✅ 動態讀取08工作表判斷掛牌狀態</p>
             <div class="stats-summary" id="statsSummary"></div>
             
             <!-- v3.58 市場趨勢分析 -->
@@ -1384,6 +1389,7 @@ function getRangeLabel(category, val) {
 
 let statistics = { '維度統計': { '產業': {}, '發行券商': {} }, '資料期間': {} };
 let cbDatabase = {}, auctionRawData = [], inquiryRawData = [], globalMarketStats = { low: 0, avg: 0 }, cbNameMap = {};
+let listedSet = new Set(); // 掛牌中清單
 
 // ==========================================
 // 2. 資料讀取
@@ -1404,8 +1410,18 @@ async function loadStatistics() {
         const sheetAuction = getSheetData(['04', '所有CB競拍']);
         const sheetHighLow = getSheetData(['00', '掛牌', '名稱過濾']);
         const sheetAllCB = getSheetData(['01', 'ALLCB基本']);
+        const sheetListed = getSheetData(['08']); // 掛牌中清單
         
         if (!sheetAuction || sheetAuction.length === 0) throw new Error("找不到競拍資料分頁");
+
+        // 建立掛牌中代號Set（用於判斷狀態）
+        if (sheetListed && sheetListed.length > 0) {
+            sheetListed.forEach(row => {
+                let id = row['代號'] || row['CB代號'] || row['股票代號'];
+                if (id) listedSet.add(String(id).replace('.0','').trim());
+            });
+            console.log(`載入掛牌中清單: ${listedSet.size} 筆`);
+        }
 
         // 建立掛牌高低對照表
         const highLowMap = {};
@@ -2509,124 +2525,78 @@ function generateSupplyAnalysis() {
 let yearlyRankingData = {};
 
 function generateYearlyRanking() {
-    // 硬編碼的年度績效數據（TOP10 & BOTTOM10，含掛牌最高、最低、振幅）
-    yearlyRankingData = {
-        2022: {
-            total: 95,
-            top10: [
-                { name: '材料三K', type: '競拍', high: 601.0, low: 100.0, amp: 501.0 },
-                { name: '萬潤四', type: '競拍', high: 467.0, low: 98.0, amp: 376.5 },
-                { name: '東科一K', type: '競拍', high: 456.0, low: 104.1, amp: 338.0 },
-                { name: '群翊一', type: '詢圈', high: 403.0, low: 102.0, amp: 295.1 },
-                { name: '台光電五', type: '詢圈', high: 388.0, low: 97.0, amp: 300.0 },
-                { name: '保瑞二', type: '競拍', high: 355.0, low: 104.0, amp: 241.3 },
-                { name: '兆利一', type: '競拍', high: 325.0, low: 101.6, amp: 219.9 },
-                { name: '科妍二', type: '詢圈', high: 313.0, low: 100.0, amp: 213.0 },
-                { name: '朋億一', type: '詢圈', high: 281.0, low: 105.1, amp: 167.4 },
-                { name: '時碩工業二', type: '競拍', high: 264.0, low: 105.0, amp: 151.4 }
-            ],
-            bottom10: [
-                { name: '桓鼎三K', type: '詢圈', high: 102.0, low: 101.0, amp: 1.0 },
-                { name: '福貞二K', type: '詢圈', high: 102.7, low: 89.1, amp: 15.3 },
-                { name: '全宇生技一K', type: '詢圈', high: 104.5, low: 91.0, amp: 14.8 },
-                { name: '廣越二', type: '競拍', high: 108.8, low: 98.7, amp: 10.2 },
-                { name: '宏佳騰一', type: '競拍', high: 109.0, low: 99.1, amp: 10.0 },
-                { name: '巨大一', type: '詢圈', high: 109.8, low: 95.2, amp: 15.3 },
-                { name: '車王電二', type: '競拍', high: 111.0, low: 93.5, amp: 18.7 },
-                { name: '春雨三', type: '競拍', high: 112.0, low: 97.2, amp: 15.3 },
-                { name: '台新金E1', type: '詢圈', high: 112.1, low: 98.5, amp: 13.8 },
-                { name: '春雨一', type: '競拍', high: 112.4, low: 97.1, amp: 15.7 }
-            ],
-            summary: '冠軍材料三K振幅501%，前10名競拍佔6檔。墊底多為KY股、傳產及金控。'
-        },
-        2023: {
-            total: 91,
-            top10: [
-                { name: '泰茂四', type: '競拍', high: 470.0, low: 121.5, amp: 287.0 },
-                { name: '欣巴巴一', type: '競拍', high: 454.0, low: 111.2, amp: 308.3 },
-                { name: '鑫科三', type: '競拍', high: 420.0, low: 114.0, amp: 268.4 },
-                { name: '雲豹能源一', type: '詢圈', high: 365.0, low: 106.6, amp: 242.4 },
-                { name: 'IET二K', type: '詢圈', high: 302.0, low: 104.0, amp: 190.4 },
-                { name: '晟銘電三', type: '競拍', high: 297.0, low: 114.0, amp: 160.5 },
-                { name: '建準三', type: '競拍', high: 289.0, low: 127.1, amp: 127.5 },
-                { name: '亞力一', type: '詢圈', high: 276.0, low: 103.8, amp: 165.9 },
-                { name: '高力四', type: '競拍', high: 264.0, low: 107.0, amp: 146.7 },
-                { name: '泓德能源一', type: '詢圈', high: 262.0, low: 104.1, amp: 151.7 }
-            ],
-            bottom10: [
-                { name: '裕融二', type: '詢圈', high: 102.5, low: 93.3, amp: 9.9 },
-                { name: '日馳一', type: '競拍', high: 104.8, low: 90.1, amp: 16.3 },
-                { name: '國際中橡三', type: '詢圈', high: 106.4, low: 94.1, amp: 13.1 },
-                { name: '進泰電子四', type: '詢圈', high: 107.0, low: 97.1, amp: 10.2 },
-                { name: '明係一', type: '競拍', high: 111.0, low: 93.8, amp: 18.4 },
-                { name: '元翎一', type: '詢圈', high: 113.0, low: 91.8, amp: 23.1 },
-                { name: '和勤五', type: '詢圈', high: 114.5, low: 93.6, amp: 22.4 },
-                { name: '廣華二K', type: '詢圈', high: 115.5, low: 93.1, amp: 24.1 },
-                { name: '鴻碩二', type: '競拍', high: 116.6, low: 94.0, amp: 24.0 },
-                { name: '吉源一K', type: '競拍', high: 117.0, low: 98.6, amp: 18.7 }
-            ],
-            summary: '綠能題材亮眼，冠軍泰茂四振幅287%。大型案件裕融二(80億)墊底僅9.9%振幅。'
-        },
-        2024: {
-            total: 139,
-            top10: [
-                { name: '亞翔四', type: '詢圈', high: 310.0, low: 110.0, amp: 181.8 },
-                { name: '佳必琪三', type: '競拍', high: 268.0, low: 101.8, amp: 163.4 },
-                { name: '欣巴巴二', type: '詢圈', high: 247.0, low: 110.0, amp: 124.5 },
-                { name: '勤誠一', type: '競拍', high: 240.0, low: 99.1, amp: 142.2 },
-                { name: '台光電六', type: '詢圈', high: 230.0, low: 101.8, amp: 126.0 },
-                { name: '華星光三', type: '詢圈', high: 230.0, low: 101.5, amp: 126.6 },
-                { name: '建暐四', type: '競拍', high: 230.0, low: 120.2, amp: 91.4 },
-                { name: '台燿四', type: '詢圈', high: 225.0, low: 101.6, amp: 121.6 },
-                { name: '台光電七', type: '競拍', high: 224.0, low: 105.0, amp: 113.3 },
-                { name: '十銓三', type: '競拍', high: 214.0, low: 114.0, amp: 87.7 }
-            ],
-            bottom10: [
-                { name: '遠東新E2永', type: '詢圈', high: 104.4, low: 95.0, amp: 9.9 },
-                { name: '麗清六', type: '競拍', high: 104.7, low: 93.6, amp: 11.9 },
-                { name: '大聯大三', type: '競拍', high: 104.9, low: 96.1, amp: 9.2 },
-                { name: '華固三', type: '詢圈', high: 105.8, low: 96.0, amp: 10.2 },
-                { name: '華固四', type: '競拍', high: 106.2, low: 98.0, amp: 8.4 },
-                { name: '麗豐二K', type: '詢圈', high: 106.5, low: 97.7, amp: 9.0 },
-                { name: '台泥一永', type: '詢圈', high: 108.1, low: 95.0, amp: 13.8 },
-                { name: '凌網一', type: '詢圈', high: 109.0, low: 93.9, amp: 16.1 },
-                { name: '大亞五', type: '競拍', high: 110.0, low: 92.9, amp: 18.5 },
-                { name: '威健七', type: '詢圈', high: 110.4, low: 100.0, amp: 10.4 }
-            ],
-            summary: 'AI/CCL概念領漲，冠軍亞翔四振幅181.8%。大型傳產(華固、台泥)表現不佳。'
-        },
-        2025: {
-            total: 94,
-            top10: [
-                { name: '良維十', type: '詢圈', high: 254.0, low: 117.9, amp: 115.5 },
-                { name: '旺矽五', type: '詢圈', high: 232.0, low: 96.5, amp: 140.4 },
-                { name: '哲固一', type: '競拍', high: 219.0, low: 107.0, amp: 104.7 },
-                { name: '健策五', type: '競拍', high: 198.0, low: 115.0, amp: 72.2 },
-                { name: '健策四', type: '詢圈', high: 197.0, low: 108.5, amp: 81.6 },
-                { name: '科妍三', type: '詢圈', high: 173.0, low: 110.0, amp: 57.3 },
-                { name: '旺宏二', type: '詢圈', high: 171.0, low: 87.0, amp: 96.6 },
-                { name: '邑錡二', type: '詢圈', high: 168.0, low: 121.0, amp: 38.8 },
-                { name: '漢磊五', type: '詢圈', high: 167.0, low: 110.2, amp: 51.5 },
-                { name: '事欣科五', type: '詢圈', high: 165.0, low: 99.0, amp: 66.7 }
-            ],
-            bottom10: [
-                { name: '安集五', type: '競拍', high: 98.7, low: 95.8, amp: 3.0 },
-                { name: '華建三', type: '詢圈', high: 98.8, low: 91.0, amp: 8.6 },
-                { name: '三洋實業三', type: '詢圈', high: 99.5, low: 95.3, amp: 4.4 },
-                { name: '鑫龍騰二', type: '詢圈', high: 99.5, low: 91.0, amp: 9.3 },
-                { name: '弘裕三', type: '競拍', high: 100.0, low: 89.5, amp: 11.7 },
-                { name: '台灣大四', type: '詢圈', high: 100.8, low: 97.7, amp: 3.2 },
-                { name: '倉和一', type: '競拍', high: 101.0, low: 91.8, amp: 10.0 },
-                { name: '華建四', type: '競拍', high: 101.5, low: 92.4, amp: 9.8 },
-                { name: '福貞三K', type: '競拍', high: 102.3, low: 99.3, amp: 3.0 },
-                { name: '冠星一K', type: '競拍', high: 103.2, low: 92.9, amp: 11.1 }
-            ],
-            summary: '冠軍振幅降至115.5%，多檔跌破面額(安集五、華建三等)。建材、紡織最弱。'
+    // 動態從競拍和詢圈資料生成年度績效
+    const years = [2022, 2023, 2024, 2025];
+    
+    // 合併競拍和詢圈資料
+    const allData = [];
+    
+    // 競拍資料
+    auctionRawData.forEach(d => {
+        if (d.marketHigh > 0 && d.marketLow > 0) {
+            let year = null;
+            if (d.openDate) {
+                if (typeof d.openDate === 'number') {
+                    const date = new Date((d.openDate - 25569) * 86400 * 1000);
+                    year = date.getFullYear();
+                } else if (typeof d.openDate === 'string') {
+                    const parts = d.openDate.split(/[\/\-]/);
+                    year = parseInt(parts[0]);
+                    if (year < 100) year += 2000;
+                }
+            }
+            if (year && year >= 2022 && year <= 2025) {
+                const amp = ((d.marketHigh - d.marketLow) / d.marketLow * 100);
+                allData.push({
+                    id: d.id,
+                    name: d.name,
+                    type: '競拍',
+                    high: d.marketHigh,
+                    low: d.marketLow,
+                    amp: amp,
+                    year: year,
+                    status: listedSet.has(d.id) ? '掛牌中' : '已下市'
+                });
+            }
         }
-    };
+    });
+    
+    // 詢圈資料
+    inquiryRawData.forEach(d => {
+        if (d.marketHigh > 0 && d.marketLow > 0) {
+            // 檢查是否已在競拍中
+            if (allData.find(a => a.id === d.id)) return;
+            
+            // 詢圈資料沒有openDate，嘗試從其他欄位推測年度
+            // 這裡簡化處理，假設有掛牌數據的詢圈都是較早年份
+            const amp = ((d.marketHigh - d.marketLow) / d.marketLow * 100);
+            // 由於詢圈沒有日期，這裡先跳過年度分組
+            // 未來可根據實際需求調整
+        }
+    });
+    
+    // 依年度分組並排序
+    years.forEach(year => {
+        const yearData = allData.filter(d => d.year === year);
+        const sortedByAmp = [...yearData].sort((a, b) => b.amp - a.amp);
+        
+        yearlyRankingData[year] = {
+            total: yearData.length,
+            top10: sortedByAmp.slice(0, 10),
+            bottom10: sortedByAmp.slice(-10).reverse(),
+            summary: generateYearSummary(year, sortedByAmp)
+        };
+    });
     
     // 預設顯示2022年
     showRankingYear(2022);
+}
+
+function generateYearSummary(year, sortedData) {
+    if (sortedData.length === 0) return '暫無資料';
+    const top = sortedData[0];
+    const auctionInTop10 = sortedData.slice(0, 10).filter(d => d.type === '競拍').length;
+    return `冠軍${top.name}振幅${top.amp.toFixed(1)}%，前10名競拍佔${auctionInTop10}檔。`;
 }
 
 function showRankingYear(year, event) {
@@ -2656,8 +2626,10 @@ function showRankingYear(year, event) {
                 <thead>
                     <tr>
                         <th>#</th>
+                        <th>代號</th>
                         <th>名稱</th>
                         <th>類型</th>
+                        <th>狀態</th>
                         <th>掛牌高</th>
                         <th>掛牌低</th>
                         <th>振幅</th>
@@ -2667,11 +2639,14 @@ function showRankingYear(year, event) {
     
     data.top10.forEach((item, idx) => {
         const typeClass = item.type === '競拍' ? 'auction' : 'inquiry';
+        const statusClass = item.status === '掛牌中' ? 'listed' : 'delisted';
         html += `
                     <tr>
                         <td><span class="rank-num">${idx + 1}</span></td>
+                        <td>${item.id || '-'}</td>
                         <td title="${item.name}">${item.name}</td>
                         <td><span class="ranking-type ${typeClass}">${item.type}</span></td>
+                        <td><span class="dimension-status-badge ${statusClass}">${item.status || '已下市'}</span></td>
                         <td class="val-gain">${item.high.toFixed(1)}</td>
                         <td>${item.low.toFixed(1)}</td>
                         <td class="val-amp">${item.amp.toFixed(1)}%</td>
@@ -2688,8 +2663,10 @@ function showRankingYear(year, event) {
                 <thead>
                     <tr>
                         <th>#</th>
+                        <th>代號</th>
                         <th>名稱</th>
                         <th>類型</th>
+                        <th>狀態</th>
                         <th>掛牌高</th>
                         <th>掛牌低</th>
                         <th>振幅</th>
@@ -2699,11 +2676,14 @@ function showRankingYear(year, event) {
     
     data.bottom10.forEach((item, idx) => {
         const typeClass = item.type === '競拍' ? 'auction' : 'inquiry';
+        const statusClass = item.status === '掛牌中' ? 'listed' : 'delisted';
         html += `
                     <tr>
                         <td><span class="rank-num">${idx + 1}</span></td>
+                        <td>${item.id || '-'}</td>
                         <td title="${item.name}">${item.name}</td>
                         <td><span class="ranking-type ${typeClass}">${item.type}</span></td>
+                        <td><span class="dimension-status-badge ${statusClass}">${item.status || '已下市'}</span></td>
                         <td class="val-gain">${item.high.toFixed(1)}</td>
                         <td>${item.low.toFixed(1)}</td>
                         <td class="val-amp">${item.amp.toFixed(1)}%</td>
@@ -2726,7 +2706,27 @@ function showRankingYear(year, event) {
 let realPerfData = {};
 
 function generateRealPerformance() {
-    // 硬編碼的月均成交績效數據
+    // 建立名稱到資料的對照表
+    const nameToData = {};
+    auctionRawData.forEach(d => {
+        if (d.name) nameToData[d.name] = { id: d.id, type: '競拍' };
+    });
+    inquiryRawData.forEach(d => {
+        if (d.name && !nameToData[d.name]) nameToData[d.name] = { id: d.id, type: '詢圈' };
+    });
+    
+    // 補充資料的輔助函數
+    const enrichItem = (item) => {
+        const lookup = nameToData[item.name] || {};
+        return {
+            ...item,
+            id: lookup.id || '',
+            type: lookup.type || '-',
+            status: lookup.id && listedSet.has(lookup.id) ? '掛牌中' : '已下市'
+        };
+    };
+    
+    // 硬編碼的月均成交績效數據（月均價無法從Excel取得）
     realPerfData = {
         2022: {
             total: 96,
@@ -2739,14 +2739,14 @@ function generateRealPerformance() {
                 { name: '台光電五', high: 388.0, low: 97.0, monthly: 382.4, pos: 98.1 },
                 { name: '台灣銘板一', high: 496.0, low: 113.5, monthly: 479.0, pos: 95.6 },
                 { name: '良維九', high: 208.0, low: 108.2, monthly: 203.0, pos: 95.0 }
-            ],
+            ].map(enrichItem),
             bottom5: [
                 { name: '海德威一', high: 133.3, low: 99.7, monthly: 99.8, pos: 0.4 },
                 { name: '立積一', high: 208.0, low: 99.5, monthly: 100.0, pos: 0.4 },
                 { name: '明安三', high: 145.0, low: 99.6, monthly: 99.9, pos: 0.6 },
                 { name: '風青二', high: 136.9, low: 99.7, monthly: 100.1, pos: 1.0 },
                 { name: '大樹二', high: 155.0, low: 99.3, monthly: 99.9, pos: 1.0 }
-            ],
+            ].map(enrichItem),
             summary: '平均位置37.9%偏低，38.5%標的目前處於極弱區(<20%)，多數曾經輝煌現已回落。'
         },
         2023: {
@@ -2760,14 +2760,14 @@ function generateRealPerformance() {
                 { name: '旭品三', high: 236.0, low: 115.3, monthly: 225.8, pos: 91.5 },
                 { name: '碩天二', high: 179.0, low: 111.0, monthly: 172.7, pos: 90.7 },
                 { name: '事欣科四', high: 199.0, low: 99.5, monthly: 185.6, pos: 86.5 }
-            ],
+            ].map(enrichItem),
             bottom5: [
                 { name: '森崴能源一', high: 167.0, low: 97.8, monthly: 98.4, pos: 0.9 },
                 { name: '高林一', high: 135.0, low: 99.8, monthly: 100.4, pos: 1.7 },
                 { name: '世德二', high: 156.0, low: 96.0, monthly: 97.1, pos: 1.9 },
                 { name: '弘帆一', high: 147.8, low: 100.0, monthly: 101.4, pos: 2.9 },
                 { name: '御嵿一', high: 159.0, low: 102.1, monthly: 104.1, pos: 3.6 }
-            ],
+            ].map(enrichItem),
             summary: '平均位置36%，36%標的極弱。冠軍泰茂四仍維持高檔(99%)，但多數已回落至低點。'
         },
         2024: {
@@ -2781,14 +2781,14 @@ function generateRealPerformance() {
                 { name: '雙鴻五', high: 151.0, low: 105.0, monthly: 145.8, pos: 88.7 },
                 { name: '嘉晶五', high: 110.9, low: 92.0, monthly: 108.6, pos: 87.9 },
                 { name: '南俊國際二', high: 155.0, low: 98.0, monthly: 147.0, pos: 85.9 }
-            ],
+            ].map(enrichItem),
             bottom5: [
                 { name: '倍力一', high: 111.0, low: 97.5, monthly: 97.5, pos: 0.0 },
                 { name: '六角三', high: 133.0, low: 99.8, monthly: 100.3, pos: 1.6 },
                 { name: '弘帆三', high: 155.0, low: 96.0, monthly: 98.1, pos: 3.5 },
                 { name: '耀勝一', high: 155.0, low: 97.6, monthly: 99.7, pos: 3.7 },
                 { name: '其陽二', high: 125.0, low: 95.1, monthly: 96.3, pos: 4.0 }
-            ],
+            ].map(enrichItem),
             summary: '平均位置36.8%，35%極弱。發行量大(139檔)導致籌碼分散，多數標的表現平淡。'
         },
         2025: {
@@ -2802,14 +2802,14 @@ function generateRealPerformance() {
                 { name: '聯合五', high: 126.7, low: 106.0, monthly: 123.0, pos: 82.5 },
                 { name: '旺矽五', high: 232.0, low: 96.5, monthly: 206.1, pos: 80.9 },
                 { name: '華電網五', high: 116.2, low: 100.2, monthly: 112.9, pos: 79.6 }
-            ],
+            ].map(enrichItem),
             bottom5: [
                 { name: '皇普四', high: 112.2, low: 92.0, monthly: 92.4, pos: 2.0 },
                 { name: '泓德能源二', high: 114.0, low: 89.9, monthly: 90.7, pos: 3.4 },
                 { name: '聯寶一', high: 110.0, low: 102.0, monthly: 102.8, pos: 9.2 },
                 { name: '平和環保一創', high: 118.0, low: 107.3, monthly: 108.3, pos: 9.3 },
                 { name: '倉和一', high: 101.0, low: 91.8, monthly: 92.8, pos: 10.8 }
-            ],
+            ].map(enrichItem),
             summary: '平均位置45.2%較高，極弱僅14.9%。2025年發行標的相對較新，尚未大幅回落。'
         }
     };
@@ -2871,7 +2871,10 @@ function showRealPerfYear(year, event) {
                 <thead>
                     <tr>
                         <th>#</th>
+                        <th>代號</th>
                         <th>名稱</th>
+                        <th>類型</th>
+                        <th>狀態</th>
                         <th>掛牌高</th>
                         <th>月均價</th>
                         <th>位置</th>
@@ -2880,10 +2883,15 @@ function showRealPerfYear(year, event) {
                 <tbody>`;
     
     data.top5.forEach((item, idx) => {
+        const typeClass = item.type === '競拍' ? 'auction' : 'inquiry';
+        const statusClass = item.status === '掛牌中' ? 'listed' : 'delisted';
         html += `
                     <tr>
                         <td>${idx + 1}</td>
+                        <td>${item.id || '-'}</td>
                         <td title="低:${item.low}">${item.name}</td>
+                        <td><span class="ranking-type ${typeClass}">${item.type || '-'}</span></td>
+                        <td><span class="dimension-status-badge ${statusClass}">${item.status || '已下市'}</span></td>
                         <td>${item.high.toFixed(1)}</td>
                         <td>${item.monthly.toFixed(1)}</td>
                         <td><span class="realperf-pos high">${item.pos.toFixed(1)}%</span></td>
@@ -2900,7 +2908,10 @@ function showRealPerfYear(year, event) {
                 <thead>
                     <tr>
                         <th>#</th>
+                        <th>代號</th>
                         <th>名稱</th>
+                        <th>類型</th>
+                        <th>狀態</th>
                         <th>掛牌高</th>
                         <th>月均價</th>
                         <th>位置</th>
@@ -2909,10 +2920,15 @@ function showRealPerfYear(year, event) {
                 <tbody>`;
     
     data.bottom5.forEach((item, idx) => {
+        const typeClass = item.type === '競拍' ? 'auction' : 'inquiry';
+        const statusClass = item.status === '掛牌中' ? 'listed' : 'delisted';
         html += `
                     <tr>
                         <td>${idx + 1}</td>
+                        <td>${item.id || '-'}</td>
                         <td title="低:${item.low}">${item.name}</td>
+                        <td><span class="ranking-type ${typeClass}">${item.type || '-'}</span></td>
+                        <td><span class="dimension-status-badge ${statusClass}">${item.status || '已下市'}</span></td>
                         <td>${item.high.toFixed(1)}</td>
                         <td>${item.monthly.toFixed(1)}</td>
                         <td><span class="realperf-pos low">${item.pos.toFixed(1)}%</span></td>

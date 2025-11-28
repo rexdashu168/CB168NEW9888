@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.59 (UI優化版)</title>
+<title>AI智能可轉債競拍系統 v3.59 (供給量分析強化版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="embedded_data.js" onerror="console.warn('embedded_data.js not found, using defaults.')"></script>
 
@@ -845,8 +845,8 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     border-radius: 3px;
     font-size: 8px;
 }
-.realperf-pos.high { background: #c8e6c9; color: #2e7d32; }
-.realperf-pos.low { background: #ffcdd2; color: #c62828; }
+.realperf-pos.high { background: #ffcdd2; color: #c62828; }
+.realperf-pos.low { background: #c8e6c9; color: #2e7d32; }
 
 .realperf-summary {
     margin-top: 10px;
@@ -856,6 +856,120 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     font-size: 10px;
     color: #0277bd;
     line-height: 1.5;
+}
+
+/* v3.59 新增：競拍盈虧勝率分析 */
+.profitloss-section {
+    background: linear-gradient(135deg, #fce4ec 0%, #f8bbd9 100%);
+    border: 2px solid #e91e63;
+    border-radius: 12px;
+    padding: 15px;
+    margin-top: 15px;
+}
+.profitloss-header {
+    font-size: 14px;
+    font-weight: bold;
+    color: #ad1457;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.profitloss-tabs {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+.profitloss-tab {
+    padding: 6px 12px;
+    border: none;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: #f48fb1;
+    color: #880e4f;
+}
+.profitloss-tab:hover {
+    background: #f06292;
+}
+.profitloss-tab.active {
+    background: #c2185b;
+    color: white;
+}
+.profitloss-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 12px;
+}
+@media (max-width: 500px) {
+    .profitloss-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+.profitloss-stat-box {
+    background: white;
+    border-radius: 8px;
+    padding: 10px 8px;
+    text-align: center;
+    border: 1px solid #f48fb1;
+}
+.profitloss-stat-label {
+    font-size: 9px;
+    color: #666;
+    margin-bottom: 4px;
+}
+.profitloss-stat-value {
+    font-size: 16px;
+    font-weight: 900;
+}
+.profitloss-stat-value.win { color: #c62828; }
+.profitloss-stat-value.lose { color: #2e7d32; }
+.profitloss-stat-value.neutral { color: #1565c0; }
+.profitloss-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9px;
+    background: white;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-top: 10px;
+}
+.profitloss-table th {
+    background: #c2185b;
+    color: white;
+    padding: 6px 4px;
+    font-weight: 700;
+    text-align: center;
+    font-size: 8px;
+}
+.profitloss-table td {
+    padding: 5px 4px;
+    text-align: center;
+    border-bottom: 1px solid #fce4ec;
+    font-weight: 600;
+}
+.profitloss-table tr:hover {
+    background: #fce4ec;
+}
+.profitloss-table .year-cell {
+    font-weight: 700;
+    color: #ad1457;
+}
+.profitloss-table .val-win { color: #c62828; font-weight: 700; }
+.profitloss-table .val-lose { color: #2e7d32; font-weight: 700; }
+.profitloss-insight {
+    margin-top: 10px;
+    padding: 10px;
+    background: white;
+    border-left: 4px solid #e91e63;
+    border-radius: 0 8px 8px 0;
+    font-size: 11px;
+    line-height: 1.6;
+    color: #880e4f;
 }
 
 /* v3.57 維度分析總覽 - 藍綠色系 */
@@ -1196,6 +1310,20 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
                 </div>
             </div>
             <div class="form-section">
+                <h3>💰 競拍盈虧勝率分析</h3>
+                <div id="profitlossSection" class="profitloss-section">
+                    <div class="profitloss-header">📊 以得標價vs掛牌價計算盈虧機率</div>
+                    <div class="profitloss-tabs">
+                        <button type="button" class="profitloss-tab active" onclick="showProfitLossYear(2022, event)">2022</button>
+                        <button type="button" class="profitloss-tab" onclick="showProfitLossYear(2023, event)">2023</button>
+                        <button type="button" class="profitloss-tab" onclick="showProfitLossYear(2024, event)">2024</button>
+                        <button type="button" class="profitloss-tab" onclick="showProfitLossYear(2025, event)">2025</button>
+                        <button type="button" class="profitloss-tab" onclick="showProfitLossYear('all', event)">全部</button>
+                    </div>
+                    <div id="profitlossContent">載入中...</div>
+                </div>
+            </div>
+            <div class="form-section">
                 <h3>📊 維度分析總覽</h3>
                 <div id="dimensionSection" class="dimension-section">
                     <div class="dimension-header">🔍 各維度區間統計（點擊展開查看詳細標的）</div>
@@ -1221,7 +1349,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     <div class="result-panel">
         <div id="welcomeMsg" class="welcome-message">
             <h2>歡迎使用AI智能競拍評估系統</h2>
-            <p style="margin-top:10px; color:#666; font-size: 14px;">v3.59 UI優化版<br>✅ 搜尋卡片緊湊化<br>✅ 排行表格加入代號/類型/狀態<br>✅ 動態讀取08工作表判斷掛牌狀態</p>
+            <p style="margin-top:10px; color:#666; font-size: 14px;">v3.59 供給量分析強化版<br>✅ 新增承銷進行中/董事會公告案件<br>✅ 未來體量預估 vs 歷史比較<br>✅ 競拍盈虧勝率分析</p>
             <div class="stats-summary" id="statsSummary"></div>
             
             <!-- v3.58 市場趨勢分析 -->
@@ -1411,6 +1539,8 @@ async function loadStatistics() {
         const sheetHighLow = getSheetData(['00', '掛牌', '名稱過濾']);
         const sheetAllCB = getSheetData(['01', 'ALLCB基本']);
         const sheetListed = getSheetData(['08']); // 掛牌中清單
+        const sheetPending = getSheetData(['06', '發行案件']); // v3.59 新增：承銷進行中
+        const sheetBoard = getSheetData(['07', '董事會']); // v3.59 新增：董事會決議
         
         if (!sheetAuction || sheetAuction.length === 0) throw new Error("找不到競拍資料分頁");
 
@@ -1421,6 +1551,46 @@ async function loadStatistics() {
                 if (id) listedSet.add(String(id).replace('.0','').trim());
             });
             console.log(`載入掛牌中清單: ${listedSet.size} 筆`);
+        }
+        
+        // v3.59 新增：處理承銷進行中資料
+        window.pendingIssueData = [];
+        if (sheetPending && sheetPending.length > 0) {
+            sheetPending.forEach(row => {
+                const size = safeFloat(row['發行量']);
+                if (size > 0) {
+                    window.pendingIssueData.push({
+                        id: row['標的代號'] || row['股票代號'] || '',
+                        name: row['發行標的'] || '',
+                        type: row['詢圈/競拍'] || '',
+                        size: size,
+                        broker: row['發行券商'] || '',
+                        rating: row['TCRI/擔保'] || '',
+                        listDate: row['掛牌日'] || ''
+                    });
+                }
+            });
+            console.log(`載入承銷進行中: ${window.pendingIssueData.length} 筆, 總額 ${window.pendingIssueData.reduce((s,d)=>s+d.size,0).toFixed(1)} 億`);
+        }
+        
+        // v3.59 新增：處理董事會決議資料
+        window.boardApprovalData = [];
+        if (sheetBoard && sheetBoard.length > 0) {
+            sheetBoard.forEach(row => {
+                const size = safeFloat(row['發行量']);
+                if (size > 0) {
+                    window.boardApprovalData.push({
+                        id: row['CB代碼'] || row['股鰾代號'] || '',
+                        name: row['發行標的'] || '',
+                        type: row['詢圈/競價'] || '',
+                        size: size,
+                        broker: row['主辦券商'] || '',
+                        rating: row['TCRI/擔保'] || '',
+                        boardDate: row['董事會通過'] || ''
+                    });
+                }
+            });
+            console.log(`載入董事會決議: ${window.boardApprovalData.length} 筆, 總額 ${window.boardApprovalData.reduce((s,d)=>s+d.size,0).toFixed(1)} 億`);
         }
 
         // 建立掛牌高低對照表
@@ -2316,6 +2486,7 @@ function initializeUI() {
     generateSupplyAnalysis(); // v3.54 新增
     generateYearlyRanking();  // v3.55 新增
     generateRealPerformance(); // v3.56 新增
+    generateProfitLossAnalysis(); // v3.59 新增
     generateDimensionAnalysis(); // v3.57 新增
     generateMarketTrendAnalysis(); // v3.58 新增
 }
@@ -2342,113 +2513,179 @@ function showStatsSummary() {
 
 // v3.54 新增：市場供給量分析
 function generateSupplyAnalysis() {
-    // 合併競拍和詢圈資料
-    const allCBData = [...auctionRawData];
-    inquiryRawData.forEach(d => {
-        if (!allCBData.find(a => a.id === d.id)) {
-            allCBData.push(d);
-        }
-    });
-    
-    // 為每筆資料計算半年度
-    const getHalfYear = (dateVal) => {
-        if (!dateVal) return null;
-        let date;
-        if (typeof dateVal === 'number') {
-            date = new Date((dateVal - 25569) * 86400 * 1000);
-        } else if (dateVal instanceof Date) {
-            date = dateVal;
-        } else {
-            date = new Date(dateVal);
-        }
-        if (isNaN(date.getTime())) return null;
-        const year = date.getFullYear();
-        const month = date.getMonth() + 1;
-        return month <= 6 ? `${year}H1` : `${year}H2`;
-    };
-    
-    // 統計各半年度數據
-    const periods = ['2022H1', '2022H2', '2023H1', '2023H2', '2024H1', '2024H2', '2025H1', '2025H2'];
-    const periodStats = {};
-    
-    periods.forEach(period => {
-        periodStats[period] = {
-            total: 0,
-            inquiry: 0,
-            auction: 0,
-            issueAmount: 0,
-            gains: [],
-            avgGain: 0,
-            medianGain: 0,
-            above50: 0,
-            range3050: 0,
-            range1030: 0,
-            below10: 0
-        };
-    });
-    
-    // 競拍資料統計
-    auctionRawData.forEach(d => {
-        const halfYear = getHalfYear(d.openDate);
-        if (halfYear && periodStats[halfYear]) {
-            periodStats[halfYear].total++;
-            periodStats[halfYear].auction++;
-            periodStats[halfYear].issueAmount += safeFloat(d.issueSize);
-            if (d.marketHigh > 0) {
-                const gain = d.marketHigh - 100;
-                periodStats[halfYear].gains.push(gain);
-            }
-        }
-    });
-    
-    // 詢圈資料統計 (需要從01工作表取得掛牌日期)
-    // 這裡用簡化方式：用inquiryRawData中的資料
-    inquiryRawData.forEach(d => {
-        // 嘗試從各種可能的日期欄位取得
-        const dateFields = ['openDate', 'listDate', 'date'];
-        let halfYear = null;
-        for (const field of dateFields) {
-            if (d[field]) {
-                halfYear = getHalfYear(d[field]);
-                if (halfYear) break;
-            }
-        }
-        
-        if (halfYear && periodStats[halfYear]) {
-            // 檢查是否已在競拍中計算過
-            const existsInAuction = auctionRawData.find(a => a.id === d.id);
-            if (!existsInAuction) {
-                periodStats[halfYear].total++;
-                periodStats[halfYear].inquiry++;
-                periodStats[halfYear].issueAmount += safeFloat(d.issueSize);
-                if (d.marketHigh > 0) {
-                    const gain = d.marketHigh - 100;
-                    periodStats[halfYear].gains.push(gain);
-                }
-            }
-        }
-    });
-    
-    // 計算各期統計值
-    periods.forEach(period => {
-        const ps = periodStats[period];
-        if (ps.gains.length > 0) {
-            ps.avgGain = ps.gains.reduce((a, b) => a + b, 0) / ps.gains.length;
-            const sorted = [...ps.gains].sort((a, b) => a - b);
-            ps.medianGain = sorted[Math.floor(sorted.length / 2)];
-            ps.above50 = ps.gains.filter(g => g >= 50).length;
-            ps.range3050 = ps.gains.filter(g => g >= 30 && g < 50).length;
-            ps.range1030 = ps.gains.filter(g => g >= 10 && g < 30).length;
-            ps.below10 = ps.gains.filter(g => g < 10).length;
-        }
-    });
-    
     // 判斷當前期間
     const now = new Date();
-    const currentPeriod = now.getMonth() < 6 ? `${now.getFullYear()}H1` : `${now.getFullYear()}H2`;
+    const currentYear = now.getFullYear();
+    const currentPeriod = now.getMonth() < 6 ? `${currentYear}H1` : `${currentYear}H2`;
     
-    // 生成表格HTML
-    let html = `
+    // 硬編碼的歷史統計數據（從分析結果）
+    const hardcodedStats = {
+        '2022H1': { total: 49, inquiry: 21, auction: 28, issueAmount: 496.0, avgGain: 88.1, medianGain: 62.0, above50: 26, range3050: 7, range1030: 15, below10: 1 },
+        '2022H2': { total: 47, inquiry: 22, auction: 25, issueAmount: 314.5, avgGain: 66.9, medianGain: 48.0, above50: 22, range3050: 12, range1030: 7, below10: 5 },
+        '2023H1': { total: 36, inquiry: 20, auction: 16, issueAmount: 400.5, avgGain: 86.7, medianGain: 61.5, above50: 21, range3050: 7, range1030: 7, below10: 1 },
+        '2023H2': { total: 55, inquiry: 27, auction: 28, issueAmount: 592.2, avgGain: 64.8, medianGain: 39.9, above50: 27, range3050: 8, range1030: 17, below10: 3 },
+        '2024H1': { total: 44, inquiry: 23, auction: 21, issueAmount: 358.7, avgGain: 61.5, medianGain: 53.5, above50: 24, range3050: 11, range1030: 9, below10: 0 },
+        '2024H2': { total: 95, inquiry: 41, auction: 54, issueAmount: 1028.8, avgGain: 33.4, medianGain: 22.1, above50: 19, range3050: 14, range1030: 54, below10: 8 },
+        '2025H1': { total: 50, inquiry: 27, auction: 23, issueAmount: 584.5, avgGain: 29.3, medianGain: 18.8, above50: 9, range3050: 4, range1030: 22, below10: 15 },
+        '2025H2': { total: 45, inquiry: 19, auction: 26, issueAmount: 293.3, avgGain: 21.8, medianGain: 18.5, above50: 3, range3050: 7, range1030: 24, below10: 10 }
+    };
+    
+    const periods = ['2022H1', '2022H2', '2023H1', '2023H2', '2024H1', '2024H2', '2025H1', '2025H2'];
+    
+    // === 計算未來體量 ===
+    const pendingData = window.pendingIssueData || [];
+    const boardData = window.boardApprovalData || [];
+    
+    const pendingTotal = pendingData.reduce((s, d) => s + d.size, 0);
+    const pendingAuction = pendingData.filter(d => d.type === '競拍').reduce((s, d) => s + d.size, 0);
+    const pendingInquiry = pendingData.filter(d => d.type === '詢圈').reduce((s, d) => s + d.size, 0);
+    
+    const boardTotal = boardData.reduce((s, d) => s + d.size, 0);
+    const boardAuction = boardData.filter(d => d.type === '競拍' || d.type === '競價').reduce((s, d) => s + d.size, 0);
+    const boardInquiry = boardData.filter(d => d.type === '詢圈').reduce((s, d) => s + d.size, 0);
+    
+    const futureTotal = pendingTotal + boardTotal;
+    
+    // 計算2025年已發行量
+    const issued2025 = (hardcodedStats['2025H1']?.issueAmount || 0) + (hardcodedStats['2025H2']?.issueAmount || 0);
+    
+    // 歷史年度統計（用於比較）
+    const yearlyTotals = {
+        2022: hardcodedStats['2022H1'].issueAmount + hardcodedStats['2022H2'].issueAmount,
+        2023: hardcodedStats['2023H1'].issueAmount + hardcodedStats['2023H2'].issueAmount,
+        2024: hardcodedStats['2024H1'].issueAmount + hardcodedStats['2024H2'].issueAmount
+    };
+    
+    const historicalAvg = (yearlyTotals[2022] + yearlyTotals[2023] + yearlyTotals[2024]) / 3;
+    const projectedTotal = issued2025 + futureTotal;
+    const exceedPercent = ((projectedTotal / yearlyTotals[2024]) - 1) * 100;
+    
+    // === 生成HTML ===
+    let html = '';
+    
+    // 第一區塊：未來供給量分析（新增）
+    html += `
+    <div style="background:linear-gradient(135deg,#fff3e0,#ffe0b2); border:2px solid #ff6f00; border-radius:10px; padding:12px; margin-bottom:15px;">
+        <div style="font-size:13px; font-weight:bold; color:#e65100; margin-bottom:10px;">🚀 未來供給量預估</div>
+        
+        <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:10px;">
+            <div style="background:white; padding:10px; border-radius:8px; text-align:center; border-left:4px solid #4CAF50;">
+                <div style="font-size:10px; color:#666;">2025年已發行</div>
+                <div style="font-size:18px; font-weight:900; color:#2e7d32;">${issued2025.toFixed(0)}億</div>
+            </div>
+            <div style="background:white; padding:10px; border-radius:8px; text-align:center; border-left:4px solid #ff9800;">
+                <div style="font-size:10px; color:#666;">承銷進行中(${pendingData.length}檔)</div>
+                <div style="font-size:18px; font-weight:900; color:#e65100;">${pendingTotal.toFixed(0)}億</div>
+            </div>
+            <div style="background:white; padding:10px; border-radius:8px; text-align:center; border-left:4px solid #9c27b0;">
+                <div style="font-size:10px; color:#666;">董事會公告(${boardData.length}檔)</div>
+                <div style="font-size:18px; font-weight:900; color:#7b1fa2;">${boardTotal.toFixed(0)}億</div>
+            </div>
+        </div>
+        
+        <div style="background:white; padding:10px; border-radius:8px; margin-bottom:10px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <span style="font-size:11px; color:#666;">承銷進行中</span>
+                <span style="font-size:11px;">競拍 <b style="color:#ff6f00;">${pendingAuction.toFixed(0)}億</b> ｜ 詢圈 <b style="color:#1565c0;">${pendingInquiry.toFixed(0)}億</b></span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:11px; color:#666;">董事會公告</span>
+                <span style="font-size:11px;">競拍 <b style="color:#ff6f00;">${boardAuction.toFixed(0)}億</b> ｜ 詢圈 <b style="color:#1565c0;">${boardInquiry.toFixed(0)}億</b></span>
+            </div>
+        </div>
+        
+        <div style="background:#ffebee; padding:10px; border-radius:8px; border-left:4px solid #f44336;">
+            <div style="font-size:12px; font-weight:bold; color:#c62828; margin-bottom:5px;">📊 2025年預估總量 vs 歷史比較</div>
+            <div style="font-size:11px; color:#c62828; line-height:1.6;">
+                預估總量: <b>${projectedTotal.toFixed(0)}億</b> (已發行${issued2025.toFixed(0)} + 待發行${futureTotal.toFixed(0)})<br>
+                2024年全年: <b>${yearlyTotals[2024].toFixed(0)}億</b> ｜ 
+                ${exceedPercent >= 0 ? 
+                    `<span style="color:#c62828;">超過${exceedPercent.toFixed(0)}%</span>` : 
+                    `<span style="color:#2e7d32;">低於${Math.abs(exceedPercent).toFixed(0)}%</span>`}<br>
+                近3年均值: <b>${historicalAvg.toFixed(0)}億</b> (2022:${yearlyTotals[2022].toFixed(0)} / 2023:${yearlyTotals[2023].toFixed(0)} / 2024:${yearlyTotals[2024].toFixed(0)})
+            </div>
+        </div>
+    </div>`;
+    
+    // 第二區塊：承銷進行中明細（可收合）
+    if (pendingData.length > 0) {
+        html += `
+        <div style="margin-bottom:10px;">
+            <div onclick="toggleSupplyDetail('pending')" style="cursor:pointer; background:#fff3e0; padding:8px 12px; border-radius:6px; display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:11px; font-weight:bold; color:#e65100;">📋 承銷進行中明細 (${pendingData.length}檔)</span>
+                <span id="pending-toggle" style="color:#e65100;">▼</span>
+            </div>
+            <div id="pending-detail" style="display:none; background:#fffde7; padding:8px; border-radius:0 0 6px 6px; max-height:200px; overflow-y:auto;">
+                <table style="width:100%; border-collapse:collapse; font-size:9px;">
+                    <tr style="background:#ff9800; color:white;">
+                        <th style="padding:4px;">代號</th>
+                        <th style="padding:4px;">名稱</th>
+                        <th style="padding:4px;">類型</th>
+                        <th style="padding:4px;">規模</th>
+                        <th style="padding:4px;">券商</th>
+                        <th style="padding:4px;">掛牌日</th>
+                    </tr>`;
+        pendingData.forEach(d => {
+            const typeColor = d.type === '競拍' ? '#ff6f00' : '#1565c0';
+            let listDateStr = '-';
+            if (d.listDate) {
+                if (typeof d.listDate === 'string') listDateStr = d.listDate.substring(0, 10);
+                else if (d.listDate instanceof Date) listDateStr = d.listDate.toISOString().substring(0, 10);
+            }
+            html += `
+                    <tr style="border-bottom:1px solid #ffe0b2;">
+                        <td style="padding:3px; text-align:center;">${d.id}</td>
+                        <td style="padding:3px;">${d.name}</td>
+                        <td style="padding:3px; text-align:center; color:${typeColor}; font-weight:bold;">${d.type}</td>
+                        <td style="padding:3px; text-align:right;">${d.size}億</td>
+                        <td style="padding:3px;">${d.broker}</td>
+                        <td style="padding:3px; text-align:center;">${listDateStr}</td>
+                    </tr>`;
+        });
+        html += `</table></div></div>`;
+    }
+    
+    // 第三區塊：董事會公告明細（可收合）
+    if (boardData.length > 0) {
+        html += `
+        <div style="margin-bottom:15px;">
+            <div onclick="toggleSupplyDetail('board')" style="cursor:pointer; background:#f3e5f5; padding:8px 12px; border-radius:6px; display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:11px; font-weight:bold; color:#7b1fa2;">🏛️ 董事會公告明細 (${boardData.length}檔)</span>
+                <span id="board-toggle" style="color:#7b1fa2;">▼</span>
+            </div>
+            <div id="board-detail" style="display:none; background:#fce4ec; padding:8px; border-radius:0 0 6px 6px; max-height:200px; overflow-y:auto;">
+                <table style="width:100%; border-collapse:collapse; font-size:9px;">
+                    <tr style="background:#9c27b0; color:white;">
+                        <th style="padding:4px;">代號</th>
+                        <th style="padding:4px;">名稱</th>
+                        <th style="padding:4px;">類型</th>
+                        <th style="padding:4px;">規模</th>
+                        <th style="padding:4px;">券商</th>
+                        <th style="padding:4px;">董事會通過</th>
+                    </tr>`;
+        boardData.forEach(d => {
+            const typeColor = (d.type === '競拍' || d.type === '競價') ? '#ff6f00' : '#1565c0';
+            let boardDateStr = '-';
+            if (d.boardDate) {
+                if (typeof d.boardDate === 'string') boardDateStr = d.boardDate.substring(0, 10);
+                else if (d.boardDate instanceof Date) boardDateStr = d.boardDate.toISOString().substring(0, 10);
+            }
+            html += `
+                    <tr style="border-bottom:1px solid #f8bbd9;">
+                        <td style="padding:3px; text-align:center;">${d.id}</td>
+                        <td style="padding:3px;">${d.name}</td>
+                        <td style="padding:3px; text-align:center; color:${typeColor}; font-weight:bold;">${d.type}</td>
+                        <td style="padding:3px; text-align:right;">${d.size > 0 ? d.size + '億' : '-'}</td>
+                        <td style="padding:3px;">${d.broker}</td>
+                        <td style="padding:3px; text-align:center;">${boardDateStr}</td>
+                    </tr>`;
+        });
+        html += `</table></div></div>`;
+    }
+    
+    // 第四區塊：歷史統計表格
+    html += `
+    <div style="font-size:12px; font-weight:bold; color:#e65100; margin-bottom:8px;">📈 歷史發行量與績效趨勢</div>
     <table class="supply-table">
         <thead>
             <tr>
@@ -2465,23 +2702,10 @@ function generateSupplyAnalysis() {
         </thead>
         <tbody>`;
     
-    // 硬編碼的統計數據（從分析結果）
-    const hardcodedStats = {
-        '2022H1': { total: 49, inquiry: 21, auction: 28, issueAmount: 496.0, avgGain: 88.1, medianGain: 62.0, above50: 26, range3050: 7, range1030: 15, below10: 1 },
-        '2022H2': { total: 47, inquiry: 22, auction: 25, issueAmount: 314.5, avgGain: 66.9, medianGain: 48.0, above50: 22, range3050: 12, range1030: 7, below10: 5 },
-        '2023H1': { total: 36, inquiry: 20, auction: 16, issueAmount: 400.5, avgGain: 86.7, medianGain: 61.5, above50: 21, range3050: 7, range1030: 7, below10: 1 },
-        '2023H2': { total: 55, inquiry: 27, auction: 28, issueAmount: 592.2, avgGain: 64.8, medianGain: 39.9, above50: 27, range3050: 8, range1030: 17, below10: 3 },
-        '2024H1': { total: 44, inquiry: 23, auction: 21, issueAmount: 358.7, avgGain: 61.5, medianGain: 53.5, above50: 24, range3050: 11, range1030: 9, below10: 0 },
-        '2024H2': { total: 95, inquiry: 41, auction: 54, issueAmount: 1028.8, avgGain: 33.4, medianGain: 22.1, above50: 19, range3050: 14, range1030: 54, below10: 8 },
-        '2025H1': { total: 50, inquiry: 27, auction: 23, issueAmount: 584.5, avgGain: 29.3, medianGain: 18.8, above50: 9, range3050: 4, range1030: 22, below10: 15 },
-        '2025H2': { total: 45, inquiry: 19, auction: 26, issueAmount: 293.3, avgGain: 21.8, medianGain: 18.5, above50: 3, range3050: 7, range1030: 24, below10: 10 }
-    };
-    
     periods.forEach(period => {
-        const ps = hardcodedStats[period] || periodStats[period];
+        const ps = hardcodedStats[period];
         const isHighlight = period === '2024H2';
         const isCurrent = period === currentPeriod;
-        const isWarning = period === '2025H1' || period === '2025H2';
         
         let rowClass = '';
         if (isHighlight) rowClass = 'highlight-row';
@@ -2507,18 +2731,34 @@ function generateSupplyAnalysis() {
     
     html += `</tbody></table>`;
     
-    // 加入警示說明
+    // 警示說明
+    const warningMsg = exceedPercent >= 20 ? 
+        `⚠️ <strong>供給壓力警示：</strong>2025年預估發行量${projectedTotal.toFixed(0)}億，較2024年增加${exceedPercent.toFixed(0)}%，市場消化壓力極大，選股難度持續提高。` :
+        (exceedPercent >= 0 ?
+            `📊 <strong>供給量觀察：</strong>2025年預估發行量${projectedTotal.toFixed(0)}億，略高於2024年水準，市場仍需留意供給壓力。` :
+            `📊 <strong>供給量觀察：</strong>2025年預估發行量${projectedTotal.toFixed(0)}億，較2024年減少，供給壓力相對緩解。`);
+    
     html += `
-    <div class="supply-warning">
-        <strong>⚠️ 供給壓力警示：</strong>2024H2發行量1,028.8億創新高，但平均漲幅僅33.4%，
-        漲幅≥50%的比例從54%驟降至20%。2025年持續呈現「量增價跌」格局，選股難度提高。
-    </div>
+    <div class="supply-warning">${warningMsg}</div>
     <div class="supply-note">
         📌 <strong>觀察重點：</strong>漲幅欄位紅色表示低於35%，綠色表示高於60%。
-        供給量過大時，多數標的漲幅集中在10-30%區間，高報酬機會減少。
+        承銷進行中案件通常1-2個月內掛牌，董事會公告案件則需3-6個月完成發行程序。
     </div>`;
     
     document.getElementById('supplyTable').innerHTML = html;
+}
+
+// 切換供給明細顯示
+function toggleSupplyDetail(type) {
+    const detail = document.getElementById(type + '-detail');
+    const toggle = document.getElementById(type + '-toggle');
+    if (detail.style.display === 'none') {
+        detail.style.display = 'block';
+        toggle.textContent = '▲';
+    } else {
+        detail.style.display = 'none';
+        toggle.textContent = '▼';
+    }
 }
 
 // v3.55 新增：年度績效排行
@@ -2866,7 +3106,7 @@ function showRealPerfYear(year, event) {
     
     <div class="realperf-grid">
         <div class="realperf-box top">
-            <div class="realperf-box-title">🌟 月均接近高點 TOP5</div>
+            <div class="realperf-box-title">🔴 月均接近高點 TOP5</div>
             <table class="realperf-table">
                 <thead>
                     <tr>
@@ -2876,6 +3116,7 @@ function showRealPerfYear(year, event) {
                         <th>類型</th>
                         <th>狀態</th>
                         <th>掛牌高</th>
+                        <th>掛牌低</th>
                         <th>月均價</th>
                         <th>位置</th>
                     </tr>
@@ -2889,10 +3130,11 @@ function showRealPerfYear(year, event) {
                     <tr>
                         <td>${idx + 1}</td>
                         <td>${item.id || '-'}</td>
-                        <td title="低:${item.low}">${item.name}</td>
+                        <td>${item.name}</td>
                         <td><span class="ranking-type ${typeClass}">${item.type || '-'}</span></td>
                         <td><span class="dimension-status-badge ${statusClass}">${item.status || '已下市'}</span></td>
                         <td>${item.high.toFixed(1)}</td>
+                        <td>${item.low.toFixed(1)}</td>
                         <td>${item.monthly.toFixed(1)}</td>
                         <td><span class="realperf-pos high">${item.pos.toFixed(1)}%</span></td>
                     </tr>`;
@@ -2903,7 +3145,7 @@ function showRealPerfYear(year, event) {
             </table>
         </div>
         <div class="realperf-box bottom">
-            <div class="realperf-box-title">⚠️ 月均接近低點 BOTTOM5</div>
+            <div class="realperf-box-title">🟢 月均接近低點 BOTTOM5</div>
             <table class="realperf-table">
                 <thead>
                     <tr>
@@ -2913,6 +3155,7 @@ function showRealPerfYear(year, event) {
                         <th>類型</th>
                         <th>狀態</th>
                         <th>掛牌高</th>
+                        <th>掛牌低</th>
                         <th>月均價</th>
                         <th>位置</th>
                     </tr>
@@ -2926,10 +3169,11 @@ function showRealPerfYear(year, event) {
                     <tr>
                         <td>${idx + 1}</td>
                         <td>${item.id || '-'}</td>
-                        <td title="低:${item.low}">${item.name}</td>
+                        <td>${item.name}</td>
                         <td><span class="ranking-type ${typeClass}">${item.type || '-'}</span></td>
                         <td><span class="dimension-status-badge ${statusClass}">${item.status || '已下市'}</span></td>
                         <td>${item.high.toFixed(1)}</td>
+                        <td>${item.low.toFixed(1)}</td>
                         <td>${item.monthly.toFixed(1)}</td>
                         <td><span class="realperf-pos low">${item.pos.toFixed(1)}%</span></td>
                     </tr>`;
@@ -2945,6 +3189,240 @@ function showRealPerfYear(year, event) {
     </div>`;
     
     document.getElementById('realperfContent').innerHTML = html;
+}
+
+// v3.59 新增：競拍盈虧勝率分析
+let profitLossData = {};
+
+function generateProfitLossAnalysis() {
+    // 從競拍資料計算盈虧
+    const years = [2022, 2023, 2024, 2025];
+    
+    years.forEach(year => {
+        // 篩選該年度有完整數據的競拍
+        const yearData = auctionRawData.filter(d => {
+            if (!d.openDate || !d.minBidPrice || d.minBidPrice <= 0) return false;
+            if (!d.marketHigh || d.marketHigh <= 0 || !d.marketLow || d.marketLow <= 0) return false;
+            
+            let dataYear = null;
+            if (typeof d.openDate === 'number') {
+                const date = new Date((d.openDate - 25569) * 86400 * 1000);
+                dataYear = date.getFullYear();
+            } else if (typeof d.openDate === 'string') {
+                const parts = d.openDate.split(/[\/\-]/);
+                dataYear = parseInt(parts[0]);
+                if (dataYear < 100) dataYear += 2000;
+            }
+            return dataYear === year;
+        });
+        
+        // 計算各項指標
+        let winByHigh = 0, winByLow = 0, winByAvg = 0;
+        let totalProfitHigh = 0, totalProfitLow = 0, totalProfitAvg = 0;
+        let details = [];
+        
+        yearData.forEach(d => {
+            const minBid = d.minBidPrice;
+            const avgBid = d.avgBidPrice || minBid;
+            const high = d.marketHigh;
+            const low = d.marketLow;
+            
+            // 以最低得標計算
+            const profitByHigh = ((high - minBid) / minBid * 100);
+            const profitByLow = ((low - minBid) / minBid * 100);
+            const profitByAvgBid = ((high - avgBid) / avgBid * 100);
+            
+            if (high > minBid) winByHigh++;
+            if (low > minBid) winByLow++;
+            if (high > avgBid) winByAvg++;
+            
+            totalProfitHigh += profitByHigh;
+            totalProfitLow += profitByLow;
+            totalProfitAvg += profitByAvgBid;
+            
+            details.push({
+                id: d.id,
+                name: d.name,
+                minBid: minBid,
+                avgBid: avgBid,
+                high: high,
+                low: low,
+                profitByHigh: profitByHigh,
+                profitByLow: profitByLow,
+                status: listedSet.has(d.id) ? '掛牌中' : '已下市'
+            });
+        });
+        
+        const count = yearData.length;
+        profitLossData[year] = {
+            total: count,
+            winRateByHigh: count > 0 ? (winByHigh / count * 100) : 0,
+            winRateByLow: count > 0 ? (winByLow / count * 100) : 0,
+            winRateByAvg: count > 0 ? (winByAvg / count * 100) : 0,
+            avgProfitHigh: count > 0 ? (totalProfitHigh / count) : 0,
+            avgProfitLow: count > 0 ? (totalProfitLow / count) : 0,
+            avgProfitAvg: count > 0 ? (totalProfitAvg / count) : 0,
+            details: details.sort((a, b) => b.profitByHigh - a.profitByHigh)
+        };
+    });
+    
+    // 計算全部年度總計
+    let allData = [];
+    years.forEach(y => {
+        if (profitLossData[y]) {
+            allData = allData.concat(profitLossData[y].details);
+        }
+    });
+    
+    const allCount = allData.length;
+    let allWinHigh = 0, allWinLow = 0, allWinAvg = 0;
+    let allProfitHigh = 0, allProfitLow = 0, allProfitAvg = 0;
+    
+    allData.forEach(d => {
+        if (d.high > d.minBid) allWinHigh++;
+        if (d.low > d.minBid) allWinLow++;
+        if (d.high > d.avgBid) allWinAvg++;
+        allProfitHigh += d.profitByHigh;
+        allProfitLow += d.profitByLow;
+    });
+    
+    profitLossData['all'] = {
+        total: allCount,
+        winRateByHigh: allCount > 0 ? (allWinHigh / allCount * 100) : 0,
+        winRateByLow: allCount > 0 ? (allWinLow / allCount * 100) : 0,
+        winRateByAvg: allCount > 0 ? (allWinAvg / allCount * 100) : 0,
+        avgProfitHigh: allCount > 0 ? (allProfitHigh / allCount) : 0,
+        avgProfitLow: allCount > 0 ? (allProfitLow / allCount) : 0,
+        details: allData.sort((a, b) => b.profitByHigh - a.profitByHigh)
+    };
+    
+    // 預設顯示2022年
+    showProfitLossYear(2022);
+}
+
+function showProfitLossYear(year, event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    
+    // 更新tab狀態
+    document.querySelectorAll('.profitloss-tab').forEach(tab => {
+        tab.classList.remove('active');
+        if ((year === 'all' && tab.textContent === '全部') || tab.textContent == year) {
+            tab.classList.add('active');
+        }
+    });
+    
+    const data = profitLossData[year];
+    if (!data) return;
+    
+    const yearLabel = year === 'all' ? '全部(2022-2025)' : year + '年';
+    
+    // 統計區塊
+    let html = `
+    <div class="profitloss-stats">
+        <div class="profitloss-stat-box">
+            <div class="profitloss-stat-label">📊 樣本數</div>
+            <div class="profitloss-stat-value neutral">${data.total}檔</div>
+        </div>
+        <div class="profitloss-stat-box">
+            <div class="profitloss-stat-label">🎯 最低得標vs掛牌高<br>勝率</div>
+            <div class="profitloss-stat-value win">${data.winRateByHigh.toFixed(1)}%</div>
+        </div>
+        <div class="profitloss-stat-box">
+            <div class="profitloss-stat-label">⚠️ 最低得標vs掛牌低<br>勝率</div>
+            <div class="profitloss-stat-value ${data.winRateByLow >= 50 ? 'win' : 'lose'}">${data.winRateByLow.toFixed(1)}%</div>
+        </div>
+        <div class="profitloss-stat-box">
+            <div class="profitloss-stat-label">📈 平均得標vs掛牌高<br>勝率</div>
+            <div class="profitloss-stat-value win">${data.winRateByAvg.toFixed(1)}%</div>
+        </div>
+    </div>
+    
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+        <div style="background:white; padding:10px; border-radius:8px; text-align:center;">
+            <div style="font-size:10px; color:#666;">以最低得標計 平均報酬(掛牌高)</div>
+            <div style="font-size:18px; font-weight:900; color:${data.avgProfitHigh >= 0 ? '#c62828' : '#2e7d32'};">${data.avgProfitHigh >= 0 ? '+' : ''}${data.avgProfitHigh.toFixed(1)}%</div>
+        </div>
+        <div style="background:white; padding:10px; border-radius:8px; text-align:center;">
+            <div style="font-size:10px; color:#666;">以最低得標計 平均報酬(掛牌低)</div>
+            <div style="font-size:18px; font-weight:900; color:${data.avgProfitLow >= 0 ? '#c62828' : '#2e7d32'};">${data.avgProfitLow >= 0 ? '+' : ''}${data.avgProfitLow.toFixed(1)}%</div>
+        </div>
+    </div>
+    
+    <div style="font-size:11px; font-weight:bold; color:#ad1457; margin:10px 0 5px 0;">📋 ${yearLabel} 盈虧明細 TOP10/BOTTOM10</div>
+    <table class="profitloss-table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>代號</th>
+                <th>名稱</th>
+                <th>狀態</th>
+                <th>最低得標</th>
+                <th>掛牌高</th>
+                <th>掛牌低</th>
+                <th>報酬(高)</th>
+                <th>報酬(低)</th>
+            </tr>
+        </thead>
+        <tbody>`;
+    
+    // TOP10
+    const top10 = data.details.slice(0, 10);
+    top10.forEach((item, idx) => {
+        const statusClass = item.status === '掛牌中' ? 'listed' : 'delisted';
+        html += `
+            <tr>
+                <td>${idx + 1}</td>
+                <td>${item.id || '-'}</td>
+                <td>${item.name || '-'}</td>
+                <td><span class="dimension-status-badge ${statusClass}">${item.status}</span></td>
+                <td>${item.minBid.toFixed(2)}</td>
+                <td>${item.high.toFixed(1)}</td>
+                <td>${item.low.toFixed(1)}</td>
+                <td class="val-win">+${item.profitByHigh.toFixed(1)}%</td>
+                <td class="${item.profitByLow >= 0 ? 'val-win' : 'val-lose'}">${item.profitByLow >= 0 ? '+' : ''}${item.profitByLow.toFixed(1)}%</td>
+            </tr>`;
+    });
+    
+    // 分隔線
+    html += `<tr style="background:#fce4ec;"><td colspan="9" style="text-align:center; font-size:8px; color:#ad1457;">── BOTTOM 10 ──</td></tr>`;
+    
+    // BOTTOM10
+    const bottom10 = data.details.slice(-10).reverse();
+    bottom10.forEach((item, idx) => {
+        const statusClass = item.status === '掛牌中' ? 'listed' : 'delisted';
+        html += `
+            <tr>
+                <td>${data.details.length - 9 + idx}</td>
+                <td>${item.id || '-'}</td>
+                <td>${item.name || '-'}</td>
+                <td><span class="dimension-status-badge ${statusClass}">${item.status}</span></td>
+                <td>${item.minBid.toFixed(2)}</td>
+                <td>${item.high.toFixed(1)}</td>
+                <td>${item.low.toFixed(1)}</td>
+                <td class="${item.profitByHigh >= 0 ? 'val-win' : 'val-lose'}">${item.profitByHigh >= 0 ? '+' : ''}${item.profitByHigh.toFixed(1)}%</td>
+                <td class="${item.profitByLow >= 0 ? 'val-win' : 'val-lose'}">${item.profitByLow >= 0 ? '+' : ''}${item.profitByLow.toFixed(1)}%</td>
+            </tr>`;
+    });
+    
+    html += `</tbody></table>`;
+    
+    // 洞察
+    const insight = data.winRateByLow >= 80 ? 
+        `${yearLabel}競拍勝率極高，即使以掛牌低計算仍有${data.winRateByLow.toFixed(0)}%機率獲利。` :
+        (data.winRateByLow >= 50 ?
+            `${yearLabel}競拍勝率尚可，以掛牌低計算有${data.winRateByLow.toFixed(0)}%機率獲利，但需注意選股。` :
+            `${yearLabel}競拍風險較高，以掛牌低計算僅${data.winRateByLow.toFixed(0)}%機率獲利，建議嚴控投標價格。`);
+    
+    html += `
+    <div class="profitloss-insight">
+        <strong>💡 Rex大叔分析：</strong>${insight}
+        以最低得標價計算，賣在掛牌高可獲利${data.avgProfitHigh.toFixed(1)}%，賣在掛牌低則${data.avgProfitLow >= 0 ? '仍有' + data.avgProfitLow.toFixed(1) + '%獲利空間' : '平均虧損' + Math.abs(data.avgProfitLow).toFixed(1) + '%'}。
+    </div>`;
+    
+    document.getElementById('profitlossContent').innerHTML = html;
 }
 
 // v3.57 新增：維度分析總覽

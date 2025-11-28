@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.60 (月均成交整合版)</title>
+<title>AI智能可轉債競拍系統 v3.59 (完整區間趨勢分析)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="embedded_data.js" onerror="console.warn('embedded_data.js not found, using defaults.')"></script>
 
@@ -1213,13 +1213,13 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.60)...</div>
+    <div>🔄 系統啟動中 (v3.59)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
 <div class="container" style="display: none;">
     <div class="header">
-        <h1>🤖 AI智能可轉債競拍系統 <span class="version-badge">v3.60</span></h1>
+        <h1>🤖 AI智能可轉債競拍系統 <span class="version-badge">v3.59</span></h1>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -1349,7 +1349,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     <div class="result-panel">
         <div id="welcomeMsg" class="welcome-message">
             <h2>歡迎使用AI智能競拍評估系統</h2>
-            <p style="margin-top:10px; color:#666; font-size: 14px;">v3.60 月均成交整合版<br>✅ 競拍盈虧分析新增月均成交報酬計算<br>✅ 從00工作表整合月均成交價格欄位<br>✅ 完整10個維度區間統計</p>
+            <p style="margin-top:10px; color:#666; font-size: 14px;">v3.59 完整區間趨勢分析版<br>✅ 10個維度完整區間統計(含05工作表設定)<br>✅ 2010-2025年多年度完整數據<br>✅ 發行次數完整到第10次</p>
             <div class="stats-summary" id="statsSummary"></div>
             
             <!-- v3.58 市場趨勢分析 -->
@@ -1444,8 +1444,7 @@ const FIELD_ALIASES = {
     'bidShares': ['投標張數', '投標總張數'],
     'bidMultiple': ['投標倍數'],
     'avgBidShares': ['投標均張', '平均投標張數'],
-    'auctionShares': ['競拍張數', '競拍總張數'],
-    'monthlyAvg': ['月均成交', '月均價', '平均成交價', '月均成交價']
+    'auctionShares': ['競拍張數', '競拍總張數']
 };
 
 function normalizeKeys(obj) {
@@ -1599,21 +1598,13 @@ async function loadStatistics() {
             console.log(`載入董事會決議: ${window.boardApprovalData.length} 筆, 總額 ${window.boardApprovalData.reduce((s,d)=>s+d.size,0).toFixed(1)} 億`);
         }
 
-        // v3.60 修改：建立掛牌高低+月均成交對照表（從00工作表）
+        // 建立掛牌高低對照表
         const highLowMap = {};
         if (sheetHighLow && sheetHighLow.length > 0) {
             sheetHighLow.forEach(row => {
                 let id = row['代號'] || row['CB代號'] || row['股票代號'];
-                if(id) {
-                    const normalizedId = String(id).replace('.0','').trim();
-                    highLowMap[normalizedId] = {
-                        ...row,
-                        // 明確提取月均成交欄位
-                        monthlyAvg: safeFloat(row['月均成交']) || safeFloat(row['月均價']) || 0
-                    };
-                }
+                if(id) highLowMap[String(id).replace('.0','').trim()] = row;
             });
-            console.log(`載入00工作表: ${Object.keys(highLowMap).length} 筆，含月均成交數據`);
         }
         
         // 讀取詢圈資料 (從01工作表)
@@ -1735,7 +1726,6 @@ async function loadStatistics() {
                 'avgPremium': normalizePremium(getSmartValue(row, 'avgPremium')),
                 'marketHigh': safeFloat(getSmartValue(hlRow, 'marketHigh')) || safeFloat(getSmartValue(row, 'marketHigh')), 
                 'marketLow': safeFloat(getSmartValue(hlRow, 'marketLow')) || safeFloat(getSmartValue(row, 'marketLow')),
-                'monthlyAvg': safeFloat(hlRow.monthlyAvg) || safeFloat(getSmartValue(hlRow, 'monthlyAvg')) || 0, // v3.60 新增：月均成交
                 'qualifiedCount': safeFloat(getSmartValue(row, 'qualifiedCount')),
                 'bidShares': safeFloat(getSmartValue(row, 'bidShares')),
                 'bidMultiple': safeFloat(getSmartValue(row, 'bidMultiple')),
@@ -3206,7 +3196,7 @@ function showRealPerfYear(year, event) {
     document.getElementById('realperfContent').innerHTML = html;
 }
 
-// v3.60 修改：競拍盈虧勝率分析（新增月均成交）
+// v3.59 新增：競拍盈虧勝率分析
 let profitLossData = {};
 
 function generateProfitLossAnalysis() {
@@ -3231,10 +3221,9 @@ function generateProfitLossAnalysis() {
             return dataYear === year;
         });
         
-        // v3.60 修改：計算各項指標（新增月均成交）
-        let winByHigh = 0, winByLow = 0, winByAvg = 0, winByMonthly = 0;
-        let totalProfitHigh = 0, totalProfitLow = 0, totalProfitAvg = 0, totalProfitMonthly = 0;
-        let countWithMonthly = 0; // 有月均成交數據的筆數
+        // 計算各項指標
+        let winByHigh = 0, winByLow = 0, winByAvg = 0;
+        let totalProfitHigh = 0, totalProfitLow = 0, totalProfitAvg = 0;
         let details = [];
         
         yearData.forEach(d => {
@@ -3242,21 +3231,11 @@ function generateProfitLossAnalysis() {
             const avgBid = d.avgBidPrice || minBid;
             const high = d.marketHigh;
             const low = d.marketLow;
-            const monthlyAvg = d.monthlyAvg || 0; // v3.60 新增
             
             // 以最低得標計算
             const profitByHigh = ((high - minBid) / minBid * 100);
             const profitByLow = ((low - minBid) / minBid * 100);
             const profitByAvgBid = ((high - avgBid) / avgBid * 100);
-            
-            // v3.60 新增：月均成交報酬計算
-            let profitByMonthly = 0;
-            if (monthlyAvg > 0) {
-                profitByMonthly = ((monthlyAvg - minBid) / minBid * 100);
-                if (monthlyAvg > minBid) winByMonthly++;
-                totalProfitMonthly += profitByMonthly;
-                countWithMonthly++;
-            }
             
             if (high > minBid) winByHigh++;
             if (low > minBid) winByLow++;
@@ -3273,10 +3252,8 @@ function generateProfitLossAnalysis() {
                 avgBid: avgBid,
                 high: high,
                 low: low,
-                monthlyAvg: monthlyAvg, // v3.60 新增
                 profitByHigh: profitByHigh,
                 profitByLow: profitByLow,
-                profitByMonthly: profitByMonthly, // v3.60 新增
                 status: listedSet.has(d.id) ? '掛牌中' : '已下市'
             });
         });
@@ -3287,17 +3264,14 @@ function generateProfitLossAnalysis() {
             winRateByHigh: count > 0 ? (winByHigh / count * 100) : 0,
             winRateByLow: count > 0 ? (winByLow / count * 100) : 0,
             winRateByAvg: count > 0 ? (winByAvg / count * 100) : 0,
-            winRateByMonthly: countWithMonthly > 0 ? (winByMonthly / countWithMonthly * 100) : 0, // v3.60 新增
             avgProfitHigh: count > 0 ? (totalProfitHigh / count) : 0,
             avgProfitLow: count > 0 ? (totalProfitLow / count) : 0,
             avgProfitAvg: count > 0 ? (totalProfitAvg / count) : 0,
-            avgProfitMonthly: countWithMonthly > 0 ? (totalProfitMonthly / countWithMonthly) : 0, // v3.60 新增
-            countWithMonthly: countWithMonthly, // v3.60 新增
             details: details.sort((a, b) => b.profitByHigh - a.profitByHigh)
         };
     });
     
-    // v3.60 修改：計算全部年度總計（新增月均成交）
+    // 計算全部年度總計
     let allData = [];
     years.forEach(y => {
         if (profitLossData[y]) {
@@ -3306,9 +3280,8 @@ function generateProfitLossAnalysis() {
     });
     
     const allCount = allData.length;
-    let allWinHigh = 0, allWinLow = 0, allWinAvg = 0, allWinMonthly = 0;
-    let allProfitHigh = 0, allProfitLow = 0, allProfitAvg = 0, allProfitMonthly = 0;
-    let allCountWithMonthly = 0;
+    let allWinHigh = 0, allWinLow = 0, allWinAvg = 0;
+    let allProfitHigh = 0, allProfitLow = 0, allProfitAvg = 0;
     
     allData.forEach(d => {
         if (d.high > d.minBid) allWinHigh++;
@@ -3316,13 +3289,6 @@ function generateProfitLossAnalysis() {
         if (d.high > d.avgBid) allWinAvg++;
         allProfitHigh += d.profitByHigh;
         allProfitLow += d.profitByLow;
-        
-        // v3.60 新增：月均成交統計
-        if (d.monthlyAvg > 0) {
-            if (d.monthlyAvg > d.minBid) allWinMonthly++;
-            allProfitMonthly += d.profitByMonthly;
-            allCountWithMonthly++;
-        }
     });
     
     profitLossData['all'] = {
@@ -3330,11 +3296,8 @@ function generateProfitLossAnalysis() {
         winRateByHigh: allCount > 0 ? (allWinHigh / allCount * 100) : 0,
         winRateByLow: allCount > 0 ? (allWinLow / allCount * 100) : 0,
         winRateByAvg: allCount > 0 ? (allWinAvg / allCount * 100) : 0,
-        winRateByMonthly: allCountWithMonthly > 0 ? (allWinMonthly / allCountWithMonthly * 100) : 0, // v3.60 新增
         avgProfitHigh: allCount > 0 ? (allProfitHigh / allCount) : 0,
         avgProfitLow: allCount > 0 ? (allProfitLow / allCount) : 0,
-        avgProfitMonthly: allCountWithMonthly > 0 ? (allProfitMonthly / allCountWithMonthly) : 0, // v3.60 新增
-        countWithMonthly: allCountWithMonthly, // v3.60 新增
         details: allData.sort((a, b) => b.profitByHigh - a.profitByHigh)
     };
     
@@ -3360,9 +3323,8 @@ function showProfitLossYear(year, event) {
     if (!data) return;
     
     const yearLabel = year === 'all' ? '全部(2022-2025)' : year + '年';
-    const hasMonthlyData = data.countWithMonthly && data.countWithMonthly > 0;
     
-    // v3.60 修改：統計區塊（新增月均成交勝率）
+    // 統計區塊
     let html = `
     <div class="profitloss-stats">
         <div class="profitloss-stat-box">
@@ -3378,12 +3340,12 @@ function showProfitLossYear(year, event) {
             <div class="profitloss-stat-value ${data.winRateByLow >= 50 ? 'win' : 'lose'}">${data.winRateByLow.toFixed(1)}%</div>
         </div>
         <div class="profitloss-stat-box">
-            <div class="profitloss-stat-label">💹 最低得標vs月均價<br>勝率${hasMonthlyData ? '(' + data.countWithMonthly + '筆)' : ''}</div>
-            <div class="profitloss-stat-value ${hasMonthlyData ? (data.winRateByMonthly >= 50 ? 'win' : 'lose') : 'neutral'}">${hasMonthlyData ? data.winRateByMonthly.toFixed(1) + '%' : '-'}</div>
+            <div class="profitloss-stat-label">📈 平均得標vs掛牌高<br>勝率</div>
+            <div class="profitloss-stat-value win">${data.winRateByAvg.toFixed(1)}%</div>
         </div>
     </div>
     
-    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:10px;">
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
         <div style="background:white; padding:10px; border-radius:8px; text-align:center;">
             <div style="font-size:10px; color:#666;">以最低得標計 平均報酬(掛牌高)</div>
             <div style="font-size:18px; font-weight:900; color:${data.avgProfitHigh >= 0 ? '#c62828' : '#2e7d32'};">${data.avgProfitHigh >= 0 ? '+' : ''}${data.avgProfitHigh.toFixed(1)}%</div>
@@ -3391,10 +3353,6 @@ function showProfitLossYear(year, event) {
         <div style="background:white; padding:10px; border-radius:8px; text-align:center;">
             <div style="font-size:10px; color:#666;">以最低得標計 平均報酬(掛牌低)</div>
             <div style="font-size:18px; font-weight:900; color:${data.avgProfitLow >= 0 ? '#c62828' : '#2e7d32'};">${data.avgProfitLow >= 0 ? '+' : ''}${data.avgProfitLow.toFixed(1)}%</div>
-        </div>
-        <div style="background:white; padding:10px; border-radius:8px; text-align:center; border:2px solid #1565c0;">
-            <div style="font-size:10px; color:#1565c0; font-weight:bold;">以最低得標計 平均報酬(月均價)</div>
-            <div style="font-size:18px; font-weight:900; color:${hasMonthlyData ? (data.avgProfitMonthly >= 0 ? '#c62828' : '#2e7d32') : '#999'};">${hasMonthlyData ? ((data.avgProfitMonthly >= 0 ? '+' : '') + data.avgProfitMonthly.toFixed(1) + '%') : '-'}</div>
         </div>
     </div>
     
@@ -3409,10 +3367,8 @@ function showProfitLossYear(year, event) {
                 <th>最低得標</th>
                 <th>掛牌高</th>
                 <th>掛牌低</th>
-                <th>月均價</th>
                 <th>報酬(高)</th>
                 <th>報酬(低)</th>
-                <th>報酬(月均)</th>
             </tr>
         </thead>
         <tbody>`;
@@ -3421,7 +3377,6 @@ function showProfitLossYear(year, event) {
     const top10 = data.details.slice(0, 10);
     top10.forEach((item, idx) => {
         const statusClass = item.status === '掛牌中' ? 'listed' : 'delisted';
-        const hasMonthly = item.monthlyAvg > 0;
         html += `
             <tr>
                 <td>${idx + 1}</td>
@@ -3431,21 +3386,18 @@ function showProfitLossYear(year, event) {
                 <td>${item.minBid.toFixed(2)}</td>
                 <td>${item.high.toFixed(1)}</td>
                 <td>${item.low.toFixed(1)}</td>
-                <td style="color:#1565c0;">${hasMonthly ? item.monthlyAvg.toFixed(1) : '-'}</td>
                 <td class="val-win">+${item.profitByHigh.toFixed(1)}%</td>
                 <td class="${item.profitByLow >= 0 ? 'val-win' : 'val-lose'}">${item.profitByLow >= 0 ? '+' : ''}${item.profitByLow.toFixed(1)}%</td>
-                <td class="${hasMonthly ? (item.profitByMonthly >= 0 ? 'val-win' : 'val-lose') : ''}" style="color:${hasMonthly ? '' : '#999'};">${hasMonthly ? ((item.profitByMonthly >= 0 ? '+' : '') + item.profitByMonthly.toFixed(1) + '%') : '-'}</td>
             </tr>`;
     });
     
     // 分隔線
-    html += `<tr style="background:#fce4ec;"><td colspan="11" style="text-align:center; font-size:8px; color:#ad1457;">── BOTTOM 10 ──</td></tr>`;
+    html += `<tr style="background:#fce4ec;"><td colspan="9" style="text-align:center; font-size:8px; color:#ad1457;">── BOTTOM 10 ──</td></tr>`;
     
     // BOTTOM10
     const bottom10 = data.details.slice(-10).reverse();
     bottom10.forEach((item, idx) => {
         const statusClass = item.status === '掛牌中' ? 'listed' : 'delisted';
-        const hasMonthly = item.monthlyAvg > 0;
         html += `
             <tr>
                 <td>${data.details.length - 9 + idx}</td>
@@ -3455,44 +3407,24 @@ function showProfitLossYear(year, event) {
                 <td>${item.minBid.toFixed(2)}</td>
                 <td>${item.high.toFixed(1)}</td>
                 <td>${item.low.toFixed(1)}</td>
-                <td style="color:#1565c0;">${hasMonthly ? item.monthlyAvg.toFixed(1) : '-'}</td>
                 <td class="${item.profitByHigh >= 0 ? 'val-win' : 'val-lose'}">${item.profitByHigh >= 0 ? '+' : ''}${item.profitByHigh.toFixed(1)}%</td>
                 <td class="${item.profitByLow >= 0 ? 'val-win' : 'val-lose'}">${item.profitByLow >= 0 ? '+' : ''}${item.profitByLow.toFixed(1)}%</td>
-                <td class="${hasMonthly ? (item.profitByMonthly >= 0 ? 'val-win' : 'val-lose') : ''}" style="color:${hasMonthly ? '' : '#999'};">${hasMonthly ? ((item.profitByMonthly >= 0 ? '+' : '') + item.profitByMonthly.toFixed(1) + '%') : '-'}</td>
             </tr>`;
     });
     
     html += `</tbody></table>`;
     
     // 洞察
-    // v3.60 修改：洞察加入月均成交分析
-    const hasMonthlyData = data.countWithMonthly && data.countWithMonthly > 0;
-    let insight = data.winRateByLow >= 80 ? 
+    const insight = data.winRateByLow >= 80 ? 
         `${yearLabel}競拍勝率極高，即使以掛牌低計算仍有${data.winRateByLow.toFixed(0)}%機率獲利。` :
         (data.winRateByLow >= 50 ?
             `${yearLabel}競拍勝率尚可，以掛牌低計算有${data.winRateByLow.toFixed(0)}%機率獲利，但需注意選股。` :
             `${yearLabel}競拍風險較高，以掛牌低計算僅${data.winRateByLow.toFixed(0)}%機率獲利，建議嚴控投標價格。`);
     
-    // 月均成交分析補充
-    let monthlyInsight = '';
-    if (hasMonthlyData) {
-        const monthlyWinRate = data.winRateByMonthly;
-        const monthlyProfit = data.avgProfitMonthly;
-        if (monthlyWinRate >= 70) {
-            monthlyInsight = `月均成交勝率${monthlyWinRate.toFixed(0)}%表現優異，`;
-        } else if (monthlyWinRate >= 50) {
-            monthlyInsight = `月均成交勝率${monthlyWinRate.toFixed(0)}%尚可，`;
-        } else {
-            monthlyInsight = `月均成交勝率僅${monthlyWinRate.toFixed(0)}%偏低，`;
-        }
-        monthlyInsight += `平均報酬${monthlyProfit >= 0 ? '+' : ''}${monthlyProfit.toFixed(1)}%，更貼近實際交易結果。`;
-    }
-    
     html += `
     <div class="profitloss-insight">
         <strong>💡 Rex大叔分析：</strong>${insight}
         以最低得標價計算，賣在掛牌高可獲利${data.avgProfitHigh.toFixed(1)}%，賣在掛牌低則${data.avgProfitLow >= 0 ? '仍有' + data.avgProfitLow.toFixed(1) + '%獲利空間' : '平均虧損' + Math.abs(data.avgProfitLow).toFixed(1) + '%'}。
-        ${hasMonthlyData ? '<br><strong>📊 月均成交參考：</strong>' + monthlyInsight : ''}
     </div>`;
     
     document.getElementById('profitlossContent').innerHTML = html;

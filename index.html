@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.60 (手機版邊界修復)</title>
+<title>AI智能可轉債競拍系統 v3.61 (CBAS智能篩選版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="embedded_data.js" onerror="console.warn('embedded_data.js not found, using defaults.')"></script>
 
@@ -1227,13 +1227,13 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.60)...</div>
+    <div>🔄 系統啟動中 (v3.61)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
 <div class="container" style="display: none;">
     <div class="header">
-        <h1>🤖 AI智能可轉債競拍系統 <span class="version-badge">v3.60</span></h1>
+        <h1>🤖 AI智能可轉債競拍系統 <span class="version-badge">v3.61</span></h1>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -1352,6 +1352,65 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
                 <div id="dimensionContent" class="dimension-content">載入中...</div>
             </div>
         </div>
+        <div class="form-section">
+            <h3>🎯 CBAS智能篩選</h3>
+            <div id="cbasSection" class="cbas-section">
+                <div class="cbas-header">💎 找出低權利金投資機會（從工作表11 CBAS報價表篩選）</div>
+                <div class="cbas-filter-row">
+                    <div class="cbas-filter-group">
+                        <label>擔保類型</label>
+                        <select id="cbasGuaranteeFilter">
+                            <option value="all" selected>全部</option>
+                            <option value="guaranteed">有擔保(銀行)</option>
+                            <option value="unguaranteed">無擔保(TCRI)</option>
+                        </select>
+                    </div>
+                    <div class="cbas-filter-group">
+                        <label>剩餘年期 ≥</label>
+                        <select id="cbasYearFilter">
+                            <option value="0">不限</option>
+                            <option value="0.5">0.5年</option>
+                            <option value="1" selected>1年</option>
+                            <option value="1.5">1.5年</option>
+                            <option value="2">2年</option>
+                        </select>
+                    </div>
+                    <div class="cbas-filter-group">
+                        <label>權利金 ≤</label>
+                        <select id="cbasPremiumFilter">
+                            <option value="3">3元</option>
+                            <option value="5" selected>5元</option>
+                            <option value="10">10元</option>
+                            <option value="15">15元</option>
+                            <option value="999">不限</option>
+                        </select>
+                    </div>
+                    <div class="cbas-filter-group">
+                        <label>溢價率 ≤</label>
+                        <select id="cbasDiscountFilter">
+                            <option value="5">5%</option>
+                            <option value="10">10%</option>
+                            <option value="20" selected>20%</option>
+                            <option value="999">不限</option>
+                        </select>
+                    </div>
+                    <div class="cbas-filter-group">
+                        <label>流通餘額 ≥</label>
+                        <select id="cbasRemainingFilter">
+                            <option value="0">不限</option>
+                            <option value="30">30%</option>
+                            <option value="50" selected>50%</option>
+                            <option value="70">70%</option>
+                            <option value="90">90%</option>
+                        </select>
+                    </div>
+                    <button type="button" class="cbas-filter-btn" onclick="filterCBAS()">🔍 篩選</button>
+                </div>
+                <div id="cbasResults" class="cbas-results">
+                    <div class="cbas-no-result">請點擊「篩選」按鈕開始搜尋</div>
+                </div>
+            </div>
+        </div>
         <div id="smartReminders" style="display:none; margin: 15px 0; padding: 12px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 8px;">
             <div style="font-weight: bold; color: #856404; font-size: 13px;">💡 Rex大叔提醒</div>
             <div id="reminderContent" style="font-size: 12px; line-height: 1.7; color: #856404; margin-top:5px;"></div>
@@ -1363,7 +1422,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 <div class="result-panel">
     <div id="welcomeMsg" class="welcome-message">
         <h2>歡迎使用AI智能競拍評估系統</h2>
-        <p style="margin-top:10px; color:#666; font-size: 14px;">v3.60 手機版邊界修復版<br>✅ 手機直式版面增加明顯邊框<br>✅ 10個維度完整區間統計<br>✅ 2010-2025年多年度完整數據</p>
+        <p style="margin-top:10px; color:#666; font-size: 14px;">v3.61 CBAS智能篩選版<br>✅ 新增CBAS低權利金投資機會篩選<br>✅ 依剩餘年期/權利金/溢價率篩選<br>✅ 10個維度完整區間統計</p>
         <div class="stats-summary" id="statsSummary"></div>
         
         <!-- v3.58 市場趨勢分析 -->
@@ -1612,6 +1671,56 @@ async function loadStatistics() {
                 }
             });
             console.log(`載入董事會決議: ${window.boardApprovalData.length} 筆, 總額 ${window.boardApprovalData.reduce((s,d)=>s+d.size,0).toFixed(1)} 億`);
+        }
+
+        // v3.61 新增：讀取CBAS報價表 (工作表11)
+        const sheetCBAS = getSheetData(['11', 'CBAS報價']);
+        window.cbasData = [];
+        if (sheetCBAS && sheetCBAS.length > 0) {
+            sheetCBAS.forEach(row => {
+                const name = row['可轉債名稱'];
+                const code = row['可轉債代碼'];
+                if (!name || !code) return;
+                
+                const premium = safeFloat(row['權利金(佰元報價)']);
+                const remainingYears = safeFloat(row['剩餘年期']);
+                const discountRate = safeFloat(row['溢(折)價%']);
+                const ratingRaw = row['擔保銀行/信用評等(TCRI)'] || '';
+                
+                // 判斷擔保類型：數字為TCRI無擔保，非數字為銀行有擔保
+                const isGuaranteed = ratingRaw && !/^\d+$/.test(ratingRaw.trim());
+                const guaranteeType = isGuaranteed ? 'guaranteed' : 'unguaranteed';
+                const guaranteeDisplay = isGuaranteed ? ratingRaw : `TCRI ${ratingRaw}`;
+                
+                window.cbasData.push({
+                    name: name,
+                    code: String(code).replace('.0', ''),
+                    rating: ratingRaw,
+                    guaranteeType: guaranteeType,
+                    guaranteeDisplay: guaranteeDisplay,
+                    isGuaranteed: isGuaranteed,
+                    premium: premium,
+                    expiryDate: row['選擇權到期日'] || '',
+                    sellbackPrice: safeFloat(row['賣回價格(A)']),
+                    sellbackDate: row['賣回日期(B)'] || '',
+                    remainingYears: remainingYears,
+                    discountRateC: safeFloat(row['折現率(C)']),
+                    premiumRef: safeFloat(row['權利金參考價']),
+                    stockPrice: safeFloat(row['現股參考價']),
+                    conversionPrice: safeFloat(row['轉換價格']),
+                    cbConversionValue: safeFloat(row['CB轉換價值']),
+                    cbRefPrice: safeFloat(row['CB參考價']),
+                    discountPct: discountRate,
+                    volatility120: safeFloat(row['股價波動率120天%']),
+                    volatility240: safeFloat(row['股價波動率240天%']),
+                    remainingRatio: safeFloat(row['流通餘額占發行總額%']),
+                    issueAmount: safeFloat(row['原始發行量']),
+                    industry: row['產業'] || ''
+                });
+            });
+            const guaranteedCount = window.cbasData.filter(d => d.isGuaranteed).length;
+            const unguaranteedCount = window.cbasData.filter(d => !d.isGuaranteed).length;
+            console.log(`載入CBAS報價表: ${window.cbasData.length} 筆 (有擔保${guaranteedCount}筆, 無擔保${unguaranteedCount}筆)`);
         }
 
         // 建立掛牌高低對照表
@@ -5116,6 +5225,198 @@ document.getElementById('evaluationForm').addEventListener('submit', function(e)
         console.error(err);
     }
 });
+
+// v3.61 CBAS智能篩選函數
+function filterCBAS() {
+    const guaranteeFilter = document.getElementById('cbasGuaranteeFilter').value;
+    const yearFilter = parseFloat(document.getElementById('cbasYearFilter').value);
+    const premiumFilter = parseFloat(document.getElementById('cbasPremiumFilter').value);
+    const discountFilter = parseFloat(document.getElementById('cbasDiscountFilter').value);
+    const remainingFilter = parseFloat(document.getElementById('cbasRemainingFilter').value);
+    
+    const cbasData = window.cbasData || [];
+    if (cbasData.length === 0) {
+        document.getElementById('cbasResults').innerHTML = '<div class="cbas-no-result">⚠️ CBAS資料尚未載入，請稍候</div>';
+        return;
+    }
+    
+    // 篩選符合條件的標的
+    const filtered = cbasData.filter(d => {
+        // 擔保類型篩選
+        if (guaranteeFilter === 'guaranteed' && !d.isGuaranteed) return false;
+        if (guaranteeFilter === 'unguaranteed' && d.isGuaranteed) return false;
+        if (d.remainingYears < yearFilter) return false;
+        if (d.premium > premiumFilter) return false;
+        if (discountFilter < 999 && d.discountPct > discountFilter) return false;
+        if (d.remainingRatio < remainingFilter) return false;
+        return true;
+    });
+    
+    // 依權利金排序（由低到高）
+    filtered.sort((a, b) => a.premium - b.premium);
+    
+    // 統計數據
+    const avgPremium = filtered.length > 0 ? filtered.reduce((s, d) => s + d.premium, 0) / filtered.length : 0;
+    const avgYears = filtered.length > 0 ? filtered.reduce((s, d) => s + d.remainingYears, 0) / filtered.length : 0;
+    const avgDiscount = filtered.length > 0 ? filtered.reduce((s, d) => s + d.discountPct, 0) / filtered.length : 0;
+    const avgRemaining = filtered.length > 0 ? filtered.reduce((s, d) => s + d.remainingRatio, 0) / filtered.length : 0;
+    
+    // 分類統計：有擔保vs無擔保
+    const guaranteedList = filtered.filter(d => d.isGuaranteed);
+    const unguaranteedList = filtered.filter(d => !d.isGuaranteed);
+    const guaranteedAvgPremium = guaranteedList.length > 0 ? guaranteedList.reduce((s, d) => s + d.premium, 0) / guaranteedList.length : 0;
+    const unguaranteedAvgPremium = unguaranteedList.length > 0 ? unguaranteedList.reduce((s, d) => s + d.premium, 0) / unguaranteedList.length : 0;
+    
+    let html = '';
+    
+    // 統計摘要
+    html += `
+    <div class="cbas-result-summary">
+        <div class="cbas-stat-box">
+            <div class="cbas-stat-label">符合標的</div>
+            <div class="cbas-stat-value">${filtered.length}</div>
+        </div>
+        <div class="cbas-stat-box">
+            <div class="cbas-stat-label">有擔保</div>
+            <div class="cbas-stat-value" style="color:#1565c0;">${guaranteedList.length}</div>
+        </div>
+        <div class="cbas-stat-box">
+            <div class="cbas-stat-label">無擔保</div>
+            <div class="cbas-stat-value" style="color:#7b1fa2;">${unguaranteedList.length}</div>
+        </div>
+        <div class="cbas-stat-box">
+            <div class="cbas-stat-label">均權利金</div>
+            <div class="cbas-stat-value" style="color:${avgPremium <= 5 ? '#2e7d32' : '#e65100'};">${avgPremium.toFixed(2)}</div>
+        </div>
+        <div class="cbas-stat-box">
+            <div class="cbas-stat-label">均剩餘年</div>
+            <div class="cbas-stat-value">${avgYears.toFixed(2)}</div>
+        </div>
+        <div class="cbas-stat-box">
+            <div class="cbas-stat-label">均流通餘額</div>
+            <div class="cbas-stat-value" style="color:${avgRemaining >= 70 ? '#2e7d32' : (avgRemaining >= 50 ? '#e65100' : '#c62828')};">${avgRemaining.toFixed(1)}%</div>
+        </div>
+    </div>`;
+    
+    // 有擔保vs無擔保權利金比較
+    if (guaranteedList.length > 0 && unguaranteedList.length > 0) {
+        html += `
+        <div style="display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
+            <div style="flex:1; min-width:140px; background:#e3f2fd; padding:8px; border-radius:6px; border-left:3px solid #1565c0;">
+                <div style="font-size:10px; color:#1565c0; font-weight:700;">🏦 有擔保(${guaranteedList.length}檔)</div>
+                <div style="font-size:14px; font-weight:900; color:#0d47a1;">均權利金 ${guaranteedAvgPremium.toFixed(2)}元</div>
+            </div>
+            <div style="flex:1; min-width:140px; background:#f3e5f5; padding:8px; border-radius:6px; border-left:3px solid #7b1fa2;">
+                <div style="font-size:10px; color:#7b1fa2; font-weight:700;">📊 無擔保TCRI(${unguaranteedList.length}檔)</div>
+                <div style="font-size:14px; font-weight:900; color:#4a148c;">均權利金 ${unguaranteedAvgPremium.toFixed(2)}元</div>
+            </div>
+        </div>`;
+    }
+    
+    if (filtered.length === 0) {
+        html += '<div class="cbas-no-result">🔍 無符合條件的標的，請調整篩選條件</div>';
+    } else {
+        // 結果表格
+        html += `
+        <table class="cbas-table">
+            <thead>
+                <tr>
+                    <th>代碼</th>
+                    <th>名稱</th>
+                    <th>擔保/信評</th>
+                    <th>權利金</th>
+                    <th>剩餘年</th>
+                    <th>溢價%</th>
+                    <th>流通餘額</th>
+                    <th>轉換價</th>
+                    <th>現股價</th>
+                    <th>波動率</th>
+                    <th>產業</th>
+                </tr>
+            </thead>
+            <tbody>`;
+        
+        filtered.forEach(d => {
+            // 權利金顏色分級
+            let premiumClass = 'cbas-premium-high';
+            if (d.premium <= 3) premiumClass = 'cbas-premium-low';
+            else if (d.premium <= 5) premiumClass = 'cbas-premium-mid';
+            
+            // 剩餘年期標籤
+            let yearClass = 'cbas-year-long';
+            if (d.remainingYears < 1) yearClass = 'cbas-year-short';
+            else if (d.remainingYears < 2) yearClass = 'cbas-year-mid';
+            
+            // 流通餘額顏色分級
+            let remainingStyle = '';
+            if (d.remainingRatio < 30) {
+                remainingStyle = 'color:#c62828; font-weight:700;';
+            } else if (d.remainingRatio < 50) {
+                remainingStyle = 'color:#e65100; font-weight:700;';
+            } else if (d.remainingRatio >= 90) {
+                remainingStyle = 'color:#2e7d32; font-weight:700;';
+            }
+            
+            // 擔保類型樣式
+            let guaranteeStyle = d.isGuaranteed ? 
+                'background:#e3f2fd; color:#1565c0; padding:1px 4px; border-radius:3px; font-size:9px;' : 
+                'background:#f3e5f5; color:#7b1fa2; padding:1px 4px; border-radius:3px; font-size:9px;';
+            let guaranteeLabel = d.isGuaranteed ? d.rating : `TCRI${d.rating}`;
+            
+            html += `
+                <tr>
+                    <td>${d.code}</td>
+                    <td title="${d.name}">${d.name}</td>
+                    <td><span style="${guaranteeStyle}">${guaranteeLabel}</span></td>
+                    <td class="${premiumClass}">${d.premium.toFixed(2)}</td>
+                    <td><span class="${yearClass}">${d.remainingYears.toFixed(2)}</span></td>
+                    <td>${d.discountPct.toFixed(1)}%</td>
+                    <td style="${remainingStyle}">${d.remainingRatio.toFixed(1)}%</td>
+                    <td>${d.conversionPrice > 0 ? d.conversionPrice.toFixed(1) : '-'}</td>
+                    <td>${d.stockPrice > 0 ? d.stockPrice.toFixed(1) : '-'}</td>
+                    <td>${d.volatility120 > 0 ? d.volatility120.toFixed(1) + '%' : '-'}</td>
+                    <td>${d.industry || '-'}</td>
+                </tr>`;
+        });
+        
+        html += '</tbody></table>';
+        
+        // 投資洞察
+        const lowPremiumCount = filtered.filter(d => d.premium <= 3).length;
+        const highVolatilityCount = filtered.filter(d => d.volatility120 >= 30).length;
+        const lowRemainingCount = filtered.filter(d => d.remainingRatio < 50).length;
+        const highRemainingCount = filtered.filter(d => d.remainingRatio >= 90).length;
+        
+        // 分類洞察
+        let guaranteeInsight = '';
+        if (guaranteedList.length > 0 && unguaranteedList.length > 0) {
+            const premiumDiff = Math.abs(guaranteedAvgPremium - unguaranteedAvgPremium).toFixed(2);
+            if (guaranteedAvgPremium < unguaranteedAvgPremium) {
+                guaranteeInsight = `<br>🏦 <strong>擔保類型分析：</strong>有擔保均權利金(${guaranteedAvgPremium.toFixed(2)}元)低於無擔保(${unguaranteedAvgPremium.toFixed(2)}元)，差距${premiumDiff}元。有擔保CB因銀行背書，風險較低，相同權利金下CP值較高。`;
+            } else if (unguaranteedAvgPremium < guaranteedAvgPremium) {
+                guaranteeInsight = `<br>🏦 <strong>擔保類型分析：</strong>無擔保均權利金(${unguaranteedAvgPremium.toFixed(2)}元)低於有擔保(${guaranteedAvgPremium.toFixed(2)}元)，差距${premiumDiff}元。無擔保雖權利金較低，但需承擔發行公司信用風險，投資前請評估TCRI信評等級。`;
+            } else {
+                guaranteeInsight = `<br>🏦 <strong>擔保類型分析：</strong>有擔保與無擔保權利金相近。`;
+            }
+        } else if (guaranteedList.length > 0) {
+            guaranteeInsight = `<br>🏦 全數為有擔保標的，均權利金${guaranteedAvgPremium.toFixed(2)}元，具銀行信用保障。`;
+        } else if (unguaranteedList.length > 0) {
+            guaranteeInsight = `<br>📊 全數為無擔保標的(TCRI)，均權利金${unguaranteedAvgPremium.toFixed(2)}元，請留意發行公司信用風險。`;
+        }
+        
+        html += `
+        <div class="cbas-insight">
+            <strong>💡 Rex大叔觀察：</strong>
+            目前符合條件${filtered.length}檔中，權利金≤3元有${lowPremiumCount}檔，高波動(≥30%)有${highVolatilityCount}檔。
+            ${guaranteeInsight}
+            <br>📊 <strong>流通餘額分析：</strong>餘額≥90%有${highRemainingCount}檔（籌碼充足），餘額<50%有${lowRemainingCount}檔（大部分已轉換，流動性可能不佳）。
+            ${lowRemainingCount > 0 ? '<br>⚠️ 低流通餘額標的需注意：大部分CB已被轉換成股票，市場流動性較差，不建議介入。' : ''}
+            ${avgYears < 1 ? '<br>⚠️ 平均剩餘年期較短，需留意時間價值衰減風險。' : ''}
+        </div>`;
+    }
+    
+    document.getElementById('cbasResults').innerHTML = html;
+}
 
 // 系統啟動
 window.addEventListener('DOMContentLoaded', function() {

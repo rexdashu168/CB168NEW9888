@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.61 (CBAS智能篩選版)</title>
+<title>AI智能可轉債競拍系統 v3.62 (CB收盤價整合版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="embedded_data.js" onerror="console.warn('embedded_data.js not found, using defaults.')"></script>
 
@@ -1373,13 +1373,13 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.61)...</div>
+    <div>🔄 系統啟動中 (v3.62)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
 <div class="container" style="display: none;">
     <div class="header">
-        <h1>🤖 AI智能可轉債競拍系統 <span class="version-badge">v3.61</span></h1>
+        <h1>🤖 AI智能可轉債競拍系統 <span class="version-badge">v3.62</span></h1>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -1524,7 +1524,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     <div class="result-panel">
         <div id="welcomeMsg" class="welcome-message">
             <h2>歡迎使用AI智能競拍評估系統</h2>
-            <p style="margin-top:10px; color:#666; font-size: 14px;">v3.61 CBAS智能標籤篩選版<br>✅ 動態計算熱門產業/優質券商/最佳股本標籤<br>✅ 8組智能篩選條件自動執行<br>✅ 每檔標的顯示符合的優勢標籤</p>
+            <p style="margin-top:10px; color:#666; font-size: 14px;">v3.62 CB收盤價整合版<br>✅ 歷史搜尋卡片顯示即時CB收盤價<br>✅ 詢圈/競拍案例整合收盤價資訊<br>✅ 完整CBAS智能標籤篩選功能</p>
             <div class="stats-summary" id="statsSummary"></div>
             
             <!-- v3.58 市場趨勢分析 -->
@@ -1720,8 +1720,25 @@ async function loadStatistics() {
         const sheetListed = getSheetData(['08']); // 掛牌中清單
         const sheetPending = getSheetData(['06', '發行案件']); // v3.59 新增：承銷進行中
         const sheetBoard = getSheetData(['07', '董事會']); // v3.59 新增：董事會決議
+        const sheetCBClose = getSheetData(['09', '每週日行情']); // v3.62 新增：CB收盤價
         
         if (!sheetAuction || sheetAuction.length === 0) throw new Error("找不到競拍資料分頁");
+
+        // v3.62 新增：建立CB收盤價對照表（從09工作表D欄「CB收盤價」讀取）
+        window.cbClosePriceMap = {};
+        if (sheetCBClose && sheetCBClose.length > 0) {
+            sheetCBClose.forEach(row => {
+                // A欄是「代碼」，D欄是「CB收盤價」
+                let id = row['代碼'] || row['代號'] || row['CB代號'];
+                let closePrice = row['CB收盤價'] || row['收盤價'] || row['CB收盤'];
+                
+                if (id && closePrice) {
+                    const cleanId = String(id).replace('.0', '').trim();
+                    window.cbClosePriceMap[cleanId] = safeFloat(closePrice);
+                }
+            });
+            console.log(`載入CB收盤價: ${Object.keys(window.cbClosePriceMap).length} 筆`);
+        }
 
         // 建立掛牌中代號Set（用於判斷狀態）
         if (sheetListed && sheetListed.length > 0) {
@@ -2358,7 +2375,7 @@ function getStatsSmart(category, val) {
 // 4. UI 顯示
 // ==========================================
 
-// v3.52 強化版：歷史搜尋卡片生成
+// v3.62 強化版：歷史搜尋卡片生成（加入CB收盤價）
 function generateHistoryCard(d) {
     const h = safeFloat(d.marketHigh);
     const l = safeFloat(d.marketLow);
@@ -2370,6 +2387,10 @@ function generateHistoryCard(d) {
     let guarantee = d.guarantee || '-';
     if (guarantee.includes('有')) guarantee = '有';
     else if (guarantee.includes('無')) guarantee = '無';
+    
+    // v3.62 新增：取得CB收盤價
+    const cbClosePrice = window.cbClosePriceMap ? window.cbClosePriceMap[d.id] : null;
+    const cbClosePriceStr = cbClosePrice > 0 ? safeFixed(cbClosePrice, 2) : '-';
     
     return `
     <div class="history-card">
@@ -2401,7 +2422,7 @@ function generateHistoryCard(d) {
         
         <table class="hc-table">
             <tr>
-                <th></th><th>得標價</th><th>溢價率</th><th></th><th>掛牌價</th><th>振幅</th>
+                <th></th><th>得標價</th><th>溢價率</th><th></th><th>掛牌價</th><th>振幅</th><th>CB收盤</th>
             </tr>
             <tr>
                 <td class="td-label">最低</td>
@@ -2410,6 +2431,7 @@ function generateHistoryCard(d) {
                 <td class="td-label">高</td>
                 <td>${h > 0 ? safeFixed(h, 1) : '-'}</td>
                 <td class="val-pink" rowspan="2">${amp}%</td>
+                <td rowspan="2" style="color:#1565c0; font-weight:700; font-size:11px;">${cbClosePriceStr}</td>
             </tr>
             <tr>
                 <td class="td-label">平均</td>
@@ -5067,6 +5089,10 @@ function bindInputEvents() {
                     if (d.guarantee) {
                         guarantee = d.guarantee.includes('有') ? '有' : (d.guarantee.includes('無') ? '無' : d.guarantee);
                     }
+                    // v3.62 新增：取得CB收盤價
+                    const cbClosePrice = window.cbClosePriceMap ? window.cbClosePriceMap[d.id] : null;
+                    const cbClosePriceStr = cbClosePrice > 0 ? safeFixed(cbClosePrice, 2) : '-';
+                    
                     html += `<div class="inquiry-card">
                         <span class="inquiry-badge">詢</span>
                         <span class="inquiry-name">${d.name || '-'}(${d.id})</span>
@@ -5076,6 +5102,7 @@ function bindInputEvents() {
                         <span class="inquiry-info">高:<b>${h > 0 ? safeFixed(h,0) : '-'}</b></span>
                         <span class="inquiry-info">低:<b>${l > 0 ? safeFixed(l,0) : '-'}</b></span>
                         <span class="inquiry-info">振:<b class="pink">${amp}%</b></span>
+                        <span class="inquiry-info">CB收:<b style="color:#1565c0;">${cbClosePriceStr}</b></span>
                     </div>`;
                 });
             }

@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.59 (供給量分析強化版)</title>
+<title>AI智能可轉債競拍系統 v3.59 (完整區間趨勢分析)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="embedded_data.js" onerror="console.warn('embedded_data.js not found, using defaults.')"></script>
 
@@ -1349,7 +1349,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     <div class="result-panel">
         <div id="welcomeMsg" class="welcome-message">
             <h2>歡迎使用AI智能競拍評估系統</h2>
-            <p style="margin-top:10px; color:#666; font-size: 14px;">v3.59 供給量分析強化版<br>✅ 新增承銷進行中/董事會公告案件<br>✅ 未來體量預估 vs 歷史比較<br>✅ 競拍盈虧勝率分析</p>
+            <p style="margin-top:10px; color:#666; font-size: 14px;">v3.59 完整區間趨勢分析版<br>✅ 10個維度完整區間統計(含05工作表設定)<br>✅ 2010-2025年多年度完整數據<br>✅ 發行次數完整到第10次</p>
             <div class="stats-summary" id="statsSummary"></div>
             
             <!-- v3.58 市場趨勢分析 -->
@@ -1360,6 +1360,9 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
                     <button class="market-trend-tab" onclick="showMarketTrendTab('guarantee', event)">擔保比較</button>
                     <button class="market-trend-tab" onclick="showMarketTrendTab('size', event)">發行規模</button>
                     <button class="market-trend-tab" onclick="showMarketTrendTab('capital', event)">股本大小</button>
+                    <button class="market-trend-tab" onclick="showMarketTrendTab('conversion', event)">轉換價</button>
+                    <button class="market-trend-tab" onclick="showMarketTrendTab('rating', event)">信評</button>
+                    <button class="market-trend-tab" onclick="showMarketTrendTab('yearPeriod', event)">發行年期</button>
                     <button class="market-trend-tab" onclick="showMarketTrendTab('type', event)">競拍vs詢圈</button>
                     <button class="market-trend-tab" onclick="showMarketTrendTab('issueNum', event)">發行次數</button>
                     <button class="market-trend-tab" onclick="showMarketTrendTab('ky', event)">KY股分析</button>
@@ -3830,155 +3833,177 @@ function generateDimensionAnalysis() {
     showDimensionTab('capital');
 }
 
-// v3.59 新增：市場趨勢分析（從01工作表完整統計）
+// v3.59 更新：市場趨勢分析（從01工作表完整統計，多年度版）
 function generateMarketTrendAnalysis() {
-    // 使用硬編碼的正確年度數據（從01工作表R欄掛牌日期統計）
-    // 包含詢圈+競拍全部標的
-    const yearlyCorrectStats = {
-        2019: { total: 71, inquiry: 63, auction: 6, issueAmount: 0, avgAmp: 0 },
-        2020: { total: 97, inquiry: 73, auction: 24, issueAmount: 0, avgAmp: 0 },
-        2021: { total: 103, inquiry: 59, auction: 44, issueAmount: 0, avgAmp: 0 },
-        2022: { total: 96, inquiry: 43, auction: 53, issueAmount: 810.5, avgAmp: 83.5 },
-        2023: { total: 91, inquiry: 47, auction: 44, issueAmount: 992.7, avgAmp: 68.3 },
-        2024: { total: 139, inquiry: 64, auction: 75, issueAmount: 1387.5, avgAmp: 44.5 },
-        2025: { total: 95, inquiry: 47, auction: 48, issueAmount: 877.8, avgAmp: 22.5 }
-    };
+    // 完整年度數據（2010-2025，從01工作表R欄掛牌日期統計）
+    marketTrendData.yearly = [
+        { year: 2010, total: 118, inquiry: 118, auction: 0, avgAmp: 51.4 },
+        { year: 2011, total: 100, inquiry: 99, auction: 0, avgAmp: 48.8 },
+        { year: 2012, total: 76, inquiry: 75, auction: 0, avgAmp: 68.6 },
+        { year: 2013, total: 89, inquiry: 88, auction: 0, avgAmp: 91.3 },
+        { year: 2014, total: 96, inquiry: 95, auction: 0, avgAmp: 48.8 },
+        { year: 2015, total: 100, inquiry: 96, auction: 0, avgAmp: 62.2 },
+        { year: 2016, total: 55, inquiry: 55, auction: 0, avgAmp: 72.9 },
+        { year: 2017, total: 46, inquiry: 45, auction: 0, avgAmp: 60.8 },
+        { year: 2018, total: 57, inquiry: 56, auction: 0, avgAmp: 79.5 },
+        { year: 2019, total: 71, inquiry: 63, auction: 6, avgAmp: 79.1 },
+        { year: 2020, total: 97, inquiry: 73, auction: 24, avgAmp: 112.2 },
+        { year: 2021, total: 103, inquiry: 59, auction: 44, avgAmp: 79.4 },
+        { year: 2022, total: 96, inquiry: 43, auction: 53, avgAmp: 83.5 },
+        { year: 2023, total: 91, inquiry: 47, auction: 44, avgAmp: 68.3 },
+        { year: 2024, total: 139, inquiry: 64, auction: 75, avgAmp: 44.5 },
+        { year: 2025, total: 95, inquiry: 47, auction: 48, avgAmp: 22.5 }
+    ];
     
-    // 計算有掛牌數據的年度平均表現
-    const allWithMarket = [...auctionRawData, ...inquiryRawData].filter(d => d.marketHigh > 0 && d.marketLow > 0);
-    
-    const yearlyPerf = {};
-    allWithMarket.forEach(d => {
-        let year = null;
-        const dateVal = d.openDate || d.listDate;
-        if (dateVal) {
-            if (typeof dateVal === 'number') {
-                const date = new Date((dateVal - 25569) * 86400 * 1000);
-                year = date.getFullYear();
-            } else if (typeof dateVal === 'string') {
-                const match = dateVal.match(/(\d{4})/);
-                if (match) year = parseInt(match[1]);
-            } else if (dateVal instanceof Date) {
-                year = dateVal.getFullYear();
-            }
-        }
-        if (year && year >= 2019 && year <= 2025) {
-            if (!yearlyPerf[year]) {
-                yearlyPerf[year] = { sumAmp: 0, count: 0, sumHigh: 0, sumLow: 0 };
-            }
-            const amp = ((d.marketHigh - d.marketLow) / d.marketLow * 100);
-            yearlyPerf[year].sumAmp += amp;
-            yearlyPerf[year].sumHigh += d.marketHigh;
-            yearlyPerf[year].sumLow += d.marketLow;
-            yearlyPerf[year].count++;
-        }
-    });
-    
-    // 合併數據
-    marketTrendData.yearly = Object.keys(yearlyCorrectStats).sort().map(y => {
-        const base = yearlyCorrectStats[y];
-        const perf = yearlyPerf[y] || { sumAmp: 0, count: 0, sumHigh: 0, sumLow: 0 };
-        return {
-            year: parseInt(y),
-            total: base.total,
-            inquiry: base.inquiry,
-            auction: base.auction,
-            totalSize: base.issueAmount,
-            avgAmp: perf.count > 0 ? perf.sumAmp / perf.count : base.avgAmp,
-            avgHigh: perf.count > 0 ? perf.sumHigh / perf.count : 0,
-            avgLow: perf.count > 0 ? perf.sumLow / perf.count : 0,
-            perfCount: perf.count
-        };
-    });
-    
-    // 擔保比較
-    const guaranteed = allWithMarket.filter(d => (d.guarantee || '').includes('有'));
-    const unguaranteed = allWithMarket.filter(d => (d.guarantee || '').includes('無'));
-    
-    const calcStats = (arr) => {
-        if (arr.length === 0) return { count: 0, avgHigh: 0, avgLow: 0, avgAmp: 0, totalSize: 0 };
-        let sumH = 0, sumL = 0, sumAmp = 0, sumSize = 0;
-        arr.forEach(d => {
-            sumH += d.marketHigh;
-            sumL += d.marketLow;
-            sumAmp += ((d.marketHigh - d.marketLow) / d.marketLow * 100);
-            sumSize += (d.issueSize || 0);
-        });
-        return {
-            count: arr.length,
-            avgHigh: sumH / arr.length,
-            avgLow: sumL / arr.length,
-            avgAmp: sumAmp / arr.length,
-            totalSize: sumSize
-        };
-    };
-    
+    // 擔保比較（多年度數據）
     marketTrendData.guarantee = {
-        guaranteed: calcStats(guaranteed),
-        unguaranteed: calcStats(unguaranteed)
+        overall: {
+            guaranteed: { count: 455, avgHigh: 183.0, avgLow: 102.4, avgAmp: 77.0 },
+            unguaranteed: { count: 827, avgHigh: 161.0, avgLow: 98.2, avgAmp: 63.4 }
+        },
+        yearly: [
+            { year: 2011, gCount: 35, gAmp: 48.8, uCount: 26, uAmp: 54.6 },
+            { year: 2012, gCount: 37, gAmp: 73.8, uCount: 38, uAmp: 64.3 },
+            { year: 2013, gCount: 40, gAmp: 119.0, uCount: 48, uAmp: 68.5 },
+            { year: 2014, gCount: 42, gAmp: 41.7, uCount: 53, uAmp: 54.8 },
+            { year: 2015, gCount: 52, gAmp: 73.9, uCount: 44, uAmp: 43.0 },
+            { year: 2016, gCount: 28, gAmp: 85.6, uCount: 27, uAmp: 60.2 },
+            { year: 2017, gCount: 19, gAmp: 61.8, uCount: 26, uAmp: 57.2 },
+            { year: 2018, gCount: 10, gAmp: 116.2, uCount: 46, uAmp: 72.7 },
+            { year: 2019, gCount: 27, gAmp: 70.8, uCount: 42, uAmp: 80.0 },
+            { year: 2020, gCount: 42, gAmp: 109.9, uCount: 55, uAmp: 114.3 },
+            { year: 2021, gCount: 39, gAmp: 94.8, uCount: 64, uAmp: 69.7 },
+            { year: 2022, gCount: 23, gAmp: 71.3, uCount: 73, uAmp: 86.2 },
+            { year: 2023, gCount: 17, gAmp: 107.8, uCount: 74, uAmp: 59.3 },
+            { year: 2024, gCount: 21, gAmp: 40.7, uCount: 118, uAmp: 44.8 },
+            { year: 2025, gCount: 16, gAmp: 17.7, uCount: 79, uAmp: 23.9 }
+        ]
     };
     
-    // 發行規模比較（10億為界）
-    const sizeSmall = allWithMarket.filter(d => (d.issueSize || 0) < 10);
-    const sizeLarge = allWithMarket.filter(d => (d.issueSize || 0) >= 10);
-    
+    // 發行規模區間（依05工作表設定）
     marketTrendData.size = {
-        small: calcStats(sizeSmall),
-        large: calcStats(sizeLarge)
+        ranges: [
+            { label: '小於2億', count: 155, avgHigh: 186.8, avgLow: 100.0, avgAmp: 88.1 },
+            { label: '2~5億', count: 678, avgHigh: 169.4, avgLow: 99.6, avgAmp: 70.4 },
+            { label: '5~10億', count: 415, avgHigh: 168.7, avgLow: 98.3, avgAmp: 71.0 },
+            { label: '10~15億', count: 177, avgHigh: 160.0, avgLow: 96.8, avgAmp: 66.6 },
+            { label: '15~20億', count: 72, avgHigh: 157.6, avgLow: 96.5, avgAmp: 64.2 },
+            { label: '大於20億', count: 142, avgHigh: 148.9, avgLow: 94.4, avgAmp: 63.7 }
+        ]
     };
     
-    // 股本大小比較（10億為界）
-    const capSmall = allWithMarket.filter(d => (d.capital || 0) < 10);
-    const capLarge = allWithMarket.filter(d => (d.capital || 0) >= 10);
-    
+    // 股本區間（依05工作表設定）
     marketTrendData.capital = {
-        small: calcStats(capSmall),
-        large: calcStats(capLarge)
+        ranges: [
+            { label: '小於3億', count: 26, avgHigh: 158.9, avgLow: 101.2, avgAmp: 55.1 },
+            { label: '3~6億', count: 214, avgHigh: 159.7, avgLow: 100.2, avgAmp: 58.1 },
+            { label: '6~10億', count: 315, avgHigh: 182.2, avgLow: 100.4, avgAmp: 79.8 },
+            { label: '10~15億', count: 239, avgHigh: 161.4, avgLow: 99.1, avgAmp: 62.4 },
+            { label: '15~20億', count: 103, avgHigh: 164.6, avgLow: 100.2, avgAmp: 63.3 },
+            { label: '大於20億', count: 359, avgHigh: 166.0, avgLow: 98.8, avgAmp: 66.9 }
+        ]
+    };
+    
+    // 轉換價區間（依05工作表設定）
+    marketTrendData.conversion = {
+        ranges: [
+            { label: '小於20元', count: 341, avgHigh: 174.5, avgLow: 100.2, avgAmp: 77.1 },
+            { label: '20~50元', count: 619, avgHigh: 167.8, avgLow: 97.0, avgAmp: 74.1 },
+            { label: '50~100元', count: 396, avgHigh: 167.0, avgLow: 98.6, avgAmp: 68.6 },
+            { label: '100~150元', count: 143, avgHigh: 164.8, avgLow: 98.2, avgAmp: 69.0 },
+            { label: '150~200元', count: 62, avgHigh: 152.8, avgLow: 99.8, avgAmp: 52.7 },
+            { label: '大於200元', count: 99, avgHigh: 157.6, avgLow: 99.9, avgAmp: 57.2 }
+        ]
+    };
+    
+    // 信評區間（依05工作表設定）
+    marketTrendData.rating = {
+        ranges: [
+            { label: 'TCRI 2', count: 3, avgHigh: 159.8, avgLow: 100.8, avgAmp: 56.8 },
+            { label: 'TCRI 3', count: 27, avgHigh: 175.2, avgLow: 99.0, avgAmp: 75.4 },
+            { label: 'TCRI 4', count: 135, avgHigh: 163.8, avgLow: 100.4, avgAmp: 62.6 },
+            { label: 'TCRI 5', count: 231, avgHigh: 169.6, avgLow: 99.6, avgAmp: 69.2 },
+            { label: 'TCRI 6', count: 261, avgHigh: 155.4, avgLow: 97.7, avgAmp: 58.6 },
+            { label: 'TCRI 7', count: 107, avgHigh: 143.8, avgLow: 94.6, avgAmp: 52.2 },
+            { label: 'TCRI 8', count: 27, avgHigh: 162.7, avgLow: 95.5, avgAmp: 68.8 },
+            { label: 'TCRI 9', count: 5, avgHigh: 0, avgLow: 0, avgAmp: 0 },
+            { label: 'BBB', count: 6, avgHigh: 146.8, avgLow: 95.6, avgAmp: 54.4 }
+        ]
+    };
+    
+    // 發行年期（依05工作表設定）
+    marketTrendData.years = {
+        ranges: [
+            { label: '3年期', count: 1047, avgHigh: 163.0, avgLow: 99.8, avgAmp: 62.2 },
+            { label: '5年期', count: 578, avgHigh: 176.9, avgLow: 96.1, avgAmp: 86.9 },
+            { label: '7年期', count: 1, avgHigh: 450.0, avgLow: 97.0, avgAmp: 363.9 }
+        ]
     };
     
     // 競拍vs詢圈
-    const auctionWithMarket = auctionRawData.filter(d => d.marketHigh > 0 && d.marketLow > 0);
-    const inquiryWithMarket = inquiryRawData.filter(d => d.marketHigh > 0 && d.marketLow > 0);
-    
     marketTrendData.type = {
-        auction: calcStats(auctionWithMarket),
-        inquiry: calcStats(inquiryWithMarket)
+        auction: { count: 296, avgHigh: 164.5, avgLow: 100.8, avgAmp: 62.8 },
+        inquiry: { count: 964, avgHigh: 170.5, avgLow: 98.1, avgAmp: 75.2 }
     };
     
-    // v3.59 新增：發行次數分析
+    // 發行次數分析（完整到第10次）
     marketTrendData.issueNum = {
-        yearly: {
-            2022: { first: { count: 35, amp: 84.8 }, multi: { count: 60, amp: 82.5 } },
-            2023: { first: { count: 26, amp: 67.0 }, multi: { count: 65, amp: 69.0 } },
-            2024: { first: { count: 37, amp: 47.4 }, multi: { count: 100, amp: 43.4 } },
-            2025: { first: { count: 28, amp: 19.6 }, multi: { count: 65, amp: 24.4 } }
-        },
-        byNumber: {
-            1: { count: 931, avgHigh: 174.1, avgLow: 97.6, avgAmp: 80.2 },
-            2: { count: 540, avgHigh: 167.7, avgLow: 96.9, avgAmp: 76.6 },
-            3: { count: 319, avgHigh: 170.7, avgLow: 99.9, avgAmp: 71.8 },
-            4: { count: 178, avgHigh: 169.9, avgLow: 98.7, avgAmp: 71.9 },
-            5: { count: 94, avgHigh: 162.7, avgLow: 99.6, avgAmp: 63.2 },
-            6: { count: 47, avgHigh: 169.0, avgLow: 100.0, avgAmp: 68.7 },
-            7: { count: 26, avgHigh: 180.7, avgLow: 101.7, avgAmp: 77.1 }
-        }
+        byNumber: [
+            { num: 1, total: 948, count: 931, avgHigh: 174.1, avgLow: 97.6, avgAmp: 80.2 },
+            { num: 2, total: 548, count: 540, avgHigh: 167.7, avgLow: 96.9, avgAmp: 76.6 },
+            { num: 3, total: 324, count: 319, avgHigh: 170.7, avgLow: 99.9, avgAmp: 71.8 },
+            { num: 4, total: 178, count: 178, avgHigh: 169.9, avgLow: 98.7, avgAmp: 71.9 },
+            { num: 5, total: 95, count: 94, avgHigh: 162.7, avgLow: 99.6, avgAmp: 63.2 },
+            { num: 6, total: 50, count: 47, avgHigh: 169.0, avgLow: 100.0, avgAmp: 68.7 },
+            { num: 7, total: 28, count: 26, avgHigh: 180.7, avgLow: 101.7, avgAmp: 77.1 },
+            { num: 8, total: 12, count: 11, avgHigh: 176.4, avgLow: 97.9, avgAmp: 80.0 },
+            { num: 9, total: 5, count: 5, avgHigh: 216.6, avgLow: 97.3, avgAmp: 127.7 },
+            { num: 10, total: 2, count: 2, avgHigh: 189.1, avgLow: 104.9, avgAmp: 75.2 }
+        ],
+        yearly: [
+            { year: 2010, first: 45, firstAmp: 44.0, multi: 72, multiAmp: 56.2 },
+            { year: 2011, first: 34, firstAmp: 41.6, multi: 64, multiAmp: 51.8 },
+            { year: 2012, first: 24, firstAmp: 72.7, multi: 50, multiAmp: 65.6 },
+            { year: 2013, first: 37, firstAmp: 109.6, multi: 52, multiAmp: 78.5 },
+            { year: 2014, first: 41, firstAmp: 46.9, multi: 54, multiAmp: 50.8 },
+            { year: 2015, first: 41, firstAmp: 62.4, multi: 57, multiAmp: 62.1 },
+            { year: 2016, first: 17, firstAmp: 75.3, multi: 38, multiAmp: 72.2 },
+            { year: 2017, first: 14, firstAmp: 60.9, multi: 32, multiAmp: 60.8 },
+            { year: 2018, first: 16, firstAmp: 65.7, multi: 41, multiAmp: 85.1 },
+            { year: 2019, first: 34, firstAmp: 61.4, multi: 37, multiAmp: 94.9 },
+            { year: 2020, first: 31, firstAmp: 109.0, multi: 66, multiAmp: 114.0 },
+            { year: 2021, first: 29, firstAmp: 86.1, multi: 74, multiAmp: 76.5 },
+            { year: 2022, first: 35, firstAmp: 84.8, multi: 60, multiAmp: 82.5 },
+            { year: 2023, first: 26, firstAmp: 67.0, multi: 65, multiAmp: 69.0 },
+            { year: 2024, first: 37, firstAmp: 47.4, multi: 100, multiAmp: 43.4 },
+            { year: 2025, first: 29, firstAmp: 19.6, multi: 65, multiAmp: 24.4 }
+        ]
     };
     
-    // v3.59 新增：KY股分析
+    // KY股分析（多年度）
     marketTrendData.ky = {
         overall: {
             ky: { count: 120, avgHigh: 154.3, avgLow: 95.9, avgAmp: 63.5 },
             nonKy: { count: 2074, avgHigh: 172.7, avgLow: 98.2, avgAmp: 77.6 }
         },
-        yearly: {
-            2019: { total: 71, ky: 7, kyRatio: 9.9 },
-            2020: { total: 97, ky: 12, kyRatio: 12.4 },
-            2021: { total: 103, ky: 10, kyRatio: 9.7 },
-            2022: { total: 96, ky: 8, kyRatio: 8.3, kyAmp: 142.9, nonKyAmp: 77.1 },
-            2023: { total: 91, ky: 9, kyRatio: 9.9, kyAmp: 67.7, nonKyAmp: 68.5 },
-            2024: { total: 139, ky: 10, kyRatio: 7.2, kyAmp: 51.9, nonKyAmp: 43.6 },
-            2025: { total: 95, ky: 11, kyRatio: 11.6, kyAmp: 14.1, nonKyAmp: 24.0 }
-        }
+        yearly: [
+            { year: 2010, total: 118, ky: 0, kyRatio: 0, kyAmp: 0, nonKyAmp: 51.4 },
+            { year: 2011, total: 100, ky: 0, kyRatio: 0, kyAmp: 0, nonKyAmp: 48.8 },
+            { year: 2012, total: 76, ky: 1, kyRatio: 1.3, kyAmp: 33.8, nonKyAmp: 69.0 },
+            { year: 2013, total: 89, ky: 3, kyRatio: 3.4, kyAmp: 97.6, nonKyAmp: 91.0 },
+            { year: 2014, total: 96, ky: 6, kyRatio: 6.2, kyAmp: 50.0, nonKyAmp: 48.9 },
+            { year: 2015, total: 100, ky: 11, kyRatio: 11.0, kyAmp: 40.4, nonKyAmp: 64.3 },
+            { year: 2016, total: 55, ky: 4, kyRatio: 7.3, kyAmp: 69.8, nonKyAmp: 73.4 },
+            { year: 2017, total: 46, ky: 7, kyRatio: 15.2, kyAmp: 29.6, nonKyAmp: 66.4 },
+            { year: 2018, total: 57, ky: 11, kyRatio: 19.3, kyAmp: 55.7, nonKyAmp: 85.3 },
+            { year: 2019, total: 71, ky: 7, kyRatio: 9.9, kyAmp: 81.7, nonKyAmp: 78.6 },
+            { year: 2020, total: 97, ky: 12, kyRatio: 12.4, kyAmp: 111.5, nonKyAmp: 112.5 },
+            { year: 2021, total: 103, ky: 10, kyRatio: 9.7, kyAmp: 27.4, nonKyAmp: 84.8 },
+            { year: 2022, total: 96, ky: 8, kyRatio: 8.3, kyAmp: 142.9, nonKyAmp: 77.1 },
+            { year: 2023, total: 91, ky: 9, kyRatio: 9.9, kyAmp: 67.7, nonKyAmp: 68.5 },
+            { year: 2024, total: 139, ky: 10, kyRatio: 7.2, kyAmp: 51.9, nonKyAmp: 43.6 },
+            { year: 2025, total: 95, ky: 11, kyRatio: 11.6, kyAmp: 14.1, nonKyAmp: 24.0 }
+        ]
     };
     
     // 顯示預設Tab
@@ -3999,6 +4024,9 @@ function showMarketTrendTab(tab, event) {
             'guarantee': '擔保比較',
             'size': '發行規模',
             'capital': '股本大小',
+            'conversion': '轉換價',
+            'rating': '信評',
+            'yearPeriod': '發行年期',
             'type': '競拍vs詢圈',
             'issueNum': '發行次數',
             'ky': 'KY股分析'
@@ -4019,6 +4047,12 @@ function showMarketTrendTab(tab, event) {
         html = renderSizeCompare();
     } else if (tab === 'capital') {
         html = renderCapitalCompare();
+    } else if (tab === 'conversion') {
+        html = renderConversionCompare();
+    } else if (tab === 'rating') {
+        html = renderRatingCompare();
+    } else if (tab === 'yearPeriod') {
+        html = renderYearPeriodCompare();
     } else if (tab === 'type') {
         html = renderTypeCompare();
     } else if (tab === 'issueNum') {
@@ -4035,32 +4069,31 @@ function renderYearlyTrend() {
     if (!data || data.length === 0) return '<div>暫無數據</div>';
     
     let html = `
+    <div style="font-size:12px; font-weight:bold; color:#e65100; margin-bottom:10px;">📊 2010-2025年完整年度統計（從01工作表掛牌日期統計）</div>
     <table class="trend-year-table">
         <tr>
             <th>年度</th>
             <th>總檔數</th>
             <th>詢圈</th>
             <th>競拍</th>
-            <th>發行規模</th>
             <th>平均振幅</th>
         </tr>`;
     
-    let totalAll = 0, totalInquiry = 0, totalAuction = 0, totalSize = 0;
+    let totalAll = 0, totalInquiry = 0, totalAuction = 0;
     data.forEach(d => {
         const ampClass = d.avgAmp >= 80 ? 'amp-high' : (d.avgAmp < 30 ? 'amp-low' : '');
+        const auctionNote = d.auction === 0 ? '' : '';
         html += `
         <tr>
             <td class="year-cell">${d.year}年</td>
             <td><b>${d.total}</b></td>
             <td style="color:#1565c0;">${d.inquiry}</td>
-            <td style="color:#e65100;">${d.auction}</td>
-            <td>${d.totalSize > 0 ? d.totalSize.toFixed(0) + '億' : '-'}</td>
+            <td style="color:#e65100;">${d.auction > 0 ? d.auction : '-'}</td>
             <td class="${ampClass}">${d.avgAmp > 0 ? d.avgAmp.toFixed(1) + '%' : '-'}</td>
         </tr>`;
         totalAll += d.total;
         totalInquiry += d.inquiry;
         totalAuction += d.auction;
-        totalSize += d.totalSize;
     });
     
     // 合計列
@@ -4070,24 +4103,22 @@ function renderYearlyTrend() {
             <td><b>${totalAll}</b></td>
             <td style="color:#1565c0;"><b>${totalInquiry}</b></td>
             <td style="color:#e65100;"><b>${totalAuction}</b></td>
-            <td><b>${totalSize.toFixed(0)}億</b></td>
             <td>-</td>
         </tr>`;
     
     html += `</table>`;
     
     // 趨勢洞察
-    const recentYears = data.filter(d => d.year >= 2022);
-    const peak = recentYears.reduce((max, d) => d.avgAmp > max.avgAmp ? d : max, recentYears[0]);
+    const peak = data.reduce((max, d) => d.avgAmp > max.avgAmp ? d : max, data[0]);
     const latest = data[data.length - 1];
     
     html += `
     <div class="trend-insight-box">
         <div class="insight-title">📊 Rex大叔趨勢觀察</div>
         <div class="insight-content">
-            2019-2021年以詢圈為主，2022年競拍制度成熟後競拍比例逐年提高。
-            ${peak.year}年振幅高峰${peak.avgAmp.toFixed(1)}%，${latest.year}年降至${latest.avgAmp.toFixed(1)}%。
-            2024年發行量達歷史新高${data.find(d=>d.year===2024)?.total || 139}檔，市場競爭加劇。
+            2010-2018年以詢圈為主，2019年開始有競拍案例，2022年後競拍比例快速提升。<br>
+            振幅高峰為${peak.year}年(${peak.avgAmp.toFixed(1)}%)，2024-2025年振幅明顯下降至22-44%。<br>
+            2024年發行量達歷史新高139檔，市場競爭加劇，選股難度提高。
         </div>
     </div>`;
     
@@ -4095,13 +4126,14 @@ function renderYearlyTrend() {
 }
 
 function renderGuaranteeCompare() {
-    const g = marketTrendData.guarantee.guaranteed;
-    const u = marketTrendData.guarantee.unguaranteed;
+    const overall = marketTrendData.guarantee.overall;
+    const yearly = marketTrendData.guarantee.yearly;
     
-    const winner = g.avgAmp > u.avgAmp ? '有擔保' : '無擔保';
-    const diff = Math.abs(g.avgAmp - u.avgAmp).toFixed(1);
+    const g = overall.guaranteed;
+    const u = overall.unguaranteed;
     
     let html = `
+    <div style="font-size:12px; font-weight:bold; color:#e65100; margin-bottom:10px;">📊 整體擔保比較（全部年度）</div>
     <div class="trend-compare-grid">
         <div class="trend-compare-card">
             <h4>🛡️ 有擔保</h4>
@@ -4141,12 +4173,45 @@ function renderGuaranteeCompare() {
                 <span class="trend-compare-value ${u.avgAmp > g.avgAmp ? 'positive' : ''}">${u.avgAmp.toFixed(1)}%</span>
             </div>
         </div>
-    </div>
+    </div>`;
+    
+    // 加入多年度表格
+    if (yearly && yearly.length > 0) {
+        html += `
+    <div style="font-size:12px; font-weight:bold; color:#e65100; margin:15px 0 10px 0;">📈 各年度 有擔保 vs 無擔保 振幅比較</div>
+    <table class="trend-year-table">
+        <tr>
+            <th>年度</th>
+            <th>有擔保</th>
+            <th>振幅</th>
+            <th>無擔保</th>
+            <th>振幅</th>
+            <th>勝出</th>
+        </tr>`;
+        
+        yearly.forEach(y => {
+            const winner = y.gAmp > y.uAmp ? '有擔保' : '無擔保';
+            const winnerColor = winner === '有擔保' ? '#2e7d32' : '#1565c0';
+            html += `
+        <tr>
+            <td class="year-cell">${y.year}年</td>
+            <td>${y.gCount}</td>
+            <td class="${y.gAmp > y.uAmp ? 'amp-high' : ''}">${y.gAmp.toFixed(1)}%</td>
+            <td>${y.uCount}</td>
+            <td class="${y.uAmp > y.gAmp ? 'amp-high' : ''}">${y.uAmp.toFixed(1)}%</td>
+            <td style="color:${winnerColor}; font-weight:bold;">${winner}</td>
+        </tr>`;
+        });
+        html += `</table>`;
+    }
+    
+    html += `
     <div class="trend-insight-box">
         <div class="insight-title">📊 Rex大叔分析結論</div>
         <div class="insight-content">
-            <strong>${winner}</strong>表現較佳，平均振幅高出${diff}%。
-            ${winner === '有擔保' ? '有擔保CB提供較高安全邊際，掛牌後表現相對穩健。' : '無擔保CB雖風險較高，但市場給予較高評價。'}
+            整體<strong>有擔保(77.0%)</strong>振幅高於無擔保(63.4%)。
+            但各年度表現不一，2020/2022/2024年無擔保反而較佳。
+            有擔保提供較高安全邊際，適合穩健型投資人。
         </div>
     </div>`;
     
@@ -4154,58 +4219,41 @@ function renderGuaranteeCompare() {
 }
 
 function renderSizeCompare() {
-    const s = marketTrendData.size.small;
-    const l = marketTrendData.size.large;
-    
-    const winner = s.avgAmp > l.avgAmp ? '小規模(<10億)' : '大規模(≥10億)';
-    const diff = Math.abs(s.avgAmp - l.avgAmp).toFixed(1);
+    const ranges = marketTrendData.size.ranges;
+    if (!ranges || ranges.length === 0) return '<div>暫無數據</div>';
     
     let html = `
-    <div class="trend-compare-grid">
-        <div class="trend-compare-card">
-            <h4>📦 發行規模 < 10億</h4>
-            <div class="trend-compare-row">
-                <span class="trend-compare-label">檔數</span>
-                <span class="trend-compare-value">${s.count}</span>
-            </div>
-            <div class="trend-compare-row">
-                <span class="trend-compare-label">掛牌均高</span>
-                <span class="trend-compare-value">${s.avgHigh.toFixed(1)}</span>
-            </div>
-            <div class="trend-compare-row">
-                <span class="trend-compare-label">掛牌均低</span>
-                <span class="trend-compare-value">${s.avgLow.toFixed(1)}</span>
-            </div>
-            <div class="trend-compare-row">
-                <span class="trend-compare-label">平均振幅</span>
-                <span class="trend-compare-value ${s.avgAmp > l.avgAmp ? 'positive' : ''}">${s.avgAmp.toFixed(1)}%</span>
-            </div>
-        </div>
-        <div class="trend-compare-card">
-            <h4>🏢 發行規模 ≥ 10億</h4>
-            <div class="trend-compare-row">
-                <span class="trend-compare-label">檔數</span>
-                <span class="trend-compare-value">${l.count}</span>
-            </div>
-            <div class="trend-compare-row">
-                <span class="trend-compare-label">掛牌均高</span>
-                <span class="trend-compare-value">${l.avgHigh.toFixed(1)}</span>
-            </div>
-            <div class="trend-compare-row">
-                <span class="trend-compare-label">掛牌均低</span>
-                <span class="trend-compare-value">${l.avgLow.toFixed(1)}</span>
-            </div>
-            <div class="trend-compare-row">
-                <span class="trend-compare-label">平均振幅</span>
-                <span class="trend-compare-value ${l.avgAmp > s.avgAmp ? 'positive' : ''}">${l.avgAmp.toFixed(1)}%</span>
-            </div>
-        </div>
-    </div>
+    <div style="font-size:12px; font-weight:bold; color:#e65100; margin-bottom:10px;">📊 發行規模區間統計（全部年度，依05工作表設定）</div>
+    <table class="trend-year-table">
+        <tr>
+            <th>規模區間</th>
+            <th>檔數</th>
+            <th>掛牌均高</th>
+            <th>掛牌均低</th>
+            <th>平均振幅</th>
+        </tr>`;
+    
+    const maxAmp = Math.max(...ranges.map(r => r.avgAmp));
+    ranges.forEach(r => {
+        const ampClass = r.avgAmp === maxAmp ? 'amp-high' : (r.avgAmp < 65 ? 'amp-low' : '');
+        html += `
+        <tr>
+            <td class="year-cell">${r.label}</td>
+            <td>${r.count}</td>
+            <td>${r.avgHigh.toFixed(1)}</td>
+            <td>${r.avgLow.toFixed(1)}</td>
+            <td class="${ampClass}">${r.avgAmp.toFixed(1)}%</td>
+        </tr>`;
+    });
+    html += `</table>`;
+    
+    html += `
     <div class="trend-insight-box">
         <div class="insight-title">📊 Rex大叔分析結論</div>
         <div class="insight-content">
-            <strong>${winner}</strong>表現較佳，平均振幅高出${diff}%。
-            發行規模較小的CB流通在外籌碼較少，相對容易有較大的價格波動空間。
+            <strong>小於2億(88.1%)</strong>振幅最高，2~10億為甜蜜區間(70-71%)。
+            規模越大振幅越低，但大規模(>20億)仍有63.7%，流動性較佳。
+            選股時可優先考慮2~10億的中小規模CB。
         </div>
     </div>`;
     
@@ -4213,58 +4261,171 @@ function renderSizeCompare() {
 }
 
 function renderCapitalCompare() {
-    const s = marketTrendData.capital.small;
-    const l = marketTrendData.capital.large;
-    
-    const winner = s.avgAmp > l.avgAmp ? '小股本(<10億)' : '大股本(≥10億)';
-    const diff = Math.abs(s.avgAmp - l.avgAmp).toFixed(1);
+    const ranges = marketTrendData.capital.ranges;
+    if (!ranges || ranges.length === 0) return '<div>暫無數據</div>';
     
     let html = `
-    <div class="trend-compare-grid">
-        <div class="trend-compare-card">
-            <h4>🌱 股本 < 10億</h4>
-            <div class="trend-compare-row">
-                <span class="trend-compare-label">檔數</span>
-                <span class="trend-compare-value">${s.count}</span>
-            </div>
-            <div class="trend-compare-row">
-                <span class="trend-compare-label">掛牌均高</span>
-                <span class="trend-compare-value">${s.avgHigh.toFixed(1)}</span>
-            </div>
-            <div class="trend-compare-row">
-                <span class="trend-compare-label">掛牌均低</span>
-                <span class="trend-compare-value">${s.avgLow.toFixed(1)}</span>
-            </div>
-            <div class="trend-compare-row">
-                <span class="trend-compare-label">平均振幅</span>
-                <span class="trend-compare-value ${s.avgAmp > l.avgAmp ? 'positive' : ''}">${s.avgAmp.toFixed(1)}%</span>
-            </div>
-        </div>
-        <div class="trend-compare-card">
-            <h4>🏛️ 股本 ≥ 10億</h4>
-            <div class="trend-compare-row">
-                <span class="trend-compare-label">檔數</span>
-                <span class="trend-compare-value">${l.count}</span>
-            </div>
-            <div class="trend-compare-row">
-                <span class="trend-compare-label">掛牌均高</span>
-                <span class="trend-compare-value">${l.avgHigh.toFixed(1)}</span>
-            </div>
-            <div class="trend-compare-row">
-                <span class="trend-compare-label">掛牌均低</span>
-                <span class="trend-compare-value">${l.avgLow.toFixed(1)}</span>
-            </div>
-            <div class="trend-compare-row">
-                <span class="trend-compare-label">平均振幅</span>
-                <span class="trend-compare-value ${l.avgAmp > s.avgAmp ? 'positive' : ''}">${l.avgAmp.toFixed(1)}%</span>
-            </div>
-        </div>
-    </div>
+    <div style="font-size:12px; font-weight:bold; color:#e65100; margin-bottom:10px;">📊 股本區間統計（全部年度，依05工作表設定）</div>
+    <table class="trend-year-table">
+        <tr>
+            <th>股本區間</th>
+            <th>檔數</th>
+            <th>掛牌均高</th>
+            <th>掛牌均低</th>
+            <th>平均振幅</th>
+        </tr>`;
+    
+    const maxAmp = Math.max(...ranges.map(r => r.avgAmp));
+    ranges.forEach(r => {
+        const ampClass = r.avgAmp === maxAmp ? 'amp-high' : (r.avgAmp < 60 ? 'amp-low' : '');
+        html += `
+        <tr>
+            <td class="year-cell">${r.label}</td>
+            <td>${r.count}</td>
+            <td>${r.avgHigh.toFixed(1)}</td>
+            <td>${r.avgLow.toFixed(1)}</td>
+            <td class="${ampClass}">${r.avgAmp.toFixed(1)}%</td>
+        </tr>`;
+    });
+    html += `</table>`;
+    
+    html += `
     <div class="trend-insight-box">
         <div class="insight-title">📊 Rex大叔分析結論</div>
         <div class="insight-content">
-            <strong>${winner}</strong>表現較佳，平均振幅高出${diff}%。
-            股本較小的公司通常為成長型企業，股價波動空間較大，連帶CB表現也較為活潑。
+            <strong>6~10億(79.8%)</strong>振幅最高，為最佳股本區間。
+            小股本(<6億)因股價波動大，反而振幅較低(55-58%)。
+            大股本(>20億)企業通常較穩定，振幅適中(66.9%)。
+        </div>
+    </div>`;
+    
+    return html;
+}
+
+// v3.59 新增：轉換價區間分析
+function renderConversionCompare() {
+    const ranges = marketTrendData.conversion.ranges;
+    if (!ranges || ranges.length === 0) return '<div>暫無數據</div>';
+    
+    let html = `
+    <div style="font-size:12px; font-weight:bold; color:#e65100; margin-bottom:10px;">📊 轉換價區間統計（全部年度，依05工作表設定）</div>
+    <table class="trend-year-table">
+        <tr>
+            <th>轉換價區間</th>
+            <th>檔數</th>
+            <th>掛牌均高</th>
+            <th>掛牌均低</th>
+            <th>平均振幅</th>
+        </tr>`;
+    
+    const maxAmp = Math.max(...ranges.map(r => r.avgAmp));
+    ranges.forEach(r => {
+        const ampClass = r.avgAmp === maxAmp ? 'amp-high' : (r.avgAmp < 60 ? 'amp-low' : '');
+        html += `
+        <tr>
+            <td class="year-cell">${r.label}</td>
+            <td>${r.count}</td>
+            <td>${r.avgHigh.toFixed(1)}</td>
+            <td>${r.avgLow.toFixed(1)}</td>
+            <td class="${ampClass}">${r.avgAmp.toFixed(1)}%</td>
+        </tr>`;
+    });
+    html += `</table>`;
+    
+    html += `
+    <div class="trend-insight-box">
+        <div class="insight-title">📊 Rex大叔分析結論</div>
+        <div class="insight-content">
+            <strong>低轉換價(<50元)</strong>振幅較高(74-77%)，主因低價股波動空間大。
+            轉換價150~200元振幅最低(52.7%)，高價股相對穩定。
+            轉換價>200元反而回升至57.2%，可能因多為優質高成長股。
+        </div>
+    </div>`;
+    
+    return html;
+}
+
+// v3.59 新增：信評區間分析
+function renderRatingCompare() {
+    const ranges = marketTrendData.rating.ranges;
+    if (!ranges || ranges.length === 0) return '<div>暫無數據</div>';
+    
+    let html = `
+    <div style="font-size:12px; font-weight:bold; color:#e65100; margin-bottom:10px;">📊 信評區間統計（全部年度，依05工作表設定）</div>
+    <table class="trend-year-table">
+        <tr>
+            <th>信評等級</th>
+            <th>檔數</th>
+            <th>掛牌均高</th>
+            <th>掛牌均低</th>
+            <th>平均振幅</th>
+        </tr>`;
+    
+    const validRanges = ranges.filter(r => r.count > 0 && r.avgAmp > 0);
+    const maxAmp = Math.max(...validRanges.map(r => r.avgAmp));
+    ranges.forEach(r => {
+        if (r.count === 0) return;
+        const ampClass = r.avgAmp === maxAmp ? 'amp-high' : (r.avgAmp < 55 && r.avgAmp > 0 ? 'amp-low' : '');
+        html += `
+        <tr>
+            <td class="year-cell">${r.label}</td>
+            <td>${r.count}</td>
+            <td>${r.avgHigh > 0 ? r.avgHigh.toFixed(1) : '-'}</td>
+            <td>${r.avgLow > 0 ? r.avgLow.toFixed(1) : '-'}</td>
+            <td class="${ampClass}">${r.avgAmp > 0 ? r.avgAmp.toFixed(1) + '%' : '-'}</td>
+        </tr>`;
+    });
+    html += `</table>`;
+    
+    html += `
+    <div class="trend-insight-box">
+        <div class="insight-title">📊 Rex大叔分析結論</div>
+        <div class="insight-content">
+            <strong>TCRI 3(75.4%)</strong>振幅最高但樣本少(27檔)。
+            <strong>TCRI 5(69.2%/231檔)</strong>為最佳平衡點，兼顧振幅與樣本數。
+            TCRI 7以下振幅明顯下降(52-54%)，信用風險較高需謹慎。
+        </div>
+    </div>`;
+    
+    return html;
+}
+
+// v3.59 新增：發行年期分析
+function renderYearPeriodCompare() {
+    const ranges = marketTrendData.years.ranges;
+    if (!ranges || ranges.length === 0) return '<div>暫無數據</div>';
+    
+    let html = `
+    <div style="font-size:12px; font-weight:bold; color:#e65100; margin-bottom:10px;">📊 發行年期統計（全部年度，依05工作表設定）</div>
+    <table class="trend-year-table">
+        <tr>
+            <th>發行年期</th>
+            <th>檔數</th>
+            <th>掛牌均高</th>
+            <th>掛牌均低</th>
+            <th>平均振幅</th>
+        </tr>`;
+    
+    ranges.forEach(r => {
+        const ampClass = r.avgAmp > 80 ? 'amp-high' : (r.avgAmp < 65 ? 'amp-low' : '');
+        html += `
+        <tr>
+            <td class="year-cell">${r.label}</td>
+            <td>${r.count}</td>
+            <td>${r.avgHigh.toFixed(1)}</td>
+            <td>${r.avgLow.toFixed(1)}</td>
+            <td class="${ampClass}">${r.avgAmp.toFixed(1)}%</td>
+        </tr>`;
+    });
+    html += `</table>`;
+    
+    html += `
+    <div class="trend-insight-box">
+        <div class="insight-title">📊 Rex大叔分析結論</div>
+        <div class="insight-content">
+            <strong>5年期(86.9%)</strong>振幅最佳，為CB發行的黃金年期。
+            3年期為主流(1047檔)，振幅62.2%相對穩健。
+            7年期目前僅1檔(新唐一)，振幅363.9%為特例，不具統計意義。
         </div>
     </div>`;
     
@@ -4336,62 +4497,58 @@ function renderIssueNumAnalysis() {
     if (!data) return '<div>暫無數據</div>';
     
     let html = `
-    <div style="font-size:12px; font-weight:bold; color:#e65100; margin-bottom:10px;">📊 各發行次數掛牌表現（全部年度）</div>
+    <div style="font-size:12px; font-weight:bold; color:#e65100; margin-bottom:10px;">📊 各發行次數掛牌表現（全部年度，完整到第10次）</div>
     <table class="trend-year-table">
         <tr>
             <th>發行次數</th>
-            <th>檔數</th>
+            <th>總檔數</th>
+            <th>有掛牌</th>
             <th>掛牌均高</th>
             <th>掛牌均低</th>
             <th>平均振幅</th>
         </tr>`;
     
     const byNum = data.byNumber;
-    for (let i = 1; i <= 7; i++) {
-        if (byNum[i]) {
-            const d = byNum[i];
-            const ampClass = d.avgAmp >= 80 ? 'amp-high' : (d.avgAmp < 65 ? 'amp-low' : '');
-            html += `
+    byNum.forEach(d => {
+        const ampClass = d.avgAmp >= 80 ? 'amp-high' : (d.avgAmp < 65 ? 'amp-low' : '');
+        html += `
         <tr>
-            <td class="year-cell">第${i}次</td>
+            <td class="year-cell">第${d.num}次</td>
+            <td>${d.total}</td>
             <td>${d.count}</td>
             <td>${d.avgHigh.toFixed(1)}</td>
             <td>${d.avgLow.toFixed(1)}</td>
             <td class="${ampClass}">${d.avgAmp.toFixed(1)}%</td>
         </tr>`;
-        }
-    }
+    });
     html += `</table>`;
     
-    // 年度首發 vs 多次發行比較
+    // 年度首發 vs 多次發行比較（多年度）
     html += `
-    <div style="font-size:12px; font-weight:bold; color:#e65100; margin:15px 0 10px 0;">📈 各年度 首次發行 vs 多次發行</div>
+    <div style="font-size:12px; font-weight:bold; color:#e65100; margin:15px 0 10px 0;">📈 各年度 首次發行 vs 多次發行（2010-2025）</div>
     <table class="trend-year-table">
         <tr>
             <th>年度</th>
-            <th>首發檔數</th>
+            <th>首發</th>
             <th>首發振幅</th>
-            <th>多次檔數</th>
+            <th>多次</th>
             <th>多次振幅</th>
             <th>勝出</th>
         </tr>`;
     
     const yearly = data.yearly;
-    [2022, 2023, 2024, 2025].forEach(year => {
-        const y = yearly[year];
-        if (y) {
-            const winner = y.first.amp > y.multi.amp ? '首發' : '多次';
-            const winnerColor = winner === '首發' ? '#2e7d32' : '#1565c0';
-            html += `
+    yearly.forEach(y => {
+        const winner = y.firstAmp > y.multiAmp ? '首發' : '多次';
+        const winnerColor = winner === '首發' ? '#2e7d32' : '#1565c0';
+        html += `
         <tr>
-            <td class="year-cell">${year}年</td>
-            <td>${y.first.count}</td>
-            <td class="${y.first.amp > y.multi.amp ? 'amp-high' : ''}">${y.first.amp.toFixed(1)}%</td>
-            <td>${y.multi.count}</td>
-            <td class="${y.multi.amp > y.first.amp ? 'amp-high' : ''}">${y.multi.amp.toFixed(1)}%</td>
+            <td class="year-cell">${y.year}年</td>
+            <td>${y.first}</td>
+            <td class="${y.firstAmp > y.multiAmp ? 'amp-high' : ''}">${y.firstAmp.toFixed(1)}%</td>
+            <td>${y.multi}</td>
+            <td class="${y.multiAmp > y.firstAmp ? 'amp-high' : ''}">${y.multiAmp.toFixed(1)}%</td>
             <td style="color:${winnerColor}; font-weight:bold;">${winner}</td>
         </tr>`;
-        }
     });
     html += `</table>`;
     
@@ -4400,15 +4557,16 @@ function renderIssueNumAnalysis() {
         <div class="insight-title">📊 Rex大叔分析結論</div>
         <div class="insight-content">
             整體而言，<strong>首次發行(80.2%)</strong>振幅略高於多次發行。
-            但近年差距縮小，2025年甚至多次發行(24.4%)略優於首發(19.6%)。
-            發行次數達5次以上時振幅明顯下降，市場對老面孔興趣減弱。
+            第9次發行振幅最高(127.7%)但僅5檔，屬特例。
+            發行次數達5次以上時振幅下降至63-69%區間。
+            近年(2024-2025)差距縮小，市場對發行次數敏感度降低。
         </div>
     </div>`;
     
     return html;
 }
 
-// v3.59 新增：KY股分析
+// v3.59 新增：KY股分析（多年度）
 function renderKYAnalysis() {
     const data = marketTrendData.ky;
     if (!data) return '<div>暫無數據</div>';
@@ -4458,9 +4616,9 @@ function renderKYAnalysis() {
         </div>
     </div>`;
     
-    // 年度KY股統計表
+    // 年度KY股統計表（多年度2010-2025）
     html += `
-    <div style="font-size:12px; font-weight:bold; color:#e65100; margin:15px 0 10px 0;">📈 各年度KY股 vs 非KY股表現</div>
+    <div style="font-size:12px; font-weight:bold; color:#e65100; margin:15px 0 10px 0;">📈 各年度KY股 vs 非KY股表現（2010-2025）</div>
     <table class="trend-year-table">
         <tr>
             <th>年度</th>
@@ -4473,14 +4631,13 @@ function renderKYAnalysis() {
         </tr>`;
     
     const yearly = data.yearly;
-    [2022, 2023, 2024, 2025].forEach(year => {
-        const y = yearly[year];
-        if (y && y.kyAmp !== undefined) {
-            const winner = y.kyAmp > y.nonKyAmp ? 'KY' : '非KY';
-            const winnerColor = winner === 'KY' ? '#9c27b0' : '#2e7d32';
-            html += `
+    yearly.forEach(y => {
+        if (y.ky === 0) return; // 跳過沒有KY股的年度
+        const winner = y.kyAmp > y.nonKyAmp ? 'KY' : '非KY';
+        const winnerColor = winner === 'KY' ? '#9c27b0' : '#2e7d32';
+        html += `
         <tr>
-            <td class="year-cell">${year}年</td>
+            <td class="year-cell">${y.year}年</td>
             <td>${y.total}</td>
             <td>${y.ky}</td>
             <td>${y.kyRatio.toFixed(1)}%</td>
@@ -4488,7 +4645,6 @@ function renderKYAnalysis() {
             <td class="${y.nonKyAmp > y.kyAmp ? 'amp-high' : ''}">${y.nonKyAmp.toFixed(1)}%</td>
             <td style="color:${winnerColor}; font-weight:bold;">${winner}</td>
         </tr>`;
-        }
     });
     html += `</table>`;
     
@@ -4498,7 +4654,8 @@ function renderKYAnalysis() {
         <div class="insight-content">
             整體而言，<strong>非KY股(77.6%)</strong>振幅高於KY股(63.5%)。
             但2022年KY股振幅高達142.9%大幅領先，顯示KY股波動較大、個案差異明顯。
-            2025年KY股表現(14.1%)遠低於非KY股(24.0%)，投資KY股CB需更謹慎選股。
+            KY股比例維持約7-15%，2025年KY股表現(14.1%)遠低於非KY股(24.0%)，
+            投資KY股CB需更謹慎選股。
         </div>
     </div>`;
     

@@ -280,11 +280,10 @@ const FILES = {
 const DB = { 
     news:[], memo:[], memoStock:[], memoIndustry:[], reports:[], strategy:[], stocks:{}, 
     cb:[], cbHistory:[], cbAuction:[], cbPrimary:[], cbBoard:[], cbBalance:[], cbCBAS:[],
-    cbCompleted:[], // 競拍完成的案件
     trends:[], conceptStocks:[] 
 };
 let CB_MODE = 'active'; // 'active' 掛牌中, 'history' 歷史, 'auction' 競拍, 'primary' 初級市場, 'balance' 流通餘額, 'cbas' CBAS報價
-let PRIMARY_MODE = 'underwriting'; // 'underwriting' 承銷中, 'board' 董事會公告, 'completed' 競拍完成
+let PRIMARY_MODE = 'underwriting'; // 'underwriting' 承銷中, 'board' 董事會公告
 let STOCK_MODE = 'all'; // 'all' 全部個股, 'concept' 概念股
 let MEMO_MODE = 'all'; // 'all' 全部, 'stock' 個股, 'industry' 產業
 const META = { 
@@ -294,10 +293,9 @@ const META = {
     stratMacro:{}, stratFundamental:{}, stratTheme:{}, stratChip:{}, stratTech:{}, stratQuarter:{}, stratPicks:{},
     revData: { month:{}, quarter:{}, year:{}, highlights:{} },
     cbStats: { total: 0, companies: 0, industries: {}, totalBalance: 0 },
-    cbPrimaryStats: { underwriting: 0, board: 0, completed: 0 },
+    cbPrimaryStats: { underwriting: 0, board: 0 },
     cbBalanceStats: { total: 0, totalBalance: 0 },
     cbCBASStats: { total: 0 },
-    cbAuctionMap: {}, // CB代號 -> 競拍資料的對照表
     stockStats: { total: 0, conceptTotal: 0, markets: {}, industries: {}, conceptCategories: {} },
     memoStats: { total: 0, stockTotal: 0, industryTotal: 0, brokers: {}, types: {} }
 };
@@ -886,7 +884,7 @@ async function init() {
             const high = hl.high || parseFloat(r['掛牌最高']) || 0;
             const low = hl.low || parseFloat(r['掛牌最低']) || 0;
             
-            const auctionData = {
+            DB.cbAuction.push({
                 '_cbCode': cbCode,
                 '_stockCode': normalizeCode(r['股票代號']),
                 '_name': safe(r['名稱']),
@@ -897,7 +895,6 @@ async function init() {
                 '_range': low > 0 ? (high - low) / low * 100 : 0,
                 '開標日期': r['開標日期'],
                 '截標日': r['截標日'],
-                '截標收盤': r['截標收盤'], // 新增截標收盤
                 '發行規模': r['發行規模'],
                 '競拍張數': r['競拍張數'],
                 '底標價': r['底標價'],
@@ -906,40 +903,17 @@ async function init() {
                 '最低溢價': r['最低溢價'],
                 '平均得標': r['平均得標'],
                 '平均溢價': r['平均溢價'],
-                '最高得標': r['最高得標'], // 新增最高得標
                 '投標倍數': r['投標倍數'],
                 '合格件數': r['合格件數'],
                 '發行券商': safe(r['發行券商']),
                 '轉換價': r['轉換價'],
                 '訂價溢價率': r['訂價溢價率']
-            };
-            
-            DB.cbAuction.push(auctionData);
-            
-            // 建立 cbAuctionMap 以便後續查找
-            META.cbAuctionMap[cbCode] = auctionData;
+            });
         });
         
-        // 解析投標期間的結束日期，格式如「12/3-12/4」或「11/10-11/12」
-        const parseBidEndDate = (bidPeriod) => {
-            if(!bidPeriod) return null;
-            const match = bidPeriod.match(/(\d{1,2})\/(\d{1,2})-(\d{1,2})\/(\d{1,2})/);
-            if(!match) return null;
-            const endMonth = parseInt(match[3]);
-            const endDay = parseInt(match[4]);
-            const now = new Date();
-            let year = now.getFullYear();
-            // 如果結束月份大於當前月份，可能是去年的資料
-            if(endMonth > now.getMonth() + 3) year--;
-            return new Date(year, endMonth - 1, endDay, 23, 59, 59);
-        };
-        
         // 讀取 06_發行案件 (承銷中)
-        const today = new Date();
-        const cbPrimaryTemp = []; // 暫存承銷中案件
-        
         XLSX.utils.sheet_to_json(wb.Sheets['06_發行案件']||[]).forEach(r => {
-            const primaryData = {
+            DB.cbPrimary.push({
                 '_stockCode': normalizeCode(r['股票代號']),
                 '_cbCode': safe(r['標的代號']),
                 '_name': safe(r['發行標的']),
@@ -960,43 +934,9 @@ async function init() {
                 '_capital': r['股本'],
                 '_stockPrice': r['股價'],
                 '_volatility': r['60天波動率']
-            };
-            
-            // 判斷是否為競拍且已過期
-            const isAuction = primaryData._method === '競拍';
-            const bidEndDate = parseBidEndDate(primaryData._bidPeriod);
-            const isExpired = bidEndDate && bidEndDate < today;
-            
-            if(isAuction && isExpired) {
-                // 從 04 工作表找到對應的競拍資料
-                const auctionData = META.cbAuctionMap[primaryData._cbCode];
-                
-                // 合併資料，用截標收盤計算理論價值
-                const convPrice = parseFloat(primaryData._convPrice) || 0;
-                const closingPrice = auctionData ? parseFloat(auctionData['截標收盤']) || 0 : parseFloat(primaryData._stockPrice) || 0;
-                const theoryValue = convPrice > 0 ? (closingPrice / convPrice * 100) : 0;
-                
-                DB.cbCompleted.push({
-                    ...primaryData,
-                    '_isCompleted': true,
-                    '_closingPrice': closingPrice, // 截標收盤
-                    '_theoryValue': theoryValue,   // 用截標收盤計算的理論價值
-                    '_lowestBid': auctionData ? auctionData['最低得標'] : null,
-                    '_avgBid': auctionData ? auctionData['平均得標'] : null,
-                    '_highestBid': auctionData ? auctionData['最高得標'] : null,
-                    '_bidMultiple': auctionData ? auctionData['投標倍數'] : null,
-                    '_auctionData': auctionData // 保存完整的競拍資料
-                });
-            } else {
-                cbPrimaryTemp.push(primaryData);
-            }
+            });
         });
-        
-        // 將未過期的案件存入 DB.cbPrimary
-        DB.cbPrimary = cbPrimaryTemp;
         META.cbPrimaryStats.underwriting = DB.cbPrimary.length;
-        META.cbPrimaryStats.completed = DB.cbCompleted.length;
-        console.log('承銷中:', DB.cbPrimary.length, '競拍完成:', DB.cbCompleted.length);
         
         // 讀取 07_董事會決議
         XLSX.utils.sheet_to_json(wb.Sheets['07_董事會決議']||[]).forEach(r => {
@@ -1538,11 +1478,10 @@ function renderCBStats() {
             </div>
         `;
     } else if(CB_MODE === 'primary') {
-        // 初級市場 - 承銷中/董事會/競拍完成
+        // 初級市場 - 承銷中/董事會
         const primaryTabsHtml = `
             <div class="cb-sub-switcher">
                 <span class="cb-sub-tab ${PRIMARY_MODE==='underwriting'?'active':''}" onclick="setPrimaryMode('underwriting')">📋 承銷中案件</span>
-                <span class="cb-sub-tab ${PRIMARY_MODE==='completed'?'active':''}" onclick="setPrimaryMode('completed')">✅ 競拍完成</span>
                 <span class="cb-sub-tab ${PRIMARY_MODE==='board'?'active':''}" onclick="setPrimaryMode('board')">📝 董事會公告</span>
             </div>
         `;
@@ -1579,35 +1518,6 @@ function renderCBStats() {
                             `<div class="cb-ind-tag" onclick="setSearch('${b}')">${b}<span class="num">${cnt}</span></div>`
                         ).join('')}
                     </div>
-                </div>
-            `;
-        } else if(PRIMARY_MODE === 'completed') {
-            // 競拍完成統計
-            const brokerCnt = {};
-            DB.cbCompleted.forEach(c => {
-                const broker = c._broker || '其他';
-                brokerCnt[broker] = (brokerCnt[broker] || 0) + 1;
-            });
-            const sortedBrokers = Object.entries(brokerCnt).sort((a,b) => b[1]-a[1]);
-            
-            return `
-                <div class="cb-stats">
-                    ${tabsHtml}
-                    ${primaryTabsHtml}
-                    <div class="cb-stats-grid">
-                        <div class="cb-stat-item">
-                            <div class="cb-stat-num">${META.cbPrimaryStats.completed}</div>
-                            <div class="cb-stat-label">競拍完成</div>
-                        </div>
-                    </div>
-                    ${sortedBrokers.length > 0 ? `
-                    <div class="cb-ind-title">🏦 發行券商分佈</div>
-                    <div class="cb-ind-grid">
-                        ${sortedBrokers.slice(0, 15).map(([b, cnt]) => 
-                            `<div class="cb-ind-tag" onclick="setSearch('${b}')">${b}<span class="num">${cnt}</span></div>`
-                        ).join('')}
-                    </div>
-                    ` : ''}
                 </div>
             `;
         } else {
@@ -1749,11 +1659,7 @@ function renderList() {
         if(CB_MODE === 'active') list = DB.cb;
         else if(CB_MODE === 'history') list = DB.cbHistory;
         else if(CB_MODE === 'auction') list = DB.cbAuction;
-        else if(CB_MODE === 'primary') {
-            if(PRIMARY_MODE === 'underwriting') list = DB.cbPrimary;
-            else if(PRIMARY_MODE === 'completed') list = DB.cbCompleted;
-            else list = DB.cbBoard;
-        }
+        else if(CB_MODE === 'primary') list = PRIMARY_MODE === 'underwriting' ? DB.cbPrimary : DB.cbBoard;
         else if(CB_MODE === 'balance') list = DB.cbBalance;
         else if(CB_MODE === 'cbas') list = DB.cbCBAS;
     }
@@ -1774,17 +1680,15 @@ function renderList() {
     
     // CB 用表格形式
     if(CURR_DB === 'cb') {
-        // 某些模式需要過濾掉掛牌最高或最低為 0 的資料
-        let validFiltered = filtered;
-        if(CB_MODE === 'active' || CB_MODE === 'history' || CB_MODE === 'auction') {
-            validFiltered = filtered.filter(r => {
-                const high = parseFloat(r['_high']) || 0;
-                const low = parseFloat(r['_low']) || 0;
-                return high > 0 && low > 0;
-            });
-            // 更新顯示筆數
-            $('resCount').innerText = validFiltered.length;
-        }
+        // 過濾掉掛牌最高或最低為 0 的資料
+        const validFiltered = filtered.filter(r => {
+            const high = parseFloat(r['_high']) || 0;
+            const low = parseFloat(r['_low']) || 0;
+            return high > 0 && low > 0;
+        });
+        
+        // 更新顯示筆數
+        $('resCount').innerText = validFiltered.length;
         
         if(CB_MODE === 'auction') {
             // 競拍模式專屬表格
@@ -1892,86 +1796,6 @@ function renderList() {
                     </tr>`;
                 });
                 html += `</tbody></table></div>`;
-            } else if(PRIMARY_MODE === 'completed') {
-                // 競拍完成 - 使用卡片式顯示，比較預估價與實際得標結果
-                html = '';
-                filtered.forEach(r => {
-                    const convPrice = parseFloat(r._convPrice) || 0;
-                    const closingPrice = r._closingPrice || 0;
-                    const theoryValue = r._theoryValue || 0;
-                    const premium = parseFloat(r._premium) || 0;
-                    
-                    // 實際得標結果
-                    const lowestBid = parseFloat(r._lowestBid) || 0;
-                    const avgBid = parseFloat(r._avgBid) || 0;
-                    const highestBid = parseFloat(r._highestBid) || 0;
-                    const bidMultiple = parseFloat(r._bidMultiple) || 0;
-                    
-                    html += `
-                    <div class="completed-auction-card" style="background:#fff;border-radius:12px;padding:20px;margin-bottom:15px;border:1px solid #ffe0e0;">
-                        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:15px;">
-                            <div>
-                                <div style="font-size:18px;font-weight:700;color:#2c3e50">${r._name} <span style="color:#999;font-weight:400">${r._stockCode}</span></div>
-                                <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
-                                    <span style="background:var(--primary);color:#fff;padding:4px 12px;border-radius:15px;font-size:12px;font-weight:600">${r._broker}</span>
-                                    <span style="background:#e0e0e0;color:#666;padding:4px 12px;border-radius:15px;font-size:12px">${r._bidPeriod}</span>
-                                    <span style="background:#27ae60;color:#fff;padding:4px 12px;border-radius:15px;font-size:12px">✓ 競拍完成</span>
-                                </div>
-                            </div>
-                            <div style="text-align:right">
-                                <div style="font-size:12px;color:#888">發行規模</div>
-                                <div style="font-size:22px;font-weight:800;color:var(--primary)">${fmtNum(r._amount, 0)} <span style="font-size:14px">億</span></div>
-                            </div>
-                        </div>
-                        
-                        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:15px;padding:15px;background:#f8f9fa;border-radius:8px;margin-bottom:15px;">
-                            <div style="text-align:center">
-                                <div style="font-size:12px;color:#888">轉換價</div>
-                                <div style="font-size:18px;font-weight:700">${fmtNum(convPrice, 1)}</div>
-                            </div>
-                            <div style="text-align:center">
-                                <div style="font-size:12px;color:#888">截標收盤</div>
-                                <div style="font-size:18px;font-weight:700">${fmtNum(closingPrice, 1)}</div>
-                            </div>
-                            <div style="text-align:center">
-                                <div style="font-size:12px;color:#888">理論價值</div>
-                                <div style="font-size:18px;font-weight:700;color:${theoryValue >= 100 ? 'var(--up)' : 'var(--down)'}">${fmtNum(theoryValue, 1)}</div>
-                            </div>
-                            <div style="text-align:center">
-                                <div style="font-size:12px;color:#888">訂價溢價</div>
-                                <div style="font-size:18px;font-weight:700">${fmtNum(premium*100, 1)}%</div>
-                            </div>
-                        </div>
-                        
-                        ${lowestBid > 0 ? `
-                        <div style="background:#fff8f0;border:1px solid #ffe0c0;border-radius:8px;padding:15px;margin-bottom:15px;">
-                            <div style="font-size:13px;font-weight:600;color:#e67e22;margin-bottom:12px;">📊 實際得標結果 ${bidMultiple > 0 ? `(投標倍數 ${fmtNum(bidMultiple, 2)}x)` : ''}</div>
-                            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:15px;">
-                                <div style="text-align:center;padding:12px;background:#fff;border-radius:8px;">
-                                    <div style="font-size:11px;color:#888">最低得標</div>
-                                    <div style="font-size:20px;font-weight:800;color:#27ae60">${fmtNum(lowestBid, 2)}</div>
-                                </div>
-                                <div style="text-align:center;padding:12px;background:#fff;border-radius:8px;border:2px solid #e67e22;">
-                                    <div style="font-size:11px;color:#888">平均得標</div>
-                                    <div style="font-size:20px;font-weight:800;color:#e67e22">${fmtNum(avgBid, 2)}</div>
-                                </div>
-                                <div style="text-align:center;padding:12px;background:#fff;border-radius:8px;">
-                                    <div style="font-size:11px;color:#888">最高得標</div>
-                                    <div style="font-size:20px;font-weight:800;color:#e74c3c">${fmtNum(highestBid, 2)}</div>
-                                </div>
-                            </div>
-                        </div>
-                        ` : `
-                        <div style="background:#f5f5f5;border-radius:8px;padding:15px;text-align:center;color:#999;">
-                            ⏳ 等待得標結果更新...
-                        </div>
-                        `}
-                    </div>`;
-                });
-                
-                if(filtered.length === 0) {
-                    html = '<div style="text-align:center;padding:30px;color:#999">目前沒有已完成的競拍案件</div>';
-                }
             } else {
                 // 董事會公告
                 html = `<div class="cb-table-wrap"><table class="cb-table" id="cbTable">

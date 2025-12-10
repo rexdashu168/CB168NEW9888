@@ -1295,6 +1295,10 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
             <div class="form-group">
                 <label>競拍截止日1:30收盤價格 (元) *</label>
                 <input type="number" id="stockPrice" step="0.01" required placeholder="例如：461.5">
+            </div>
+            <div class="form-group">
+                <label>實際轉換價格 (元) *</label>
+                <input type="number" id="actualConversionPrice" step="0.01" required placeholder="例如：450">
                 <div class="warning-box">⚠️ 理論價格隨股價變動，建議於 13:30 截標前再進行最終試算</div>
             </div>
         </div>
@@ -5108,6 +5112,7 @@ function bindInputEvents() {
     });
     
     document.getElementById('stockPrice').addEventListener('input', updateSmartReminders);
+    document.getElementById('actualConversionPrice').addEventListener('input', updateSmartReminders); // v3.66 新增
     document.getElementById('conversionPrice').addEventListener('change', updateSmartReminders); // v3.66 新增
 }
 
@@ -5127,13 +5132,14 @@ function getConversionMidValue(rangeStr) {
 
 function updateSmartReminders() {
     const s = parseFloat(document.getElementById('stockPrice').value);
-    const cRaw = document.getElementById('conversionPrice').value;
-    const c = getConversionMidValue(cRaw); // v3.66 支援區間選擇
+    // v3.66 優先使用實際轉換價格
+    const actualC = parseFloat(document.getElementById('actualConversionPrice').value);
+    const c = actualC > 0 ? actualC : getConversionMidValue(document.getElementById('conversionPrice').value);
     const r = document.getElementById('rating').value;
     
     if(s && c) { 
         const t = (s/c)*100; 
-        let msg = `目前理論價：<b>${t.toFixed(2)} 元</b>（轉換價取${cRaw}中間值${c}元）。`;
+        let msg = `目前理論價：<b>${t.toFixed(2)} 元</b>（轉換價 ${c} 元）。`;
         if(t > 120) msg += " 🔥 理論價偏高，注意溢價風險。";
         else if(t < 95) msg += " 💡 理論價具吸引力。";
         else msg += " ✨ 理論價處於合理區間。";
@@ -5193,8 +5199,9 @@ function calculateEvaluation(d) {
         return isNaN(num) ? 0 : num;
     }
     
-    const conversionPriceNum = getRangeMidValue(d.conversionPrice, 'conversion');
-    const theo = conversionPriceNum > 0 ? (d.stockPrice/conversionPriceNum)*100 : 0;
+    // v3.66 修改：使用實際轉換價格計算理論價格
+    const actualConvPrice = d.actualConversionPrice || getRangeMidValue(d.conversionPrice, 'conversion');
+    const theo = actualConvPrice > 0 ? (d.stockPrice/actualConvPrice)*100 : 0;
     const brokerName = d.broker || ""; 
     
     const dims = [
@@ -5352,6 +5359,7 @@ document.getElementById('evaluationForm').addEventListener('submit', function(e)
             rating: document.getElementById('rating').value,
             capital: document.getElementById('capital').value, // v3.66 改為區間選擇
             stockPrice: parseFloat(document.getElementById('stockPrice').value), 
+            actualConversionPrice: parseFloat(document.getElementById('actualConversionPrice').value), // v3.66 新增：實際轉換價格
             conversionPrice: document.getElementById('conversionPrice').value, // v3.66 改為區間選擇
             subjectiveWeight: parseFloat(document.getElementById('subjectiveWeight').value)||0, 
             subjectiveLowPremium: parseFloat(document.getElementById('subjectiveLowPremium').value)||0, 

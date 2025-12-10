@@ -1272,16 +1272,34 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     <div class="input-panel" id="inputPanel">
         <h2>📋 輸入標的資料</h2>
         <form id="evaluationForm">
-            <div class="form-section">
-                <h3>📌 基本資料</h3>
-                <div class="form-group">
-                    <label>CB名稱 / 代號 *</label>
-                    <input type="text" id="cbName" placeholder="輸入代號(如2383)或名稱搜尋歷史">
-                    <div id="historyResults" class="history-results"></div>
-                    <div id="cbNameInfo" class="info-box"></div>
+            <!-- v3.69 新增：閃電帶入功能 -->
+            <div class="form-section" style="background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border: 2px solid #ffc107; border-radius: 10px; padding: 15px; margin-bottom: 15px;">
+                <h3 style="color: #f57c00; border-left-color: #ff9800;">⚡ 閃電帶入（承銷中案件）</h3>
+                <div class="form-group" style="margin-bottom: 10px;">
+                    <label style="color: #e65100;">選擇承銷案件，自動帶入所有條件</label>
+                    <select id="quickSelect" style="border: 2px solid #ffc107; font-weight: bold;">
+                        <option value="">-- 請選擇承銷中案件 --</option>
+                        <optgroup label="🔥 競拍案件" id="auctionGroup"></optgroup>
+                        <optgroup label="📋 詢圈案件" id="inquiryGroup"></optgroup>
+                    </select>
                 </div>
+                <div id="quickSelectInfo" style="display:none; background:#fff; padding:10px; border-radius:6px; margin-top:8px; font-size:12px; border-left:4px solid #ff9800;">
+                </div>
+                <div style="font-size:11px; color:#795548; margin-top:8px;">
+                    💡 選擇後自動帶入所有條件，「截標日收盤價」可自行調整
+                </div>
+            </div>
 
 ```
+        <div class="form-section">
+            <h3>📌 基本資料</h3>
+            <div class="form-group">
+                <label>CB名稱 / 代號 *</label>
+                <input type="text" id="cbName" placeholder="輸入代號(如2383)或名稱搜尋歷史">
+                <div id="historyResults" class="history-results"></div>
+                <div id="cbNameInfo" class="info-box"></div>
+            </div>
+            
             <div class="form-group"><label>股本區間 *</label><select id="capital"><option value="">請選擇...</option><option value="小於3億">小於3億</option><option value="3~6億">3~6億</option><option value="6~10億">6~10億</option><option value="10~15億">10~15億</option><option value="15~20億">15~20億</option><option value="大於20億">大於20億</option></select><div id="capitalInfo" class="info-box"></div></div>
             <div class="form-group"><label>產業分類 *</label><select id="industry"><option value="">載入中...</option></select><div id="industryInfo" class="info-box"></div></div>
             <div class="form-group"><label>發行券商</label><select id="broker"><option value="">載入中...</option></select><div id="brokerInfo" class="info-box"></div></div>
@@ -6094,10 +6112,211 @@ function initResizer() {
     });
 }
 
+// ==========================================
+// v3.69 閃電帶入功能 - 承銷中案件資料
+// ==========================================
+const pendingCases = [
+  {"stockCode":"3032","cbCode":"30322","cbName":"偉訓二","auctionType":"競拍","industry":"電子零組件","broker":"統一證券","issueSize":10.0,"sizeRange":"10~15億","capital":11.33,"capitalRange":"10~15億","convPrice":101.9,"convRange":"100~150元","years":"5","guarantee":"無擔保","rating":"5","floorPrice":104.73,"stockPrice":83.9},
+  {"stockCode":"4772","cbCode":"47721","cbName":"台特化一","auctionType":"詢圈","industry":"化工","broker":"元大證券","issueSize":20.0,"sizeRange":"大於20億","capital":14.77,"capitalRange":"10~15億","convPrice":323.8,"convRange":"大於200元","years":"3","guarantee":"無擔保","rating":"6","floorPrice":101.0,"stockPrice":301.0},
+  {"stockCode":"6890","cbCode":"68901","cbName":"來億一KY","auctionType":"詢圈","industry":"運動休閒","broker":"富邦證券","issueSize":45.0,"sizeRange":"大於20億","capital":24.94,"capitalRange":"大於20億","convPrice":246.4,"convRange":"大於200元","years":"3","guarantee":"無擔保","rating":"5","floorPrice":100.0,"stockPrice":280.5},
+  {"stockCode":"6442","cbCode":"64422","cbName":"光聖二","auctionType":"詢圈","industry":"通信網路","broker":"台新證券","issueSize":10.0,"sizeRange":"10~15億","capital":7.73,"capitalRange":"6~10億","convPrice":1103.5,"convRange":"大於200元","years":"3","guarantee":"無擔保","rating":"5","floorPrice":100.5,"stockPrice":1255.0},
+  {"stockCode":"3135","cbCode":"31351","cbName":"凌航一","auctionType":"詢圈","industry":"半導體","broker":"統一證券","issueSize":10.0,"sizeRange":"10~15億","capital":7.75,"capitalRange":"6~10億","convPrice":52.19,"convRange":"50~100元","years":"3","guarantee":"無擔保","rating":"6","floorPrice":100.0,"stockPrice":58.7},
+  {"stockCode":"6890","cbCode":"68902","cbName":"來億二KY","auctionType":"競拍","industry":"運動休閒","broker":"富邦證券","issueSize":5.0,"sizeRange":"5~10億","capital":24.94,"capitalRange":"大於20億","convPrice":245.2,"convRange":"大於200元","years":"3","guarantee":"無擔保","rating":"5","floorPrice":119.83,"stockPrice":280.5},
+  {"stockCode":"2732","cbCode":"27324","cbName":"六角四","auctionType":"詢圈","industry":"觀光餐旅","broker":"華南永昌證","issueSize":6.0,"sizeRange":"5~10億","capital":4.65,"capitalRange":"3~6億","convPrice":0,"convRange":"","years":"5","guarantee":"無擔保","rating":"5","floorPrice":100.0,"stockPrice":71.6},
+  {"stockCode":"6442","cbCode":"64423","cbName":"光聖三","auctionType":"競拍","industry":"通信網路","broker":"台新證券","issueSize":15.0,"sizeRange":"15~20億","capital":7.73,"capitalRange":"6~10億","convPrice":1065.9,"convRange":"大於200元","years":"3","guarantee":"無擔保","rating":"5","floorPrice":100.0,"stockPrice":1255.0},
+  {"stockCode":"5309","cbCode":"53096","cbName":"系統電六","auctionType":"詢圈","industry":"電子零組件","broker":"富邦證券","issueSize":7.0,"sizeRange":"5~10億","capital":20.44,"capitalRange":"大於20億","convPrice":0,"convRange":"","years":"5","guarantee":"無擔保","rating":"6","floorPrice":100.5,"stockPrice":58.5},
+  {"stockCode":"5309","cbCode":"53097","cbName":"系統電七","auctionType":"競拍","industry":"電子零組件","broker":"富邦證券","issueSize":5.0,"sizeRange":"5~10億","capital":20.44,"capitalRange":"大於20億","convPrice":55.0,"convRange":"50~100元","years":"3","guarantee":"無擔保","rating":"6","floorPrice":101.0,"stockPrice":58.5},
+  {"stockCode":"4739","cbCode":"47394","cbName":"康普四","auctionType":"競拍","industry":"化工","broker":"福邦證券","issueSize":6.0,"sizeRange":"5~10億","capital":11.86,"capitalRange":"10~15億","convPrice":71.0,"convRange":"50~100元","years":"5","guarantee":"無擔保","rating":"","floorPrice":100.0,"stockPrice":68.3},
+  {"stockCode":"6670","cbCode":"66702","cbName":"復盛應用二","auctionType":"競拍","industry":"運動休閒","broker":"台新證券","issueSize":20.0,"sizeRange":"大於20億","capital":13.94,"capitalRange":"10~15億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"3","floorPrice":100,"stockPrice":240.5},
+  {"stockCode":"4113","cbCode":"41136","cbName":"聯上六","auctionType":"競拍","industry":"建材營造","broker":"合庫證券","issueSize":3.0,"sizeRange":"2~5億","capital":23.11,"capitalRange":"大於20億","convPrice":0,"convRange":"","years":"5","guarantee":"無擔保","rating":"7","floorPrice":100.0,"stockPrice":20.75},
+  {"stockCode":"2236","cbCode":"22363","cbName":"百達三KY","auctionType":"詢圈","industry":"汽車","broker":"台新證券","issueSize":4.5,"sizeRange":"2~5億","capital":5.96,"capitalRange":"3~6億","convPrice":0,"convRange":"","years":"5","guarantee":"無擔保","rating":"7","floorPrice":100.0,"stockPrice":94.4},
+  {"stockCode":"8299","cbCode":"82993","cbName":"群聯三","auctionType":"詢圈","industry":"半導體","broker":"凱基證券","issueSize":60.0,"sizeRange":"大於20億","capital":20.66,"capitalRange":"大於20億","convPrice":0,"convRange":"","years":"5","guarantee":"無擔保","rating":"3","floorPrice":100,"stockPrice":1055.0},
+  {"stockCode":"8042","cbCode":"80426","cbName":"金山電六","auctionType":"詢圈","industry":"電子零組件","broker":"永豐金證券","issueSize":3.5,"sizeRange":"2~5億","capital":12.95,"capitalRange":"10~15億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"6","floorPrice":100.0,"stockPrice":52.0},
+  {"stockCode":"6796","cbCode":"67962","cbName":"晉弘二","auctionType":"詢圈","industry":"生技醫療","broker":"富邦證券","issueSize":2.0,"sizeRange":"2~5億","capital":3.82,"capitalRange":"3~6億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"7","floorPrice":100,"stockPrice":92.5},
+  {"stockCode":"6904","cbCode":"69041","cbName":"伯鑫一","auctionType":"競拍","industry":"其他","broker":"國泰證券","issueSize":2.0,"sizeRange":"2~5億","capital":1.85,"capitalRange":"小於3億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"6","floorPrice":100,"stockPrice":124.0},
+  {"stockCode":"3543","cbCode":"35431","cbName":"州巧一","auctionType":"競拍","industry":"光電","broker":"福邦證券","issueSize":4.0,"sizeRange":"2~5億","capital":8.93,"capitalRange":"6~10億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"","floorPrice":100.0,"stockPrice":45.0},
+  {"stockCode":"3715","cbCode":"37151","cbName":"定穎一","auctionType":"詢圈","industry":"電子零組件","broker":"凱基證券","issueSize":5.0,"sizeRange":"5~10億","capital":27.77,"capitalRange":"大於20億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"5","floorPrice":100,"stockPrice":118.0},
+  {"stockCode":"3715","cbCode":"37152","cbName":"定穎二","auctionType":"競拍","industry":"電子零組件","broker":"凱基證券","issueSize":10.0,"sizeRange":"10~15億","capital":27.77,"capitalRange":"大於20億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"5","floorPrice":102.0,"stockPrice":118.0},
+  {"stockCode":"6510","cbCode":"65101","cbName":"精測一","auctionType":"競拍","industry":"半導體","broker":"元大證券","issueSize":20.0,"sizeRange":"大於20億","capital":3.28,"capitalRange":"3~6億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"4","floorPrice":100,"stockPrice":1800.0},
+  {"stockCode":"2745","cbCode":"27451","cbName":"五福一","auctionType":"競拍","industry":"觀光餐旅","broker":"台新證券","issueSize":3.0,"sizeRange":"2~5億","capital":3.38,"capitalRange":"3~6億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"4","floorPrice":100.0,"stockPrice":112.5},
+  {"stockCode":"8431","cbCode":"84312","cbName":"匯鑽科二","auctionType":"詢圈","industry":"其他電子","broker":"華南永昌證","issueSize":3.0,"sizeRange":"2~5億","capital":4.44,"capitalRange":"3~6億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"7","floorPrice":100.0,"stockPrice":44.45},
+  {"stockCode":"2467","cbCode":"24672","cbName":"志聖二","auctionType":"詢圈","industry":"電子零組件","broker":"富邦證券","issueSize":7.0,"sizeRange":"5~10億","capital":15.68,"capitalRange":"15~20億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"5","floorPrice":100,"stockPrice":197.5},
+  {"stockCode":"2467","cbCode":"24673","cbName":"志聖三","auctionType":"競拍","industry":"電子零組件","broker":"富邦證券","issueSize":10.0,"sizeRange":"10~15億","capital":15.68,"capitalRange":"15~20億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"5","floorPrice":100.0,"stockPrice":197.5}
+];
+
+// 初始化閃電帶入選單
+function initQuickSelect() {
+    const select = document.getElementById('quickSelect');
+    const auctionGroup = document.getElementById('auctionGroup');
+    const inquiryGroup = document.getElementById('inquiryGroup');
+    
+    if (!select || !auctionGroup || !inquiryGroup) return;
+    
+    // 清空並填入選項
+    auctionGroup.innerHTML = '';
+    inquiryGroup.innerHTML = '';
+    
+    pendingCases.forEach((c, idx) => {
+        const option = document.createElement('option');
+        option.value = idx;
+        const convInfo = c.convPrice > 0 ? ` | 轉換價${c.convPrice}` : '';
+        option.textContent = `${c.cbName} (${c.cbCode}) - ${c.industry} | ${c.sizeRange}${convInfo}`;
+        
+        if (c.auctionType === '競拍') {
+            auctionGroup.appendChild(option);
+        } else {
+            inquiryGroup.appendChild(option);
+        }
+    });
+    
+    // 監聽選擇事件
+    select.addEventListener('change', handleQuickSelect);
+}
+
+// 處理閃電帶入選擇
+function handleQuickSelect() {
+    const select = document.getElementById('quickSelect');
+    const infoDiv = document.getElementById('quickSelectInfo');
+    const idx = select.value;
+    
+    if (idx === '' || idx === null) {
+        infoDiv.style.display = 'none';
+        return;
+    }
+    
+    const c = pendingCases[parseInt(idx)];
+    if (!c) return;
+    
+    // 帶入各欄位
+    document.getElementById('cbName').value = c.cbName + ' (' + c.cbCode + ')';
+    
+    // 股本區間
+    if (c.capitalRange) {
+        document.getElementById('capital').value = c.capitalRange;
+    }
+    
+    // 產業分類
+    const industrySelect = document.getElementById('industry');
+    if (c.industry) {
+        // 尋找匹配的選項
+        let found = false;
+        for (let opt of industrySelect.options) {
+            if (opt.value === c.industry || opt.textContent.includes(c.industry)) {
+                industrySelect.value = opt.value;
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            // 如果找不到，嘗試新增選項
+            const newOpt = document.createElement('option');
+            newOpt.value = c.industry;
+            newOpt.textContent = c.industry;
+            industrySelect.appendChild(newOpt);
+            industrySelect.value = c.industry;
+        }
+    }
+    
+    // 發行券商
+    const brokerSelect = document.getElementById('broker');
+    if (c.broker) {
+        let found = false;
+        for (let opt of brokerSelect.options) {
+            if (opt.value === c.broker || opt.textContent.includes(c.broker)) {
+                brokerSelect.value = opt.value;
+                found = true;
+                break;
+            }
+        }
+        if (!found && c.broker) {
+            const newOpt = document.createElement('option');
+            newOpt.value = c.broker;
+            newOpt.textContent = c.broker;
+            brokerSelect.appendChild(newOpt);
+            brokerSelect.value = c.broker;
+        }
+    }
+    
+    // 發行規模區間
+    if (c.sizeRange) {
+        document.getElementById('issueSize').value = c.sizeRange;
+    }
+    
+    // 轉換價區間
+    if (c.convRange) {
+        document.getElementById('conversionPrice').value = c.convRange;
+    }
+    
+    // 發行年期
+    if (c.years) {
+        document.getElementById('years').value = c.years;
+    }
+    
+    // 擔保情況
+    if (c.guarantee) {
+        document.getElementById('guarantee').value = c.guarantee;
+    }
+    
+    // 信用評等
+    if (c.rating) {
+        document.getElementById('rating').value = c.rating;
+    }
+    
+    // 底標價格
+    if (c.floorPrice) {
+        document.getElementById('floorPrice').value = c.floorPrice;
+    }
+    
+    // 股價（截標日收盤價）- 可編輯
+    if (c.stockPrice > 0) {
+        document.getElementById('stockPrice').value = c.stockPrice;
+    }
+    
+    // 實際轉換價格
+    if (c.convPrice > 0) {
+        document.getElementById('actualConversionPrice').value = c.convPrice;
+    }
+    
+    // 顯示帶入資訊
+    const theoPrice = c.convPrice > 0 ? ((c.stockPrice / c.convPrice) * 100).toFixed(2) : '待計算';
+    infoDiv.innerHTML = `
+        <div style="font-weight:bold; color:#e65100; margin-bottom:5px;">✅ 已帶入「${c.cbName}」資料</div>
+        <div style="display:flex; flex-wrap:wrap; gap:8px;">
+            <span>📊 ${c.auctionType}</span>
+            <span>🏭 ${c.industry}</span>
+            <span>💰 規模${c.issueSize}億</span>
+            <span>📈 股本${c.capital}億</span>
+            ${c.convPrice > 0 ? `<span>🎯 轉換價${c.convPrice}</span>` : ''}
+            <span>⭐ TCRI${c.rating || '未知'}</span>
+        </div>
+        <div style="margin-top:5px; color:#1565c0;">
+            📌 參考股價：<b>${c.stockPrice}</b> 元 | 底標：<b>${c.floorPrice}</b> 元 
+            ${c.convPrice > 0 ? `| 理論價約：<b>${theoPrice}</b> 元` : ''}
+        </div>
+        <div style="margin-top:5px; color:#795548; font-size:11px;">
+            ⚠️ 股價為參考值，請於截標日13:30前確認最新收盤價
+        </div>
+    `;
+    infoDiv.style.display = 'block';
+    
+    // 觸發各欄位的 change 事件以更新統計資訊
+    ['capital', 'industry', 'issueSize', 'conversionPrice', 'years', 'guarantee', 'rating', 'broker'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.dispatchEvent(new Event('change'));
+    });
+    
+    // 觸發股價和轉換價的 input 事件
+    ['stockPrice', 'actualConversionPrice', 'floorPrice'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.dispatchEvent(new Event('input'));
+    });
+}
+
 // 系統啟動
 window.addEventListener('DOMContentLoaded', function() {
     loadStatistics();
     initResizer();
+    initQuickSelect();  // v3.69 新增
 });
 </script>
 

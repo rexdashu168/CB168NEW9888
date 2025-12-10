@@ -1276,8 +1276,6 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
                     <div id="historyResults" class="history-results"></div>
                     <div id="cbNameInfo" class="info-box"></div>
                 </div>
-
-```
             <div class="form-group"><label>股本區間 *</label><select id="capital" required><option value="">請選擇...</option><option value="小於3億">小於3億</option><option value="3~6億">3~6億</option><option value="6~10億">6~10億</option><option value="10~15億">10~15億</option><option value="15~20億">15~20億</option><option value="大於20億">大於20億</option></select><div id="capitalInfo" class="info-box"></div></div>
             <div class="form-group"><label>產業分類 *</label><select id="industry" required><option value="">載入中...</option></select><div id="industryInfo" class="info-box"></div></div>
             <div class="form-group"><label>發行券商</label><select id="broker"><option value="">載入中...</option></select><div id="brokerInfo" class="info-box"></div></div>
@@ -1299,7 +1297,11 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
             <div class="form-group">
                 <label>實際轉換價格 (元) *</label>
                 <input type="number" id="actualConversionPrice" step="0.01" required placeholder="例如：450">
-                <div class="warning-box">⚠️ 理論價格隨股價變動，建議於 13:30 截標前再進行最終試算</div>
+            </div>
+            <div class="form-group">
+                <label>底標價格 (元)</label>
+                <input type="number" id="floorPrice" step="0.1" value="100" placeholder="預設：100">
+                <div class="warning-box">⚠️ 理論價格隨股價變動，建議於 13:30 截標前再進行最終試算<br>💡 當理論價 < 90元時，系統自動切換為「得標價格分析法」</div>
             </div>
         </div>
         <div class="form-section" style="background: linear-gradient(135deg, #fff9e6 0%, #ffe6cc 100%); border: 2px solid #ff9800; border-radius: 12px; padding: 15px;">
@@ -1330,7 +1332,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 <div class="result-panel" id="resultPanel">
     <div id="welcomeMsg" class="welcome-message">
         <h2>歡迎使用AI智能競拍評估系統</h2>
-        <p style="margin-top:10px; color:#666; font-size: 14px;">v3.66 區間選擇版<br>✅ 股本/發行規模/轉換價改為區間選擇<br>✅ 手機版表格優化不溢出<br>✅ 承銷/董事會明細欄位增強</p>
+        <p style="margin-top:10px; color:#666; font-size: 14px;">v3.66 雙模式分析版<br>✅ 溢價率分析法：理論價≥90元時適用<br>✅ 得標價格分析法：理論價<90元自動切換<br>✅ 新增底標價格/實際轉換價格欄位</p>
         <div class="stats-summary" id="statsSummary"></div>
         
         <!-- v3.58 市場趨勢分析 -->
@@ -5113,6 +5115,7 @@ function bindInputEvents() {
     
     document.getElementById('stockPrice').addEventListener('input', updateSmartReminders);
     document.getElementById('actualConversionPrice').addEventListener('input', updateSmartReminders); // v3.66 新增
+    document.getElementById('floorPrice').addEventListener('input', updateSmartReminders); // v3.66 新增：底標價格
     document.getElementById('conversionPrice').addEventListener('change', updateSmartReminders); // v3.66 新增
 }
 
@@ -5136,13 +5139,21 @@ function updateSmartReminders() {
     const actualC = parseFloat(document.getElementById('actualConversionPrice').value);
     const c = actualC > 0 ? actualC : getConversionMidValue(document.getElementById('conversionPrice').value);
     const r = document.getElementById('rating').value;
+    const floorPrice = parseFloat(document.getElementById('floorPrice').value) || 100;
     
     if(s && c) { 
         const t = (s/c)*100; 
         let msg = `目前理論價：<b>${t.toFixed(2)} 元</b>（轉換價 ${c} 元）。`;
-        if(t > 120) msg += " 🔥 理論價偏高，注意溢價風險。";
-        else if(t < 95) msg += " 💡 理論價具吸引力。";
-        else msg += " ✨ 理論價處於合理區間。";
+        
+        // v3.66 根據理論價提示分析方法
+        if (t < 90) {
+            msg += `<br>📊 <b style="color:#e65100;">將使用「得標價格分析法」</b>（理論價 < 90元，溢價率法可能低於底標${floorPrice}元）`;
+        } else {
+            msg += `<br>📈 <b style="color:#1976d2;">將使用「溢價率分析法」</b>`;
+            if(t > 120) msg += " 🔥 理論價偏高，注意溢價風險。";
+            else if(t < 95) msg += " 💡 理論價具吸引力。";
+            else msg += " ✨ 理論價處於合理區間。";
+        }
         
         if(r && ['7','8','9'].includes(r)) msg += "<br>⚠️ 信評較低，建議保守策略。";
         
@@ -5202,27 +5213,52 @@ function calculateEvaluation(d) {
     // v3.66 修改：使用實際轉換價格計算理論價格
     const actualConvPrice = d.actualConversionPrice || getRangeMidValue(d.conversionPrice, 'conversion');
     const theo = actualConvPrice > 0 ? (d.stockPrice/actualConvPrice)*100 : 0;
+    const floorPrice = d.floorPrice || 100; // 底標價格，預設100元
     const brokerName = d.broker || ""; 
     
+    // v3.66 調整維度權重：產業25%、券商12%、股本10%、規模12%、信評17%、年期12%、轉價12%
     const dims = [
         {k:'industry',c:'產業',w:0.25,v:d.industry}, 
-        {k:'broker',c:'發行券商',w:0.13,v:brokerName},
-        {k:'capital',c:'股本',w:0.12,v:d.capital}, 
-        {k:'size',c:'發行規模',w:0.10,v:d.issueSize},
-        {k:'rating',c:'信評',w:0.15,v:d.rating}, 
-        {k:'guarantee',c:'擔保',w:0.12,v:d.guarantee},
-        {k:'years',c:'年期',w:0.08,v:d.years}, 
-        {k:'conversion',c:'轉換價',w:0.05,v:d.conversionPrice}
+        {k:'broker',c:'發行券商',w:0.12,v:brokerName},
+        {k:'capital',c:'股本',w:0.10,v:d.capital}, 
+        {k:'size',c:'發行規模',w:0.12,v:d.issueSize},
+        {k:'rating',c:'信評',w:0.17,v:d.rating}, 
+        {k:'years',c:'年期',w:0.12,v:d.years}, 
+        {k:'conversion',c:'轉換價',w:0.12,v:d.conversionPrice}
     ];
     
+    // === 計算各維度數據 ===
     let wL=0, wA=0, resDims={};
+    let wLowBid=0, wAvgBid=0; // 得標價格分析法用
+    
     dims.forEach(x=>{
         const s = getStatsSmart(x.c, x.v), coef = getWeightCoefficient(x.k, x.v);
-        resDims[x.k] = { ...s, coefficient: coef, weight: x.w, range: x.v, weightedLow: s.low*x.w*coef, weightedAvg: s.avg*x.w*coef };
+        
+        // 溢價率數據
+        resDims[x.k] = { 
+            ...s, 
+            coefficient: coef, 
+            weight: x.w, 
+            range: x.v, 
+            weightedLow: s.low*x.w*coef, 
+            weightedAvg: s.avg*x.w*coef
+        };
+        
+        // 得標價格數據（從rawData取得）
+        const lowBidPrice = s.rawData && s.rawData['平均最低得標價'] ? s.rawData['平均最低得標價'] : 0;
+        const avgBidPrice = s.rawData && s.rawData['平均得標價'] ? s.rawData['平均得標價'] : 0;
+        resDims[x.k].lowBidPrice = lowBidPrice;
+        resDims[x.k].avgBidPrice = avgBidPrice;
+        resDims[x.k].weightedLowBid = lowBidPrice * x.w * coef;
+        resDims[x.k].weightedAvgBid = avgBidPrice * x.w * coef;
+        
         if (s.rawData && s.rawData['區間名稱']) resDims[x.k].displayRange = s.rawData['區間名稱'];
         else resDims[x.k].displayRange = x.v;
-        wL+=resDims[x.k].weightedLow; 
-        wA+=resDims[x.k].weightedAvg;
+        
+        wL += resDims[x.k].weightedLow; 
+        wA += resDims[x.k].weightedAvg;
+        wLowBid += resDims[x.k].weightedLowBid;
+        wAvgBid += resDims[x.k].weightedAvgBid;
     });
     
     const subR = (d.subjectiveWeight||0)/100, objR = 1-subR;
@@ -5230,22 +5266,83 @@ function calculateEvaluation(d) {
     const tA = (wA*objR)+((d.subjectiveAvgPremium||0)*subR);
     const gap = tA-tL;
     
-    const p1 = theo*(1+tL/100);
-    const p2 = theo*(1+tA/100);
-    const p3 = theo*(1+(tA+gap)/100);
-    const p4 = theo*(1+(tA+gap*2)/100);
+    // === v3.66 判斷使用哪種分析方法 ===
+    const usePriceMethod = theo < 90; // 理論價低於90元時使用得標價格分析法
+    
+    let p1, p2, p3, p4;
+    let analysisMethod = '溢價率分析法';
+    let methodNote = '';
+    
+    if (usePriceMethod) {
+        // === 得標價格分析法 ===
+        analysisMethod = '得標價格分析法';
+        methodNote = `理論價(${safeFixed(theo)}元)低於90元，溢價率法可能低於底標(${floorPrice}元)，改用歷史得標價格加權計算`;
+        
+        // 加權平均得標價格
+        const weightedLowBidPrice = wLowBid > 0 ? wLowBid : floorPrice;
+        const weightedAvgBidPrice = wAvgBid > 0 ? wAvgBid : floorPrice + 2;
+        const bidGap = weightedAvgBidPrice - weightedLowBidPrice;
+        
+        // 確保不低於底標價格
+        p1 = Math.max(weightedLowBidPrice, floorPrice);
+        p2 = Math.max(weightedAvgBidPrice, floorPrice);
+        p3 = Math.max(weightedAvgBidPrice + bidGap, floorPrice);
+        p4 = Math.max(weightedAvgBidPrice + bidGap * 2, floorPrice);
+        
+        // 反推溢價率（相對於理論價）
+        const impliedLowPremium = theo > 0 ? ((p1/theo) - 1) * 100 : 0;
+        const impliedAvgPremium = theo > 0 ? ((p2/theo) - 1) * 100 : 0;
+        
+        return {
+            cbName: d.cbName, 
+            theoreticalPrice: safeFixed(theo), 
+            floorPrice: floorPrice,
+            dimensions: resDims, 
+            totalLowPremium: safeFixed(tL), 
+            totalAvgPremium: safeFixed(tA),
+            // 得標價格分析法結果
+            weightedLowBidPrice: safeFixed(weightedLowBidPrice),
+            weightedAvgBidPrice: safeFixed(weightedAvgBidPrice),
+            impliedLowPremium: safeFixed(impliedLowPremium),
+            impliedAvgPremium: safeFixed(impliedAvgPremium),
+            bidPrices: { conservative: safeFixed(p1), balanced: safeFixed(p2), aggressive: safeFixed(p3), ultimate: safeFixed(p4) },
+            inputData: d, 
+            analysisMethod: analysisMethod,
+            methodNote: methodNote,
+            usePriceMethod: true,
+            weightedSubjectiveLow: safeFixed(((d.subjectiveLowPremium||0)*subR)), 
+            weightedSubjectiveAvg: safeFixed(((d.subjectiveAvgPremium||0)*subR))
+        };
+    } else {
+        // === 溢價率分析法（原有邏輯）===
+        p1 = theo*(1+tL/100);
+        p2 = theo*(1+tA/100);
+        p3 = theo*(1+(tA+gap)/100);
+        p4 = theo*(1+(tA+gap*2)/100);
+        
+        // 檢查是否低於底標價格，給予警告
+        const belowFloor = p1 < floorPrice;
+        if (belowFloor) {
+            methodNote = `⚠️ 保守價(${safeFixed(p1)}元)低於底標(${floorPrice}元)，建議參考「得標價格分析法」`;
+        }
 
-    return {
-        cbName:d.cbName, 
-        theoreticalPrice:safeFixed(theo), 
-        dimensions:resDims, 
-        totalLowPremium:safeFixed(tL), 
-        totalAvgPremium:safeFixed(tA),
-        bidPrices:{ conservative:safeFixed(p1), balanced:safeFixed(p2), aggressive:safeFixed(p3), ultimate:safeFixed(p4) },
-        inputData:d, 
-        weightedSubjectiveLow:safeFixed(((d.subjectiveLowPremium||0)*subR)), 
-        weightedSubjectiveAvg:safeFixed(((d.subjectiveAvgPremium||0)*subR))
-    };
+        return {
+            cbName: d.cbName, 
+            theoreticalPrice: safeFixed(theo), 
+            floorPrice: floorPrice,
+            dimensions: resDims, 
+            totalLowPremium: safeFixed(tL), 
+            totalAvgPremium: safeFixed(tA),
+            bidPrices: { conservative: safeFixed(p1), balanced: safeFixed(p2), aggressive: safeFixed(p3), ultimate: safeFixed(p4) },
+            inputData: d, 
+            analysisMethod: analysisMethod,
+            methodNote: methodNote,
+            usePriceMethod: false,
+            belowFloor: belowFloor,
+            weightedSubjectiveLow: safeFixed(((d.subjectiveLowPremium||0)*subR)), 
+            weightedSubjectiveAvg: safeFixed(((d.subjectiveAvgPremium||0)*subR))
+        };
+    }
 }
 
 function displayResult(r) {
@@ -5256,19 +5353,36 @@ function displayResult(r) {
     let rows = ''; 
     const nm={'industry':'產業','broker':'券商','capital':'股本','size':'規模','rating':'信評','guarantee':'擔保','years':'年期','conversion':'轉價'};
     
-    for(const[k,d] of Object.entries(r.dimensions)) {
-        rows+=`<tr>
-            <td>${nm[k]}</td>
-            <td>${d.displayRange || d.range}</td>
-            <td>${safeFixed(d.low)}%</td>
-            <td>${safeFixed(d.avg)}%</td>
-            <td>${safeFixed(d.weight*100,0)}%</td>
-            <td>${safeFixed(d.weightedLow)}</td>
-            <td>${safeFixed(d.weightedAvg)}</td>
-        </tr>`;
+    // v3.66 根據分析方法顯示不同欄位
+    if (r.usePriceMethod) {
+        // 得標價格分析法：顯示得標價格欄位
+        for(const[k,d] of Object.entries(r.dimensions)) {
+            rows+=`<tr>
+                <td>${nm[k]}</td>
+                <td>${d.displayRange || d.range}</td>
+                <td>${safeFixed(d.lowBidPrice || 0, 1)}</td>
+                <td>${safeFixed(d.avgBidPrice || 0, 1)}</td>
+                <td>${safeFixed(d.weight*100,0)}%</td>
+                <td>${safeFixed(d.weightedLowBid || 0, 2)}</td>
+                <td>${safeFixed(d.weightedAvgBid || 0, 2)}</td>
+            </tr>`;
+        }
+    } else {
+        // 溢價率分析法：顯示溢價率欄位
+        for(const[k,d] of Object.entries(r.dimensions)) {
+            rows+=`<tr>
+                <td>${nm[k]}</td>
+                <td>${d.displayRange || d.range}</td>
+                <td>${safeFixed(d.low)}%</td>
+                <td>${safeFixed(d.avg)}%</td>
+                <td>${safeFixed(d.weight*100,0)}%</td>
+                <td>${safeFixed(d.weightedLow)}</td>
+                <td>${safeFixed(d.weightedAvg)}</td>
+            </tr>`;
+        }
     }
     
-    if(r.inputData.subjectiveWeight>0) {
+    if(r.inputData.subjectiveWeight>0 && !r.usePriceMethod) {
         rows+=`<tr style="background:#fff3e0">
             <td>主觀</td><td>自訂</td>
             <td>${r.inputData.subjectiveLowPremium}%</td>
@@ -5279,33 +5393,79 @@ function displayResult(r) {
         </tr>`;
     }
 
-    rows+=`<tfoot><tr>
-        <td></td><td style="text-align:right">合計</td>
-        <td>-</td><td>-</td><td>100%</td>
-        <td>${r.totalLowPremium}%</td>
-        <td>${r.totalAvgPremium}%</td>
-    </tr></tfoot>`;
+    // v3.66 根據分析方法顯示不同的合計行
+    if (r.usePriceMethod) {
+        rows+=`<tfoot><tr>
+            <td></td><td style="text-align:right">加權得標價</td>
+            <td>-</td><td>-</td><td>100%</td>
+            <td><b>${r.weightedLowBidPrice}</b></td>
+            <td><b>${r.weightedAvgBidPrice}</b></td>
+        </tr></tfoot>`;
+    } else {
+        rows+=`<tfoot><tr>
+            <td></td><td style="text-align:right">合計</td>
+            <td>-</td><td>-</td><td>100%</td>
+            <td>${r.totalLowPremium}%</td>
+            <td>${r.totalAvgPremium}%</td>
+        </tr></tfoot>`;
+    }
+    
+    // v3.66 分析方法標籤
+    const methodBadge = r.usePriceMethod 
+        ? `<span style="background:#e65100; color:white; padding:4px 12px; border-radius:20px; font-size:13px;">📊 得標價格分析法</span>`
+        : `<span style="background:#1976d2; color:white; padding:4px 12px; border-radius:20px; font-size:13px;">📈 溢價率分析法</span>`;
+    
+    // v3.66 分析方法說明
+    const methodNote = r.methodNote 
+        ? `<div style="background:#fff3e0; border-left:4px solid #ff9800; padding:10px 15px; margin:10px 0; border-radius:0 8px 8px 0; font-size:13px;">${r.methodNote}</div>` 
+        : '';
+    
+    // v3.66 核心數據區塊（根據分析方法不同）
+    let coreDataHtml = '';
+    if (r.usePriceMethod) {
+        coreDataHtml = `
+            <div style="font-size:16px; line-height:2;">
+                <div>理論價格：<b style="color:#667eea; font-size:20px;">${r.theoreticalPrice}</b> 元</div>
+                <div>底標價格：<b>${r.floorPrice}</b> 元</div>
+                <div style="margin-top:8px; padding:10px; background:#e8f5e9; border-radius:8px;">
+                    <div>📊 加權最低得標價：<b style="color:#2e7d32; font-size:18px;">${r.weightedLowBidPrice}</b> 元 <span style="color:#666; font-size:13px;">(相當溢價率 ${r.impliedLowPremium}%)</span></div>
+                    <div>📊 加權平均得標價：<b style="color:#1565c0; font-size:18px;">${r.weightedAvgBidPrice}</b> 元 <span style="color:#666; font-size:13px;">(相當溢價率 ${r.impliedAvgPremium}%)</span></div>
+                </div>
+            </div>
+        `;
+    } else {
+        coreDataHtml = `
+            <div style="font-size:16px; line-height:2;">
+                <div>理論價格：<b style="color:#667eea; font-size:20px;">${r.theoreticalPrice}</b> 元</div>
+                <div>底標價格：<b>${r.floorPrice}</b> 元</div>
+                <div>預估溢價：<b>${r.totalLowPremium}% ~ ${r.totalAvgPremium}%</b></div>
+            </div>
+        `;
+    }
+    
+    // v3.66 表格標題（根據分析方法不同）
+    const tableHeaders = r.usePriceMethod
+        ? `<th>維度</th><th>條件</th>
+           <th>最低<br>得標價</th><th>平均<br>得標價</th>
+           <th>權重</th><th>加權<br>最低</th><th>加權<br>平均</th>`
+        : `<th>維度</th><th>條件</th>
+           <th>最低<br>溢價</th><th>平均<br>溢價</th>
+           <th>權重</th><th>加權<br>最低</th><th>加權<br>平均</th>`;
     
     div.innerHTML = `
-    <div class="result-header"><h2>${r.cbName}</h2><div>AI 評估結果</div></div>
+    <div class="result-header"><h2>${r.cbName}</h2><div>AI 評估結果 ${methodBadge}</div></div>
+    ${methodNote}
     
     <div style="display:flex; gap:20px; flex-wrap:wrap;">
         <div class="detail-section" style="flex:1; min-width:280px;">
             <h3>📊 核心數據</h3>
-            <div style="font-size:16px; line-height:2;">
-                <div>理論價格：<b style="color:#667eea; font-size:20px;">${r.theoreticalPrice}</b> 元</div>
-                <div>預估溢價：<b>${r.totalLowPremium}% ~ ${r.totalAvgPremium}%</b></div>
-            </div>
+            ${coreDataHtml}
         </div>
         <div class="detail-section" style="flex:2; min-width:280px;">
             <h3>📐 維度權重分析</h3>
             <div style="overflow-x:auto;">
                 <table class="data-table">
-                    <thead><tr>
-                        <th>維度</th><th>條件</th>
-                        <th>最低<br>溢價</th><th>平均<br>溢價</th>
-                        <th>權重</th><th>加權<br>最低</th><th>加權<br>平均</th>
-                    </tr></thead>
+                    <thead><tr>${tableHeaders}</tr></thead>
                     <tbody>${rows}</tbody>
                 </table>
             </div>
@@ -5320,12 +5480,12 @@ function displayResult(r) {
             <div class="strategy-card conservative">
                 <h4>🛡️ 保守</h4>
                 <div class="price">${r.bidPrices.conservative}</div>
-                <div style="font-size:12px; color:#666;">追求高安全邊際</div>
+                <div style="font-size:12px; color:#666;">${r.usePriceMethod ? '加權最低得標價' : '追求高安全邊際'}</div>
             </div>
             <div class="strategy-card balanced">
                 <h4>⚖️ 平衡</h4>
                 <div class="price">${r.bidPrices.balanced}</div>
-                <div style="font-size:12px; color:#666;">參考市場平均</div>
+                <div style="font-size:12px; color:#666;">${r.usePriceMethod ? '加權平均得標價' : '參考市場平均'}</div>
             </div>
             <div class="strategy-card aggressive">
                 <h4>🚀 積極</h4>
@@ -5360,6 +5520,7 @@ document.getElementById('evaluationForm').addEventListener('submit', function(e)
             capital: document.getElementById('capital').value, // v3.66 改為區間選擇
             stockPrice: parseFloat(document.getElementById('stockPrice').value), 
             actualConversionPrice: parseFloat(document.getElementById('actualConversionPrice').value), // v3.66 新增：實際轉換價格
+            floorPrice: parseFloat(document.getElementById('floorPrice').value) || 100, // v3.66 新增：底標價格
             conversionPrice: document.getElementById('conversionPrice').value, // v3.66 改為區間選擇
             subjectiveWeight: parseFloat(document.getElementById('subjectiveWeight').value)||0, 
             subjectiveLowPremium: parseFloat(document.getElementById('subjectiveLowPremium').value)||0, 

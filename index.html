@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.70 (回測分析版)</title>
+<title>AI智能可轉債競拍系統 v3.71 (主力模擬版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="embedded_data.js" onerror="console.warn('embedded_data.js not found, using defaults.')"></script>
 
@@ -1247,20 +1247,164 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     .history-bid-row { flex-direction: column; gap: 6px; }
     .supply-analysis, .ranking-section, .realperf-section, .profitloss-section, .dimension-section, .market-trend-section { padding: 10px; }
 }
+
+/* ================= v3.71 主力模擬出價面板 ================= */
+.major-player-panel {
+    border: 2px solid #6a1b9a;
+    border-radius: 12px;
+    margin-top: 20px;
+    overflow: hidden;
+}
+.major-player-header {
+    background: linear-gradient(135deg, #9c27b0 0%, #6a1b9a 100%);
+    color: white;
+    padding: 12px 18px;
+    font-size: 16px;
+    font-weight: bold;
+}
+.major-player-content {
+    padding: 18px;
+    background: linear-gradient(135deg, #fafafa 0%, #f3e5f5 100%);
+}
+.major-player-main {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-bottom: 15px;
+}
+.major-player-gauge {
+    flex: 0 0 140px;
+    text-align: center;
+}
+.major-player-gauge .gauge-value {
+    font-size: 42px;
+    font-weight: bold;
+    color: #6a1b9a;
+}
+.major-player-gauge .gauge-label {
+    font-size: 12px;
+    color: #666;
+}
+.major-player-strategies {
+    flex: 1;
+    min-width: 280px;
+}
+.mp-strategy-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+.mp-strategy-card {
+    background: white;
+    border-radius: 8px;
+    padding: 12px;
+    text-align: center;
+    border: 2px solid #e0e0e0;
+    transition: all 0.2s;
+}
+.mp-strategy-card:hover {
+    border-color: #9c27b0;
+    box-shadow: 0 3px 10px rgba(156, 39, 176, 0.2);
+}
+.mp-strategy-card.sniper { border-left: 4px solid #f44336; }
+.mp-strategy-card.stable { border-left: 4px solid #4caf50; }
+.mp-strategy-card.safe { border-left: 4px solid #2196f3; }
+.mp-strategy-card h5 {
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 5px;
+}
+.mp-strategy-card .mp-price {
+    font-size: 22px;
+    font-weight: bold;
+    color: #333;
+}
+.mp-strategy-card .mp-rate {
+    font-size: 11px;
+    color: #999;
+    margin-top: 3px;
+}
+.mp-confidence-bar {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 6px;
+}
+.mp-confidence-bar.high { background: #e8f5e9; border-left: 4px solid #4caf50; }
+.mp-confidence-bar.medium { background: #fff3e0; border-left: 4px solid #ff9800; }
+.mp-confidence-bar.low { background: #ffebee; border-left: 4px solid #f44336; }
+.mp-adjustments {
+    margin-top: 15px;
+    padding: 12px;
+    background: white;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+}
+.mp-adjustments-title {
+    font-size: 13px;
+    font-weight: bold;
+    color: #333;
+    margin-bottom: 8px;
+}
+.mp-adj-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.mp-adj-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 15px;
+    font-size: 12px;
+    background: #f5f5f5;
+}
+.mp-adj-item.positive { background: #e8f5e9; color: #2e7d32; }
+.mp-adj-item.negative { background: #ffebee; color: #c62828; }
+.mp-adj-item.neutral { background: #f5f5f5; color: #666; }
+.mp-win-rate-calc {
+    margin-top: 15px;
+    padding: 12px;
+    background: white;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+}
+.mp-win-rate-input {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.mp-win-rate-input input {
+    width: 100px;
+    padding: 8px;
+    border: 2px solid #9c27b0;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: bold;
+    text-align: center;
+}
+.mp-win-rate-result {
+    display: inline-block;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 14px;
+}
 </style>
 
 </head>
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.70)...</div>
+    <div>🔄 系統啟動中 (v3.71)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
 <div class="container" style="display: none;">
     <div class="header">
         <h1>🤖 AI智能可轉債競拍系統</h1>
-        <span class="version-badge">v3.70</span>
+        <span class="version-badge">v3.71</span>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -1332,6 +1476,22 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
                 <div class="warning-box">⚠️ 理論價格隨股價變動，建議於 13:30 截標前再進行最終試算<br>💡 系統將同時呈現「溢價率分析法」與「得標價格分析法」供您參考</div>
             </div>
         </div>
+        
+        <!-- v3.71 新增：主力模擬出價參數 -->
+        <div class="form-section" style="background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%); border: 2px solid #9c27b0; border-radius: 12px; padding: 15px;">
+            <h3 style="color: #6a1b9a; border-left-color: #9c27b0;">🎯 主力模擬出價（v3.71新功能）</h3>
+            <div style="font-size:12px; color:#666; margin-bottom:10px;">
+                💡 基於75檔CB得標明細統計，模擬主力（得標>100張）的出價行為
+            </div>
+            <div class="form-group">
+                <label>預估投標倍數 (選填)</label>
+                <input type="number" id="estBidMultiple" step="0.1" min="0.5" max="10" placeholder="留空則自動估算">
+                <div style="font-size:11px; color:#999; margin-top:4px;">
+                    📊 冷門(<2倍)預測較準確 | 一般(2-4倍)建議保留彈性 | 熱門(>4倍)競爭激烈
+                </div>
+            </div>
+        </div>
+        
         <div class="form-section" style="background: linear-gradient(135deg, #fff9e6 0%, #ffe6cc 100%); border: 2px solid #ff9800; border-radius: 12px; padding: 15px;">
             <h3 style="color: #e65100; margin-bottom: 10px;">⚖️ 主觀權重(選填)</h3>
             <div class="subjective-note">
@@ -1370,7 +1530,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 <div class="result-panel" id="resultPanel">
     <div id="welcomeMsg" class="welcome-message">
         <h2>歡迎使用AI智能競拍評估系統</h2>
-        <p style="margin-top:10px; color:#666; font-size: 14px;">v3.70 回測分析版<br>✅ 新增市場氛圍儀表板（近期競拍熱度）<br>✅ 新增熱度指數分析（五維度評分）<br>✅ 新增同類案件統計（理論價×規模×產業）</p>
+        <p style="margin-top:10px; color:#666; font-size: 14px;">v3.71 主力模擬版<br>✅ 新增主力模擬出價分析（基於75檔CB得標明細）<br>✅ 承銷商＋擔保調整參數（準確度提升6%）<br>✅ 得標機率計算器</p>
         <div class="stats-summary" id="statsSummary"></div>
         
         <!-- v3.58 市場趨勢分析 -->
@@ -5761,6 +5921,20 @@ function calculateEvaluation(d) {
         industry: d.industry
     });
 
+    // === v3.71 新增：主力模擬出價預測 ===
+    const estBidMultiple = d.estBidMultiple || (heatResult ? heatResult.expectedMultiple : 2.5);
+    const guaranteeType = d.guarantee || '';
+    const yearsNum = parseInt(d.years) || 3;
+    
+    const majorPlayerResult = predictMajorPlayerBid(
+        theo,
+        estBidMultiple,
+        sizeMid,
+        brokerName,
+        guaranteeType,
+        yearsNum
+    );
+
     return {
         cbName: d.cbName, 
         theoreticalPrice: safeFixed(theo), 
@@ -5800,7 +5974,11 @@ function calculateEvaluation(d) {
         // === v3.70 新增：熱度分析結果 ===
         heatAnalysis: heatResult,
         similarCases: similarCases,
-        marketAtmosphere: atmosphere
+        marketAtmosphere: atmosphere,
+        
+        // === v3.71 新增：主力模擬出價結果 ===
+        majorPlayerResult: majorPlayerResult,
+        estBidMultiple: estBidMultiple
     };
 }
 
@@ -6030,6 +6208,8 @@ function displayResult(r) {
     
     ${r.heatAnalysis ? generateHeatAnalysisHTML(r.heatAnalysis, r.similarCases, r.marketAtmosphere) : ''}
     
+    ${r.majorPlayerResult ? generateMajorPlayerHTML(r.majorPlayerResult, r.floorPrice, r.theoreticalPrice) : ''}
+    
     <div style="text-align:center;margin-top:25px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
         <button onclick="location.reload()" class="calculate-btn" style="width:180px; background:#555;">🔄 重新評估</button>
         <button onclick="window.print()" class="calculate-btn" style="width:180px;">🖨️ 列印報告</button>
@@ -6053,6 +6233,9 @@ document.getElementById('evaluationForm').addEventListener('submit', function(e)
     const actualConversionPrice = document.getElementById('actualConversionPrice').value;
     const conversionPrice = document.getElementById('conversionPrice').value;
     const broker = document.getElementById('broker').value;
+    
+    // v3.71 新增：預估投標倍數
+    const estBidMultiple = parseFloat(document.getElementById('estBidMultiple')?.value) || 0;
     
     // 檢查是否至少填寫一個條件
     const hasAnyCondition = industry || issueSize || years || guarantee || rating || capital || conversionPrice || broker;
@@ -6078,7 +6261,8 @@ document.getElementById('evaluationForm').addEventListener('submit', function(e)
             subjectiveWeight: parseFloat(document.getElementById('subjectiveWeight').value)||0, 
             subjectiveLowPremium: parseFloat(document.getElementById('subjectiveLowPremium').value)||0, 
             subjectiveAvgPremium: parseFloat(document.getElementById('subjectiveAvgPremium').value)||0,
-            broker: broker 
+            broker: broker,
+            estBidMultiple: estBidMultiple  // v3.71 新增
         }));
     } catch (err) {
         alert("⚠️ 計算錯誤：\n" + err.message);
@@ -6639,6 +6823,279 @@ function calcHeatIndex(params) {
         expectedMultiple: expectedMultiple,
         breakdown: breakdown
     };
+}
+
+// ==========================================
+// v3.71 主力模擬出價預測模組
+// ==========================================
+
+/**
+ * 承銷商溢價調整參數（基於75檔CB得標明細分析）
+ */
+const BROKER_PREMIUM_ADJ = {
+    '福邦證券': 2.0,
+    '凱基證券': 1.5,
+    '元大證券': 1.5,
+    '統一證券': 0.5,
+    '富邦證券': 0,
+    '國泰證券': 0,
+    '兆豐證券': 0,
+    '群益證券': 0,
+    '華南永昌': 0,
+    '國票證券': 0,
+    '台新證券': -1.0,
+    '永豐證券': -1.0,
+    '永豐金證': -1.0,
+    '中信證券': -1.0
+};
+
+/**
+ * 主力出價預測函數
+ * @param {number} theoPrice - 理論價格
+ * @param {number} bidMultiple - 預估投標倍數
+ * @param {number} issueSize - 發行規模（億元）
+ * @param {string} broker - 承銷商名稱
+ * @param {string} guarantee - 擔保類型（'有擔保' 或 '無擔保'）
+ * @param {number} years - 發行年期（3 或 5）
+ * @returns {object} 預測結果
+ */
+function predictMajorPlayerBid(theoPrice, bidMultiple, issueSize, broker, guarantee, years = 3) {
+    
+    // 1. 理論價基礎溢價
+    let base = 0, range = 2;
+    if (theoPrice < 90) { base = 0; range = 2; }
+    else if (theoPrice < 95) { base = 0; range = 2; }
+    else if (theoPrice < 100) { base = 0.5; range = 2.5; }
+    else if (theoPrice < 105) { base = 5; range = 4; }
+    else if (theoPrice < 110) { base = 9; range = 5; }
+    else if (theoPrice < 115) { base = 12; range = 5; }
+    else { base = 15; range = 6; }
+    
+    // 2. 投標倍數調整
+    let multAdj = 0, confidence = '中';
+    if (bidMultiple < 1.5) { multAdj = -2; confidence = '高'; }
+    else if (bidMultiple < 2) { multAdj = -1; confidence = '高'; }
+    else if (bidMultiple < 2.5) { multAdj = 0; confidence = '中'; }
+    else if (bidMultiple < 3) { multAdj = 1; confidence = '中'; }
+    else if (bidMultiple < 4) { multAdj = 2; confidence = '中'; }
+    else if (bidMultiple < 5) { multAdj = 4; confidence = '低'; }
+    else { multAdj = 5; confidence = '低'; }
+    
+    // 3. 發行規模調整
+    let sizeAdj = 0;
+    if (issueSize < 5) sizeAdj = 0.5;
+    else if (issueSize < 10) sizeAdj = 0;
+    else if (issueSize < 15) sizeAdj = -0.5;
+    else sizeAdj = -1;
+    
+    // 4. 承銷商調整（新增）
+    let brokerAdj = BROKER_PREMIUM_ADJ[broker] || 0;
+    
+    // 5. 擔保調整（新增）
+    let guarAdj = (guarantee === '有擔保') ? 1.0 : 0;
+    
+    // 6. 年期調整（可選）
+    let yearAdj = (years == 5) ? -0.5 : 0;
+    
+    // 計算預測溢價
+    let predicted = Math.max(0, base + multAdj + sizeAdj + brokerAdj + guarAdj + yearAdj);
+    
+    // 計算建議區間
+    let lowRange = Math.max(0, predicted - range / 2);
+    let highRange = predicted + range / 2;
+    
+    // 計算策略價格
+    let strategies = {
+        sniper: Math.max(0, predicted - 0.5),    // 狙擊型
+        stable: predicted,                        // 穩健型
+        safe: predicted + 1                       // 保守型
+    };
+    
+    return {
+        predictedPremium: predicted,
+        lowRange: lowRange,
+        highRange: highRange,
+        confidence: confidence,
+        strategies: strategies,
+        adjustments: {
+            base: base,
+            multiple: multAdj,
+            size: sizeAdj,
+            broker: brokerAdj,
+            guarantee: guarAdj,
+            year: yearAdj
+        },
+        brokerName: broker,
+        guaranteeType: guarantee
+    };
+}
+
+/**
+ * 得標機率估算函數
+ * @param {number} inputPremium - 用戶輸入的溢價%
+ * @param {number} predictedPremium - 預測的溢價%
+ * @returns {object} 機率評估結果
+ */
+function estimateWinRate(inputPremium, predictedPremium) {
+    const diff = inputPremium - predictedPremium;
+    
+    if (diff < -1) return { rate: '<20%', level: '低', color: '#ef4444' };
+    if (diff < 0) return { rate: '20-35%', level: '偏低', color: '#f97316' };
+    if (diff < 0.5) return { rate: '35-50%', level: '中等', color: '#eab308' };
+    if (diff < 1) return { rate: '50-62%', level: '偏高', color: '#84cc16' };
+    if (diff < 1.5) return { rate: '62-72%', level: '高', color: '#22c55e' };
+    if (diff < 2.5) return { rate: '72-88%', level: '很高', color: '#10b981' };
+    return { rate: '>88%', level: '極高', color: '#059669' };
+}
+
+/**
+ * 根據底標價計算實際投標價格
+ * @param {number} basePrice - 底標價
+ * @param {number} premium - 溢價%
+ * @returns {number} 投標價格
+ */
+function calcMajorBidPrice(basePrice, premium) {
+    return Math.round((basePrice * (1 + premium / 100)) * 100) / 100;
+}
+
+/**
+ * 生成主力模擬出價面板HTML
+ * @param {object} mpResult - 主力預測結果
+ * @param {number} floorPrice - 底標價格
+ * @param {number} theoPrice - 理論價格
+ * @returns {string} HTML字串
+ */
+function generateMajorPlayerHTML(mpResult, floorPrice, theoPrice) {
+    if (!mpResult) return '';
+    
+    const fp = parseFloat(floorPrice) || 100;
+    const tp = parseFloat(theoPrice) || 100;
+    
+    // 計算各策略的實際價格
+    const sniperPrice = calcMajorBidPrice(fp, mpResult.strategies.sniper);
+    const stablePrice = calcMajorBidPrice(fp, mpResult.strategies.stable);
+    const safePrice = calcMajorBidPrice(fp, mpResult.strategies.safe);
+    
+    // 計算各策略的得標機率
+    const sniperRate = estimateWinRate(mpResult.strategies.sniper, mpResult.predictedPremium);
+    const stableRate = estimateWinRate(mpResult.strategies.stable, mpResult.predictedPremium);
+    const safeRate = estimateWinRate(mpResult.strategies.safe, mpResult.predictedPremium);
+    
+    // 信心度樣式
+    const confClass = mpResult.confidence === '高' ? 'high' : (mpResult.confidence === '中' ? 'medium' : 'low');
+    const confIcon = mpResult.confidence === '高' ? '⭐⭐⭐' : (mpResult.confidence === '中' ? '⭐⭐' : '⭐');
+    
+    // 調整因素明細
+    const adj = mpResult.adjustments;
+    let adjItems = [];
+    adjItems.push(`<span class="mp-adj-item neutral">理論價基礎: +${adj.base.toFixed(1)}%</span>`);
+    if (adj.multiple !== 0) {
+        const mClass = adj.multiple > 0 ? 'positive' : 'negative';
+        adjItems.push(`<span class="mp-adj-item ${mClass}">投標倍數: ${adj.multiple > 0 ? '+' : ''}${adj.multiple.toFixed(1)}%</span>`);
+    }
+    if (adj.size !== 0) {
+        const sClass = adj.size > 0 ? 'positive' : 'negative';
+        adjItems.push(`<span class="mp-adj-item ${sClass}">發行規模: ${adj.size > 0 ? '+' : ''}${adj.size.toFixed(1)}%</span>`);
+    }
+    if (adj.broker !== 0) {
+        const bClass = adj.broker > 0 ? 'positive' : 'negative';
+        adjItems.push(`<span class="mp-adj-item ${bClass}">承銷商(${mpResult.brokerName || '未知'}): ${adj.broker > 0 ? '+' : ''}${adj.broker.toFixed(1)}%</span>`);
+    }
+    if (adj.guarantee !== 0) {
+        adjItems.push(`<span class="mp-adj-item positive">擔保(有): +${adj.guarantee.toFixed(1)}%</span>`);
+    }
+    if (adj.year !== 0) {
+        adjItems.push(`<span class="mp-adj-item negative">年期(5年): ${adj.year.toFixed(1)}%</span>`);
+    }
+    
+    const html = `
+    <div class="major-player-panel">
+        <div class="major-player-header">
+            🎯 v3.71 主力模擬出價分析
+            <span style="float:right; font-size:12px; font-weight:normal;">基於75檔CB得標明細統計</span>
+        </div>
+        <div class="major-player-content">
+            <div class="major-player-main">
+                <div class="major-player-gauge">
+                    <div class="gauge-label">預測溢價</div>
+                    <div class="gauge-value">${mpResult.predictedPremium.toFixed(1)}%</div>
+                    <div class="gauge-label">區間: ${mpResult.lowRange.toFixed(1)}% ~ ${mpResult.highRange.toFixed(1)}%</div>
+                </div>
+                <div class="major-player-strategies">
+                    <div style="font-size:13px; font-weight:bold; color:#333; margin-bottom:10px;">💰 策略建議價格（底標 ${fp} 元）</div>
+                    <div class="mp-strategy-grid">
+                        <div class="mp-strategy-card sniper">
+                            <h5>🎯 狙擊型</h5>
+                            <div class="mp-price">${sniperPrice.toFixed(2)}</div>
+                            <div class="mp-rate">溢價 ${mpResult.strategies.sniper.toFixed(1)}%</div>
+                            <div class="mp-rate" style="color:${sniperRate.color};">機率 ${sniperRate.rate}</div>
+                        </div>
+                        <div class="mp-strategy-card stable">
+                            <h5>⚖️ 穩健型</h5>
+                            <div class="mp-price">${stablePrice.toFixed(2)}</div>
+                            <div class="mp-rate">溢價 ${mpResult.strategies.stable.toFixed(1)}%</div>
+                            <div class="mp-rate" style="color:${stableRate.color};">機率 ${stableRate.rate}</div>
+                        </div>
+                        <div class="mp-strategy-card safe">
+                            <h5>🛡️ 保守型</h5>
+                            <div class="mp-price">${safePrice.toFixed(2)}</div>
+                            <div class="mp-rate">溢價 ${mpResult.strategies.safe.toFixed(1)}%</div>
+                            <div class="mp-rate" style="color:${safeRate.color};">機率 ${safeRate.rate}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mp-confidence-bar ${confClass}">
+                <span style="font-weight:bold;">預測信心度：${mpResult.confidence} ${confIcon}</span>
+                <span style="margin-left:15px; font-size:12px;">
+                    ${mpResult.confidence === '高' ? '投標倍數<2，預測較準確（MAE 1.27%）' : 
+                      mpResult.confidence === '中' ? '投標倍數2-4，建議保留彈性空間' : 
+                      '投標倍數>4，市場熱度高，競爭激烈'}
+                </span>
+            </div>
+            
+            <div class="mp-adjustments">
+                <div class="mp-adjustments-title">📊 調整因素明細</div>
+                <div class="mp-adj-grid">
+                    ${adjItems.join('')}
+                </div>
+            </div>
+            
+            <div class="mp-win-rate-calc">
+                <div style="font-size:13px; font-weight:bold; color:#333; margin-bottom:10px;">🧮 得標機率計算器</div>
+                <div class="mp-win-rate-input">
+                    <span>您的出價：</span>
+                    <input type="number" id="mpUserBidPrice" value="${stablePrice.toFixed(2)}" step="0.01" min="${fp}" 
+                           onchange="updateWinRateCalc(${fp}, ${mpResult.predictedPremium})">
+                    <span>元</span>
+                    <span id="mpWinRateResult" class="mp-win-rate-result" style="background:${stableRate.color}; color:white;">
+                        預估機率: ${stableRate.rate}
+                    </span>
+                </div>
+                <div style="font-size:11px; color:#999; margin-top:8px;">
+                    💡 主力平均以溢價 1.42% 得標，前10大得標者平均溢價 1.09%
+                </div>
+            </div>
+        </div>
+    </div>`;
+    
+    return html;
+}
+
+/**
+ * 更新得標機率計算器
+ */
+function updateWinRateCalc(floorPrice, predictedPremium) {
+    const bidPrice = parseFloat(document.getElementById('mpUserBidPrice').value) || floorPrice;
+    const userPremium = ((bidPrice / floorPrice) - 1) * 100;
+    const result = estimateWinRate(userPremium, predictedPremium);
+    
+    const resultEl = document.getElementById('mpWinRateResult');
+    if (resultEl) {
+        resultEl.style.background = result.color;
+        resultEl.textContent = `預估機率: ${result.rate}`;
+    }
 }
 
 /**

@@ -1550,7 +1550,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 <div class="result-panel" id="resultPanel">
     <div id="welcomeMsg" class="welcome-message">
         <h2>歡迎使用AI智能競拍評估系統</h2>
-        <p style="margin-top:10px; color:#666; font-size: 14px;">v3.73 主力模擬版<br>✅ 修正評估邏輯：明確標示「同條件歷史數據」<br>✅ 投標倍數改為「同條件歷史投標倍數」供參考<br>✅ 評分項目說明更清楚（條件+樣本數）</p>
+        <p style="margin-top:10px; color:#666; font-size: 14px;">v3.73 主力模擬版<br>✅ 主力模擬重新設計：基於理論價（非底標）<br>✅ 閃電帶入修正：價格有小數=已開標結束<br>✅ 新增同條件歷史溢價率統計</p>
         <div class="stats-summary" id="statsSummary"></div>
 
 ```
@@ -2112,6 +2112,13 @@ async function loadStatistics() {
                 const issueSize = safeFloat(row['發行規模']);
                 const gain = listing.marketHigh > 0 ? listing.marketHigh - listing.issuePrice : null;
                 
+                // v3.73 新增：讀取溢價率（相對理論價）
+                const minBidPrice = safeFloat(row['最低得標'] || row['最低得標價格']);
+                const avgBidPrice = safeFloat(row['加權均價'] || row['加權平均']);
+                // 計算相對理論價的溢價率
+                const lowPremium = (theoPrice > 0 && minBidPrice > 0) ? (minBidPrice / theoPrice - 1) * 100 : null;
+                const avgPremium = (theoPrice > 0 && avgBidPrice > 0) ? (avgBidPrice / theoPrice - 1) * 100 : null;
+                
                 // 判斷日期（近期為2024年後）
                 let isRecent = false;
                 if (listing.listDate) {
@@ -2132,7 +2139,7 @@ async function loadStatistics() {
                 else if (issueSize < 5) sizeKey = '3-5億';
                 else if (issueSize < 10) sizeKey = '5-10億';
                 
-                return { theoPrice, theoKey, bidMultiple, guarantee, issueSize, sizeKey, gain, isRecent };
+                return { theoPrice, theoKey, bidMultiple, guarantee, issueSize, sizeKey, gain, isRecent, lowPremium, avgPremium, minBidPrice };
             }).filter(d => d.theoPrice > 0);
             
             // 計算各條件組合的統計
@@ -2151,11 +2158,17 @@ async function loadStatistics() {
                         const bidMults = group.map(d => d.bidMultiple).filter(v => v > 0);
                         const gains = group.map(d => d.gain).filter(v => v !== null);
                         const wins = gains.filter(g => g >= 10).length;
+                        // v3.73 新增：溢價率統計（相對理論價）
+                        const lowPrems = group.map(d => d.lowPremium).filter(v => v !== null);
+                        const avgPrems = group.map(d => d.avgPremium).filter(v => v !== null);
                         
                         // 近期數據（優先使用）
                         const recentBidMults = recentGroup.map(d => d.bidMultiple).filter(v => v > 0);
                         const recentGains = recentGroup.map(d => d.gain).filter(v => v !== null);
                         const recentWins = recentGains.filter(g => g >= 10).length;
+                        // v3.73 新增：近期溢價率
+                        const recentLowPrems = recentGroup.map(d => d.lowPremium).filter(v => v !== null);
+                        const recentAvgPrems = recentGroup.map(d => d.avgPremium).filter(v => v !== null);
                         
                         window.conditionStats[key] = {
                             // 全部統計
@@ -2164,11 +2177,17 @@ async function loadStatistics() {
                             avgGain: gains.length > 0 ? gains.reduce((s,v) => s+v, 0) / gains.length : 30,
                             medianGain: gains.length > 0 ? gains.sort((a,b) => a-b)[Math.floor(gains.length/2)] : 20,
                             winRate: gains.length > 0 ? wins / gains.length : 0.7,
+                            // v3.73 新增：溢價率統計（相對理論價，這才是主力出價的基準）
+                            avgLowPremium: lowPrems.length > 0 ? lowPrems.reduce((s,v) => s+v, 0) / lowPrems.length : 5,
+                            avgAvgPremium: avgPrems.length > 0 ? avgPrems.reduce((s,v) => s+v, 0) / avgPrems.length : 7,
                             // 近期統計（2024年後）
                             recentCount: recentGroup.length,
                             recentAvgBidMultiple: recentBidMults.length >= 3 ? recentBidMults.reduce((s,v) => s+v, 0) / recentBidMults.length : null,
                             recentAvgGain: recentGains.length >= 3 ? recentGains.reduce((s,v) => s+v, 0) / recentGains.length : null,
-                            recentWinRate: recentGains.length >= 3 ? recentWins / recentGains.length : null
+                            recentWinRate: recentGains.length >= 3 ? recentWins / recentGains.length : null,
+                            // v3.73 新增：近期溢價率（相對理論價）
+                            recentAvgLowPremium: recentLowPrems.length >= 3 ? recentLowPrems.reduce((s,v) => s+v, 0) / recentLowPrems.length : null,
+                            recentAvgAvgPremium: recentAvgPrems.length >= 3 ? recentAvgPrems.reduce((s,v) => s+v, 0) / recentAvgPrems.length : null
                         };
                     }
                 });
@@ -2246,6 +2265,7 @@ async function loadStatistics() {
                 // 處理承銷價格（可能是區間）
                 const priceRaw = row['承銷價格'];
                 let floorPrice = 100, highPrice = 100, isPriceRange = false;
+                let priceIsDecimal = false; // v3.73 新增：判斷價格是否有小數（非整數=已成交）
                 if (priceRaw) {
                     const priceStr = String(priceRaw);
                     if (priceStr.includes('~') || priceStr.includes('-')) {
@@ -2257,6 +2277,8 @@ async function loadStatistics() {
                         floorPrice = safeFloat(priceRaw) || 100;
                         highPrice = floorPrice;
                     }
+                    // v3.73：檢查價格是否有小數（如101.55表示已成交）
+                    priceIsDecimal = (floorPrice % 1 !== 0) || (highPrice % 1 !== 0);
                 }
                 
                 // 處理投標期間
@@ -2298,8 +2320,13 @@ async function loadStatistics() {
                 }
                 
                 // 判斷狀態
+                // v3.73 修正：增加價格判斷（非整數=已成交=已開標結束）
                 let status = 'pending';
-                if (listingDate) {
+                
+                // 優先判斷：價格有小數點 = 已經開標結束（成交價）
+                if (priceIsDecimal) {
+                    status = 'opened';
+                } else if (listingDate) {
                     const listDate = new Date(listingDate);
                     if (listDate <= today) {
                         status = 'listed';
@@ -2310,7 +2337,7 @@ async function loadStatistics() {
                         } else if (bidEndDate) {
                             const bidEndDateObj = new Date(bidEndDate);
                             if (bidEndDateObj < today) {
-                                status = 'closed';
+                                status = 'closed'; // 截標已過但還沒開標
                             } else if (bidPeriod) {
                                 status = 'bidding';
                             }
@@ -2327,6 +2354,12 @@ async function loadStatistics() {
                         } else if (bidPeriod) {
                             status = 'bidding';
                         }
+                    }
+                } else if (bidEndDate) {
+                    // v3.73 新增：即使沒有開標日，如果截標日已過也算closed
+                    const bidEndDateObj = new Date(bidEndDate);
+                    if (bidEndDateObj < today) {
+                        status = 'closed';
                     }
                 }
                 
@@ -2380,6 +2413,7 @@ async function loadStatistics() {
                     floorPrice: floorPrice,
                     highPrice: highPrice,
                     isPriceRange: isPriceRange,
+                    priceIsDecimal: priceIsDecimal, // v3.73 新增：價格是否為小數（成交價）
                     stockPrice: stockPrice,
                     bidPeriod: bidPeriod,
                     bidEndDate: bidEndDate,
@@ -2405,8 +2439,10 @@ async function loadStatistics() {
             console.log(`載入閃電帶入資料: ${pendingCases.length} 筆`);
             console.log(`  - 已掛牌: ${pendingCases.filter(c => c.status === 'listed').length} 筆`);
             console.log(`  - 已開標: ${pendingCases.filter(c => c.status === 'opened').length} 筆`);
+            console.log(`  - 已截標: ${pendingCases.filter(c => c.status === 'closed').length} 筆`);
             console.log(`  - 投標中: ${pendingCases.filter(c => c.status === 'bidding').length} 筆`);
             console.log(`  - 待公告: ${pendingCases.filter(c => c.status === 'pending').length} 筆`);
+            console.log(`  - 競拍待投標: ${pendingCases.filter(c => (c.status === 'pending' || c.status === 'bidding') && c.auctionType === '競拍').length} 筆`);
         }
         
         // v3.59 新增：處理董事會決議資料
@@ -7164,9 +7200,18 @@ function initQuickSelect() {
     pendingCases.forEach((c, idx) => {
         const option = document.createElement('option');
         option.value = idx;
-        const priceInfo = c.isPriceRange ? `底標${c.floorPrice}~${c.highPrice}` : `底標${c.floorPrice}`;
+        // v3.73 修正：根據狀態顯示不同的價格標籤
+        let priceLabel = '';
+        if (c.status === 'opened' || c.status === 'closed') {
+            // 已開標：顯示成交價
+            priceLabel = `成交${c.floorPrice}`;
+        } else if (c.isPriceRange) {
+            priceLabel = `底標${c.floorPrice}~${c.highPrice}`;
+        } else {
+            priceLabel = `底標${c.floorPrice}`;
+        }
         const convInfo = c.convPrice > 0 ? ` | 轉${c.convPrice}` : '';
-        option.textContent = `${statusLabels[c.status] || ''} ${c.cbName} - ${c.auctionType} | ${c.industry} | ${priceInfo}${convInfo}`;
+        option.textContent = `${statusLabels[c.status] || ''} ${c.cbName} - ${c.auctionType} | ${c.industry} | ${priceLabel}${convInfo}`;
         
         // 按狀態分組
         if (c.status === 'opened' || c.status === 'closed') {
@@ -7637,13 +7682,9 @@ function calcHeatIndex(params) {
 function predictMajorPlayerBid(theoPrice, bidMultiple, issueSize, broker, guarantee, years = 3) {
     
     // ========================================
-    // v3.72 動態數據驅動模型
-    // 使用從04工作表計算的統計數據
+    // v3.73 重新設計：基於理論價的主力模擬
+    // 核心邏輯：主力出價 = 理論價 × (1 + 同條件歷史溢價率)
     // ========================================
-    
-    // 使用動態計算的交叉表，如果沒有則使用備用值
-    const crossTable = window.crossTable || {};
-    const brokerAdj = window.brokerPremiumAdj || {};
     
     // 判斷理論價區間
     let theoKey = '>=110';
@@ -7652,108 +7693,73 @@ function predictMajorPlayerBid(theoPrice, bidMultiple, issueSize, broker, guaran
     else if (theoPrice < 105) theoKey = '100-105';
     else if (theoPrice < 110) theoKey = '105-110';
     
-    // 判斷投標倍數區間（使用更細的分組）
-    let bidKey = '>=3';
-    if (bidMultiple < 1.5) bidKey = '<1.5';
-    else if (bidMultiple < 2) bidKey = '1.5-2';
-    else if (bidMultiple < 2.5) bidKey = '2-2.5';
-    else if (bidMultiple < 3) bidKey = '2.5-3';
+    // 判斷擔保類型
+    const guarKey = (guarantee === '有擔保') ? '有擔保' : '無擔保';
+    const condKey = `${theoKey}_${guarKey}`;
     
-    // 從動態交叉表取得基礎溢價
-    let base = 5.0; // 預設值
-    let confidence = '中';
+    // 從 conditionStats 取得同條件歷史數據
+    const condStats = window.conditionStats?.[condKey] || {};
     
-    if (crossTable[theoKey] && crossTable[theoKey][bidKey] && crossTable[theoKey][bidKey].adj !== null) {
-        base = crossTable[theoKey][bidKey].adj;
-        const n = crossTable[theoKey][bidKey].n || 0;
-        if (n >= 10) confidence = '高';
-        else if (n >= 5) confidence = '中';
-        else confidence = '低';
-    } else {
-        // 如果找不到精確匹配，嘗試相鄰區間
-        confidence = '低';
-    }
+    // 優先使用近期數據，否則用全部數據
+    const useRecent = condStats.recentAvgLowPremium !== null;
+    const avgLowPremium = useRecent ? condStats.recentAvgLowPremium : (condStats.avgLowPremium || 5);
+    const avgAvgPremium = useRecent ? condStats.recentAvgAvgPremium : (condStats.avgAvgPremium || 7);
+    const avgBidMult = useRecent ? condStats.recentAvgBidMultiple : (condStats.avgBidMultiple || 2.5);
+    const sampleCount = condStats.count || 0;
+    const recentCount = condStats.recentCount || 0;
     
-    let range = 3;  // 預設區間
+    // 計算主力建議出價（基於理論價）
+    // 保守策略：最低得標溢價率（目標：穩定得標）
+    // 平衡策略：最低與平均的中間
+    // 積極策略：平均得標溢價率（可能多付一點）
     
-    // 根據理論價調整區間範圍
-    if (theoPrice >= 110) range = 4;
-    if (theoPrice >= 115) range = 5;
+    const conservativePremium = avgLowPremium;
+    const balancedPremium = (avgLowPremium + avgAvgPremium) / 2;
+    const aggressivePremium = avgAvgPremium;
     
-    // 2. 發行規模調整（相對於整體平均的差異）
-    let sizeAdj = 0;
-    if (issueSize < 5) sizeAdj = 0.1;
-    else if (issueSize < 10) sizeAdj = 0;
-    else if (issueSize < 15) sizeAdj = 0.9;
-    else sizeAdj = -1.6;
+    // 計算實際出價（理論價 × (1 + 溢價率)）
+    const conservativePrice = theoPrice * (1 + conservativePremium / 100);
+    const balancedPrice = theoPrice * (1 + balancedPremium / 100);
+    const aggressivePrice = theoPrice * (1 + aggressivePremium / 100);
     
-    // 3. 承銷商調整（v3.72 使用動態計算的統計數據）
-    // 嘗試完整名稱，再嘗試簡稱
-    let brokerAdjValue = brokerAdj[broker] || 0;
-    if (brokerAdjValue === 0 && broker) {
-        // 嘗試簡稱匹配
-        const shortName = broker.replace('證券', '').replace('金證', '');
-        Object.keys(brokerAdj).forEach(b => {
-            if (b.includes(shortName) || shortName.includes(b.replace('證券', ''))) {
-                brokerAdjValue = brokerAdj[b];
-            }
-        });
-    }
+    // 信心度判斷
+    let confidence = '低';
+    const totalSamples = useRecent ? recentCount : sampleCount;
+    if (totalSamples >= 10) confidence = '高';
+    else if (totalSamples >= 5) confidence = '中';
     
-    // 4. 擔保調整（有擔保+1.2%，無擔保-0.6%）
-    let guarAdj = (guarantee === '有擔保') ? 1.2 : -0.6;
-    
-    // 計算預測溢價（交叉表基礎 + 微調）
-    let predicted = base + sizeAdj + brokerAdjValue + guarAdj;
-    
-    // 投標倍數的微調（在區間內的線性插值）
-    let multAdj = 0;
-    if (bidMultiple < 2) {  // 冷門
-        // 1.0~2.0倍之間線性調整
-        multAdj = (bidMultiple - 1.5) * 0.5;  // 越低越負
-    } else if (bidMultiple >= 3) {  // 熱門
-        // 3.0~5.0倍之間線性調整
-        multAdj = Math.min(2, (bidMultiple - 3) * 0.5);  // 越高越正，但有上限
-    }
-    predicted += multAdj;
-    
-    // 計算建議區間
-    let lowRange = predicted - range / 2;
-    let highRange = predicted + range / 2;
-    
-    // 計算策略價格
-    let strategies = {
-        sniper: predicted - 0.5,    // 狙擊型：稍低於預測
-        stable: predicted,          // 穩健型：預測值
-        safe: predicted + 1         // 保守型：稍高於預測
-    };
-    
-    // 決定倍數區間標籤
-    let multKeyLabel = '一般(2-3)';
-    if (bidMultiple < 1.5) multKeyLabel = '冷門(<1.5)';
-    else if (bidMultiple < 2) multKeyLabel = '偏冷(1.5-2)';
-    else if (bidMultiple < 2.5) multKeyLabel = '一般(2-2.5)';
-    else if (bidMultiple < 3) multKeyLabel = '偏熱(2.5-3)';
-    else multKeyLabel = '熱門(>=3)';
+    // 熱度描述
+    let heatLevel = '一般';
+    if (avgBidMult < 2) heatLevel = '冷門';
+    else if (avgBidMult < 2.5) heatLevel = '普通';
+    else if (avgBidMult < 3.5) heatLevel = '偏熱';
+    else heatLevel = '熱門';
     
     return {
-        predictedPremium: predicted,
-        lowRange: lowRange,
-        highRange: highRange,
+        // 核心結果
+        theoPrice: theoPrice,
+        conservativePrice: conservativePrice,
+        balancedPrice: balancedPrice,
+        aggressivePrice: aggressivePrice,
+        conservativePremium: conservativePremium,
+        balancedPremium: balancedPremium,
+        aggressivePremium: aggressivePremium,
+        
+        // 參考資訊
+        avgBidMultiple: avgBidMult,
         confidence: confidence,
-        strategies: strategies,
-        adjustments: {
-            base: base,
-            multiple: multAdj,
-            size: sizeAdj,
-            broker: brokerAdjValue,
-            guarantee: guarAdj,
-            year: 0
-        },
-        brokerName: broker,
-        guaranteeType: guarantee,
+        heatLevel: heatLevel,
+        sampleCount: totalSamples,
+        useRecent: useRecent,
+        
+        // 條件標籤
         theoKey: theoKey,
-        multKey: multKeyLabel
+        guarKey: guarKey,
+        condKey: condKey,
+        
+        // 說明文字
+        methodology: `基於${theoKey}×${guarKey}歷史${useRecent ? `近${recentCount}檔` : `${sampleCount}檔`}數據，` +
+                     `平均投標倍數${avgBidMult.toFixed(2)}x（${heatLevel}）`
     };
 }
 
@@ -8217,6 +8223,7 @@ function calcMajorBidPrice(theoPrice, premium, floorPrice) {
 
 /**
  * 生成主力模擬出價面板HTML
+ * v3.73 重寫：基於理論價的主力模擬
  * @param {object} mpResult - 主力預測結果
  * @param {number} floorPrice - 底標價格
  * @param {number} theoPrice - 理論價格
@@ -8226,138 +8233,105 @@ function generateMajorPlayerHTML(mpResult, floorPrice, theoPrice, guarantee) {
     if (!mpResult) return '';
     
     const fp = parseFloat(floorPrice) || 100;
-    const tp = parseFloat(theoPrice) || 100;
-    const guar = guarantee || '無擔保'; // 預設無擔保
+    const tp = parseFloat(theoPrice) || mpResult.theoPrice || 100;
     
-    // v3.72 修正：以理論價為基礎計算投標價格，但不低於底標
-    const sniperPrice = calcMajorBidPrice(tp, mpResult.strategies.sniper, fp);
-    const stablePrice = calcMajorBidPrice(tp, mpResult.strategies.stable, fp);
-    const safePrice = calcMajorBidPrice(tp, mpResult.strategies.safe, fp);
-    
-    // 計算基礎價格（用於顯示）
-    const basePrice = Math.max(fp, tp);
-    const baseType = tp >= fp ? '理論價' : '底標';
-    
-    // 計算各策略的得標機率
-    const sniperRate = estimateWinRate(mpResult.strategies.sniper, mpResult.predictedPremium);
-    const stableRate = estimateWinRate(mpResult.strategies.stable, mpResult.predictedPremium);
-    const safeRate = estimateWinRate(mpResult.strategies.safe, mpResult.predictedPremium);
+    // v3.73：直接使用計算好的價格，但確保不低於底標
+    const conservativePrice = Math.max(mpResult.conservativePrice, fp);
+    const balancedPrice = Math.max(mpResult.balancedPrice, fp);
+    const aggressivePrice = Math.max(mpResult.aggressivePrice, fp);
     
     // 信心度樣式
     const confClass = mpResult.confidence === '高' ? 'high' : (mpResult.confidence === '中' ? 'medium' : 'low');
     const confIcon = mpResult.confidence === '高' ? '⭐⭐⭐' : (mpResult.confidence === '中' ? '⭐⭐' : '⭐');
     
-    // 調整因素明細
-    const adj = mpResult.adjustments;
-    let adjItems = [];
-    // 交叉表基礎（理論價×投標倍數）
-    const baseClass = adj.base >= 0 ? 'neutral' : 'negative';
-    adjItems.push(`<span class="mp-adj-item ${baseClass}">基礎(${mpResult.theoKey}×${mpResult.multKey}): ${adj.base >= 0 ? '+' : ''}${adj.base.toFixed(1)}%</span>`);
-    if (adj.multiple !== 0) {
-        const mClass = adj.multiple > 0 ? 'positive' : 'negative';
-        adjItems.push(`<span class="mp-adj-item ${mClass}">倍數微調: ${adj.multiple > 0 ? '+' : ''}${adj.multiple.toFixed(1)}%</span>`);
-    }
-    if (adj.size !== 0) {
-        const sClass = adj.size > 0 ? 'positive' : 'negative';
-        adjItems.push(`<span class="mp-adj-item ${sClass}">發行規模: ${adj.size > 0 ? '+' : ''}${adj.size.toFixed(1)}%</span>`);
-    }
-    if (adj.broker !== 0) {
-        const bClass = adj.broker > 0 ? 'positive' : 'negative';
-        adjItems.push(`<span class="mp-adj-item ${bClass}">承銷商(${mpResult.brokerName || '未知'}): ${adj.broker > 0 ? '+' : ''}${adj.broker.toFixed(1)}%</span>`);
-    }
-    // 擔保調整（有擔保+1.2%，無擔保-0.6%）
-    const guarClass = adj.guarantee > 0 ? 'positive' : 'negative';
-    const guarLabel = mpResult.guaranteeType === '有擔保' ? '有擔保' : '無擔保';
-    adjItems.push(`<span class="mp-adj-item ${guarClass}">擔保(${guarLabel}): ${adj.guarantee > 0 ? '+' : ''}${adj.guarantee.toFixed(1)}%</span>`);
-    if (adj.year !== 0) {
-        adjItems.push(`<span class="mp-adj-item negative">年期(5年): ${adj.year.toFixed(1)}%</span>`);
-    }
+    // 熱度標籤顏色
+    const heatColor = mpResult.heatLevel === '熱門' ? '#ef4444' : 
+                      mpResult.heatLevel === '偏熱' ? '#f97316' :
+                      mpResult.heatLevel === '普通' ? '#eab308' : '#22c55e';
     
     const html = `
     <div class="major-player-panel">
         <div class="major-player-header">
             🎯 v3.73 主力模擬出價分析
-            <span style="float:right; font-size:12px; font-weight:normal;">基於300檔CB競拍統計</span>
+            <span style="float:right; font-size:12px; font-weight:normal;">基於${mpResult.condKey || '同條件'}歷史數據</span>
         </div>
         <div class="major-player-content">
+            <div style="background:#f0fdf4; border:1px solid #86efac; border-radius:8px; padding:12px; margin-bottom:15px;">
+                <div style="font-size:13px; color:#166534; margin-bottom:8px;">
+                    <b>📊 數據基礎</b>：${mpResult.methodology || '同條件歷史數據'}
+                </div>
+                <div style="display:flex; gap:20px; flex-wrap:wrap;">
+                    <div>
+                        <span style="color:#666;">理論價區間：</span>
+                        <b style="color:#1565c0;">${mpResult.theoKey}</b>
+                    </div>
+                    <div>
+                        <span style="color:#666;">擔保類型：</span>
+                        <b style="color:#7c3aed;">${mpResult.guarKey}</b>
+                    </div>
+                    <div>
+                        <span style="color:#666;">歷史倍數：</span>
+                        <b style="color:${heatColor};">${mpResult.avgBidMultiple?.toFixed(2) || '-'}x（${mpResult.heatLevel}）</b>
+                    </div>
+                    <div>
+                        <span style="color:#666;">樣本數：</span>
+                        <b>${mpResult.sampleCount || 0}檔</b>${mpResult.useRecent ? '（近期）' : ''}
+                    </div>
+                </div>
+            </div>
+            
             <div class="major-player-main">
                 <div class="major-player-gauge">
-                    <div class="gauge-label">預測溢價</div>
-                    <div class="gauge-value">${mpResult.predictedPremium.toFixed(1)}%</div>
-                    <div class="gauge-label">區間: ${mpResult.lowRange.toFixed(1)}% ~ ${mpResult.highRange.toFixed(1)}%</div>
+                    <div class="gauge-label">歷史最低溢價</div>
+                    <div class="gauge-value">${mpResult.conservativePremium?.toFixed(2) || '-'}%</div>
+                    <div class="gauge-label" style="margin-top:8px;">歷史平均溢價</div>
+                    <div class="gauge-value" style="font-size:18px; color:#1565c0;">${mpResult.aggressivePremium?.toFixed(2) || '-'}%</div>
+                    <div class="gauge-label" style="font-size:11px; color:#666; margin-top:5px;">
+                        （溢價率 = 相對理論價${tp.toFixed(1)}元）
+                    </div>
                 </div>
                 <div class="major-player-strategies">
-                    <div style="font-size:13px; font-weight:bold; color:#333; margin-bottom:10px;">💰 策略建議價格（${baseType} ${basePrice.toFixed(1)} 元為基礎）</div>
+                    <div style="font-size:13px; font-weight:bold; color:#333; margin-bottom:10px;">💰 主力建議出價（理論價 ${tp.toFixed(1)} 元為基礎）</div>
                     <div class="mp-strategy-grid">
                         <div class="mp-strategy-card sniper">
-                            <h5>🎯 狙擊型</h5>
-                            <div class="mp-price">${sniperPrice.toFixed(2)}</div>
-                            <div class="mp-rate">溢價 ${mpResult.strategies.sniper.toFixed(1)}%</div>
-                            <div class="mp-rate" style="color:${sniperRate.color};">機率 ${sniperRate.rate}</div>
+                            <h5>🎯 積極型</h5>
+                            <div class="mp-price">${conservativePrice.toFixed(2)}</div>
+                            <div class="mp-rate">溢價 ${mpResult.conservativePremium?.toFixed(2) || '-'}%</div>
+                            <div class="mp-rate" style="color:#22c55e; font-size:11px;">追求最低價得標</div>
                         </div>
                         <div class="mp-strategy-card stable">
-                            <h5>⚖️ 穩健型</h5>
-                            <div class="mp-price">${stablePrice.toFixed(2)}</div>
-                            <div class="mp-rate">溢價 ${mpResult.strategies.stable.toFixed(1)}%</div>
-                            <div class="mp-rate" style="color:${stableRate.color};">機率 ${stableRate.rate}</div>
+                            <h5>⚖️ 平衡型</h5>
+                            <div class="mp-price">${balancedPrice.toFixed(2)}</div>
+                            <div class="mp-rate">溢價 ${mpResult.balancedPremium?.toFixed(2) || '-'}%</div>
+                            <div class="mp-rate" style="color:#3b82f6; font-size:11px;">兼顧得標與成本</div>
                         </div>
                         <div class="mp-strategy-card safe">
                             <h5>🛡️ 保守型</h5>
-                            <div class="mp-price">${safePrice.toFixed(2)}</div>
-                            <div class="mp-rate">溢價 ${mpResult.strategies.safe.toFixed(1)}%</div>
-                            <div class="mp-rate" style="color:${safeRate.color};">機率 ${safeRate.rate}</div>
+                            <div class="mp-price">${aggressivePrice.toFixed(2)}</div>
+                            <div class="mp-rate">溢價 ${mpResult.aggressivePremium?.toFixed(2) || '-'}%</div>
+                            <div class="mp-rate" style="color:#f59e0b; font-size:11px;">追求穩定得標</div>
                         </div>
                     </div>
                 </div>
             </div>
             
             <div class="mp-confidence-bar ${confClass}">
-                <span style="font-weight:bold;">預測信心度：${mpResult.confidence} ${confIcon}</span>
+                <span style="font-weight:bold;">數據信心度：${mpResult.confidence} ${confIcon}</span>
                 <span style="margin-left:15px; font-size:12px;">
-                    ${mpResult.confidence === '高' ? '投標倍數<2，預測較準確（MAE 1.27%）' : 
-                      mpResult.confidence === '中' ? '投標倍數2-4，建議保留彈性空間' : 
-                      '投標倍數>4，市場熱度高，競爭激烈'}
+                    ${mpResult.confidence === '高' ? '樣本數≥10檔，數據可靠' : 
+                      mpResult.confidence === '中' ? '樣本數5-9檔，可作參考' : 
+                      '樣本數<5檔，建議謹慎參考'}
                 </span>
             </div>
             
-            <div class="mp-adjustments">
-                <div class="mp-adjustments-title">📊 調整因素明細</div>
-                <div class="mp-adj-grid">
-                    ${adjItems.join('')}
-                </div>
-            </div>
-            
-            <div class="mp-win-rate-calc">
-                <div style="font-size:13px; font-weight:bold; color:#333; margin-bottom:10px;">🧮 得標機率計算器</div>
-                <div class="mp-win-rate-input">
-                    <span>您的出價：</span>
-                    <input type="number" id="mpUserBidPrice" value="${stablePrice.toFixed(2)}" step="0.01" min="${fp}" 
-                           onchange="updateWinRateCalc(${tp}, ${fp}, ${mpResult.predictedPremium}, '${guar}')">
-                    <span>元</span>
-                    <span id="mpWinRateResult" class="mp-win-rate-result" style="background:${stableRate.color}; color:white;">
-                        預估機率: ${stableRate.rate}
-                    </span>
-                </div>
-                <div style="font-size:11px; color:#999; margin-top:8px;">
-                    💡 溢價以基礎價 ${basePrice.toFixed(1)} 元為基準計算（基礎價 = max(理論價, 底標)）
-                </div>
-            </div>
-            
-            <div id="mpRiskAssessment" style="background:#f8fafc; padding:12px; border-radius:8px; margin-top:12px; border-left:4px solid #eab308;">
-                <div style="display:flex; align-items:center; gap:10px;">
-                    <span style="font-size:20px;">⚖️</span>
-                    <div>
-                        <div style="font-weight:bold; color:#eab308;">
-                            風險等級：中等偏低（約第50百分位）
-                        </div>
-                        <div style="font-size:11px; color:#666; margin-top:3px;">
-                            出價接近歷史中位數，風險與機會均衡
-                        </div>
-                        <div style="font-size:10px; color:#999; margin-top:2px;">
-                            📊 同理論價區間：輸入出價後顯示詳細分析
-                        </div>
-                    </div>
-                </div>
+            <div style="background:#fef3c7; border-radius:8px; padding:12px; margin-top:12px;">
+                <div style="font-size:13px; font-weight:bold; color:#92400e; margin-bottom:8px;">⚠️ 重要提醒</div>
+                <ul style="margin:0; padding-left:18px; color:#78350f; font-size:12px; line-height:1.6;">
+                    <li>主力建議價格基於「同條件歷史數據」計算，是相對於<b>理論價</b>的溢價率</li>
+                    <li>實際出價不得低於底標 ${fp.toFixed(2)} 元</li>
+                    <li>投標倍數無法事前精確預測，歷史均值僅供參考</li>
+                    <li>市場情緒變化可能導致實際結果與歷史數據有差異</li>
+                </ul>
             </div>
         </div>
     </div>`;

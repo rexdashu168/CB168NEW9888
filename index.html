@@ -1455,7 +1455,14 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
         <div class="form-section">
             <h3>💰 發行條件</h3>
             <div class="form-group"><label>發行規模區間 *</label><select id="issueSize"><option value="">請選擇...</option><option value="小於2億">小於2億</option><option value="2~5億">2~5億</option><option value="5~10億">5~10億</option><option value="10~15億">10~15億</option><option value="15~20億">15~20億</option><option value="大於20億">大於20億</option></select><div id="issueSizeInfo" class="info-box"></div></div>
-            <div class="form-group"><label>理論價區間 *</label><select id="theoRange"><option value="">請選擇...</option><option value="小於90元">小於90元</option><option value="90~95元">90~95元</option><option value="95~100元">95~100元</option><option value="100~105元">100~105元</option><option value="105~110元">105~110元</option><option value="110~115元">110~115元</option><option value="大於115元">大於115元</option></select><div id="theoRangeInfo" class="info-box"></div></div>
+            <div class="form-group">
+                <label>理論價區間 * <span id="theoRangeMode" style="font-size:11px; color:#1976d2; font-weight:normal;">（輸入股價/轉換價後自動計算）</span></label>
+                <select id="theoRange"><option value="">請選擇或由下方自動計算...</option><option value="小於90元">小於90元</option><option value="90~95元">90~95元</option><option value="95~100元">95~100元</option><option value="100~105元">100~105元</option><option value="105~110元">105~110元</option><option value="110~115元">110~115元</option><option value="大於115元">大於115元</option></select>
+                <div id="theoRangeInfo" class="info-box"></div>
+                <div id="theoAutoCalcInfo" style="display:none; background:#e3f2fd; padding:8px 12px; border-radius:6px; margin-top:5px; font-size:12px;">
+                    <span style="color:#1565c0;">✅ 已自動計算：理論價 <b id="theoAutoValue">0</b> 元 → 區間 <b id="theoAutoRange">-</b></span>
+                </div>
+            </div>
             <div class="form-group"><label>發行年期 *</label><select id="years"><option value="">請選擇...</option><option value="3">3年期</option><option value="5">5年期</option><option value="7">7年期</option></select><div id="yearsInfo" class="info-box"></div></div>
             <div class="form-group"><label>擔保情況 *</label><select id="guarantee"><option value="">請選擇...</option><option value="有擔保">有擔保</option><option value="無擔保">無擔保</option></select><div id="guaranteeInfo" class="info-box"></div></div>
             <div class="form-group"><label>信用評等 (TCRI) *</label><select id="rating"><option value="">請選擇...</option><option value="1">TCRI 1</option><option value="2">TCRI 2</option><option value="3">TCRI 3</option><option value="4">TCRI 4</option><option value="5">TCRI 5</option><option value="6">TCRI 6</option><option value="7">TCRI 7</option><option value="8">TCRI 8</option></select><div id="ratingInfo" class="info-box"></div></div>
@@ -1473,7 +1480,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
             <div class="form-group">
                 <label>底標價格 (元)</label>
                 <input type="number" id="floorPrice" step="0.1" value="100" placeholder="預設：100">
-                <div class="warning-box">⚠️ 理論價格隨股價變動，建議於 13:30 截標前再進行最終試算<br>💡 系統將同時呈現「溢價率分析法」與「得標價格分析法」供您參考</div>
+                <div class="warning-box">⚠️ 理論價格隨股價變動，建議於 13:30 截標前再進行最終試算<br>💡 輸入股價和轉換價後，系統會自動計算理論價並帶入上方區間</div>
             </div>
         </div>
         
@@ -5574,16 +5581,64 @@ function updateSmartReminders() {
     const actualC = parseFloat(document.getElementById('actualConversionPrice').value);
     // v3.71 修改：如果沒有輸入股價和轉換價，則從理論價區間獲取中間值
     const theoRangeVal = document.getElementById('theoRange').value;
+    const theoAutoCalcInfo = document.getElementById('theoAutoCalcInfo');
     
     let t = 0;  // 理論價
     let c = actualC;  // 轉換價
+    let autoCalcRange = '';  // 自動計算的區間
     
     if(s > 0 && actualC > 0) {
         // 方式一：從股價和轉換價計算理論價
         t = (s/actualC)*100;
-    } else if(theoRangeVal) {
+        
+        // v3.71 新增：自動判斷理論價區間並更新下拉選單
+        if (t < 90) autoCalcRange = '小於90元';
+        else if (t < 95) autoCalcRange = '90~95元';
+        else if (t < 100) autoCalcRange = '95~100元';
+        else if (t < 105) autoCalcRange = '100~105元';
+        else if (t < 110) autoCalcRange = '105~110元';
+        else if (t < 115) autoCalcRange = '110~115元';
+        else autoCalcRange = '大於115元';
+        
+        // 自動更新理論價區間選項
+        document.getElementById('theoRange').value = autoCalcRange;
+        
+        // 顯示自動計算提示
+        if (theoAutoCalcInfo) {
+            document.getElementById('theoAutoValue').textContent = t.toFixed(2);
+            document.getElementById('theoAutoRange').textContent = autoCalcRange;
+            theoAutoCalcInfo.style.display = 'block';
+        }
+        
+        // 更新標籤提示
+        const modeSpan = document.getElementById('theoRangeMode');
+        if (modeSpan) {
+            modeSpan.innerHTML = '（<span style="color:#2e7d32;">✅ 已自動計算</span>）';
+        }
+        
+    } else if(theoRangeVal && theoRangeVal !== '') {
         // 方式二：從理論價區間獲取中間值
         t = getTheoRangeMidValue(theoRangeVal);
+        
+        // 隱藏自動計算提示
+        if (theoAutoCalcInfo) {
+            theoAutoCalcInfo.style.display = 'none';
+        }
+        
+        // 更新標籤提示
+        const modeSpan = document.getElementById('theoRangeMode');
+        if (modeSpan) {
+            modeSpan.innerHTML = '（<span style="color:#ff9800;">📝 手動選擇</span>）';
+        }
+    } else {
+        // 都沒輸入
+        if (theoAutoCalcInfo) {
+            theoAutoCalcInfo.style.display = 'none';
+        }
+        const modeSpan = document.getElementById('theoRangeMode');
+        if (modeSpan) {
+            modeSpan.innerHTML = '（輸入股價/轉換價後自動計算）';
+        }
     }
     
     const r = document.getElementById('rating').value;

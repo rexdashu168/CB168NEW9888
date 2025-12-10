@@ -1694,6 +1694,61 @@ const FIELD_ALIASES = {
     'auctionShares': ['競拍張數', '競拍總張數']
 };
 
+// 產業分類名稱對應表（05工作表篩選名稱 → 04工作表實際名稱）
+// 因為05工作表用簡稱，04工作表用全名，需要做對應
+const INDUSTRY_NAME_MAP = {
+    '化工': '化學工業',
+    '半導體': '半導體業',
+    '航運': '航運業',
+    '光電': '光電業',
+    '其他電子': '其他電子業',
+    '其他': '其他業',
+    '建材營造': '建材營造業',
+    '生技醫療': '生技醫療業',
+    '電子零組件': '電子零組件業',
+    '電腦及週邊設備': '電腦及週邊設備業',
+    '油電燃氣': '油電燃氣業',
+    '農業科技': '農業科技業',
+    '文化創意': '文化創意業',
+    '通信網路': '通信網路業',
+    '資訊服務': '資訊服務業',
+    '電子通路': '電子通路業',
+    '鋼鐵': '鋼鐵工業',
+    '塑膠': '塑膠工業',
+    '造紙': '造紙工業',
+    '食品': '食品工業',
+    '汽車': '汽車工業',
+    '貿易百貨': '貿易百貨業',
+    '證券': '證券業'
+};
+
+// 取得產業的實際名稱（支援雙向查找）
+function getIndustryActualName(filterName) {
+    if (!filterName) return filterName;
+    // 先查mapping
+    if (INDUSTRY_NAME_MAP[filterName]) return INDUSTRY_NAME_MAP[filterName];
+    // 如果已經是實際名稱就直接返回
+    return filterName;
+}
+
+// 檢查產業是否匹配（支援簡稱和全名）
+function industryMatches(dataIndustry, filterIndustry) {
+    if (!filterIndustry) return true;
+    if (!dataIndustry) return false;
+    // 直接匹配
+    if (dataIndustry === filterIndustry) return true;
+    // 通過mapping匹配
+    const actualName = INDUSTRY_NAME_MAP[filterIndustry];
+    if (actualName && dataIndustry === actualName) return true;
+    // 反向匹配（數據是簡稱，篩選是全名）
+    for (const [short, full] of Object.entries(INDUSTRY_NAME_MAP)) {
+        if (dataIndustry === short && filterIndustry === full) return true;
+    }
+    // 包含匹配（如「化工」包含於「化學工業」）
+    if (dataIndustry.includes(filterIndustry) || filterIndustry.includes(dataIndustry)) return true;
+    return false;
+}
+
 function normalizeKeys(obj) {
     const newObj = {};
     Object.keys(obj).forEach(key => { newObj[key.trim()] = obj[key]; });
@@ -2290,7 +2345,7 @@ function getStatsSmart(category, val) {
         if (safeVal === "") return stats;
         
         if (category === '發行券商') filterFn = d => (d.broker || '').includes(safeVal) || safeVal.includes(d.broker || '');
-        else if (category === '產業') filterFn = d => d.industry === safeVal;
+        else if (category === '產業') filterFn = d => industryMatches(d.industry, safeVal);
         else if (category === '擔保') filterFn = d => (d.guarantee || '').includes(safeVal);
         else if (category === '年期') filterFn = d => d.years == safeVal;
         else if (category === '信評') {
@@ -5459,7 +5514,7 @@ function updateMarketSentiment() {
     // 1. 產業維度 (35%)
     let industryResult = { lowPremium: null, avgPremium: null, lowBidPrice: null, avgBidPrice: null, count: 0 };
     if (industry) {
-        const industryCases = sortedData.filter(d => d.industry === industry);
+        const industryCases = sortedData.filter(d => industryMatches(d.industry, industry));
         industryResult = calcWeightedData(industryCases);
     }
     
@@ -6360,6 +6415,19 @@ function displayResult(r) {
     </div>`;
     
     div.scrollIntoView({ behavior: 'smooth' });
+    
+    // v3.71: 初始化出價風險評估
+    if (r.majorPlayerResult && r.theoreticalPrice) {
+        setTimeout(() => {
+            const bidInput = document.getElementById('mpUserBidPrice');
+            if (bidInput) {
+                const bidPrice = parseFloat(bidInput.value) || r.floorPrice;
+                const basePrice = Math.max(r.theoreticalPrice, r.floorPrice);
+                const userPremium = ((bidPrice / basePrice) - 1) * 100;
+                updateBidRiskAssessment(userPremium, r.theoreticalPrice);
+            }
+        }, 100);
+    }
 }
 
 document.getElementById('evaluationForm').addEventListener('submit', function(e) {
@@ -7292,7 +7360,24 @@ function generateMajorPlayerHTML(mpResult, floorPrice, theoPrice) {
                     </span>
                 </div>
                 <div style="font-size:11px; color:#999; margin-top:8px;">
-                    💡 溢價以理論價 ${tp.toFixed(1)} 元為基準計算 | 底標 ${fp} 元
+                    💡 溢價以基礎價 ${basePrice.toFixed(1)} 元為基準計算（基礎價 = max(理論價, 底標)）
+                </div>
+            </div>
+            
+            <div id="mpRiskAssessment" style="background:#f8fafc; padding:12px; border-radius:8px; margin-top:12px; border-left:4px solid #eab308;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <span style="font-size:20px;">⚖️</span>
+                    <div>
+                        <div style="font-weight:bold; color:#eab308;">
+                            風險等級：中等偏低（約第50百分位）
+                        </div>
+                        <div style="font-size:11px; color:#666; margin-top:3px;">
+                            出價接近歷史中位數，風險與機會均衡
+                        </div>
+                        <div style="font-size:10px; color:#999; margin-top:2px;">
+                            📊 同理論價區間：輸入出價後顯示詳細分析
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -7307,14 +7392,145 @@ function generateMajorPlayerHTML(mpResult, floorPrice, theoPrice) {
  */
 function updateWinRateCalc(theoPrice, floorPrice, predictedPremium) {
     const bidPrice = parseFloat(document.getElementById('mpUserBidPrice').value) || floorPrice;
-    // 溢價是相對於理論價計算的
-    const userPremium = ((bidPrice / theoPrice) - 1) * 100;
+    const basePrice = Math.max(theoPrice, floorPrice);
+    // 溢價是相對於基礎價計算的
+    const userPremium = ((bidPrice / basePrice) - 1) * 100;
     const result = estimateWinRate(userPremium, predictedPremium);
     
     const resultEl = document.getElementById('mpWinRateResult');
     if (resultEl) {
         resultEl.style.background = result.color;
         resultEl.textContent = `預估機率: ${result.rate}`;
+    }
+    
+    // 更新出價風險評估
+    updateBidRiskAssessment(userPremium, theoPrice);
+}
+
+/**
+ * 出價風險評估函數
+ * 基於300檔CB歷史統計，計算用戶出價在歷史數據中的位置
+ * @param {number} userPremium - 用戶的溢價%
+ * @param {number} theoPrice - 理論價格
+ */
+function updateBidRiskAssessment(userPremium, theoPrice) {
+    // 整體百分位數（基於300檔CB）
+    const OVERALL_PERCENTILES = {
+        p10: 0.0, p25: 0.4, p50: 3.1, p75: 7.4, p90: 10.7
+    };
+    
+    // 按理論價區間的百分位數
+    const THEO_PERCENTILES = {
+        '<95': { p10: 0.0, p25: 0.6, p50: 3.2, p75: 6.4, p90: 9.1 },
+        '95-100': { p10: 0.0, p25: 0.3, p50: 2.9, p75: 7.4, p90: 11.2 },
+        '100-105': { p10: -0.2, p25: 1.7, p50: 5.5, p75: 9.4, p90: 12.4 },
+        '105-110': { p10: -3.3, p25: 1.7, p50: 3.6, p75: 8.4, p90: 9.9 },
+        '>=110': { p10: -13.0, p25: -7.8, p50: -3.2, p75: 0.8, p90: 2.0 }
+    };
+    
+    // 各區間的均值和標準差（用於Z-score計算）
+    const THEO_STATS = {
+        '<95': { mean: 4.14, std: 3.98, n: 87 },
+        '95-100': { mean: 4.31, std: 4.49, n: 98 },
+        '100-105': { mean: 5.77, std: 5.15, n: 64 },
+        '105-110': { mean: 4.23, std: 5.40, n: 31 },
+        '>=110': { mean: -4.13, std: 6.73, n: 20 }
+    };
+    
+    // 判斷理論價區間
+    let theoKey = '>=110';
+    if (theoPrice < 95) theoKey = '<95';
+    else if (theoPrice < 100) theoKey = '95-100';
+    else if (theoPrice < 105) theoKey = '100-105';
+    else if (theoPrice < 110) theoKey = '105-110';
+    
+    const pct = THEO_PERCENTILES[theoKey] || OVERALL_PERCENTILES;
+    const stats = THEO_STATS[theoKey] || { mean: 4.0, std: 5.26, n: 300 };
+    
+    // 計算Z-score（偏離均值幾個標準差）
+    const zScore = (userPremium - stats.mean) / stats.std;
+    const absZ = Math.abs(zScore);
+    
+    // 計算百分位位置
+    let percentile = 50;
+    let riskLevel = '中等';
+    let riskColor = '#eab308';
+    let riskIcon = '⚖️';
+    let riskNote = '';
+    
+    if (userPremium <= pct.p10) {
+        percentile = 10;
+        riskLevel = '極低';
+        riskColor = '#22c55e';
+        riskIcon = '✅';
+        riskNote = '出價位於歷史最低10%，得標機率較低但風險可控';
+    } else if (userPremium <= pct.p25) {
+        percentile = 25;
+        riskLevel = '偏低';
+        riskColor = '#84cc16';
+        riskIcon = '👍';
+        riskNote = '出價位於歷史25%分位，得標機率中低';
+    } else if (userPremium <= pct.p50) {
+        percentile = 50;
+        riskLevel = '中等偏低';
+        riskColor = '#eab308';
+        riskIcon = '⚖️';
+        riskNote = '出價接近歷史中位數，風險與機會均衡';
+    } else if (userPremium <= pct.p75) {
+        percentile = 75;
+        riskLevel = '中等偏高';
+        riskColor = '#f97316';
+        riskIcon = '⚠️';
+        riskNote = '出價高於75%的歷史案例，得標機率較高但風險增加';
+    } else if (userPremium <= pct.p90) {
+        percentile = 90;
+        riskLevel = '偏高';
+        riskColor = '#ef4444';
+        riskIcon = '🔺';
+        riskNote = '出價位於歷史前10%高位，風險較高';
+    } else {
+        percentile = 95;
+        riskLevel = '極高';
+        riskColor = '#dc2626';
+        riskIcon = '🚨';
+        riskNote = '出價超過90%的歷史案例！極高風險，請審慎評估';
+    }
+    
+    // Z-score風險補充說明
+    let zScoreNote = '';
+    if (absZ > 2) {
+        zScoreNote = `<div style="background:#fef2f2; padding:6px 10px; border-radius:4px; margin-top:8px; font-size:11px; color:#dc2626;">
+            <strong>⚠️ 極端偏離警示：</strong>偏離均值 ${absZ.toFixed(1)} 個標準差（${zScore > 0 ? '高於' : '低於'}均值 ${Math.abs(userPremium - stats.mean).toFixed(1)}%）
+        </div>`;
+    } else if (absZ > 1.5) {
+        zScoreNote = `<div style="background:#fffbeb; padding:6px 10px; border-radius:4px; margin-top:8px; font-size:11px; color:#d97706;">
+            <strong>⚡ 注意：</strong>偏離均值 ${absZ.toFixed(1)} 個標準差，價格${zScore > 0 ? '偏高' : '偏低'}
+        </div>`;
+    }
+    
+    // 更新UI
+    const riskEl = document.getElementById('mpRiskAssessment');
+    if (riskEl) {
+        riskEl.innerHTML = `
+            <div style="display:flex; align-items:flex-start; gap:10px;">
+                <span style="font-size:24px;">${riskIcon}</span>
+                <div style="flex:1;">
+                    <div style="font-weight:bold; color:${riskColor}; font-size:14px;">
+                        價格位置：${riskLevel}（第${percentile}百分位）
+                    </div>
+                    <div style="font-size:12px; color:#666; margin-top:4px;">
+                        ${riskNote}
+                    </div>
+                    <div style="font-size:11px; color:#888; margin-top:6px; padding:6px 0; border-top:1px solid #e5e7eb;">
+                        📊 同區間（${theoKey}，${stats.n}檔）：均值 ${stats.mean.toFixed(1)}% ± ${stats.std.toFixed(1)}%
+                        <br>
+                        📈 百分位：P25=${pct.p25.toFixed(1)}% | P50=${pct.p50.toFixed(1)}% | P75=${pct.p75.toFixed(1)}% | P90=${pct.p90.toFixed(1)}%
+                    </div>
+                    ${zScoreNote}
+                </div>
+            </div>
+        `;
+        riskEl.style.borderLeft = `4px solid ${riskColor}`;
     }
 }
 
@@ -7366,7 +7582,7 @@ function findSimilarCases(params) {
     // 如果有產業條件，進一步篩選
     let industryMatchCases = [];
     if (industry) {
-        industryMatchCases = similarCases.filter(d => d.industry === industry);
+        industryMatchCases = similarCases.filter(d => industryMatches(d.industry, industry));
     }
     
     // 計算統計數據

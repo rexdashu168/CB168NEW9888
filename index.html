@@ -5162,12 +5162,17 @@ function updateMarketSentiment() {
     });
     
     // 加權計算函數：最近3檔權重5，4-6檔權重3，7-9檔權重2
-    function calcWeightedPremium(cases) {
-        if (cases.length === 0) return { low: null, avg: null, count: 0, detail: [] };
+    // v3.68 修正：同時計算溢價率和得標價格
+    function calcWeightedData(cases) {
+        if (cases.length === 0) return { 
+            lowPremium: null, avgPremium: null, 
+            lowBidPrice: null, avgBidPrice: null,
+            count: 0, detail: [] 
+        };
         
         let totalWeight = 0;
-        let weightedLow = 0;
-        let weightedAvg = 0;
+        let weightedLowPremium = 0, weightedAvgPremium = 0;
+        let weightedLowBid = 0, weightedAvgBid = 0;
         const detail = [];
         
         cases.slice(0, 9).forEach((c, idx) => {
@@ -5176,88 +5181,118 @@ function updateMarketSentiment() {
             else if (idx < 6) weight = 3;  // 4-6檔
             else weight = 2;               // 7-9檔
             
-            const low = c.lowPremium || 0;
-            const avg = c.avgPremium || 0;
+            const lowP = c.lowPremium || 0;
+            const avgP = c.avgPremium || 0;
+            const lowB = c.minBidPrice || 0;
+            const avgB = c.avgBidPrice || 0;
             
-            weightedLow += low * weight;
-            weightedAvg += avg * weight;
+            weightedLowPremium += lowP * weight;
+            weightedAvgPremium += avgP * weight;
+            weightedLowBid += lowB * weight;
+            weightedAvgBid += avgB * weight;
             totalWeight += weight;
             
             detail.push({
                 name: c.name || c.id,
-                low: low,
-                avg: avg,
+                lowPremium: lowP,
+                avgPremium: avgP,
+                lowBid: lowB,
+                avgBid: avgB,
                 weight: weight
             });
         });
         
         return {
-            low: totalWeight > 0 ? (weightedLow / totalWeight) : null,
-            avg: totalWeight > 0 ? (weightedAvg / totalWeight) : null,
+            lowPremium: totalWeight > 0 ? (weightedLowPremium / totalWeight) : null,
+            avgPremium: totalWeight > 0 ? (weightedAvgPremium / totalWeight) : null,
+            lowBidPrice: totalWeight > 0 ? (weightedLowBid / totalWeight) : null,
+            avgBidPrice: totalWeight > 0 ? (weightedAvgBid / totalWeight) : null,
             count: cases.length,
             detail: detail
         };
     }
     
     // 1. 產業維度 (35%)
-    let industryResult = { low: null, avg: null, count: 0 };
+    let industryResult = { lowPremium: null, avgPremium: null, lowBidPrice: null, avgBidPrice: null, count: 0 };
     if (industry) {
         const industryCases = sortedData.filter(d => d.industry === industry);
-        industryResult = calcWeightedPremium(industryCases);
+        industryResult = calcWeightedData(industryCases);
     }
     
-    // 2. 規模維度 (25%)
-    let sizeResult = { low: null, avg: null, count: 0 };
+    // 2. 規模維度 (25%) - v3.68 修正篩選條件，匹配選項值
+    let sizeResult = { lowPremium: null, avgPremium: null, lowBidPrice: null, avgBidPrice: null, count: 0 };
     if (issueSize) {
         const sizeCases = sortedData.filter(d => {
             const size = d.issueSize || 0;
-            if (issueSize === '小於5億') return size < 5;
+            if (issueSize === '小於2億') return size > 0 && size < 2;
+            if (issueSize === '2~5億') return size >= 2 && size < 5;
             if (issueSize === '5~10億') return size >= 5 && size < 10;
-            if (issueSize === '10~20億') return size >= 10 && size < 20;
-            if (issueSize === '20~50億') return size >= 20 && size < 50;
-            if (issueSize === '大於50億') return size >= 50;
+            if (issueSize === '10~15億') return size >= 10 && size < 15;
+            if (issueSize === '15~20億') return size >= 15 && size < 20;
+            if (issueSize === '大於20億') return size >= 20;
             return false;
         });
-        sizeResult = calcWeightedPremium(sizeCases);
+        sizeResult = calcWeightedData(sizeCases);
     }
     
     // 3. 信評維度 (40%)
-    let ratingResult = { low: null, avg: null, count: 0 };
+    let ratingResult = { lowPremium: null, avgPremium: null, lowBidPrice: null, avgBidPrice: null, count: 0 };
     if (rating) {
         const ratingCases = sortedData.filter(d => d.rating === rating);
-        ratingResult = calcWeightedPremium(ratingCases);
+        ratingResult = calcWeightedData(ratingCases);
     }
     
     // 計算總加權（產業35%、規模25%、信評40%）
-    let totalLow = 0, totalAvg = 0, totalWeight = 0;
+    let totalLowP = 0, totalAvgP = 0;
+    let totalLowB = 0, totalAvgB = 0;
+    let totalWeight = 0;
     
-    if (industryResult.low !== null) {
-        totalLow += industryResult.low * 0.35;
-        totalAvg += industryResult.avg * 0.35;
+    if (industryResult.lowPremium !== null) {
+        totalLowP += industryResult.lowPremium * 0.35;
+        totalAvgP += industryResult.avgPremium * 0.35;
+        totalLowB += industryResult.lowBidPrice * 0.35;
+        totalAvgB += industryResult.avgBidPrice * 0.35;
         totalWeight += 0.35;
     }
-    if (sizeResult.low !== null) {
-        totalLow += sizeResult.low * 0.25;
-        totalAvg += sizeResult.avg * 0.25;
+    if (sizeResult.lowPremium !== null) {
+        totalLowP += sizeResult.lowPremium * 0.25;
+        totalAvgP += sizeResult.avgPremium * 0.25;
+        totalLowB += sizeResult.lowBidPrice * 0.25;
+        totalAvgB += sizeResult.avgBidPrice * 0.25;
         totalWeight += 0.25;
     }
-    if (ratingResult.low !== null) {
-        totalLow += ratingResult.low * 0.40;
-        totalAvg += ratingResult.avg * 0.40;
+    if (ratingResult.lowPremium !== null) {
+        totalLowP += ratingResult.lowPremium * 0.40;
+        totalAvgP += ratingResult.avgPremium * 0.40;
+        totalLowB += ratingResult.lowBidPrice * 0.40;
+        totalAvgB += ratingResult.avgBidPrice * 0.40;
         totalWeight += 0.40;
     }
     
     // 重新正規化（如果只有部分維度有資料）
-    const finalLow = totalWeight > 0 ? (totalLow / totalWeight) : 0;
-    const finalAvg = totalWeight > 0 ? (totalAvg / totalWeight) : 0;
+    const finalLowP = totalWeight > 0 ? (totalLowP / totalWeight) : 0;
+    const finalAvgP = totalWeight > 0 ? (totalAvgP / totalWeight) : 0;
+    const finalLowB = totalWeight > 0 ? (totalLowB / totalWeight) : 0;
+    const finalAvgB = totalWeight > 0 ? (totalAvgB / totalWeight) : 0;
     
     // 顯示結果
     let html = `<div class="stats-header">🌡️ 近期市場氛圍（加權計算）</div>`;
     
-    // 總結
+    // 總結 - 同時顯示溢價率和得標價格
     html += `<div style="background:#fff; padding:10px; border-radius:6px; margin-bottom:10px;">
-        <div style="font-size:16px; font-weight:bold; color:#1976d2;">
-            加權溢價率：<span style="color:#2e7d32;">${finalLow.toFixed(2)}%</span> ~ <span style="color:#d32f2f;">${finalAvg.toFixed(2)}%</span>
+        <div style="display:flex; gap:15px; flex-wrap:wrap;">
+            <div style="flex:1; min-width:140px;">
+                <div style="font-size:12px; color:#666;">加權溢價率</div>
+                <div style="font-size:16px; font-weight:bold;">
+                    <span style="color:#2e7d32;">${finalLowP.toFixed(2)}%</span> ~ <span style="color:#d32f2f;">${finalAvgP.toFixed(2)}%</span>
+                </div>
+            </div>
+            <div style="flex:1; min-width:140px;">
+                <div style="font-size:12px; color:#666;">加權得標價</div>
+                <div style="font-size:16px; font-weight:bold;">
+                    <span style="color:#2e7d32;">${finalLowB.toFixed(2)}</span> ~ <span style="color:#d32f2f;">${finalAvgB.toFixed(2)}</span> 元
+                </div>
+            </div>
         </div>
     </div>`;
     
@@ -5266,14 +5301,14 @@ function updateMarketSentiment() {
     
     if (industry) {
         const status = industryResult.count > 0 ? 
-            `<span style="color:#2e7d32;">${industryResult.low?.toFixed(2) || '-'}%</span> ~ <span style="color:#d32f2f;">${industryResult.avg?.toFixed(2) || '-'}%</span> (${Math.min(industryResult.count, 9)}筆)` : 
+            `溢價 <span style="color:#2e7d32;">${industryResult.lowPremium?.toFixed(2) || '-'}%</span>~<span style="color:#d32f2f;">${industryResult.avgPremium?.toFixed(2) || '-'}%</span>｜得標價 ${industryResult.lowBidPrice?.toFixed(2) || '-'}~${industryResult.avgBidPrice?.toFixed(2) || '-'}元 (${Math.min(industryResult.count, 9)}筆)` : 
             `<span style="color:#999;">無案例</span>`;
         html += `<div>📌 產業[${industry}] 35%：${status}</div>`;
     }
     
     if (issueSize) {
         const status = sizeResult.count > 0 ? 
-            `<span style="color:#2e7d32;">${sizeResult.low?.toFixed(2) || '-'}%</span> ~ <span style="color:#d32f2f;">${sizeResult.avg?.toFixed(2) || '-'}%</span> (${Math.min(sizeResult.count, 9)}筆)` : 
+            `溢價 <span style="color:#2e7d32;">${sizeResult.lowPremium?.toFixed(2) || '-'}%</span>~<span style="color:#d32f2f;">${sizeResult.avgPremium?.toFixed(2) || '-'}%</span>｜得標價 ${sizeResult.lowBidPrice?.toFixed(2) || '-'}~${sizeResult.avgBidPrice?.toFixed(2) || '-'}元 (${Math.min(sizeResult.count, 9)}筆)` : 
             `<span style="color:#999;">無案例</span>`;
         html += `<div>📌 規模[${issueSize}] 25%：${status}</div>`;
     }
@@ -5281,7 +5316,7 @@ function updateMarketSentiment() {
     if (rating) {
         const ratingName = rating === 'BBB' ? 'BBB' : `TCRI ${rating}`;
         const status = ratingResult.count > 0 ? 
-            `<span style="color:#2e7d32;">${ratingResult.low?.toFixed(2) || '-'}%</span> ~ <span style="color:#d32f2f;">${ratingResult.avg?.toFixed(2) || '-'}%</span> (${Math.min(ratingResult.count, 9)}筆)` : 
+            `溢價 <span style="color:#2e7d32;">${ratingResult.lowPremium?.toFixed(2) || '-'}%</span>~<span style="color:#d32f2f;">${ratingResult.avgPremium?.toFixed(2) || '-'}%</span>｜得標價 ${ratingResult.lowBidPrice?.toFixed(2) || '-'}~${ratingResult.avgBidPrice?.toFixed(2) || '-'}元 (${Math.min(ratingResult.count, 9)}筆)` : 
             `<span style="color:#999;">無案例</span>`;
         html += `<div>📌 信評[${ratingName}] 40%：${status}</div>`;
     }
@@ -5306,35 +5341,67 @@ function updateSmartReminders() {
     
     if(s && c) { 
         const t = (s/c)*100; 
-        let msg = `目前理論價：<b style="color:#667eea; font-size:18px;">${t.toFixed(2)} 元</b>（轉換價 ${c} 元，底標 ${floorPrice} 元）`;
         
-        // v3.68 修改：以95元為分界點
+        // 建立條列式提醒
+        let tips = [];
+        
+        // 1. 基本資訊
+        let headerMsg = `<div style="margin-bottom:8px;">
+            <div>目前理論價：<b style="color:#667eea; font-size:20px;">${t.toFixed(2)} 元</b></div>
+            <div style="font-size:13px; color:#666;">轉換價 ${c} 元｜底標 ${floorPrice} 元</div>
+            <div style="font-size:12px; color:#1976d2; margin-top:4px;">💡 理論價格會隨股價波動，建議以截標日13:30收盤價計算的理論價格為最終評估基礎</div>
+        </div>`;
+        
+        // 2. 分析法適用性判斷（以95元為分界）
         if (t < 95) {
-            // 95以下，得標價格分析法更準確
             const deviation = 95 - t;
             if (deviation > 15) {
-                msg += `<br>📊 理論價偏離95元較遠(${deviation.toFixed(1)}元)，溢價率分析法誤差較大，<b>強烈建議參考「得標價格分析法」</b>`;
+                tips.push(`<b>理論價 ${t.toFixed(2)} 元，偏離95元分界點達 ${deviation.toFixed(1)} 元</b>`);
+                tips.push(`溢價率分析法在低理論價時誤差較大，預估價格可能失準`);
+                tips.push(`<b style="color:#d32f2f;">強烈建議以「得標價格分析法」為主要參考依據</b>`);
             } else if (deviation > 5) {
-                msg += `<br>📊 理論價低於95元，建議重點參考「得標價格分析法」`;
+                tips.push(`理論價 ${t.toFixed(2)} 元，低於95元分界點`);
+                tips.push(`得標價格分析法在此區間較能反映市場實際行情`);
+                tips.push(`建議重點參考「得標價格分析法」，溢價率法可作輔助`);
             } else {
-                msg += `<br>💡 理論價接近95元分界，可同時參考兩種分析法`;
+                tips.push(`理論價 ${t.toFixed(2)} 元，接近95元分界點`);
+                tips.push(`兩種分析法皆有參考價值，可交叉比對`);
+                tips.push(`若兩者差異大，建議偏向得標價格分析法`);
             }
         } else {
-            // 95以上，溢價率分析法較適用
-            if(t > 120) msg += `<br>🔥 理論價偏高，注意溢價風險`;
-            else if(t < 105) msg += `<br>💡 理論價具吸引力，兩種分析法皆可參考`;
-            else msg += `<br>✨ 理論價處於合理區間，溢價率分析法較適用`;
+            // 95以上
+            if (t > 120) {
+                tips.push(`理論價 ${t.toFixed(2)} 元，處於較高水位`);
+                tips.push(`高理論價標的溢價空間有限，競拍熱度可能較低`);
+                tips.push(`建議採保守策略，注意溢價風險`);
+            } else if (t < 105) {
+                tips.push(`理論價 ${t.toFixed(2)} 元，處於具吸引力區間`);
+                tips.push(`兩種分析法皆適用，可交叉參考`);
+                tips.push(`此區間通常競拍熱度較高，可適度積極`);
+            } else {
+                tips.push(`理論價 ${t.toFixed(2)} 元，處於合理區間`);
+                tips.push(`溢價率分析法較為適用`);
+                tips.push(`可參考歷史同類型標的溢價率作為投標依據`);
+            }
         }
         
-        // 檢查溢價率法是否可能低於底標
+        // 3. 底標相關提醒
         if (t * 1.10 < floorPrice) {
-            msg += `<br>⚠️ 溢價率法可能低於底標，保守策略將以底標價為基準`;
+            tips.push(`<span style="color:#e65100;">⚠️ 理論價加10%仍低於底標，溢價率法將自動調整為底標基準模式</span>`);
         }
         
-        if(r && ['7','8','9'].includes(r)) msg += `<br>⚠️ 信評較低，建議保守策略`;
+        // 4. 信評提醒
+        if (r && ['7','8','9'].includes(r)) {
+            tips.push(`<span style="color:#d32f2f;">⚠️ 信評 TCRI ${r} 較低，市場接受度可能受限，建議採保守策略</span>`);
+        }
         
-        // v3.68 新增：截標日提醒
-        msg += `<br><span style="color:#1976d2; font-size:11px;">💡 理論價格會隨股價波動，建議以截標日13:30收盤價計算的理論價格為最終評估基礎</span>`;
+        // 組合輸出
+        let msg = headerMsg;
+        msg += `<div style="border-top:1px solid #e0e0e0; padding-top:8px; margin-top:4px;">`;
+        tips.forEach((tip, idx) => {
+            msg += `<div style="margin-bottom:4px;">${idx + 1}. ${tip}</div>`;
+        });
+        msg += `</div>`;
         
         document.getElementById('reminderContent').innerHTML = msg; 
         document.getElementById('smartReminders').style.display='block'; 
@@ -5342,36 +5409,106 @@ function updateSmartReminders() {
 }
 
 function generateRexCommentary(r) { 
-    // v3.68 修改：加入95元分界判斷和底標基準說明
+    // v3.68 修改：根據Rex大叔文章風格，優化分析內容
     const theo = parseFloat(r.theoreticalPrice);
-    const premiumGap = parseFloat(r.premiumBidPrices.balanced) - theo;
-    const priceGap = parseFloat(r.priceBidPrices.balanced) - theo;
+    const floor = parseFloat(r.floorPrice);
+    const premiumConservative = parseFloat(r.premiumBidPrices.conservative);
+    const premiumBalanced = parseFloat(r.premiumBidPrices.balanced);
+    const priceConservative = parseFloat(r.priceBidPrices.conservative);
+    const priceBalanced = parseFloat(r.priceBidPrices.balanced);
     const belowFloor = r.premiumBelowFloor;
+    const totalLowP = parseFloat(r.totalLowPremium);
+    const totalAvgP = parseFloat(r.totalAvgPremium);
     
-    let comment = "";
+    // 計算風險相關數據
+    const maxLossPercent = ((premiumConservative - 100) / premiumConservative * 100).toFixed(2);
+    const premiumVsPrice = (premiumBalanced - priceBalanced).toFixed(2);
+    
+    let title = "";
+    let situation = "";
+    let strategy = "";
+    let risk = "";
+    let reminder = "";
     
     if (belowFloor) {
-        // 低於底標時，已自動調整為底標基準
-        comment = `歷史溢價率計算結果低於底標，系統已自動調整為底標基準模式。保守價即為底標 ${r.floorPrice} 元（相當於溢價率 ${r.floorBasedPremium}%），平衡/積極/極致分別為底標加3%/5%/7%。此情境也建議同時參考「得標價格分析法」的加權平均得標價 ${r.priceBidPrices.balanced} 元作為參考。`;
+        // 情境一：溢價率法低於底標
+        title = "⚠️ 特殊情境：溢價率計算低於底標";
+        situation = `本檔理論價 ${r.theoreticalPrice} 元，歷史溢價率計算出的投標價低於底標 ${r.floorPrice} 元，系統已自動切換為「底標基準模式」。這種情況通常出現在理論價偏低或市場氛圍保守的標的。`;
+        strategy = `<b>策略建議：</b><br>
+            1. 保守策略：以底標 ${r.floorPrice} 元投標（相當於溢價率 ${r.floorBasedPremium}%）<br>
+            2. 平衡策略：底標加3%約 ${r.premiumBidPrices.balanced} 元<br>
+            3. 同時參考得標價格分析法的加權平均 ${priceBalanced} 元作為另一參考點`;
+        risk = `<b>風險評估：</b>以底標投標，最大損失為手續費約0.5%，風險極低。但需注意此類標的可能競爭激烈，得標機率需評估。`;
+        reminder = "競拍的核心是控制成本，在這種情境下，用底標投標是最保守的選擇，讓自己立於不敗之地。";
+        
+    } else if (theo < 85) {
+        // 情境二：理論價很低（<85元）
+        title = "📊 低理論價情境分析";
+        situation = `理論價 ${r.theoreticalPrice} 元明顯偏低，與95元分界點相差 ${(95-theo).toFixed(1)} 元。在這種情境下，溢價率分析法的參考價值有限，因為歷史資料多以較高理論價標的為主。`;
+        strategy = `<b>策略建議：</b><br>
+            1. <b>強烈建議以「得標價格分析法」為主</b><br>
+            2. 保守價參考：${priceConservative} 元（加權最低得標價）<br>
+            3. 平衡價參考：${priceBalanced} 元（加權平均得標價）<br>
+            4. 溢價率法僅供輔助參考，不建議作為主要依據`;
+        risk = `<b>風險評估：</b>低理論價標的通常代表股價相對轉換價偏低，需特別關注公司基本面與未來股價走勢。以 ${priceConservative} 元投標，最大損失約 ${((priceConservative-100)/priceConservative*100).toFixed(1)}%。`;
+        reminder = "記住，競拍最大的好處就是你可以控制投入成本，在低理論價情境更要謹慎評估是否參與。";
+        
     } else if (theo < 95) {
-        // 理論價低於95元，建議以得標價格分析法為主
-        const deviation = 95 - theo;
-        if (deviation > 10) {
-            comment = `理論價 ${r.theoreticalPrice} 元偏離95元分界點較遠，溢價率分析法誤差可能較大，強烈建議以「得標價格分析法」為主要參考。加權平均得標價 ${r.priceBidPrices.balanced} 元較能反映實際市場行情。`;
-        } else {
-            comment = `理論價 ${r.theoreticalPrice} 元低於95元分界點，建議重點參考「得標價格分析法」，加權平均得標價 ${r.priceBidPrices.balanced} 元可作為投標參考。溢價率分析法可作為輔助參考。`;
-        }
-    } else if (premiumGap > 20) {
-        comment = "市場對此類標的熱情較高，建議嚴控成本，可參考溢價率法的「保守」價格。";
-    } else if (premiumGap > 10) {
-        comment = "溢價合理偏高，適合在「平衡」與「保守」間尋找甜蜜點。";
-    } else if (premiumGap > 0) {
-        comment = "市場估值理性，可參考「積極」策略爭取籌碼。";
+        // 情境三：理論價偏低（85-95元）
+        title = "💡 理論價接近分界點情境";
+        situation = `理論價 ${r.theoreticalPrice} 元略低於95元分界點，兩種分析法都有參考價值，但得標價格分析法可能更貼近市場實際。`;
+        strategy = `<b>策略建議：</b><br>
+            1. 主要參考「得標價格分析法」：${priceConservative} ~ ${priceBalanced} 元<br>
+            2. 輔助參考「溢價率分析法」：${premiumConservative} ~ ${premiumBalanced} 元<br>
+            3. 兩者差異 ${Math.abs(premiumVsPrice)} 元，建議取較保守的價格`;
+        risk = `<b>風險評估：</b>以保守價 ${Math.min(premiumConservative, priceConservative).toFixed(2)} 元投標，最大損失控制在 ${maxLossPercent}% 左右，屬於可接受範圍。`;
+        reminder = "在分界點附近，交叉比對兩種分析法能讓你的判斷更客觀，不要只看單一數據。";
+        
+    } else if (theo >= 95 && theo <= 105) {
+        // 情境四：理論價適中（95-105元）
+        title = "✨ 理想投標區間情境";
+        situation = `理論價 ${r.theoreticalPrice} 元處於95-105元的理想區間，這是競拍最舒適的情境。溢價率分析法較為準確，歷史資料參考價值高。`;
+        strategy = `<b>策略建議：</b><br>
+            1. 保守策略：${premiumConservative} 元（溢價率 ${totalLowP}%）<br>
+            2. 平衡策略：${premiumBalanced} 元（溢價率 ${totalAvgP}%）<br>
+            3. 此區間通常競拍熱度較高，想得標可考慮平衡或積極策略`;
+        risk = `<b>風險評估：</b>以 ${premiumConservative} 元投標，三年最大損失約 ${maxLossPercent}%（約 ${(premiumConservative-100).toFixed(1)} 元/張）。這個風險是你進場前就能確定的，這就是競拍控制風險的精髓。`;
+        reminder = "這種理論價的標的是練習競拍的好機會，風險可控且有獲利空間，值得認真評估參與。";
+        
+    } else if (theo > 105 && theo <= 115) {
+        // 情境五：理論價偏高（105-115元）
+        title = "🔥 較高理論價情境";
+        situation = `理論價 ${r.theoreticalPrice} 元偏高，代表股價已經超過轉換價一段距離。這類標的通常有題材支撐，但溢價空間相對有限。`;
+        strategy = `<b>策略建議：</b><br>
+            1. 建議採「保守」策略：${premiumConservative} 元<br>
+            2. 高理論價標的不宜追高，嚴控投標成本<br>
+            3. 如果保守價仍覺得太高，可以考慮降低投標張數或放棄`;
+        risk = `<b>風險評估：</b>高理論價不代表沒風險，股價回檔時可轉債價格也會下跌。以 ${premiumConservative} 元投標，最大損失 ${maxLossPercent}%。`;
+        reminder = "不要因為標的熱門就衝動追高，記住我們參與競拍的核心目的是控制成本，不是搶籌碼。";
+        
     } else {
-        comment = "估值偏低，可能存在撿漏機會，但仍需注意底標限制。";
+        // 情境六：理論價很高（>115元）
+        title = "⚡ 高理論價警示";
+        situation = `理論價 ${r.theoreticalPrice} 元已經相當高，市場對此標的可能有強烈預期。但越熱門的標的，競拍價格通常也會被推高。`;
+        strategy = `<b>策略建議：</b><br>
+            1. 嚴格採用「保守」策略：${premiumConservative} 元<br>
+            2. 認真評估是否值得參與，高價得標的風險不低<br>
+            3. 如執意參與，建議降低投標張數，控制整體曝險`;
+        risk = `<b>風險評估：</b>高理論價標的在股價回檔時損失可能較大。建議將此類標的的投標資金控制在總投資部位的較小比例。`;
+        reminder = "有時候最好的投資決策是「不參與」。不是每一檔都要拍，選擇適合自己風險承受度的標的更重要。";
     }
     
-    return `<div class="rex-analysis"><div class="rex-title">🧢 Rex大叔分析</div><div class="rex-content"><p>${comment}</p></div></div>`; 
+    // 組合輸出
+    return `<div class="rex-analysis">
+        <div class="rex-title">🧢 Rex大叔分析</div>
+        <div class="rex-content">
+            <div style="font-size:15px; font-weight:bold; color:#1565c0; margin-bottom:10px;">${title}</div>
+            <div style="margin-bottom:12px;">${situation}</div>
+            <div style="background:#f5f5f5; padding:12px; border-radius:8px; margin-bottom:12px;">${strategy}</div>
+            <div style="background:#fff3e0; padding:12px; border-radius:8px; margin-bottom:12px;">${risk}</div>
+            <div style="border-left:4px solid #667eea; padding-left:12px; font-style:italic; color:#555;">💬 ${reminder}</div>
+        </div>
+    </div>`; 
 }
 
 function calculateEvaluation(d) {
@@ -5636,9 +5773,6 @@ function displayResult(r) {
         <div style="display:flex; gap:30px; flex-wrap:wrap; font-size:16px;">
             <div><span style="color:#666;">理論價格：</span><b style="color:#667eea; font-size:24px;">${r.theoreticalPrice}</b> 元</div>
             <div><span style="color:#666;">底標價格：</span><b style="font-size:20px;">${r.floorPrice}</b> 元</div>
-        </div>
-        <div style="font-size:12px; color:#666; margin-top:8px;">
-            💡 理論價格會隨股價波動，建議以截標日13:30收盤價計算的理論價格為最終評估基礎
         </div>
     </div>
 

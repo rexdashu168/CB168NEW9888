@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.67 (精簡版)</title>
+<title>AI智能可轉債競拍系統 v3.68 (95元分界版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="embedded_data.js" onerror="console.warn('embedded_data.js not found, using defaults.')"></script>
 
@@ -1253,14 +1253,14 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.67)...</div>
+    <div>🔄 系統啟動中 (v3.68)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
 <div class="container" style="display: none;">
     <div class="header">
         <h1>🤖 AI智能可轉債競拍系統</h1>
-        <span class="version-badge">v3.67</span>
+        <span class="version-badge">v3.68</span>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -1320,9 +1320,12 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
             <div class="form-group"><label>主觀平均溢價 (%)</label><input type="number" id="subjectiveAvgPremium" step="0.1" value="0"></div>
         </div>
         <div class="form-section">
-            <h3>📊 近期市場氛圍</h3>
+            <h3>📊 近期市場氛圍（自動計算）</h3>
+            <div style="font-size:12px; color:#666; margin-bottom:10px;">
+                根據產業(35%)、規模(25%)、信評(40%)三維度，以近期案例加權計算
+            </div>
             <div id="marketSentiment" class="info-box" style="display: block; background:#e3f2fd; border-left: 4px solid #2196F3;">
-                <div class="stat-row">請先選擇「擔保情況」</div>
+                <div class="stat-row">請先填寫產業、發行規模、信評等欄位</div>
             </div>
         </div>
         <div id="smartReminders" style="display:none; margin: 15px 0; padding: 12px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 8px;">
@@ -1338,7 +1341,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 <div class="result-panel" id="resultPanel">
     <div id="welcomeMsg" class="welcome-message">
         <h2>歡迎使用AI智能競拍評估系統</h2>
-        <p style="margin-top:10px; color:#666; font-size: 14px;">v3.67 雙模式並呈版<br>✅ 溢價率分析法＋得標價格分析法同時呈現<br>✅ 各維度同時顯示溢價率與得標價數據<br>✅ 新增底標價格/實際轉換價格欄位</p>
+        <p style="margin-top:10px; color:#666; font-size: 14px;">v3.68 95元分界版<br>✅ 以95元為分界判斷分析法適用性<br>✅ 低於底標時自動調整為底標基準模式<br>✅ 近期市場氛圍三維度加權計算</p>
         <div class="stats-summary" id="statsSummary"></div>
         
         <!-- v3.58 市場趨勢分析 -->
@@ -1993,7 +1996,7 @@ function getStatsSmart(category, val) {
     let filterFn = null;
     let rangeLabel = "";
 
-    // v3.67 修改：支援區間選擇（字串格式）
+    // v3.68 修改：支援區間選擇（字串格式）
     if (category === '股本') {
         rangeLabel = val;
         if (val === '小於3億') { filterFn = d => d.capital > 0 && d.capital < 3; }
@@ -5110,22 +5113,21 @@ function bindInputEvents() {
     bind('rating','信評');
     
     document.getElementById('guarantee').addEventListener('change', function() {
-        const val = this.value, div = document.getElementById('marketSentiment');
-        if(!val) return;
-        const recent = auctionRawData.filter(d=>(d.guarantee||'').includes(val)).slice(-20);
-        if(recent.length===0){ div.innerHTML=`<div class="stat-row">無案例</div>`; return; }
-        const avgP = recent.reduce((s,i)=>s+(i.avgPremium||0),0)/recent.length;
-        div.innerHTML=`<div class="stats-header">🌡️ 市場氛圍 (${val})</div><div class="stat-row">近 ${recent.length} 筆平均溢價：<span style="color:#d32f2f; font-weight:bold;">${avgP.toFixed(2)}%</span></div>`;
-        div.style.display='block';
+        updateMarketSentiment();
     });
     
+    // 產業、規模、信評變更時都觸發市場氛圍計算
+    document.getElementById('industry').addEventListener('change', updateMarketSentiment);
+    document.getElementById('issueSize').addEventListener('change', updateMarketSentiment);
+    document.getElementById('rating').addEventListener('change', updateMarketSentiment);
+    
     document.getElementById('stockPrice').addEventListener('input', updateSmartReminders);
-    document.getElementById('actualConversionPrice').addEventListener('input', updateSmartReminders); // v3.67 新增
-    document.getElementById('floorPrice').addEventListener('input', updateSmartReminders); // v3.67 新增：底標價格
-    document.getElementById('conversionPrice').addEventListener('change', updateSmartReminders); // v3.67 新增
+    document.getElementById('actualConversionPrice').addEventListener('input', updateSmartReminders); // v3.68 新增
+    document.getElementById('floorPrice').addEventListener('input', updateSmartReminders); // v3.68 新增：底標價格
+    document.getElementById('conversionPrice').addEventListener('change', updateSmartReminders); // v3.68 新增
 }
 
-// v3.67 更新：從區間字串提取中間值
+// v3.68 更新：從區間字串提取中間值
 function getConversionMidValue(rangeStr) {
     if (typeof rangeStr === 'number' && !isNaN(rangeStr)) return rangeStr;
     const str = String(rangeStr || '');
@@ -5139,9 +5141,164 @@ function getConversionMidValue(rangeStr) {
     return isNaN(num) ? 0 : num;
 }
 
+// v3.68 新增：近期市場氛圍三維度加權計算
+function updateMarketSentiment() {
+    const div = document.getElementById('marketSentiment');
+    const industry = document.getElementById('industry').value;
+    const issueSize = document.getElementById('issueSize').value;
+    const rating = document.getElementById('rating').value;
+    
+    // 至少要有一個條件才計算
+    if (!industry && !issueSize && !rating) {
+        div.innerHTML = `<div class="stat-row">請先填寫產業、發行規模、信評等欄位</div>`;
+        return;
+    }
+    
+    // 按截標日排序（最新在前）
+    const sortedData = [...auctionRawData].filter(d => d.openDate).sort((a, b) => {
+        const dateA = new Date(a.openDate);
+        const dateB = new Date(b.openDate);
+        return dateB - dateA;
+    });
+    
+    // 加權計算函數：最近3檔權重5，4-6檔權重3，7-9檔權重2
+    function calcWeightedPremium(cases) {
+        if (cases.length === 0) return { low: null, avg: null, count: 0, detail: [] };
+        
+        let totalWeight = 0;
+        let weightedLow = 0;
+        let weightedAvg = 0;
+        const detail = [];
+        
+        cases.slice(0, 9).forEach((c, idx) => {
+            let weight = 0;
+            if (idx < 3) weight = 5;      // 最近3檔
+            else if (idx < 6) weight = 3;  // 4-6檔
+            else weight = 2;               // 7-9檔
+            
+            const low = c.lowPremium || 0;
+            const avg = c.avgPremium || 0;
+            
+            weightedLow += low * weight;
+            weightedAvg += avg * weight;
+            totalWeight += weight;
+            
+            detail.push({
+                name: c.name || c.id,
+                low: low,
+                avg: avg,
+                weight: weight
+            });
+        });
+        
+        return {
+            low: totalWeight > 0 ? (weightedLow / totalWeight) : null,
+            avg: totalWeight > 0 ? (weightedAvg / totalWeight) : null,
+            count: cases.length,
+            detail: detail
+        };
+    }
+    
+    // 1. 產業維度 (35%)
+    let industryResult = { low: null, avg: null, count: 0 };
+    if (industry) {
+        const industryCases = sortedData.filter(d => d.industry === industry);
+        industryResult = calcWeightedPremium(industryCases);
+    }
+    
+    // 2. 規模維度 (25%)
+    let sizeResult = { low: null, avg: null, count: 0 };
+    if (issueSize) {
+        const sizeCases = sortedData.filter(d => {
+            const size = d.issueSize || 0;
+            if (issueSize === '小於5億') return size < 5;
+            if (issueSize === '5~10億') return size >= 5 && size < 10;
+            if (issueSize === '10~20億') return size >= 10 && size < 20;
+            if (issueSize === '20~50億') return size >= 20 && size < 50;
+            if (issueSize === '大於50億') return size >= 50;
+            return false;
+        });
+        sizeResult = calcWeightedPremium(sizeCases);
+    }
+    
+    // 3. 信評維度 (40%)
+    let ratingResult = { low: null, avg: null, count: 0 };
+    if (rating) {
+        const ratingCases = sortedData.filter(d => d.rating === rating);
+        ratingResult = calcWeightedPremium(ratingCases);
+    }
+    
+    // 計算總加權（產業35%、規模25%、信評40%）
+    let totalLow = 0, totalAvg = 0, totalWeight = 0;
+    
+    if (industryResult.low !== null) {
+        totalLow += industryResult.low * 0.35;
+        totalAvg += industryResult.avg * 0.35;
+        totalWeight += 0.35;
+    }
+    if (sizeResult.low !== null) {
+        totalLow += sizeResult.low * 0.25;
+        totalAvg += sizeResult.avg * 0.25;
+        totalWeight += 0.25;
+    }
+    if (ratingResult.low !== null) {
+        totalLow += ratingResult.low * 0.40;
+        totalAvg += ratingResult.avg * 0.40;
+        totalWeight += 0.40;
+    }
+    
+    // 重新正規化（如果只有部分維度有資料）
+    const finalLow = totalWeight > 0 ? (totalLow / totalWeight) : 0;
+    const finalAvg = totalWeight > 0 ? (totalAvg / totalWeight) : 0;
+    
+    // 顯示結果
+    let html = `<div class="stats-header">🌡️ 近期市場氛圍（加權計算）</div>`;
+    
+    // 總結
+    html += `<div style="background:#fff; padding:10px; border-radius:6px; margin-bottom:10px;">
+        <div style="font-size:16px; font-weight:bold; color:#1976d2;">
+            加權溢價率：<span style="color:#2e7d32;">${finalLow.toFixed(2)}%</span> ~ <span style="color:#d32f2f;">${finalAvg.toFixed(2)}%</span>
+        </div>
+    </div>`;
+    
+    // 各維度明細
+    html += `<div style="font-size:12px; line-height:1.8;">`;
+    
+    if (industry) {
+        const status = industryResult.count > 0 ? 
+            `<span style="color:#2e7d32;">${industryResult.low?.toFixed(2) || '-'}%</span> ~ <span style="color:#d32f2f;">${industryResult.avg?.toFixed(2) || '-'}%</span> (${Math.min(industryResult.count, 9)}筆)` : 
+            `<span style="color:#999;">無案例</span>`;
+        html += `<div>📌 產業[${industry}] 35%：${status}</div>`;
+    }
+    
+    if (issueSize) {
+        const status = sizeResult.count > 0 ? 
+            `<span style="color:#2e7d32;">${sizeResult.low?.toFixed(2) || '-'}%</span> ~ <span style="color:#d32f2f;">${sizeResult.avg?.toFixed(2) || '-'}%</span> (${Math.min(sizeResult.count, 9)}筆)` : 
+            `<span style="color:#999;">無案例</span>`;
+        html += `<div>📌 規模[${issueSize}] 25%：${status}</div>`;
+    }
+    
+    if (rating) {
+        const ratingName = rating === 'BBB' ? 'BBB' : `TCRI ${rating}`;
+        const status = ratingResult.count > 0 ? 
+            `<span style="color:#2e7d32;">${ratingResult.low?.toFixed(2) || '-'}%</span> ~ <span style="color:#d32f2f;">${ratingResult.avg?.toFixed(2) || '-'}%</span> (${Math.min(ratingResult.count, 9)}筆)` : 
+            `<span style="color:#999;">無案例</span>`;
+        html += `<div>📌 信評[${ratingName}] 40%：${status}</div>`;
+    }
+    
+    html += `</div>`;
+    
+    html += `<div style="font-size:11px; color:#666; margin-top:8px; border-top:1px solid #ddd; padding-top:6px;">
+        💡 計算方式：各維度取最近9檔，前3檔權重5、4-6檔權重3、7-9檔權重2
+    </div>`;
+    
+    div.innerHTML = html;
+    div.style.display = 'block';
+}
+
 function updateSmartReminders() {
     const s = parseFloat(document.getElementById('stockPrice').value);
-    // v3.67 優先使用實際轉換價格
+    // v3.68 優先使用實際轉換價格
     const actualC = parseFloat(document.getElementById('actualConversionPrice').value);
     const c = actualC > 0 ? actualC : getConversionMidValue(document.getElementById('conversionPrice').value);
     const r = document.getElementById('rating').value;
@@ -5151,19 +5308,33 @@ function updateSmartReminders() {
         const t = (s/c)*100; 
         let msg = `目前理論價：<b style="color:#667eea; font-size:18px;">${t.toFixed(2)} 元</b>（轉換價 ${c} 元，底標 ${floorPrice} 元）`;
         
-        // v3.67 提供情境判斷資訊
-        if (t < 90) {
-            msg += `<br>📊 理論價較低，建議重點參考「得標價格分析法」`;
-        } else if (t * 1.10 < floorPrice) {
-            // 理論價加10%溢價仍低於底標
-            msg += `<br>⚠️ 溢價率法可能低於底標，建議同時參考「得標價格分析法」`;
+        // v3.68 修改：以95元為分界點
+        if (t < 95) {
+            // 95以下，得標價格分析法更準確
+            const deviation = 95 - t;
+            if (deviation > 15) {
+                msg += `<br>📊 理論價偏離95元較遠(${deviation.toFixed(1)}元)，溢價率分析法誤差較大，<b>強烈建議參考「得標價格分析法」</b>`;
+            } else if (deviation > 5) {
+                msg += `<br>📊 理論價低於95元，建議重點參考「得標價格分析法」`;
+            } else {
+                msg += `<br>💡 理論價接近95元分界，可同時參考兩種分析法`;
+            }
         } else {
+            // 95以上，溢價率分析法較適用
             if(t > 120) msg += `<br>🔥 理論價偏高，注意溢價風險`;
-            else if(t < 95) msg += `<br>💡 理論價具吸引力`;
-            else msg += `<br>✨ 理論價處於合理區間`;
+            else if(t < 105) msg += `<br>💡 理論價具吸引力，兩種分析法皆可參考`;
+            else msg += `<br>✨ 理論價處於合理區間，溢價率分析法較適用`;
+        }
+        
+        // 檢查溢價率法是否可能低於底標
+        if (t * 1.10 < floorPrice) {
+            msg += `<br>⚠️ 溢價率法可能低於底標，保守策略將以底標價為基準`;
         }
         
         if(r && ['7','8','9'].includes(r)) msg += `<br>⚠️ 信評較低，建議保守策略`;
+        
+        // v3.68 新增：截標日提醒
+        msg += `<br><span style="color:#1976d2; font-size:11px;">💡 理論價格會隨股價波動，建議以截標日13:30收盤價計算的理論價格為最終評估基礎</span>`;
         
         document.getElementById('reminderContent').innerHTML = msg; 
         document.getElementById('smartReminders').style.display='block'; 
@@ -5171,17 +5342,27 @@ function updateSmartReminders() {
 }
 
 function generateRexCommentary(r) { 
-    // v3.67 同時參考兩種分析法給建議
-    const premiumGap = parseFloat(r.premiumBidPrices.balanced) - parseFloat(r.theoreticalPrice);
-    const priceGap = parseFloat(r.priceBidPrices.balanced) - parseFloat(r.theoreticalPrice);
+    // v3.68 修改：加入95元分界判斷和底標基準說明
+    const theo = parseFloat(r.theoreticalPrice);
+    const premiumGap = parseFloat(r.premiumBidPrices.balanced) - theo;
+    const priceGap = parseFloat(r.priceBidPrices.balanced) - theo;
     const belowFloor = r.premiumBelowFloor;
     
     let comment = "";
     
     if (belowFloor) {
-        comment = `溢價率法保守價(${r.premiumBidPrices.conservative}元)低於底標(${r.floorPrice}元)，建議以「得標價格分析法」為主要參考。加權平均得標價 ${r.priceBidPrices.balanced} 元是較穩妥的選擇。`;
+        // 低於底標時，已自動調整為底標基準
+        comment = `歷史溢價率計算結果低於底標，系統已自動調整為底標基準模式。保守價即為底標 ${r.floorPrice} 元（相當於溢價率 ${r.floorBasedPremium}%），平衡/積極/極致分別為底標加3%/5%/7%。此情境也建議同時參考「得標價格分析法」的加權平均得標價 ${r.priceBidPrices.balanced} 元作為參考。`;
+    } else if (theo < 95) {
+        // 理論價低於95元，建議以得標價格分析法為主
+        const deviation = 95 - theo;
+        if (deviation > 10) {
+            comment = `理論價 ${r.theoreticalPrice} 元偏離95元分界點較遠，溢價率分析法誤差可能較大，強烈建議以「得標價格分析法」為主要參考。加權平均得標價 ${r.priceBidPrices.balanced} 元較能反映實際市場行情。`;
+        } else {
+            comment = `理論價 ${r.theoreticalPrice} 元低於95元分界點，建議重點參考「得標價格分析法」，加權平均得標價 ${r.priceBidPrices.balanced} 元可作為投標參考。溢價率分析法可作為輔助參考。`;
+        }
     } else if (premiumGap > 20) {
-        comment = "市場對此類標的熱情過高，建議嚴控成本，可參考溢價率法的「保守」價格。";
+        comment = "市場對此類標的熱情較高，建議嚴控成本，可參考溢價率法的「保守」價格。";
     } else if (premiumGap > 10) {
         comment = "溢價合理偏高，適合在「平衡」與「保守」間尋找甜蜜點。";
     } else if (premiumGap > 0) {
@@ -5194,7 +5375,7 @@ function generateRexCommentary(r) {
 }
 
 function calculateEvaluation(d) {
-    // v3.67 修改：同時計算兩種分析法，都呈現給用戶參考
+    // v3.68 修改：同時計算兩種分析法，都呈現給用戶參考
     // 從區間字串提取中間值用於計算
     function getRangeMidValue(rangeStr, type) {
         if (typeof rangeStr === 'number' && !isNaN(rangeStr)) return rangeStr;
@@ -5288,11 +5469,30 @@ function calculateEvaluation(d) {
     const gap = tA-tL;
     
     // === 溢價率分析法計算 ===
-    const premiumP1 = theo*(1+tL/100);
-    const premiumP2 = theo*(1+tA/100);
-    const premiumP3 = theo*(1+(tA+gap)/100);
-    const premiumP4 = theo*(1+(tA+gap*2)/100);
-    const premiumBelowFloor = premiumP1 < floorPrice;
+    const rawPremiumP1 = theo*(1+tL/100);  // 原始計算值
+    const rawPremiumP2 = theo*(1+tA/100);
+    const rawPremiumP3 = theo*(1+(tA+gap)/100);
+    const rawPremiumP4 = theo*(1+(tA+gap*2)/100);
+    const premiumBelowFloor = rawPremiumP1 < floorPrice;
+    
+    // v3.68 修改：當低於底標時，以底標為基準計算
+    let premiumP1, premiumP2, premiumP3, premiumP4;
+    let floorBasedPremium = 0;  // 以底標投標的溢價率
+    
+    if (premiumBelowFloor) {
+        // 保守=底標，平衡=底標+3%，積極=底標+5%，極致=底標+7%
+        premiumP1 = floorPrice;
+        premiumP2 = floorPrice * 1.03;
+        premiumP3 = floorPrice * 1.05;
+        premiumP4 = floorPrice * 1.07;
+        // 計算以底標投標的隱含溢價率
+        floorBasedPremium = theo > 0 ? ((floorPrice/theo) - 1) * 100 : 0;
+    } else {
+        premiumP1 = rawPremiumP1;
+        premiumP2 = rawPremiumP2;
+        premiumP3 = rawPremiumP3;
+        premiumP4 = rawPremiumP4;
+    }
     
     // === 得標價格分析法計算 ===
     const weightedLowBidPrice = wLowBid > 0 ? wLowBid : floorPrice;
@@ -5325,6 +5525,7 @@ function calculateEvaluation(d) {
             ultimate: safeFixed(premiumP4) 
         },
         premiumBelowFloor: premiumBelowFloor,
+        floorBasedPremium: safeFixed(floorBasedPremium),  // v3.68 以底標投標的隱含溢價率
         
         // === 得標價格分析法結果 ===
         weightedLowBidPrice: safeFixed(weightedLowBidPrice),
@@ -5404,12 +5605,27 @@ function displayResult(r) {
         <td><b>${r.weightedAvgBidPrice}</b></td>
     </tr></tfoot>`;
     
-    // 檢查溢價率法是否低於底標
+    // 檢查溢價率法是否低於底標，並生成對應的說明
     const premiumWarning = r.premiumBelowFloor 
-        ? `<div style="background:#ffebee; border-left:4px solid #f44336; padding:8px 12px; margin-top:10px; border-radius:0 8px 8px 0; font-size:13px; color:#c62828;">
-            ⚠️ 保守價(${r.premiumBidPrices.conservative}元)低於底標(${r.floorPrice}元)，此情境建議參考「得標價格分析法」
+        ? `<div style="background:#fff3e0; border-left:4px solid #ff9800; padding:10px 12px; margin-top:10px; border-radius:0 8px 8px 0; font-size:13px; color:#e65100;">
+            ⚠️ 歷史溢價率計算結果低於底標，已自動調整為底標基準模式<br>
+            <span style="font-size:12px;">💡 以底標價 ${r.floorPrice} 元投標 = 相當於溢價率 <b>${r.floorBasedPremium}%</b></span>
            </div>` 
         : '';
+    
+    // 根據是否低於底標決定策略卡片說明
+    const conservativeDesc = r.premiumBelowFloor 
+        ? `底標價` 
+        : `理論價×(1+${r.totalLowPremium}%)`;
+    const balancedDesc = r.premiumBelowFloor 
+        ? `底標價×1.03` 
+        : `理論價×(1+${r.totalAvgPremium}%)`;
+    const aggressiveDesc = r.premiumBelowFloor 
+        ? `底標價×1.05` 
+        : ``;
+    const ultimateDesc = r.premiumBelowFloor 
+        ? `底標價×1.07` 
+        : ``;
     
     div.innerHTML = `
     <div class="result-header"><h2>${r.cbName}</h2><div>AI 評估結果</div></div>
@@ -5421,13 +5637,16 @@ function displayResult(r) {
             <div><span style="color:#666;">理論價格：</span><b style="color:#667eea; font-size:24px;">${r.theoreticalPrice}</b> 元</div>
             <div><span style="color:#666;">底標價格：</span><b style="font-size:20px;">${r.floorPrice}</b> 元</div>
         </div>
+        <div style="font-size:12px; color:#666; margin-top:8px;">
+            💡 理論價格會隨股價波動，建議以截標日13:30收盤價計算的理論價格為最終評估基礎
+        </div>
     </div>
 
     <!-- ========== 溢價率分析法 ========== -->
     <div class="detail-section" style="border: 2px solid #1976d2; border-radius: 12px;">
         <h3 style="color:#1976d2;">📈 分析法一：溢價率分析法</h3>
         <p style="color:#666; font-size:13px; margin-bottom:10px;">
-            適用情境：理論價 ≥ 90元時，在理論價基礎上加上歷史平均溢價率計算投標價
+            適用情境：理論價 ≥ 95元時，在理論價基礎上加上歷史平均溢價率計算投標價
         </p>
         
         <!-- 溢價率法核心數據 -->
@@ -5463,20 +5682,22 @@ function displayResult(r) {
             <div class="strategy-card conservative">
                 <h4>🛡️ 保守</h4>
                 <div class="price">${r.premiumBidPrices.conservative}</div>
-                <div style="font-size:11px; color:#666;">理論價×(1+${r.totalLowPremium}%)</div>
+                <div style="font-size:11px; color:#666;">${conservativeDesc}</div>
             </div>
             <div class="strategy-card balanced">
                 <h4>⚖️ 平衡</h4>
                 <div class="price">${r.premiumBidPrices.balanced}</div>
-                <div style="font-size:11px; color:#666;">理論價×(1+${r.totalAvgPremium}%)</div>
+                <div style="font-size:11px; color:#666;">${balancedDesc}</div>
             </div>
             <div class="strategy-card aggressive">
                 <h4>🚀 積極</h4>
                 <div class="price">${r.premiumBidPrices.aggressive}</div>
+                <div style="font-size:11px; color:#666;">${aggressiveDesc}</div>
             </div>
             <div class="strategy-card ultimate">
                 <h4>🔥 極致</h4>
                 <div class="price">${r.premiumBidPrices.ultimate}</div>
+                <div style="font-size:11px; color:#666;">${ultimateDesc}</div>
             </div>
         </div>
     </div>
@@ -5485,7 +5706,7 @@ function displayResult(r) {
     <div class="detail-section" style="border: 2px solid #e65100; border-radius: 12px;">
         <h3 style="color:#e65100;">📊 分析法二：得標價格分析法</h3>
         <p style="color:#666; font-size:13px; margin-bottom:10px;">
-            適用情境：理論價 < 90元 或 溢價率法低於底標時，直接用歷史平均得標價格加權計算
+            適用情境：理論價 < 95元 或 溢價率法低於底標時，直接用歷史平均得標價格加權計算
         </p>
         
         <!-- 得標價格法核心數據 -->
@@ -5556,15 +5777,15 @@ document.getElementById('evaluationForm').addEventListener('submit', function(e)
         displayResult(calculateEvaluation({
             cbName: document.getElementById('cbName').value, 
             industry: document.getElementById('industry').value, 
-            issueSize: document.getElementById('issueSize').value, // v3.67 改為區間選擇
+            issueSize: document.getElementById('issueSize').value, // v3.68 改為區間選擇
             years: document.getElementById('years').value, 
             guarantee: document.getElementById('guarantee').value, 
             rating: document.getElementById('rating').value,
-            capital: document.getElementById('capital').value, // v3.67 改為區間選擇
+            capital: document.getElementById('capital').value, // v3.68 改為區間選擇
             stockPrice: parseFloat(document.getElementById('stockPrice').value), 
-            actualConversionPrice: parseFloat(document.getElementById('actualConversionPrice').value), // v3.67 新增：實際轉換價格
-            floorPrice: parseFloat(document.getElementById('floorPrice').value) || 100, // v3.67 新增：底標價格
-            conversionPrice: document.getElementById('conversionPrice').value, // v3.67 改為區間選擇
+            actualConversionPrice: parseFloat(document.getElementById('actualConversionPrice').value), // v3.68 新增：實際轉換價格
+            floorPrice: parseFloat(document.getElementById('floorPrice').value) || 100, // v3.68 新增：底標價格
+            conversionPrice: document.getElementById('conversionPrice').value, // v3.68 改為區間選擇
             subjectiveWeight: parseFloat(document.getElementById('subjectiveWeight').value)||0, 
             subjectiveLowPremium: parseFloat(document.getElementById('subjectiveLowPremium').value)||0, 
             subjectiveAvgPremium: parseFloat(document.getElementById('subjectiveAvgPremium').value)||0,

@@ -1464,7 +1464,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
                 </div>
             </div>
             <div class="form-group"><label>發行年期 *</label><select id="years"><option value="">請選擇...</option><option value="3">3年期</option><option value="5">5年期</option><option value="7">7年期</option></select><div id="yearsInfo" class="info-box"></div></div>
-            <div class="form-group"><label>擔保情況 *</label><select id="guarantee"><option value="">請選擇...</option><option value="有擔保">有擔保</option><option value="無擔保">無擔保</option></select><div id="guaranteeInfo" class="info-box"></div></div>
+            <div class="form-group"><label>擔保情況 *</label><select id="guarantee" onchange="updateAtmospherePanel(); updateMarketSentiment();"><option value="">請選擇...</option><option value="有擔保">有擔保</option><option value="無擔保">無擔保</option></select><div id="guaranteeInfo" class="info-box"></div></div>
             <div class="form-group"><label>信用評等 (TCRI) *</label><select id="rating"><option value="">請選擇...</option><option value="1">TCRI 1</option><option value="2">TCRI 2</option><option value="3">TCRI 3</option><option value="4">TCRI 4</option><option value="5">TCRI 5</option><option value="6">TCRI 6</option><option value="7">TCRI 7</option><option value="8">TCRI 8</option></select><div id="ratingInfo" class="info-box"></div></div>
         </div>
         <div class="form-section">
@@ -5394,6 +5394,9 @@ function bindInputEvents() {
     
     document.getElementById('guarantee').addEventListener('change', function() {
         updateMarketSentiment();
+        if (typeof updateAtmospherePanel === 'function') {
+            updateAtmospherePanel();
+        }
     });
     
     // 產業、規模、信評變更時都觸發市場氛圍計算
@@ -5437,11 +5440,13 @@ function getTheoRangeMidValue(rangeStr) {
 }
 
 // v3.69 修改：近期市場氛圍三維度加權計算（需三個條件都填寫）
+// v3.71 新增：區分有擔保/無擔保篩選
 function updateMarketSentiment() {
     const div = document.getElementById('marketSentiment');
     const industry = document.getElementById('industry').value;
     const issueSize = document.getElementById('issueSize').value;
     const rating = document.getElementById('rating').value;
+    const guarantee = document.getElementById('guarantee').value; // v3.71 新增
     
     // v3.69 修改：三個條件都要填寫才計算市場氛圍
     if (!industry || !issueSize || !rating) {
@@ -5453,8 +5458,15 @@ function updateMarketSentiment() {
         return;
     }
     
-    // 按截標日排序（最新在前）
-    const sortedData = [...auctionRawData].filter(d => d.openDate).sort((a, b) => {
+    // v3.71 修改：先按擔保類型篩選，再按截標日排序
+    let filteredData = [...auctionRawData].filter(d => d.openDate);
+    
+    // 如果有選擔保類型，就篩選同類型
+    if (guarantee) {
+        filteredData = filteredData.filter(d => d.guarantee === guarantee);
+    }
+    
+    const sortedData = filteredData.sort((a, b) => {
         const dateA = new Date(a.openDate);
         const dateB = new Date(b.openDate);
         return dateB - dateA;
@@ -5575,7 +5587,8 @@ function updateMarketSentiment() {
     const finalAvgB = totalWeight > 0 ? (totalAvgB / totalWeight) : 0;
     
     // 顯示結果
-    let html = `<div class="stats-header">🌡️ 近期市場氛圍（加權計算）</div>`;
+    const guarLabel = guarantee ? `【${guarantee}】` : '';
+    let html = `<div class="stats-header">🌡️ 近期市場氛圍${guarLabel}（加權計算）</div>`;
     
     // 總結 - 同時顯示溢價率和得標價格
     html += `<div style="background:#fff; padding:10px; border-radius:6px; margin-bottom:10px;">
@@ -6871,13 +6884,19 @@ function getRangeMidValue(rangeStr, type) {
  * @param {number} n - 要計算的近期案例數量（預設5）
  * @returns {Object|null} 市場氛圍數據
  */
-function calcMarketAtmosphere(n = 5) {
+function calcMarketAtmosphere(n = 5, guarantee = null) {
     if (!auctionRawData || auctionRawData.length === 0) return null;
     
-    // 按開標日期排序（最新的在前）
-    const sortedData = [...auctionRawData]
-        .filter(d => d.openDate && d.avgPremium !== null && d.avgPremium !== undefined && d.bidMultiple > 0)
-        .sort((a, b) => {
+    // v3.71 修改：先按擔保類型篩選，再排序
+    let filteredData = [...auctionRawData]
+        .filter(d => d.openDate && d.avgPremium !== null && d.avgPremium !== undefined && d.bidMultiple > 0);
+    
+    // 如果指定擔保類型，篩選同類型
+    if (guarantee) {
+        filteredData = filteredData.filter(d => d.guarantee === guarantee);
+    }
+    
+    const sortedData = filteredData.sort((a, b) => {
             const dateA = new Date(a.openDate);
             const dateB = new Date(b.openDate);
             return dateB - dateA;
@@ -6942,7 +6961,8 @@ function calcMarketAtmosphere(n = 5) {
         level: level,
         levelColor: levelColor,
         suggestion: suggestion,
-        caseCount: recentCases.length
+        caseCount: recentCases.length,
+        guarantee: guarantee  // v3.71 新增
     };
 }
 
@@ -7756,6 +7776,7 @@ function generateHeatAnalysisHTML(heatResult, similarCases, atmosphere) {
 
 /**
  * 更新市場氛圍面板
+ * v3.71 修改：根據用戶選擇的擔保類型篩選
  */
 function updateAtmospherePanel() {
     const panel = document.getElementById('atmospherePanel');
@@ -7763,7 +7784,11 @@ function updateAtmospherePanel() {
     
     if (!panel || !content) return;
     
-    const atmosphere = calcMarketAtmosphere(5);
+    // v3.71 新增：取得用戶選擇的擔保類型
+    const guaranteeEl = document.getElementById('guarantee');
+    const guarantee = guaranteeEl ? guaranteeEl.value : null;
+    
+    const atmosphere = calcMarketAtmosphere(5, guarantee);
     
     if (!atmosphere || atmosphere.caseCount === 0) {
         panel.style.display = 'none';
@@ -7771,6 +7796,9 @@ function updateAtmospherePanel() {
     }
     
     panel.style.display = 'block';
+    
+    // v3.71 新增：標題加入擔保類型
+    const guarLabel = guarantee ? `【${guarantee}】` : '';
     
     // 生成近期案例列表
     let caseList = '';
@@ -7788,7 +7816,7 @@ function updateAtmospherePanel() {
     content.innerHTML = `
         <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 10px;">
             <div style="flex: 1;">
-                <div style="font-size: 11px; color: #666;">近${atmosphere.caseCount}檔平均溢價</div>
+                <div style="font-size: 11px; color: #666;">近${atmosphere.caseCount}檔${guarLabel}平均溢價</div>
                 <div style="font-size: 22px; font-weight: bold; color: #2e7d32;">${atmosphere.avgPremium.toFixed(2)}%</div>
             </div>
             <div style="flex: 1;">
@@ -7802,7 +7830,7 @@ function updateAtmospherePanel() {
             </div>
         </div>
         <div style="background: #fff; padding: 8px; border-radius: 6px; margin-bottom: 8px;">
-            <div style="font-size: 11px; color: #666; margin-bottom: 5px;">📋 近期開標案例</div>
+            <div style="font-size: 11px; color: #666; margin-bottom: 5px;">📋 近期${guarLabel}開標案例</div>
             ${caseList}
         </div>
         <div style="font-size: 11px; color: #2e7d32; background: #fff; padding: 8px; border-radius: 6px;">

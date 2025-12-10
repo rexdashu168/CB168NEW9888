@@ -938,25 +938,30 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 .profitloss-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 12px;
+    font-size: 10px;
     background: white;
     border-radius: 6px;
     overflow: hidden;
-    margin-top: 12px;
+    margin-top: 10px;
+    table-layout: fixed;
 }
 .profitloss-table th {
     background: #c2185b;
     color: white;
-    padding: 8px 5px;
+    padding: 6px 3px;
     font-weight: 700;
     text-align: center;
-    font-size: 11px;
+    font-size: 9px;
+    white-space: nowrap;
 }
 .profitloss-table td {
-    padding: 7px 5px;
+    padding: 5px 3px;
     text-align: center;
     border-bottom: 1px solid #fce4ec;
     font-weight: 600;
+    font-size: 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .profitloss-table tr:hover {
     background: #fce4ec;
@@ -968,13 +973,13 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 .profitloss-table .val-win { color: #c62828; font-weight: 700; }
 .profitloss-table .val-lose { color: #2e7d32; font-weight: 700; }
 .profitloss-insight {
-    margin-top: 12px;
-    padding: 12px;
+    margin-top: 10px;
+    padding: 10px;
     background: white;
     border-left: 4px solid #e91e63;
     border-radius: 0 8px 8px 0;
-    font-size: 13px;
-    line-height: 1.7;
+    font-size: 12px;
+    line-height: 1.6;
     color: #880e4f;
 }
 
@@ -3506,18 +3511,16 @@ function showProfitLossYear(year, event) {
     </div>
     
     <div style="font-size:11px; font-weight:bold; color:#ad1457; margin:10px 0 5px 0;">📋 ${yearLabel} 盈虧明細 TOP10/BOTTOM10</div>
+    <div style="overflow-x:auto;">
     <table class="profitloss-table">
         <thead>
             <tr>
-                <th>#</th>
-                <th>代號</th>
-                <th>名稱</th>
-                <th>狀態</th>
-                <th>最低得標</th>
-                <th>掛牌高</th>
-                <th>掛牌低</th>
-                <th>報酬(高)</th>
-                <th>報酬(低)</th>
+                <th style="width:8%;">#</th>
+                <th style="width:28%;">名稱</th>
+                <th style="width:16%;">得標價</th>
+                <th style="width:16%;">掛牌高</th>
+                <th style="width:16%;">報酬高</th>
+                <th style="width:16%;">報酬低</th>
             </tr>
         </thead>
         <tbody>`;
@@ -3525,43 +3528,35 @@ function showProfitLossYear(year, event) {
     // TOP10
     const top10 = data.details.slice(0, 10);
     top10.forEach((item, idx) => {
-        const statusClass = item.status === '掛牌中' ? 'listed' : 'delisted';
         html += `
             <tr>
                 <td>${idx + 1}</td>
-                <td>${item.id || '-'}</td>
-                <td>${item.name || '-'}</td>
-                <td><span class="dimension-status-badge ${statusClass}">${item.status}</span></td>
-                <td>${item.minBid.toFixed(2)}</td>
+                <td style="text-align:left; padding-left:5px;">${item.name || '-'}</td>
+                <td>${item.minBid.toFixed(1)}</td>
                 <td>${item.high.toFixed(1)}</td>
-                <td>${item.low.toFixed(1)}</td>
                 <td class="val-win">+${item.profitByHigh.toFixed(1)}%</td>
                 <td class="${item.profitByLow >= 0 ? 'val-win' : 'val-lose'}">${item.profitByLow >= 0 ? '+' : ''}${item.profitByLow.toFixed(1)}%</td>
             </tr>`;
     });
     
     // 分隔線
-    html += `<tr style="background:#fce4ec;"><td colspan="9" style="text-align:center; font-size:8px; color:#ad1457;">── BOTTOM 10 ──</td></tr>`;
+    html += `<tr style="background:#fce4ec;"><td colspan="6" style="text-align:center; font-size:8px; color:#ad1457;">── BOTTOM 10 ──</td></tr>`;
     
     // BOTTOM10
     const bottom10 = data.details.slice(-10).reverse();
     bottom10.forEach((item, idx) => {
-        const statusClass = item.status === '掛牌中' ? 'listed' : 'delisted';
         html += `
             <tr>
                 <td>${data.details.length - 9 + idx}</td>
-                <td>${item.id || '-'}</td>
-                <td>${item.name || '-'}</td>
-                <td><span class="dimension-status-badge ${statusClass}">${item.status}</span></td>
-                <td>${item.minBid.toFixed(2)}</td>
+                <td style="text-align:left; padding-left:5px;">${item.name || '-'}</td>
+                <td>${item.minBid.toFixed(1)}</td>
                 <td>${item.high.toFixed(1)}</td>
-                <td>${item.low.toFixed(1)}</td>
                 <td class="${item.profitByHigh >= 0 ? 'val-win' : 'val-lose'}">${item.profitByHigh >= 0 ? '+' : ''}${item.profitByHigh.toFixed(1)}%</td>
                 <td class="${item.profitByLow >= 0 ? 'val-win' : 'val-lose'}">${item.profitByLow >= 0 ? '+' : ''}${item.profitByLow.toFixed(1)}%</td>
             </tr>`;
     });
     
-    html += `</tbody></table>`;
+    html += `</tbody></table></div>`;
     
     // 洞察
     const insight = data.winRateByLow >= 80 ? 

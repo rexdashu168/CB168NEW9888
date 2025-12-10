@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.68 (95元分界版)</title>
+<title>AI智能可轉債競拍系統 v3.69 (Rex提醒優化版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="embedded_data.js" onerror="console.warn('embedded_data.js not found, using defaults.')"></script>
 
@@ -5409,7 +5409,7 @@ function updateSmartReminders() {
 }
 
 function generateRexCommentary(r) { 
-    // v3.68 修改：根據Rex大叔文章風格，優化分析內容
+    // v3.69 修改：優化Rex大叔分析內容，增加轉換價值說明與分析法建議
     const theo = parseFloat(r.theoreticalPrice);
     const floor = parseFloat(r.floorPrice);
     const premiumConservative = parseFloat(r.premiumBidPrices.conservative);
@@ -5419,10 +5419,37 @@ function generateRexCommentary(r) {
     const belowFloor = r.premiumBelowFloor;
     const totalLowP = parseFloat(r.totalLowPremium);
     const totalAvgP = parseFloat(r.totalAvgPremium);
+    const impliedLowP = parseFloat(r.impliedLowPremium);
+    const impliedAvgP = parseFloat(r.impliedAvgPremium);
+    const weightedLowBid = parseFloat(r.weightedLowBidPrice);
+    const weightedAvgBid = parseFloat(r.weightedAvgBidPrice);
     
     // 計算風險相關數據
     const maxLossPercent = ((premiumConservative - 100) / premiumConservative * 100).toFixed(2);
     const premiumVsPrice = (premiumBalanced - priceBalanced).toFixed(2);
+    
+    // v3.69 新增：計算轉換價值相關數據
+    const conversionValuePercent = (theo - 100).toFixed(2); // 相對於100元的差距
+    const aboveOrBelow = theo >= 100 ? '高於' : '低於';
+    const conversionNote = theo >= 100 
+        ? `目前市價高於轉換價格 ${conversionValuePercent}%，可轉債將跟著股價連動漲跌`
+        : `目前市價低於轉換價格 ${Math.abs(conversionValuePercent)}%，可轉債價格較不受股價影響，主要由純債價值支撐`;
+    
+    // v3.69 新增：溢價率換算價格、得標價換算溢價率
+    const premiumPriceLow = (theo * (1 + totalLowP/100)).toFixed(2);
+    const premiumPriceAvg = (theo * (1 + totalAvgP/100)).toFixed(2);
+    const pricePremiumLow = theo > 0 ? ((weightedLowBid/theo - 1) * 100).toFixed(2) : '0.00';
+    const pricePremiumAvg = theo > 0 ? ((weightedAvgBid/theo - 1) * 100).toFixed(2) : '0.00';
+    
+    // v3.69 新增：分析法建議
+    let methodRecommendation = '';
+    if (theo >= 95) {
+        methodRecommendation = '以目前理論價狀況，選擇<b style="color:#1976d2;">溢價率分析法</b>較具參考價值';
+    } else if (theo >= 85) {
+        methodRecommendation = '理論價接近分界點，建議<b style="color:#e65100;">兩種分析法交叉比對</b>參考';
+    } else {
+        methodRecommendation = '以目前理論價狀況，選擇<b style="color:#e65100;">得標價格分析法</b>較具參考價值';
+    }
     
     let title = "";
     let situation = "";
@@ -5430,77 +5457,95 @@ function generateRexCommentary(r) {
     let risk = "";
     let reminder = "";
     
+    // v3.69 新增：市場氛圍與歷史組合條件區間說明
+    const marketAtmosphere = `<div style="background:#e8f5e9; padding:10px 12px; border-radius:6px; margin:10px 0; font-size:13px;">
+        <div style="margin-bottom:8px;"><b style="color:#2e7d32;">📊 近期市場氛圍（溢價率分析法）</b></div>
+        <div>加權溢價率區間：<b>${totalLowP}% ~ ${totalAvgP}%</b></div>
+        <div style="color:#666;">→ 換算投標價區間：<b style="color:#1976d2;">${premiumPriceLow} ~ ${premiumPriceAvg} 元</b></div>
+    </div>
+    <div style="background:#fff3e0; padding:10px 12px; border-radius:6px; margin:10px 0; font-size:13px;">
+        <div style="margin-bottom:8px;"><b style="color:#e65100;">📈 歷史組合條件（得標價格分析法）</b></div>
+        <div>加權得標價區間：<b>${weightedLowBid} ~ ${weightedAvgBid} 元</b></div>
+        <div style="color:#666;">→ 換算溢價率區間：<b style="color:#e65100;">${pricePremiumLow}% ~ ${pricePremiumAvg}%</b></div>
+    </div>`;
+    
     if (belowFloor) {
         // 情境一：溢價率法低於底標
         title = "⚠️ 特殊情境：溢價率計算低於底標";
-        situation = `本檔理論價 ${r.theoreticalPrice} 元，歷史溢價率計算出的投標價低於底標 ${r.floorPrice} 元，系統已自動切換為「底標基準模式」。這種情況通常出現在理論價偏低或市場氛圍保守的標的。`;
-        strategy = `<b>策略建議：</b><br>
-            1. 保守策略：以底標 ${r.floorPrice} 元投標（相當於溢價率 ${r.floorBasedPremium}%）<br>
-            2. 平衡策略：底標加3%約 ${r.premiumBidPrices.balanced} 元<br>
-            3. 同時參考得標價格分析法的加權平均 ${priceBalanced} 元作為另一參考點`;
+        situation = `本檔理論價 ${r.theoreticalPrice} 元，${conversionNote}。歷史溢價率計算出的投標價低於底標 ${r.floorPrice} 元，系統已自動切換為「底標基準模式」。`;
+        strategy = `${marketAtmosphere}
+            <div style="margin-top:12px;"><b>策略建議：</b></div>
+            <div>1. 保守策略：以底標 ${r.floorPrice} 元投標（相當於溢價率 ${r.floorBasedPremium}%）</div>
+            <div>2. 平衡策略：底標加3%約 ${r.premiumBidPrices.balanced} 元</div>
+            <div>3. 同時參考得標價格分析法的加權平均 ${priceBalanced} 元作為另一參考點</div>`;
         risk = `<b>風險評估：</b>以底標投標，最大損失為手續費約0.5%，風險極低。但需注意此類標的可能競爭激烈，得標機率需評估。`;
         reminder = "競拍的核心是控制成本，在這種情境下，用底標投標是最保守的選擇，讓自己立於不敗之地。";
         
     } else if (theo < 85) {
         // 情境二：理論價很低（<85元）
         title = "📊 低理論價情境分析";
-        situation = `理論價 ${r.theoreticalPrice} 元明顯偏低，與95元分界點相差 ${(95-theo).toFixed(1)} 元。在這種情境下，溢價率分析法的參考價值有限，因為歷史資料多以較高理論價標的為主。`;
-        strategy = `<b>策略建議：</b><br>
-            1. <b>強烈建議以「得標價格分析法」為主</b><br>
-            2. 保守價參考：${priceConservative} 元（加權最低得標價）<br>
-            3. 平衡價參考：${priceBalanced} 元（加權平均得標價）<br>
-            4. 溢價率法僅供輔助參考，不建議作為主要依據`;
+        situation = `理論價 ${r.theoreticalPrice} 元明顯偏低，${conversionNote}。<br><br>${methodRecommendation}，溢價率分析法的參考價值有限。`;
+        strategy = `${marketAtmosphere}
+            <div style="margin-top:12px;"><b>策略建議：</b></div>
+            <div>1. <b>強烈建議以「得標價格分析法」為主</b></div>
+            <div>2. 保守價參考：${priceConservative} 元（加權最低得標價）</div>
+            <div>3. 平衡價參考：${priceBalanced} 元（加權平均得標價）</div>
+            <div>4. 溢價率法僅供輔助參考，不建議作為主要依據</div>`;
         risk = `<b>風險評估：</b>低理論價標的通常代表股價相對轉換價偏低，需特別關注公司基本面與未來股價走勢。以 ${priceConservative} 元投標，最大損失約 ${((priceConservative-100)/priceConservative*100).toFixed(1)}%。`;
         reminder = "記住，競拍最大的好處就是你可以控制投入成本，在低理論價情境更要謹慎評估是否參與。";
         
     } else if (theo < 95) {
         // 情境三：理論價偏低（85-95元）
         title = "💡 理論價接近分界點情境";
-        situation = `理論價 ${r.theoreticalPrice} 元略低於95元分界點，兩種分析法都有參考價值，但得標價格分析法可能更貼近市場實際。`;
-        strategy = `<b>策略建議：</b><br>
-            1. 主要參考「得標價格分析法」：${priceConservative} ~ ${priceBalanced} 元<br>
-            2. 輔助參考「溢價率分析法」：${premiumConservative} ~ ${premiumBalanced} 元<br>
-            3. 兩者差異 ${Math.abs(premiumVsPrice)} 元，建議取較保守的價格`;
+        situation = `理論價 ${r.theoreticalPrice} 元略低於95元分界點，${conversionNote}。<br><br>${methodRecommendation}。`;
+        strategy = `${marketAtmosphere}
+            <div style="margin-top:12px;"><b>策略建議：</b></div>
+            <div>1. 主要參考「得標價格分析法」：${priceConservative} ~ ${priceBalanced} 元</div>
+            <div>2. 輔助參考「溢價率分析法」：${premiumConservative} ~ ${premiumBalanced} 元</div>
+            <div>3. 兩者差異 ${Math.abs(premiumVsPrice)} 元，建議取較保守的價格</div>`;
         risk = `<b>風險評估：</b>以保守價 ${Math.min(premiumConservative, priceConservative).toFixed(2)} 元投標，最大損失控制在 ${maxLossPercent}% 左右，屬於可接受範圍。`;
         reminder = "在分界點附近，交叉比對兩種分析法能讓你的判斷更客觀，不要只看單一數據。";
         
     } else if (theo >= 95 && theo <= 105) {
         // 情境四：理論價適中（95-105元）
         title = "✨ 理想投標區間情境";
-        situation = `理論價 ${r.theoreticalPrice} 元處於95-105元的理想區間，這是競拍最舒適的情境。溢價率分析法較為準確，歷史資料參考價值高。`;
-        strategy = `<b>策略建議：</b><br>
-            1. 保守策略：${premiumConservative} 元（溢價率 ${totalLowP}%）<br>
-            2. 平衡策略：${premiumBalanced} 元（溢價率 ${totalAvgP}%）<br>
-            3. 此區間通常競拍熱度較高，想得標可考慮平衡或積極策略`;
+        situation = `理論價 ${r.theoreticalPrice} 元處於95-105元的理想區間，${conversionNote}。<br><br>${methodRecommendation}，歷史資料參考價值高。`;
+        strategy = `${marketAtmosphere}
+            <div style="margin-top:12px;"><b>策略建議：</b></div>
+            <div>1. 保守策略：${premiumConservative} 元（溢價率 ${totalLowP}%）</div>
+            <div>2. 平衡策略：${premiumBalanced} 元（溢價率 ${totalAvgP}%）</div>
+            <div>3. 此區間通常競拍熱度較高，想得標可考慮平衡或積極策略</div>`;
         risk = `<b>風險評估：</b>以 ${premiumConservative} 元投標，三年最大損失約 ${maxLossPercent}%（約 ${(premiumConservative-100).toFixed(1)} 元/張）。這個風險是你進場前就能確定的，這就是競拍控制風險的精髓。`;
         reminder = "這種理論價的標的是練習競拍的好機會，風險可控且有獲利空間，值得認真評估參與。";
         
     } else if (theo > 105 && theo <= 115) {
         // 情境五：理論價偏高（105-115元）
         title = "🔥 較高理論價情境";
-        situation = `理論價 ${r.theoreticalPrice} 元偏高，代表股價已經超過轉換價一段距離。這類標的通常有題材支撐，但溢價空間相對有限。`;
-        strategy = `<b>策略建議：</b><br>
-            1. 建議採「保守」策略：${premiumConservative} 元<br>
-            2. 高理論價標的不宜追高，嚴控投標成本<br>
-            3. 如果保守價仍覺得太高，可以考慮降低投標張數或放棄`;
+        situation = `理論價 ${r.theoreticalPrice} 元偏高，${conversionNote}，已具備轉換價值。<br><br>${methodRecommendation}。`;
+        strategy = `${marketAtmosphere}
+            <div style="margin-top:12px;"><b>策略建議：</b></div>
+            <div>1. 建議採「保守」策略：${premiumConservative} 元</div>
+            <div>2. 高理論價標的不宜追高，嚴控投標成本</div>
+            <div>3. 如果保守價仍覺得太高，可以考慮降低投標張數或放棄</div>`;
         risk = `<b>風險評估：</b>高理論價不代表沒風險，股價回檔時可轉債價格也會下跌。以 ${premiumConservative} 元投標，最大損失 ${maxLossPercent}%。`;
         reminder = "不要因為標的熱門就衝動追高，記住我們參與競拍的核心目的是控制成本，不是搶籌碼。";
         
     } else {
         // 情境六：理論價很高（>115元）
         title = "⚡ 高理論價警示";
-        situation = `理論價 ${r.theoreticalPrice} 元已經相當高，市場對此標的可能有強烈預期。但越熱門的標的，競拍價格通常也會被推高。`;
-        strategy = `<b>策略建議：</b><br>
-            1. 嚴格採用「保守」策略：${premiumConservative} 元<br>
-            2. 認真評估是否值得參與，高價得標的風險不低<br>
-            3. 如執意參與，建議降低投標張數，控制整體曝險`;
+        situation = `理論價 ${r.theoreticalPrice} 元已經相當高，${conversionNote}，已具備明顯轉換價值。<br><br>${methodRecommendation}，但市場競爭可能較激烈。`;
+        strategy = `${marketAtmosphere}
+            <div style="margin-top:12px;"><b>策略建議：</b></div>
+            <div>1. 嚴格採用「保守」策略：${premiumConservative} 元</div>
+            <div>2. 認真評估是否值得參與，高價得標的風險不低</div>
+            <div>3. 如執意參與，建議降低投標張數，控制整體曝險</div>`;
         risk = `<b>風險評估：</b>高理論價標的在股價回檔時損失可能較大。建議將此類標的的投標資金控制在總投資部位的較小比例。`;
         reminder = "有時候最好的投資決策是「不參與」。不是每一檔都要拍，選擇適合自己風險承受度的標的更重要。";
     }
     
     // 組合輸出
     return `<div class="rex-analysis">
-        <div class="rex-title">🧢 Rex大叔分析</div>
+        <div class="rex-title">🧢 Rex大叔提醒</div>
         <div class="rex-content">
             <div style="font-size:15px; font-weight:bold; color:#1565c0; margin-bottom:10px;">${title}</div>
             <div style="margin-bottom:12px;">${situation}</div>

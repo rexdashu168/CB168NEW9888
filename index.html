@@ -1635,7 +1635,6 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 ```
 
 </div>
-```
 
 </div>
 
@@ -6748,6 +6747,7 @@ function displayResult(r) {
     
     // === 溢價率分析法表格 ===
     let premiumRows = '';
+    let sumLow = 0, sumAvg = 0, dimCount = 0;
     for(const[k,d] of Object.entries(r.dimensions)) {
         premiumRows+=`<tr>
             <td>${nm[k] || k}</td>
@@ -6758,6 +6758,9 @@ function displayResult(r) {
             <td>${safeFixed(d.weightedLow)}</td>
             <td>${safeFixed(d.weightedAvg)}</td>
         </tr>`;
+        if(d.low !== null && !isNaN(d.low)) { sumLow += d.low; }
+        if(d.avg !== null && !isNaN(d.avg)) { sumAvg += d.avg; }
+        dimCount++;
     }
     
     if(r.inputData.subjectiveWeight > 0) {
@@ -6781,15 +6784,19 @@ function displayResult(r) {
         </tr>`;
     }
     
+    // v3.73 修正：合計行增加原始數值的簡單平均
+    const avgLow = dimCount > 0 ? (sumLow / dimCount).toFixed(2) : '-';
+    const avgAvgPrem = dimCount > 0 ? (sumAvg / dimCount).toFixed(2) : '-';
     premiumRows+=`<tfoot><tr>
         <td></td><td style="text-align:right"><b>合計</b></td>
-        <td>-</td><td>-</td><td>100%</td>
+        <td><b>${avgLow}%</b></td><td><b>${avgAvgPrem}%</b></td><td>100%</td>
         <td><b>${r.totalLowPremium}%</b></td>
         <td><b>${r.totalAvgPremium}%</b></td>
     </tr></tfoot>`;
     
     // === 得標價格分析法表格 ===
     let priceRows = '';
+    let sumLowBid = 0, sumAvgBid = 0, priceDimCount = 0;
     for(const[k,d] of Object.entries(r.dimensions)) {
         priceRows+=`<tr>
             <td>${nm[k] || k}</td>
@@ -6800,11 +6807,16 @@ function displayResult(r) {
             <td>${safeFixed(d.weightedLowBid || 0, 2)}</td>
             <td>${safeFixed(d.weightedAvgBid || 0, 2)}</td>
         </tr>`;
+        if(d.lowBidPrice > 0) { sumLowBid += d.lowBidPrice; priceDimCount++; }
+        if(d.avgBidPrice > 0) { sumAvgBid += d.avgBidPrice; }
     }
     
+    // v3.73 修正：合計行增加原始數值的簡單平均
+    const avgLowBid = priceDimCount > 0 ? (sumLowBid / priceDimCount).toFixed(2) : '-';
+    const avgAvgBid = priceDimCount > 0 ? (sumAvgBid / priceDimCount).toFixed(2) : '-';
     priceRows+=`<tfoot><tr>
         <td></td><td style="text-align:right"><b>加權得標價</b></td>
-        <td>-</td><td>-</td><td>100%</td>
+        <td><b>${avgLowBid}</b></td><td><b>${avgAvgBid}</b></td><td>100%</td>
         <td><b>${r.weightedLowBidPrice}</b></td>
         <td><b>${r.weightedAvgBidPrice}</b></td>
     </tr></tfoot>`;
@@ -8739,23 +8751,14 @@ function updateAtmospherePanel() {
     // 生成近期案例列表
     let caseList = '';
     atmosphere.recentCases.slice(0, 5).forEach((d, i) => {
-        // v3.72 修正：日期格式化處理
-        let dateStr = '-';
-        if (d.openDate) {
-            const dateObj = new Date(d.openDate);
-            if (!isNaN(dateObj.getTime()) && dateObj.getFullYear() > 2000) {
-                dateStr = `${dateObj.getFullYear()}/${(dateObj.getMonth()+1).toString().padStart(2,'0')}/${dateObj.getDate().toString().padStart(2,'0')}`;
-            } else {
-                // 嘗試直接使用字串
-                dateStr = String(d.openDate).substring(0, 10).replace(/-/g, '/');
-            }
-        }
+        // v3.73 修正：使用統一的 formatDate 函數處理日期
+        const dateStr = formatDate(d.openDate);
         caseList += `
         <div style="display: flex; gap: 8px; padding: 4px 0; border-bottom: 1px dashed #c8e6c9; font-size: 11px;">
             <span style="color: #666; min-width: 70px;">${dateStr}</span>
             <span style="font-weight: 600; min-width: 80px;">${d.name || '-'}</span>
-            <span style="color: #1565c0;">溢${d.avgPremium !== null ? d.avgPremium.toFixed(1) : '-'}%</span>
-            <span style="color: #e65100;">${d.bidMultiple > 0 ? d.bidMultiple.toFixed(1) + 'x' : '-'}</span>
+            <span style="color: #1565c0;">溢${d.avgPremium !== null ? d.avgPremium.toFixed(2) : '-'}%</span>
+            <span style="color: #e65100;">${d.bidMultiple > 0 ? d.bidMultiple.toFixed(2) + 'x' : '-'}</span>
         </div>`;
     });
     

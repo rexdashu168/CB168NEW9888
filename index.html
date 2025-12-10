@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.72 (主力模擬版)</title>
+<title>AI智能可轉債競拍系統 v3.73 (主力模擬版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="embedded_data.js" onerror="console.warn('embedded_data.js not found, using defaults.')"></script>
 
@@ -1397,14 +1397,14 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.72)...</div>
+    <div>🔄 系統啟動中 (v3.73)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
 <div class="container" style="display: none;">
     <div class="header">
         <h1>🤖 AI智能可轉債競拍系統</h1>
-        <span class="version-badge">v3.72</span>
+        <span class="version-badge">v3.73</span>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -1548,7 +1548,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 <div class="result-panel" id="resultPanel">
     <div id="welcomeMsg" class="welcome-message">
         <h2>歡迎使用AI智能競拍評估系統</h2>
-        <p style="margin-top:10px; color:#666; font-size: 14px;">v3.72 主力模擬版<br>✅ 新增競拍前綜合評估（自動評分建議）<br>✅ 所有統計模型改為動態計算（隨資料更新）<br>✅ 主力模擬出價分析（基於300檔CB統計）</p>
+        <p style="margin-top:10px; color:#666; font-size: 14px;">v3.73 主力模擬版<br>✅ 修正評估邏輯：明確標示「同條件歷史數據」<br>✅ 投標倍數改為「同條件歷史投標倍數」供參考<br>✅ 評分項目說明更清楚（條件+樣本數）</p>
         <div class="stats-summary" id="statsSummary"></div>
         
         <!-- v3.58 市場趨勢分析 -->
@@ -2079,6 +2079,99 @@ async function loadStatistics() {
                 totalSamples: auctionData.length
             };
             console.log(`統計模型載入完成，共 ${auctionData.length} 筆競拍樣本`);
+        }
+        
+        // v3.72 新增：計算各條件組合的歷史統計（用於競拍前評估）
+        // 需要合併04競拍資料和01基本資料來取得掛牌表現
+        if (sheetAuction && sheetAuction.length > 0 && sheetAllCB && sheetAllCB.length > 0) {
+            // 建立CB代號到掛牌資料的對照
+            const listingMap = {};
+            sheetAllCB.forEach(row => {
+                const cbCode = String(row['CB代號'] || '').replace('.0', '').trim();
+                if (cbCode) {
+                    listingMap[cbCode] = {
+                        marketHigh: safeFloat(row['掛牌最高']),
+                        marketLow: safeFloat(row['掛牌最低']),
+                        issuePrice: safeFloat(row['發行價格']) || 100,
+                        listDate: row['掛牌日期']
+                    };
+                }
+            });
+            
+            // 合併資料並計算掛牌獲利
+            const combinedData = sheetAuction.map(row => {
+                const cbCode = String(row['CB代號'] || '').replace('.0', '').trim();
+                const listing = listingMap[cbCode] || {};
+                const theoPrice = safeFloat(row['理論價']);
+                const bidMultiple = safeFloat(row['投標倍數']);
+                const guarantee = row['擔保'] || '無擔保';
+                const issueSize = safeFloat(row['發行規模']);
+                const gain = listing.marketHigh > 0 ? listing.marketHigh - listing.issuePrice : null;
+                
+                // 判斷日期（近期為2024年後）
+                let isRecent = false;
+                if (listing.listDate) {
+                    const d = new Date(listing.listDate);
+                    isRecent = d.getFullYear() >= 2024;
+                }
+                
+                // 理論價分組
+                let theoKey = '>=110';
+                if (theoPrice > 0 && theoPrice < 95) theoKey = '<95';
+                else if (theoPrice < 100) theoKey = '95-100';
+                else if (theoPrice < 105) theoKey = '100-105';
+                else if (theoPrice < 110) theoKey = '105-110';
+                
+                // 規模分組
+                let sizeKey = '>=10億';
+                if (issueSize > 0 && issueSize < 3) sizeKey = '<3億';
+                else if (issueSize < 5) sizeKey = '3-5億';
+                else if (issueSize < 10) sizeKey = '5-10億';
+                
+                return { theoPrice, theoKey, bidMultiple, guarantee, issueSize, sizeKey, gain, isRecent };
+            }).filter(d => d.theoPrice > 0);
+            
+            // 計算各條件組合的統計
+            window.conditionStats = {};
+            const theoKeys = ['<95', '95-100', '100-105', '105-110', '>=110'];
+            const guarKeys = ['有擔保', '無擔保'];
+            
+            theoKeys.forEach(tk => {
+                guarKeys.forEach(gk => {
+                    const key = `${tk}_${gk}`;
+                    const group = combinedData.filter(d => d.theoKey === tk && d.guarantee === gk);
+                    const recentGroup = group.filter(d => d.isRecent);
+                    
+                    if (group.length >= 3) {
+                        // 全部數據
+                        const bidMults = group.map(d => d.bidMultiple).filter(v => v > 0);
+                        const gains = group.map(d => d.gain).filter(v => v !== null);
+                        const wins = gains.filter(g => g >= 10).length;
+                        
+                        // 近期數據（優先使用）
+                        const recentBidMults = recentGroup.map(d => d.bidMultiple).filter(v => v > 0);
+                        const recentGains = recentGroup.map(d => d.gain).filter(v => v !== null);
+                        const recentWins = recentGains.filter(g => g >= 10).length;
+                        
+                        window.conditionStats[key] = {
+                            // 全部統計
+                            count: group.length,
+                            avgBidMultiple: bidMults.length > 0 ? bidMults.reduce((s,v) => s+v, 0) / bidMults.length : 2.5,
+                            avgGain: gains.length > 0 ? gains.reduce((s,v) => s+v, 0) / gains.length : 30,
+                            medianGain: gains.length > 0 ? gains.sort((a,b) => a-b)[Math.floor(gains.length/2)] : 20,
+                            winRate: gains.length > 0 ? wins / gains.length : 0.7,
+                            // 近期統計（2024年後）
+                            recentCount: recentGroup.length,
+                            recentAvgBidMultiple: recentBidMults.length >= 3 ? recentBidMults.reduce((s,v) => s+v, 0) / recentBidMults.length : null,
+                            recentAvgGain: recentGains.length >= 3 ? recentGains.reduce((s,v) => s+v, 0) / recentGains.length : null,
+                            recentWinRate: recentGains.length >= 3 ? recentWins / recentGains.length : null
+                        };
+                    }
+                });
+            });
+            
+            console.log(`計算條件組合統計: ${Object.keys(window.conditionStats).length} 組`);
+            console.log('條件組合統計:', window.conditionStats);
         }
 
         // v3.62 新增：建立CB收盤價對照表（從09工作表D欄「CB收盤價」讀取）
@@ -5825,8 +5918,8 @@ function bindInputEvents() {
     document.getElementById('floorPrice').addEventListener('input', updateSmartReminders); // v3.69 新增：底標價格
     document.getElementById('theoRange').addEventListener('change', updateSmartReminders); // v3.72 改為理論價區間
     
-    // v3.72 新增：競拍前評估觸發
-    const evalTriggers = ['stockPrice', 'actualConversionPrice', 'theoRange', 'estBidMultiple', 'guarantee', 'rating', 'issueSize', 'broker', 'industry'];
+    // v3.72 新增：競拍前評估觸發（基於事前可知條件）
+    const evalTriggers = ['stockPrice', 'actualConversionPrice', 'theoRange', 'guarantee', 'rating', 'issueSize', 'broker', 'industry'];
     evalTriggers.forEach(id => {
         const el = document.getElementById(id);
         if (el) {
@@ -7672,7 +7765,6 @@ function estimateWinRate(inputPremium, predictedPremium) {
 function evaluateAuctionOpportunity(params) {
     const { 
         theoPrice,      // 理論價
-        bidMultiple,    // 預估投標倍數
         guarantee,      // 擔保類型
         tcri,           // 信用評等
         issueSize,      // 發行規模（億元）
@@ -7684,101 +7776,153 @@ function evaluateAuctionOpportunity(params) {
     let maxScore = 100;
     const factors = [];
     
+    // 判斷理論價區間
+    let theoKey = '>=110';
+    if (theoPrice < 95) theoKey = '<95';
+    else if (theoPrice < 100) theoKey = '95-100';
+    else if (theoPrice < 105) theoKey = '100-105';
+    else if (theoPrice < 110) theoKey = '105-110';
+    
+    // 取得同條件歷史統計
+    const guarKey = guarantee === '有擔保' ? '有擔保' : '無擔保';
+    const condKey = `${theoKey}_${guarKey}`;
+    const condStats = window.conditionStats?.[condKey] || null;
+    
+    // 優先使用近期數據，沒有則用全部數據
+    const useRecent = condStats?.recentCount >= 5;
+    const estBidMultiple = useRecent && condStats.recentAvgBidMultiple ? condStats.recentAvgBidMultiple : (condStats?.avgBidMultiple || 2.5);
+    const estGain = useRecent && condStats.recentAvgGain !== null ? condStats.recentAvgGain : (condStats?.avgGain || 30);
+    const estWinRate = useRecent && condStats.recentWinRate !== null ? condStats.recentWinRate : (condStats?.winRate || 0.7);
+    const sampleCount = condStats?.count || 0;
+    const recentCount = condStats?.recentCount || 0;
+    
     // ========================================
-    // 1. 理論價評分（權重30分）- 基於勝率數據
+    // 1. 同條件歷史獲利評分（權重30分）
+    // ========================================
+    let gainScore = 0;
+    let gainNote = '';
+    const condLabel = `${theoKey}×${guarKey}`;
+    const dataSource = useRecent ? `近${recentCount}檔` : `${sampleCount}檔`;
+    
+    if (estGain >= 50) {
+        gainScore = 30;
+        gainNote = `${condLabel}歷史平均獲利${estGain.toFixed(0)}元，表現優異`;
+    } else if (estGain >= 30) {
+        gainScore = 25;
+        gainNote = `${condLabel}歷史平均獲利${estGain.toFixed(0)}元，表現良好`;
+    } else if (estGain >= 20) {
+        gainScore = 18;
+        gainNote = `${condLabel}歷史平均獲利${estGain.toFixed(0)}元，表現一般`;
+    } else if (estGain >= 10) {
+        gainScore = 12;
+        gainNote = `${condLabel}歷史平均獲利${estGain.toFixed(0)}元，獲利空間有限`;
+    } else {
+        gainScore = 5;
+        gainNote = `${condLabel}歷史平均獲利僅${estGain.toFixed(0)}元，風險較高`;
+    }
+    
+    totalScore += gainScore;
+    factors.push({
+        name: '同條件歷史獲利',
+        score: gainScore,
+        maxScore: 30,
+        value: `${estGain.toFixed(0)}元`,
+        note: `${gainNote}（${dataSource}）`,
+        positive: gainScore >= 18
+    });
+    
+    // ========================================
+    // 2. 同條件歷史勝率評分（權重25分）
+    // ========================================
+    let winScore = 0;
+    let winNote = '';
+    const winPct = estWinRate * 100;
+    
+    if (winPct >= 80) {
+        winScore = 25;
+        winNote = `${condLabel}歷史勝率${winPct.toFixed(0)}%，非常優秀`;
+    } else if (winPct >= 70) {
+        winScore = 20;
+        winNote = `${condLabel}歷史勝率${winPct.toFixed(0)}%，表現良好`;
+    } else if (winPct >= 60) {
+        winScore = 15;
+        winNote = `${condLabel}歷史勝率${winPct.toFixed(0)}%，中等水準`;
+    } else if (winPct >= 50) {
+        winScore = 10;
+        winNote = `${condLabel}歷史勝率${winPct.toFixed(0)}%，略低於平均`;
+    } else {
+        winScore = 5;
+        winNote = `${condLabel}歷史勝率僅${winPct.toFixed(0)}%，需謹慎評估`;
+    }
+    
+    totalScore += winScore;
+    factors.push({
+        name: '同條件歷史勝率',
+        score: winScore,
+        maxScore: 25,
+        value: `${winPct.toFixed(0)}%`,
+        note: `${winNote}（${dataSource}）`,
+        positive: winScore >= 15
+    });
+    
+    // ========================================
+    // 3. 理論價本身評分（權重20分）
     // ========================================
     let theoScore = 0;
     let theoNote = '';
-    let theoKey = '';
     
-    if (theoPrice < 90) {
-        theoScore = 25; theoKey = '<90';
-        theoNote = '理論價<90，轉換價值偏低但下檔有保護';
-    } else if (theoPrice < 95) {
-        theoScore = 28; theoKey = '90-95';
-        theoNote = '理論價90-95，歷史勝率72.7%';
+    if (theoPrice < 95) {
+        theoScore = 18;
+        theoNote = '理論價<95，轉換價值低但下檔有債券保護';
     } else if (theoPrice < 100) {
-        theoScore = 30; theoKey = '95-100';
-        theoNote = '理論價95-100，最佳區間，歷史勝率77.0%';
+        theoScore = 20;
+        theoNote = '理論價95-100，風險報酬比最佳區間';
     } else if (theoPrice < 105) {
-        theoScore = 28; theoKey = '100-105';
-        theoNote = '理論價100-105，歷史勝率80.3%';
+        theoScore = 18;
+        theoNote = '理論價100-105，具轉換價值，風險可控';
     } else if (theoPrice < 110) {
-        theoScore = 18; theoKey = '105-110';
-        theoNote = '理論價105-110，轉換價值高，勝率64.5%';
+        theoScore = 12;
+        theoNote = '理論價105-110，股價已高於轉換價，需留意回檔';
     } else {
-        theoScore = 10; theoKey = '>=110';
-        theoNote = '理論價>=110，高理論價風險較高';
+        theoScore = 6;
+        theoNote = '理論價>=110，高度依賴股價維持，風險較高';
     }
     
     totalScore += theoScore;
     factors.push({
         name: '理論價',
         score: theoScore,
-        maxScore: 30,
-        value: `${theoPrice?.toFixed(1) || '-'}`,
-        note: theoNote,
-        positive: theoScore >= 25
-    });
-    
-    // ========================================
-    // 2. 市場熱度評分（權重20分）- 基於投標倍數
-    // ========================================
-    let heatScore = 0;
-    let heatNote = '';
-    
-    if (bidMultiple >= 2.5 && bidMultiple < 4) {
-        heatScore = 20;
-        heatNote = '投標倍數2.5-4倍，熱度適中，歷史勝率81-84%';
-    } else if (bidMultiple >= 2 && bidMultiple < 2.5) {
-        heatScore = 15;
-        heatNote = '投標倍數2-2.5倍，熱度一般，歷史勝率69.4%';
-    } else if (bidMultiple >= 4) {
-        heatScore = 15;
-        heatNote = '投標倍數>=4倍，過熱競爭激烈，成本可能偏高';
-    } else if (bidMultiple >= 1.5 && bidMultiple < 2) {
-        heatScore = 12;
-        heatNote = '投標倍數1.5-2倍，熱度偏低，歷史勝率72.2%';
-    } else {
-        heatScore = 8;
-        heatNote = '投標倍數<1.5倍，冷門案件，需留意市場認可度';
-    }
-    
-    totalScore += heatScore;
-    factors.push({
-        name: '市場熱度',
-        score: heatScore,
         maxScore: 20,
-        value: `${bidMultiple?.toFixed(1) || '-'}倍`,
-        note: heatNote,
-        positive: heatScore >= 15
+        value: `${theoPrice?.toFixed(1) || '-'}元`,
+        note: theoNote,
+        positive: theoScore >= 15
     });
     
     // ========================================
-    // 3. 安全性評分（權重20分）- 擔保+信評
+    // 4. 安全性評分（權重15分）- 擔保+信評
     // ========================================
     let safeScore = 0;
     let safeNote = '';
     
-    // 擔保 (10分)
+    // 擔保 (8分)
     if (guarantee === '有擔保') {
-        safeScore += 10;
-        safeNote = '有擔保(勝率81.8%)';
+        safeScore += 8;
+        safeNote = '有擔保';
     } else {
-        safeScore += 5;
-        safeNote = '無擔保(勝率73.6%)';
+        safeScore += 4;
+        safeNote = '無擔保';
     }
     
-    // 信評 (10分)
+    // 信評 (7分)
     const tcriNum = parseInt(tcri) || 6;
     if (tcriNum <= 4) {
-        safeScore += 10;
+        safeScore += 7;
         safeNote += ' + 優良信評TCRI' + tcriNum;
     } else if (tcriNum <= 6) {
-        safeScore += 7;
+        safeScore += 5;
         safeNote += ' + 一般信評TCRI' + tcriNum;
     } else {
-        safeScore += 3;
+        safeScore += 2;
         safeNote += ' + 較差信評TCRI' + tcriNum;
     }
     
@@ -7786,14 +7930,14 @@ function evaluateAuctionOpportunity(params) {
     factors.push({
         name: '安全性',
         score: safeScore,
-        maxScore: 20,
+        maxScore: 15,
         value: `${guarantee || '無擔保'} / TCRI${tcriNum}`,
         note: safeNote,
-        positive: safeScore >= 15
+        positive: safeScore >= 10
     });
     
     // ========================================
-    // 4. 時間因素評分（權重15分）- 當前市場環境
+    // 5. 市場環境評分（權重10分）
     // ========================================
     let timeScore = 0;
     let timeNote = '';
@@ -7803,90 +7947,39 @@ function evaluateAuctionOpportunity(params) {
     const currentHalf = now.getMonth() < 6 ? 'H1' : 'H2';
     const currentPeriod = `${currentYear}${currentHalf}`;
     
-    // 基於歷史數據：2024H2後勝率明顯下降
+    // 基於歷史數據：2024H2後整體勝率下降
     if (currentYear < 2024 || (currentYear === 2024 && currentHalf === 'H1')) {
-        timeScore = 15;
-        timeNote = '市場環境良好，歷史勝率85%以上';
+        timeScore = 10;
+        timeNote = '市場環境良好期';
     } else if (currentYear === 2024 && currentHalf === 'H2') {
-        timeScore = 8;
-        timeNote = '2024H2供給量大增，市場勝率降至約62%';
+        timeScore = 5;
+        timeNote = '2024H2供給量大增，整體勝率約62%';
     } else {
-        timeScore = 6;
-        timeNote = `${currentPeriod}供給持續高位，歷史勝率約52-56%`;
+        timeScore = 4;
+        timeNote = `${currentPeriod}供給持續高位，整體勝率約55%`;
     }
     
     totalScore += timeScore;
     factors.push({
         name: '市場環境',
         score: timeScore,
-        maxScore: 15,
+        maxScore: 10,
         value: currentPeriod,
         note: timeNote,
-        positive: timeScore >= 10
+        positive: timeScore >= 6
     });
     
     // ========================================
-    // 5. 發行規模評分（權重10分）
+    // 同條件歷史數據參考（僅供參考，不計分）
     // ========================================
-    let sizeScore = 0;
-    let sizeNote = '';
-    
-    if (issueSize < 3) {
-        sizeScore = 10;
-        sizeNote = '規模<3億，小而美，歷史平均獲利75元';
-    } else if (issueSize < 5) {
-        sizeScore = 7;
-        sizeNote = '規模3-5億，中小型發行';
-    } else if (issueSize < 10) {
-        sizeScore = 6;
-        sizeNote = '規模5-10億，中型發行';
-    } else if (issueSize < 15) {
-        sizeScore = 5;
-        sizeNote = '規模10-15億，中大型發行';
-    } else {
-        sizeScore = 3;
-        sizeNote = '規模>=15億，大型發行，競爭可能較激烈';
-    }
-    
-    totalScore += sizeScore;
     factors.push({
-        name: '發行規模',
-        score: sizeScore,
-        maxScore: 10,
-        value: `${issueSize || '-'}億`,
-        note: sizeNote,
-        positive: sizeScore >= 6
-    });
-    
-    // ========================================
-    // 6. 券商因素（權重5分）
-    // ========================================
-    let brokerScore = 3; // 預設
-    let brokerNote = '一般券商';
-    
-    // 使用動態計算的券商調整
-    const brokerAdj = window.brokerPremiumAdj || {};
-    const adj = brokerAdj[broker] || 0;
-    
-    if (adj <= -2) {
-        brokerScore = 5;
-        brokerNote = `${broker}歷史得標價偏低${adj.toFixed(1)}%，有利`;
-    } else if (adj >= 3) {
-        brokerScore = 2;
-        brokerNote = `${broker}歷史得標價偏高+${adj.toFixed(1)}%，成本較高`;
-    } else {
-        brokerScore = 3;
-        brokerNote = broker ? `${broker}表現中性` : '券商資訊不明';
-    }
-    
-    totalScore += brokerScore;
-    factors.push({
-        name: '承銷券商',
-        score: brokerScore,
-        maxScore: 5,
-        value: broker || '-',
-        note: brokerNote,
-        positive: brokerScore >= 3
+        name: '同條件歷史投標倍數',
+        score: '-',
+        maxScore: '-',
+        value: `${estBidMultiple.toFixed(1)}倍`,
+        note: `條件：${condLabel}，${dataSource}平均，供出價策略參考`,
+        positive: true,
+        isReference: true
     });
     
     // ========================================
@@ -7903,27 +7996,28 @@ function evaluateAuctionOpportunity(params) {
         recommendation = '建議參與';
         recommendColor = '#22c55e';
         recommendIcon = '🟢';
-        summaryNote = '多項條件有利，建議積極參與競拍';
+        summaryNote = '歷史數據顯示同條件案件表現優異，建議積極參與';
     } else if (scorePercent >= 60) {
         recommendation = '可考慮參與';
         recommendColor = '#84cc16';
         recommendIcon = '🟡';
-        summaryNote = '條件尚可，可根據個人風險偏好決定';
+        summaryNote = '條件尚可，可根據個人風險偏好及資金配置決定';
     } else if (scorePercent >= 45) {
         recommendation = '謹慎評估';
         recommendColor = '#f97316';
         recommendIcon = '🟠';
-        summaryNote = '部分條件不利，需謹慎評估是否參與';
+        summaryNote = '部分條件不利，歷史表現一般，需審慎考量';
     } else {
         recommendation = '建議觀望';
         recommendColor = '#ef4444';
         recommendIcon = '🔴';
-        summaryNote = '多項條件不利，建議暫時觀望';
+        summaryNote = '多項條件不利，歷史勝率偏低，建議暫時觀望';
     }
     
     // 找出主要利多和利空
-    const positiveFactors = factors.filter(f => f.positive && f.score >= f.maxScore * 0.7);
-    const negativeFactors = factors.filter(f => !f.positive && f.score < f.maxScore * 0.5);
+    const scoredFactors = factors.filter(f => f.score !== '-');
+    const positiveFactors = scoredFactors.filter(f => f.positive && f.score >= f.maxScore * 0.7);
+    const negativeFactors = scoredFactors.filter(f => !f.positive && f.score < f.maxScore * 0.5);
     
     return {
         totalScore,
@@ -7936,7 +8030,16 @@ function evaluateAuctionOpportunity(params) {
         factors,
         positiveFactors,
         negativeFactors,
-        theoKey
+        theoKey,
+        condKey,
+        estimates: {
+            bidMultiple: estBidMultiple,
+            gain: estGain,
+            winRate: estWinRate,
+            sampleCount,
+            recentCount,
+            useRecent
+        }
     };
 }
 
@@ -7950,10 +8053,10 @@ function updateAuctionEvaluation() {
     // 取得當前輸入值
     const stockPrice = safeFloat(document.getElementById('stockPrice')?.value);
     const convPrice = safeFloat(document.getElementById('actualConversionPrice')?.value);
-    const bidMultiple = safeFloat(document.getElementById('estBidMultiple')?.value) || 2.5;
     const guarantee = document.getElementById('guarantee')?.value || '無擔保';
     const tcri = document.getElementById('rating')?.value || '6';
     const broker = document.getElementById('broker')?.value || '';
+    const industry = document.getElementById('industry')?.value || '';
     
     // 從發行規模區間解析數值
     const issueSizeStr = document.getElementById('issueSize')?.value || '';
@@ -7980,14 +8083,19 @@ function updateAuctionEvaluation() {
         return;
     }
     
+    // 檢查是否有統計數據
+    if (!window.conditionStats || Object.keys(window.conditionStats).length === 0) {
+        container.innerHTML = '<div style="color:#666;padding:10px;">統計數據載入中，請稍候...</div>';
+        return;
+    }
+    
     const result = evaluateAuctionOpportunity({
         theoPrice,
-        bidMultiple,
         guarantee,
         tcri,
         issueSize,
         broker,
-        industry: document.getElementById('industry')?.value || ''
+        industry
     });
     
     // 生成評估HTML
@@ -8017,14 +8125,16 @@ function updateAuctionEvaluation() {
         <tbody>`;
     
     result.factors.forEach(f => {
-        const scoreColor = f.positive ? '#22c55e' : (f.score < f.maxScore * 0.5 ? '#ef4444' : '#f97316');
-        const icon = f.positive ? '✓' : (f.score < f.maxScore * 0.5 ? '✗' : '△');
+        const isRef = f.isReference;
+        const scoreColor = isRef ? '#666' : (f.positive ? '#22c55e' : (f.score < f.maxScore * 0.5 ? '#ef4444' : '#f97316'));
+        const icon = isRef ? '📌' : (f.positive ? '✓' : (f.score < f.maxScore * 0.5 ? '✗' : '△'));
+        const scoreText = isRef ? '參考' : `${f.score}/${f.maxScore}`;
         html += `
-        <tr>
+        <tr style="${isRef ? 'background:#f9fafb;' : ''}">
             <td style="padding:6px 8px; border-bottom:1px solid #eee;">${f.name}</td>
-            <td style="padding:6px 8px; border-bottom:1px solid #eee; text-align:center;">${f.value}</td>
+            <td style="padding:6px 8px; border-bottom:1px solid #eee; text-align:center; font-weight:bold;">${f.value}</td>
             <td style="padding:6px 8px; border-bottom:1px solid #eee; text-align:center; color:${scoreColor}; font-weight:bold;">
-                ${icon} ${f.score}/${f.maxScore}
+                ${icon} ${scoreText}
             </td>
             <td style="padding:6px 8px; border-bottom:1px solid #eee; color:#666; font-size:0.9em;">${f.note}</td>
         </tr>`;
@@ -8034,10 +8144,10 @@ function updateAuctionEvaluation() {
     
     // 利多利空摘要
     if (result.positiveFactors.length > 0 || result.negativeFactors.length > 0) {
-        html += `<div style="margin-top:12px; display:flex; gap:15px;">`;
+        html += `<div style="margin-top:12px; display:flex; gap:15px; flex-wrap:wrap;">`;
         
         if (result.positiveFactors.length > 0) {
-            html += `<div style="flex:1; background:#dcfce7; padding:10px; border-radius:8px;">
+            html += `<div style="flex:1; min-width:140px; background:#dcfce7; padding:10px; border-radius:8px;">
                 <div style="font-weight:bold; color:#16a34a; margin-bottom:5px;">✅ 利多因素</div>
                 <ul style="margin:0; padding-left:18px; color:#166534; font-size:0.85em;">
                     ${result.positiveFactors.map(f => `<li>${f.name}：${f.value}</li>`).join('')}
@@ -8046,7 +8156,7 @@ function updateAuctionEvaluation() {
         }
         
         if (result.negativeFactors.length > 0) {
-            html += `<div style="flex:1; background:#fee2e2; padding:10px; border-radius:8px;">
+            html += `<div style="flex:1; min-width:140px; background:#fee2e2; padding:10px; border-radius:8px;">
                 <div style="font-weight:bold; color:#dc2626; margin-bottom:5px;">⚠️ 利空因素</div>
                 <ul style="margin:0; padding-left:18px; color:#991b1b; font-size:0.85em;">
                     ${result.negativeFactors.map(f => `<li>${f.name}：${f.value}</li>`).join('')}
@@ -8057,13 +8167,14 @@ function updateAuctionEvaluation() {
         html += `</div>`;
     }
     
-    // 歷史參考
+    // 數據來源說明
+    const est = result.estimates;
     html += `
-    <div style="margin-top:12px; padding:10px; background:#f8fafc; border-radius:8px; font-size:0.85em; color:#64748b;">
-        📈 <strong>歷史參考：</strong>
-        理論價${result.theoKey}區間共${window.crossTable?.[result.theoKey]?.['2-2.5']?.n || '-'}+筆案例，
-        當前市場環境(${new Date().getFullYear()}${new Date().getMonth() < 6 ? 'H1' : 'H2'})勝率約55%，
-        評估基於${window.overallStats?.totalSamples || 300}筆歷史競拍數據。
+    <div style="margin-top:12px; padding:10px; background:#f8fafc; border-radius:8px; font-size:0.8em; color:#64748b;">
+        📈 <strong>數據來源：</strong>
+        理論價${result.theoKey} + ${result.condKey.includes('有擔保') ? '有擔保' : '無擔保'}，
+        共${est.sampleCount}筆歷史案例${est.useRecent ? `（優先採用近期${est.recentCount}筆）` : ''}。
+        統計模型基於${window.overallStats?.totalSamples || 300}筆競拍數據。
     </div>`;
     
     container.innerHTML = html;
@@ -8146,7 +8257,7 @@ function generateMajorPlayerHTML(mpResult, floorPrice, theoPrice, guarantee) {
     const html = `
     <div class="major-player-panel">
         <div class="major-player-header">
-            🎯 v3.72 主力模擬出價分析
+            🎯 v3.73 主力模擬出價分析
             <span style="float:right; font-size:12px; font-weight:normal;">基於300檔CB競拍統計</span>
         </div>
         <div class="major-player-content">

@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.69 (Rex提醒優化版)</title>
+<title>AI智能可轉債競拍系統 v3.70 (回測分析版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="embedded_data.js" onerror="console.warn('embedded_data.js not found, using defaults.')"></script>
 
@@ -1253,14 +1253,14 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.69)...</div>
+    <div>🔄 系統啟動中 (v3.70)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
 <div class="container" style="display: none;">
     <div class="header">
         <h1>🤖 AI智能可轉債競拍系統</h1>
-        <span class="version-badge">v3.69</span>
+        <span class="version-badge">v3.70</span>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -1279,11 +1279,15 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
                     <label style="color: #e65100;">選擇承銷案件，自動帶入所有條件</label>
                     <select id="quickSelect" style="border: 2px solid #ffc107; font-weight: bold;">
                         <option value="">-- 請選擇承銷中案件 --</option>
-                        <optgroup label="🔥 競拍案件" id="auctionGroup"></optgroup>
-                        <optgroup label="📋 詢圈案件" id="inquiryGroup"></optgroup>
+                        <optgroup label="📊 已開標未掛牌（可驗證模型）" id="openedGroup"></optgroup>
+                        <optgroup label="🔥 尚未開標（競拍）" id="pendingAuctionGroup"></optgroup>
+                        <optgroup label="📋 尚未開標（詢圈）" id="pendingInquiryGroup"></optgroup>
+                        <optgroup label="✅ 已掛牌（參考用）" id="listedGroup"></optgroup>
                     </select>
                 </div>
                 <div id="quickSelectInfo" style="display:none; background:#fff; padding:10px; border-radius:6px; margin-top:8px; font-size:12px; border-left:4px solid #ff9800;">
+                </div>
+                <div id="modelCompareResult" style="display:none; background:#e8f5e9; padding:10px; border-radius:6px; margin-top:8px; font-size:12px; border-left:4px solid #4caf50;">
                 </div>
                 <div style="font-size:11px; color:#795548; margin-top:8px;">
                     💡 選擇後自動帶入所有條件，「截標日收盤價」可自行調整
@@ -1337,6 +1341,12 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
             <div class="form-group"><label>主觀最低溢價 (%)</label><input type="number" id="subjectiveLowPremium" step="0.1" value="0"></div>
             <div class="form-group"><label>主觀平均溢價 (%)</label><input type="number" id="subjectiveAvgPremium" step="0.1" value="0"></div>
         </div>
+        <!-- v3.70 新增：市場氛圍儀表板 -->
+        <div id="atmospherePanel" class="form-section" style="display:none; background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border: 2px solid #4caf50; border-radius: 12px; padding: 15px;">
+            <h3 style="color: #2e7d32; border-left-color: #4caf50;">🌡️ 市場氛圍儀表板（近期競拍）</h3>
+            <div id="atmosphereContent" style="font-size: 12px;">載入中...</div>
+        </div>
+
         <div class="form-section">
             <h3>📊 近期市場氛圍（自動計算）</h3>
             <div style="font-size:12px; color:#666; margin-bottom:10px;">
@@ -1360,7 +1370,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 <div class="result-panel" id="resultPanel">
     <div id="welcomeMsg" class="welcome-message">
         <h2>歡迎使用AI智能競拍評估系統</h2>
-        <p style="margin-top:10px; color:#666; font-size: 14px;">v3.69 彈性評估版<br>✅ 至少填寫一個條件即可開始評估<br>✅ 市場氛圍需填寫產業、規模、信評三維度<br>✅ 動態權重調整，已填維度按比例分配</p>
+        <p style="margin-top:10px; color:#666; font-size: 14px;">v3.70 回測分析版<br>✅ 新增市場氛圍儀表板（近期競拍熱度）<br>✅ 新增熱度指數分析（五維度評分）<br>✅ 新增同類案件統計（理論價×規模×產業）</p>
         <div class="stats-summary" id="statsSummary"></div>
         
         <!-- v3.58 市場趨勢分析 -->
@@ -1924,6 +1934,11 @@ async function loadStatistics() {
         autoGenerateStatistics(); 
         calculateGlobalMarketStats(); 
         initializeUI();
+        
+        // v3.70 新增：初始化市場氛圍面板
+        if (typeof updateAtmospherePanel === 'function') {
+            updateAtmospherePanel();
+        }
         
         loadingDiv.style.display = 'none'; 
         document.querySelector('.container').style.display = 'block';
@@ -5727,6 +5742,25 @@ function calculateEvaluation(d) {
     const impliedLowPremium = theo > 0 ? ((priceP1/theo) - 1) * 100 : 0;
     const impliedAvgPremium = theo > 0 ? ((priceP2/theo) - 1) * 100 : 0;
 
+    // === v3.70 新增：熱度分析（回測功能）===
+    const atmosphere = calcMarketAtmosphere(5);
+    const atmosphereIndex = atmosphere ? atmosphere.atmosphereIndex : 50;
+    const sizeMid = getRangeMidValue(d.issueSize, 'size');
+
+    const heatResult = calcHeatIndex({
+        issueSize: sizeMid,
+        theoreticalPrice: theo,
+        industry: d.industry,
+        years: d.years || 3,
+        atmosphereIndex: atmosphereIndex
+    });
+
+    const similarCases = findSimilarCases({
+        theoreticalPrice: theo,
+        issueSize: sizeMid,
+        industry: d.industry
+    });
+
     return {
         cbName: d.cbName, 
         theoreticalPrice: safeFixed(theo), 
@@ -5761,7 +5795,12 @@ function calculateEvaluation(d) {
         
         inputData: d, 
         weightedSubjectiveLow: safeFixed(((d.subjectiveLowPremium||0)*subR)), 
-        weightedSubjectiveAvg: safeFixed(((d.subjectiveAvgPremium||0)*subR))
+        weightedSubjectiveAvg: safeFixed(((d.subjectiveAvgPremium||0)*subR)),
+        
+        // === v3.70 新增：熱度分析結果 ===
+        heatAnalysis: heatResult,
+        similarCases: similarCases,
+        marketAtmosphere: atmosphere
     };
 }
 
@@ -5989,6 +6028,8 @@ function displayResult(r) {
 
     ${generateRexCommentary(r)}
     
+    ${r.heatAnalysis ? generateHeatAnalysisHTML(r.heatAnalysis, r.similarCases, r.marketAtmosphere) : ''}
+    
     <div style="text-align:center;margin-top:25px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
         <button onclick="location.reload()" class="calculate-btn" style="width:180px; background:#555;">🔄 重新評估</button>
         <button onclick="window.print()" class="calculate-btn" style="width:180px;">🖨️ 列印報告</button>
@@ -6113,59 +6154,81 @@ function initResizer() {
 }
 
 // ==========================================
-// v3.69 閃電帶入功能 - 承銷中案件資料
+// v3.69 閃電帶入功能 - 承銷中案件資料（含狀態判斷）
+// 狀態: pending=尚未公告, bidding=投標中, closed=截標待開標, opened=已開標未掛牌, listed=已掛牌
 // ==========================================
 const pendingCases = [
-  {"stockCode":"3032","cbCode":"30322","cbName":"偉訓二","auctionType":"競拍","industry":"電子零組件","broker":"統一證券","issueSize":10.0,"sizeRange":"10~15億","capital":11.33,"capitalRange":"10~15億","convPrice":101.9,"convRange":"100~150元","years":"5","guarantee":"無擔保","rating":"5","floorPrice":104.73,"stockPrice":83.9},
-  {"stockCode":"4772","cbCode":"47721","cbName":"台特化一","auctionType":"詢圈","industry":"化工","broker":"元大證券","issueSize":20.0,"sizeRange":"大於20億","capital":14.77,"capitalRange":"10~15億","convPrice":323.8,"convRange":"大於200元","years":"3","guarantee":"無擔保","rating":"6","floorPrice":101.0,"stockPrice":301.0},
-  {"stockCode":"6890","cbCode":"68901","cbName":"來億一KY","auctionType":"詢圈","industry":"運動休閒","broker":"富邦證券","issueSize":45.0,"sizeRange":"大於20億","capital":24.94,"capitalRange":"大於20億","convPrice":246.4,"convRange":"大於200元","years":"3","guarantee":"無擔保","rating":"5","floorPrice":100.0,"stockPrice":280.5},
-  {"stockCode":"6442","cbCode":"64422","cbName":"光聖二","auctionType":"詢圈","industry":"通信網路","broker":"台新證券","issueSize":10.0,"sizeRange":"10~15億","capital":7.73,"capitalRange":"6~10億","convPrice":1103.5,"convRange":"大於200元","years":"3","guarantee":"無擔保","rating":"5","floorPrice":100.5,"stockPrice":1255.0},
-  {"stockCode":"3135","cbCode":"31351","cbName":"凌航一","auctionType":"詢圈","industry":"半導體","broker":"統一證券","issueSize":10.0,"sizeRange":"10~15億","capital":7.75,"capitalRange":"6~10億","convPrice":52.19,"convRange":"50~100元","years":"3","guarantee":"無擔保","rating":"6","floorPrice":100.0,"stockPrice":58.7},
-  {"stockCode":"6890","cbCode":"68902","cbName":"來億二KY","auctionType":"競拍","industry":"運動休閒","broker":"富邦證券","issueSize":5.0,"sizeRange":"5~10億","capital":24.94,"capitalRange":"大於20億","convPrice":245.2,"convRange":"大於200元","years":"3","guarantee":"無擔保","rating":"5","floorPrice":119.83,"stockPrice":280.5},
-  {"stockCode":"2732","cbCode":"27324","cbName":"六角四","auctionType":"詢圈","industry":"觀光餐旅","broker":"華南永昌證","issueSize":6.0,"sizeRange":"5~10億","capital":4.65,"capitalRange":"3~6億","convPrice":0,"convRange":"","years":"5","guarantee":"無擔保","rating":"5","floorPrice":100.0,"stockPrice":71.6},
-  {"stockCode":"6442","cbCode":"64423","cbName":"光聖三","auctionType":"競拍","industry":"通信網路","broker":"台新證券","issueSize":15.0,"sizeRange":"15~20億","capital":7.73,"capitalRange":"6~10億","convPrice":1065.9,"convRange":"大於200元","years":"3","guarantee":"無擔保","rating":"5","floorPrice":100.0,"stockPrice":1255.0},
-  {"stockCode":"5309","cbCode":"53096","cbName":"系統電六","auctionType":"詢圈","industry":"電子零組件","broker":"富邦證券","issueSize":7.0,"sizeRange":"5~10億","capital":20.44,"capitalRange":"大於20億","convPrice":0,"convRange":"","years":"5","guarantee":"無擔保","rating":"6","floorPrice":100.5,"stockPrice":58.5},
-  {"stockCode":"5309","cbCode":"53097","cbName":"系統電七","auctionType":"競拍","industry":"電子零組件","broker":"富邦證券","issueSize":5.0,"sizeRange":"5~10億","capital":20.44,"capitalRange":"大於20億","convPrice":55.0,"convRange":"50~100元","years":"3","guarantee":"無擔保","rating":"6","floorPrice":101.0,"stockPrice":58.5},
-  {"stockCode":"4739","cbCode":"47394","cbName":"康普四","auctionType":"競拍","industry":"化工","broker":"福邦證券","issueSize":6.0,"sizeRange":"5~10億","capital":11.86,"capitalRange":"10~15億","convPrice":71.0,"convRange":"50~100元","years":"5","guarantee":"無擔保","rating":"","floorPrice":100.0,"stockPrice":68.3},
-  {"stockCode":"6670","cbCode":"66702","cbName":"復盛應用二","auctionType":"競拍","industry":"運動休閒","broker":"台新證券","issueSize":20.0,"sizeRange":"大於20億","capital":13.94,"capitalRange":"10~15億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"3","floorPrice":100,"stockPrice":240.5},
-  {"stockCode":"4113","cbCode":"41136","cbName":"聯上六","auctionType":"競拍","industry":"建材營造","broker":"合庫證券","issueSize":3.0,"sizeRange":"2~5億","capital":23.11,"capitalRange":"大於20億","convPrice":0,"convRange":"","years":"5","guarantee":"無擔保","rating":"7","floorPrice":100.0,"stockPrice":20.75},
-  {"stockCode":"2236","cbCode":"22363","cbName":"百達三KY","auctionType":"詢圈","industry":"汽車","broker":"台新證券","issueSize":4.5,"sizeRange":"2~5億","capital":5.96,"capitalRange":"3~6億","convPrice":0,"convRange":"","years":"5","guarantee":"無擔保","rating":"7","floorPrice":100.0,"stockPrice":94.4},
-  {"stockCode":"8299","cbCode":"82993","cbName":"群聯三","auctionType":"詢圈","industry":"半導體","broker":"凱基證券","issueSize":60.0,"sizeRange":"大於20億","capital":20.66,"capitalRange":"大於20億","convPrice":0,"convRange":"","years":"5","guarantee":"無擔保","rating":"3","floorPrice":100,"stockPrice":1055.0},
-  {"stockCode":"8042","cbCode":"80426","cbName":"金山電六","auctionType":"詢圈","industry":"電子零組件","broker":"永豐金證券","issueSize":3.5,"sizeRange":"2~5億","capital":12.95,"capitalRange":"10~15億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"6","floorPrice":100.0,"stockPrice":52.0},
-  {"stockCode":"6796","cbCode":"67962","cbName":"晉弘二","auctionType":"詢圈","industry":"生技醫療","broker":"富邦證券","issueSize":2.0,"sizeRange":"2~5億","capital":3.82,"capitalRange":"3~6億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"7","floorPrice":100,"stockPrice":92.5},
-  {"stockCode":"6904","cbCode":"69041","cbName":"伯鑫一","auctionType":"競拍","industry":"其他","broker":"國泰證券","issueSize":2.0,"sizeRange":"2~5億","capital":1.85,"capitalRange":"小於3億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"6","floorPrice":100,"stockPrice":124.0},
-  {"stockCode":"3543","cbCode":"35431","cbName":"州巧一","auctionType":"競拍","industry":"光電","broker":"福邦證券","issueSize":4.0,"sizeRange":"2~5億","capital":8.93,"capitalRange":"6~10億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"","floorPrice":100.0,"stockPrice":45.0},
-  {"stockCode":"3715","cbCode":"37151","cbName":"定穎一","auctionType":"詢圈","industry":"電子零組件","broker":"凱基證券","issueSize":5.0,"sizeRange":"5~10億","capital":27.77,"capitalRange":"大於20億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"5","floorPrice":100,"stockPrice":118.0},
-  {"stockCode":"3715","cbCode":"37152","cbName":"定穎二","auctionType":"競拍","industry":"電子零組件","broker":"凱基證券","issueSize":10.0,"sizeRange":"10~15億","capital":27.77,"capitalRange":"大於20億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"5","floorPrice":102.0,"stockPrice":118.0},
-  {"stockCode":"6510","cbCode":"65101","cbName":"精測一","auctionType":"競拍","industry":"半導體","broker":"元大證券","issueSize":20.0,"sizeRange":"大於20億","capital":3.28,"capitalRange":"3~6億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"4","floorPrice":100,"stockPrice":1800.0},
-  {"stockCode":"2745","cbCode":"27451","cbName":"五福一","auctionType":"競拍","industry":"觀光餐旅","broker":"台新證券","issueSize":3.0,"sizeRange":"2~5億","capital":3.38,"capitalRange":"3~6億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"4","floorPrice":100.0,"stockPrice":112.5},
-  {"stockCode":"8431","cbCode":"84312","cbName":"匯鑽科二","auctionType":"詢圈","industry":"其他電子","broker":"華南永昌證","issueSize":3.0,"sizeRange":"2~5億","capital":4.44,"capitalRange":"3~6億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"7","floorPrice":100.0,"stockPrice":44.45},
-  {"stockCode":"2467","cbCode":"24672","cbName":"志聖二","auctionType":"詢圈","industry":"電子零組件","broker":"富邦證券","issueSize":7.0,"sizeRange":"5~10億","capital":15.68,"capitalRange":"15~20億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"5","floorPrice":100,"stockPrice":197.5},
-  {"stockCode":"2467","cbCode":"24673","cbName":"志聖三","auctionType":"競拍","industry":"電子零組件","broker":"富邦證券","issueSize":10.0,"sizeRange":"10~15億","capital":15.68,"capitalRange":"15~20億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"5","floorPrice":100.0,"stockPrice":197.5}
+  {"stockCode":"3032","cbCode":"30322","cbName":"偉訓二","auctionType":"競拍","industry":"電子零組件","broker":"統一證券","issueSize":10.0,"sizeRange":"10~15億","capital":11.33,"capitalRange":"10~15億","convPrice":101.9,"convRange":"100~150元","years":"5","guarantee":"無擔保","rating":"5","floorPrice":104.73,"highPrice":104.73,"isPriceRange":false,"stockPrice":83.9,"bidPeriod":"11/10-11/12","bidEndDate":"2025-11-12","openDate":"2025-11-14","listingDate":"2025-11-25","status":"listed"},
+  {"stockCode":"4772","cbCode":"47721","cbName":"台特化一","auctionType":"詢圈","industry":"化工","broker":"元大證券","issueSize":20.0,"sizeRange":"大於20億","capital":14.77,"capitalRange":"10~15億","convPrice":323.8,"convRange":"大於200元","years":"3","guarantee":"無擔保","rating":"6","floorPrice":101.0,"highPrice":101.0,"isPriceRange":false,"stockPrice":301.0,"bidPeriod":"11/13-11/17","bidEndDate":"2025-11-17","openDate":"2025-11-19","listingDate":"2025-11-27","status":"listed"},
+  {"stockCode":"6890","cbCode":"68901","cbName":"來億一KY","auctionType":"詢圈","industry":"運動休閒","broker":"富邦證券","issueSize":45.0,"sizeRange":"大於20億","capital":24.94,"capitalRange":"大於20億","convPrice":246.4,"convRange":"大於200元","years":"3","guarantee":"無擔保","rating":"5","floorPrice":100.0,"highPrice":100.0,"isPriceRange":false,"stockPrice":280.5,"bidPeriod":"11/14-11/18","bidEndDate":"2025-11-18","openDate":"2025-11-20","listingDate":"2025-11-28","status":"listed"},
+  {"stockCode":"6442","cbCode":"64422","cbName":"光聖二","auctionType":"詢圈","industry":"通信網路","broker":"台新證券","issueSize":10.0,"sizeRange":"10~15億","capital":7.73,"capitalRange":"6~10億","convPrice":1103.5,"convRange":"大於200元","years":"3","guarantee":"無擔保","rating":"5","floorPrice":100.5,"highPrice":100.5,"isPriceRange":false,"stockPrice":1255.0,"bidPeriod":"11/17-11/19","bidEndDate":"2025-11-19","openDate":"2025-11-21","listingDate":"2025-12-01","status":"listed"},
+  {"stockCode":"3135","cbCode":"31351","cbName":"凌航一","auctionType":"詢圈","industry":"半導體","broker":"統一證券","issueSize":10.0,"sizeRange":"10~15億","capital":7.75,"capitalRange":"6~10億","convPrice":52.19,"convRange":"50~100元","years":"3","guarantee":"無擔保","rating":"6","floorPrice":100.0,"highPrice":100.0,"isPriceRange":false,"stockPrice":58.7,"bidPeriod":"11/21-11/24","bidEndDate":"2025-11-24","openDate":"2025-11-26","listingDate":"2025-12-04","status":"listed"},
+  {"stockCode":"6890","cbCode":"68902","cbName":"來億二KY","auctionType":"競拍","industry":"運動休閒","broker":"富邦證券","issueSize":5.0,"sizeRange":"5~10億","capital":24.94,"capitalRange":"大於20億","convPrice":245.2,"convRange":"大於200元","years":"3","guarantee":"無擔保","rating":"5","floorPrice":119.83,"highPrice":119.83,"isPriceRange":false,"stockPrice":280.5,"bidPeriod":"11/25-11/27","bidEndDate":"2025-11-27","openDate":"2025-12-01","listingDate":"2025-12-10","status":"listed"},
+  {"stockCode":"2732","cbCode":"27324","cbName":"六角四","auctionType":"詢圈","industry":"觀光餐旅","broker":"華南永昌證","issueSize":6.0,"sizeRange":"5~10億","capital":4.65,"capitalRange":"3~6億","convPrice":0,"convRange":"","years":"5","guarantee":"無擔保","rating":"5","floorPrice":100.0,"highPrice":100.0,"isPriceRange":false,"stockPrice":71.6,"bidPeriod":"11/24-11/26","bidEndDate":"2025-11-26","openDate":"2025-11-28","listingDate":"","status":"opened"},
+  {"stockCode":"6442","cbCode":"64423","cbName":"光聖三","auctionType":"競拍","industry":"通信網路","broker":"台新證券","issueSize":15.0,"sizeRange":"15~20億","capital":7.73,"capitalRange":"6~10億","convPrice":1065.9,"convRange":"大於200元","years":"3","guarantee":"無擔保","rating":"5","floorPrice":100.0,"highPrice":100.0,"isPriceRange":false,"stockPrice":1255.0,"bidPeriod":"11/26-11/28","bidEndDate":"2025-11-28","openDate":"2025-12-02","listingDate":"2025-12-11","status":"opened"},
+  {"stockCode":"5309","cbCode":"53096","cbName":"系統電六","auctionType":"詢圈","industry":"電子零組件","broker":"富邦證券","issueSize":7.0,"sizeRange":"5~10億","capital":20.44,"capitalRange":"大於20億","convPrice":0,"convRange":"","years":"5","guarantee":"無擔保","rating":"6","floorPrice":100.5,"highPrice":100.5,"isPriceRange":false,"stockPrice":58.5,"bidPeriod":"11/28-12/2","bidEndDate":"2025-12-02","openDate":"2025-12-04","listingDate":"","status":"opened"},
+  {"stockCode":"5309","cbCode":"53097","cbName":"系統電七","auctionType":"競拍","industry":"電子零組件","broker":"富邦證券","issueSize":5.0,"sizeRange":"5~10億","capital":20.44,"capitalRange":"大於20億","convPrice":55.0,"convRange":"50~100元","years":"3","guarantee":"無擔保","rating":"6","floorPrice":101.0,"highPrice":101.0,"isPriceRange":false,"stockPrice":58.5,"bidPeriod":"11/28-12/2","bidEndDate":"2025-12-02","openDate":"2025-12-04","listingDate":"2025-12-15","status":"opened"},
+  {"stockCode":"4739","cbCode":"47394","cbName":"康普四","auctionType":"競拍","industry":"化工","broker":"福邦證券","issueSize":6.0,"sizeRange":"5~10億","capital":11.86,"capitalRange":"10~15億","convPrice":71.0,"convRange":"50~100元","years":"5","guarantee":"無擔保","rating":"","floorPrice":100.0,"highPrice":100.0,"isPriceRange":false,"stockPrice":68.3,"bidPeriod":"12/2-12/4","bidEndDate":"2025-12-04","openDate":"2025-12-08","listingDate":"2025-12-17","status":"opened"},
+  {"stockCode":"6670","cbCode":"66702","cbName":"復盛應用二","auctionType":"競拍","industry":"運動休閒","broker":"台新證券","issueSize":20.0,"sizeRange":"大於20億","capital":13.94,"capitalRange":"10~15億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"3","floorPrice":102.0,"highPrice":104.0,"isPriceRange":true,"stockPrice":240.5,"bidPeriod":"","bidEndDate":"","openDate":"","listingDate":"","status":"pending"},
+  {"stockCode":"4113","cbCode":"41136","cbName":"聯上六","auctionType":"競拍","industry":"建材營造","broker":"合庫證券","issueSize":3.0,"sizeRange":"2~5億","capital":23.11,"capitalRange":"大於20億","convPrice":0,"convRange":"","years":"5","guarantee":"無擔保","rating":"7","floorPrice":100.0,"highPrice":100.0,"isPriceRange":false,"stockPrice":20.75,"bidPeriod":"","bidEndDate":"","openDate":"","listingDate":"","status":"pending"},
+  {"stockCode":"2236","cbCode":"22363","cbName":"百達三KY","auctionType":"詢圈","industry":"汽車","broker":"台新證券","issueSize":4.5,"sizeRange":"2~5億","capital":5.96,"capitalRange":"3~6億","convPrice":0,"convRange":"","years":"5","guarantee":"無擔保","rating":"7","floorPrice":100.0,"highPrice":100.0,"isPriceRange":false,"stockPrice":94.4,"bidPeriod":"","bidEndDate":"","openDate":"","listingDate":"","status":"pending"},
+  {"stockCode":"8299","cbCode":"82993","cbName":"群聯三","auctionType":"詢圈","industry":"半導體","broker":"凱基證券","issueSize":60.0,"sizeRange":"大於20億","capital":20.66,"capitalRange":"大於20億","convPrice":0,"convRange":"","years":"5","guarantee":"無擔保","rating":"3","floorPrice":100.0,"highPrice":101.0,"isPriceRange":true,"stockPrice":1055.0,"bidPeriod":"","bidEndDate":"","openDate":"","listingDate":"","status":"pending"},
+  {"stockCode":"8042","cbCode":"80426","cbName":"金山電六","auctionType":"詢圈","industry":"電子零組件","broker":"永豐金證券","issueSize":3.5,"sizeRange":"2~5億","capital":12.95,"capitalRange":"10~15億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"6","floorPrice":100.0,"highPrice":100.0,"isPriceRange":false,"stockPrice":52.0,"bidPeriod":"","bidEndDate":"","openDate":"","listingDate":"","status":"pending"},
+  {"stockCode":"6796","cbCode":"67962","cbName":"晉弘二","auctionType":"詢圈","industry":"生技醫療","broker":"富邦證券","issueSize":2.0,"sizeRange":"2~5億","capital":3.82,"capitalRange":"3~6億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"7","floorPrice":100.5,"highPrice":101.0,"isPriceRange":true,"stockPrice":92.5,"bidPeriod":"","bidEndDate":"","openDate":"","listingDate":"","status":"pending"},
+  {"stockCode":"6904","cbCode":"69041","cbName":"伯鑫一","auctionType":"競拍","industry":"其他","broker":"國泰證券","issueSize":2.0,"sizeRange":"2~5億","capital":1.85,"capitalRange":"小於3億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"6","floorPrice":101.0,"highPrice":102.0,"isPriceRange":true,"stockPrice":124.0,"bidPeriod":"","bidEndDate":"","openDate":"","listingDate":"","status":"pending"},
+  {"stockCode":"3543","cbCode":"35431","cbName":"州巧一","auctionType":"競拍","industry":"光電","broker":"福邦證券","issueSize":4.0,"sizeRange":"2~5億","capital":8.93,"capitalRange":"6~10億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"","floorPrice":100.0,"highPrice":100.0,"isPriceRange":false,"stockPrice":45.0,"bidPeriod":"","bidEndDate":"","openDate":"","listingDate":"","status":"pending"},
+  {"stockCode":"3715","cbCode":"37151","cbName":"定穎一","auctionType":"詢圈","industry":"電子零組件","broker":"凱基證券","issueSize":5.0,"sizeRange":"5~10億","capital":27.77,"capitalRange":"大於20億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"5","floorPrice":100.5,"highPrice":101.0,"isPriceRange":true,"stockPrice":118.0,"bidPeriod":"","bidEndDate":"","openDate":"","listingDate":"","status":"pending"},
+  {"stockCode":"3715","cbCode":"37152","cbName":"定穎二","auctionType":"競拍","industry":"電子零組件","broker":"凱基證券","issueSize":10.0,"sizeRange":"10~15億","capital":27.77,"capitalRange":"大於20億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"5","floorPrice":102.0,"highPrice":102.0,"isPriceRange":false,"stockPrice":118.0,"bidPeriod":"","bidEndDate":"","openDate":"","listingDate":"","status":"pending"},
+  {"stockCode":"6510","cbCode":"65101","cbName":"精測一","auctionType":"競拍","industry":"半導體","broker":"元大證券","issueSize":20.0,"sizeRange":"大於20億","capital":3.28,"capitalRange":"3~6億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"4","floorPrice":100.0,"highPrice":103.0,"isPriceRange":true,"stockPrice":1800.0,"bidPeriod":"","bidEndDate":"","openDate":"","listingDate":"","status":"pending"},
+  {"stockCode":"2745","cbCode":"27451","cbName":"五福一","auctionType":"競拍","industry":"觀光餐旅","broker":"台新證券","issueSize":3.0,"sizeRange":"2~5億","capital":3.38,"capitalRange":"3~6億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"4","floorPrice":100.0,"highPrice":100.0,"isPriceRange":false,"stockPrice":112.5,"bidPeriod":"","bidEndDate":"","openDate":"","listingDate":"","status":"pending"},
+  {"stockCode":"8431","cbCode":"84312","cbName":"匯鑽科二","auctionType":"詢圈","industry":"其他電子","broker":"華南永昌證","issueSize":3.0,"sizeRange":"2~5億","capital":4.44,"capitalRange":"3~6億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"7","floorPrice":100.0,"highPrice":100.0,"isPriceRange":false,"stockPrice":44.45,"bidPeriod":"","bidEndDate":"","openDate":"","listingDate":"","status":"pending"},
+  {"stockCode":"2467","cbCode":"24672","cbName":"志聖二","auctionType":"詢圈","industry":"電子零組件","broker":"富邦證券","issueSize":7.0,"sizeRange":"5~10億","capital":15.68,"capitalRange":"15~20億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"5","floorPrice":100.0,"highPrice":105.0,"isPriceRange":true,"stockPrice":197.5,"bidPeriod":"","bidEndDate":"","openDate":"","listingDate":"","status":"pending"},
+  {"stockCode":"2467","cbCode":"24673","cbName":"志聖三","auctionType":"競拍","industry":"電子零組件","broker":"富邦證券","issueSize":10.0,"sizeRange":"10~15億","capital":15.68,"capitalRange":"15~20億","convPrice":0,"convRange":"","years":"3","guarantee":"無擔保","rating":"5","floorPrice":100.0,"highPrice":100.0,"isPriceRange":false,"stockPrice":197.5,"bidPeriod":"","bidEndDate":"","openDate":"","listingDate":"","status":"pending"}
 ];
 
-// 初始化閃電帶入選單
+// 初始化閃電帶入選單（按狀態分組）
 function initQuickSelect() {
     const select = document.getElementById('quickSelect');
-    const auctionGroup = document.getElementById('auctionGroup');
-    const inquiryGroup = document.getElementById('inquiryGroup');
+    const openedGroup = document.getElementById('openedGroup');
+    const pendingAuctionGroup = document.getElementById('pendingAuctionGroup');
+    const pendingInquiryGroup = document.getElementById('pendingInquiryGroup');
+    const listedGroup = document.getElementById('listedGroup');
     
-    if (!select || !auctionGroup || !inquiryGroup) return;
+    if (!select) return;
     
-    // 清空並填入選項
-    auctionGroup.innerHTML = '';
-    inquiryGroup.innerHTML = '';
+    // 清空各分組
+    if (openedGroup) openedGroup.innerHTML = '';
+    if (pendingAuctionGroup) pendingAuctionGroup.innerHTML = '';
+    if (pendingInquiryGroup) pendingInquiryGroup.innerHTML = '';
+    if (listedGroup) listedGroup.innerHTML = '';
+    
+    // 狀態標籤
+    const statusLabels = {
+        'pending': '⏳',
+        'bidding': '🔥',
+        'closed': '⏱️',
+        'opened': '📊',
+        'listed': '✅'
+    };
     
     pendingCases.forEach((c, idx) => {
         const option = document.createElement('option');
         option.value = idx;
-        const convInfo = c.convPrice > 0 ? ` | 轉換價${c.convPrice}` : '';
-        option.textContent = `${c.cbName} (${c.cbCode}) - ${c.industry} | ${c.sizeRange}${convInfo}`;
+        const priceInfo = c.isPriceRange ? `底標${c.floorPrice}~${c.highPrice}` : `底標${c.floorPrice}`;
+        const convInfo = c.convPrice > 0 ? ` | 轉${c.convPrice}` : '';
+        option.textContent = `${statusLabels[c.status] || ''} ${c.cbName} - ${c.auctionType} | ${c.industry} | ${priceInfo}${convInfo}`;
         
-        if (c.auctionType === '競拍') {
-            auctionGroup.appendChild(option);
-        } else {
-            inquiryGroup.appendChild(option);
+        // 按狀態分組
+        if (c.status === 'opened' || c.status === 'closed') {
+            if (openedGroup) openedGroup.appendChild(option);
+        } else if (c.status === 'listed') {
+            if (listedGroup) listedGroup.appendChild(option);
+        } else if (c.status === 'pending' || c.status === 'bidding') {
+            if (c.auctionType === '競拍') {
+                if (pendingAuctionGroup) pendingAuctionGroup.appendChild(option);
+            } else {
+                if (pendingInquiryGroup) pendingInquiryGroup.appendChild(option);
+            }
         }
     });
     
@@ -6177,10 +6240,12 @@ function initQuickSelect() {
 function handleQuickSelect() {
     const select = document.getElementById('quickSelect');
     const infoDiv = document.getElementById('quickSelectInfo');
+    const compareDiv = document.getElementById('modelCompareResult');
     const idx = select.value;
     
     if (idx === '' || idx === null) {
         infoDiv.style.display = 'none';
+        if (compareDiv) compareDiv.style.display = 'none';
         return;
     }
     
@@ -6198,7 +6263,6 @@ function handleQuickSelect() {
     // 產業分類
     const industrySelect = document.getElementById('industry');
     if (c.industry) {
-        // 尋找匹配的選項
         let found = false;
         for (let opt of industrySelect.options) {
             if (opt.value === c.industry || opt.textContent.includes(c.industry)) {
@@ -6208,7 +6272,6 @@ function handleQuickSelect() {
             }
         }
         if (!found) {
-            // 如果找不到，嘗試新增選項
             const newOpt = document.createElement('option');
             newOpt.value = c.industry;
             newOpt.textContent = c.industry;
@@ -6238,50 +6301,47 @@ function handleQuickSelect() {
     }
     
     // 發行規模區間
-    if (c.sizeRange) {
-        document.getElementById('issueSize').value = c.sizeRange;
-    }
+    if (c.sizeRange) document.getElementById('issueSize').value = c.sizeRange;
     
     // 轉換價區間
-    if (c.convRange) {
-        document.getElementById('conversionPrice').value = c.convRange;
-    }
+    if (c.convRange) document.getElementById('conversionPrice').value = c.convRange;
     
     // 發行年期
-    if (c.years) {
-        document.getElementById('years').value = c.years;
-    }
+    if (c.years) document.getElementById('years').value = c.years;
     
     // 擔保情況
-    if (c.guarantee) {
-        document.getElementById('guarantee').value = c.guarantee;
-    }
+    if (c.guarantee) document.getElementById('guarantee').value = c.guarantee;
     
     // 信用評等
-    if (c.rating) {
-        document.getElementById('rating').value = c.rating;
-    }
+    if (c.rating) document.getElementById('rating').value = c.rating;
     
     // 底標價格
-    if (c.floorPrice) {
-        document.getElementById('floorPrice').value = c.floorPrice;
-    }
+    if (c.floorPrice) document.getElementById('floorPrice').value = c.floorPrice;
     
-    // 股價（截標日收盤價）- 可編輯
-    if (c.stockPrice > 0) {
-        document.getElementById('stockPrice').value = c.stockPrice;
-    }
+    // 股價
+    if (c.stockPrice > 0) document.getElementById('stockPrice').value = c.stockPrice;
     
     // 實際轉換價格
-    if (c.convPrice > 0) {
-        document.getElementById('actualConversionPrice').value = c.convPrice;
-    }
+    if (c.convPrice > 0) document.getElementById('actualConversionPrice').value = c.convPrice;
     
-    // 顯示帶入資訊
+    // 狀態標籤
+    const statusInfo = {
+        'pending': {label: '⏳ 尚未公告投標日期', color: '#9e9e9e'},
+        'bidding': {label: '🔥 投標進行中', color: '#ff5722'},
+        'closed': {label: '⏱️ 已截標待開標', color: '#ff9800'},
+        'opened': {label: '📊 已開標未掛牌', color: '#4caf50'},
+        'listed': {label: '✅ 已掛牌', color: '#2196f3'}
+    };
+    
+    const status = statusInfo[c.status] || {label: '未知', color: '#666'};
     const theoPrice = c.convPrice > 0 ? ((c.stockPrice / c.convPrice) * 100).toFixed(2) : '待計算';
+    const priceDisplay = c.isPriceRange ? `${c.floorPrice}~${c.highPrice}` : c.floorPrice;
+    
+    // 基本資訊
     infoDiv.innerHTML = `
         <div style="font-weight:bold; color:#e65100; margin-bottom:5px;">✅ 已帶入「${c.cbName}」資料</div>
-        <div style="display:flex; flex-wrap:wrap; gap:8px;">
+        <div style="display:inline-block; padding:2px 8px; border-radius:4px; background:${status.color}; color:#fff; font-size:11px; margin-bottom:5px;">${status.label}</div>
+        <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:5px;">
             <span>📊 ${c.auctionType}</span>
             <span>🏭 ${c.industry}</span>
             <span>💰 規模${c.issueSize}億</span>
@@ -6290,26 +6350,572 @@ function handleQuickSelect() {
             <span>⭐ TCRI${c.rating || '未知'}</span>
         </div>
         <div style="margin-top:5px; color:#1565c0;">
-            📌 參考股價：<b>${c.stockPrice}</b> 元 | 底標：<b>${c.floorPrice}</b> 元 
+            📌 參考股價：<b>${c.stockPrice}</b> 元 | 底標：<b>${priceDisplay}</b> 元 
             ${c.convPrice > 0 ? `| 理論價約：<b>${theoPrice}</b> 元` : ''}
         </div>
+        ${c.bidPeriod ? `<div style="margin-top:3px; color:#666; font-size:11px;">📅 投標期間：${c.bidPeriod} | 開標：${c.openDate} ${c.listingDate ? `| 掛牌：${c.listingDate}` : ''}</div>` : ''}
         <div style="margin-top:5px; color:#795548; font-size:11px;">
             ⚠️ 股價為參考值，請於截標日13:30前確認最新收盤價
         </div>
     `;
     infoDiv.style.display = 'block';
     
-    // 觸發各欄位的 change 事件以更新統計資訊
+    // 對已開標且價格確定的案件，顯示模型比對結果
+    if (compareDiv && (c.status === 'opened' || c.status === 'listed') && !c.isPriceRange && c.floorPrice > 100) {
+        // 這裡的承銷價格已是加權平均價（開標結果）
+        const finalPrice = c.floorPrice;
+        
+        // 簡易計算模型預估（這裡使用近似值，實際應該觸發完整計算）
+        const theoVal = c.convPrice > 0 ? (c.stockPrice / c.convPrice) * 100 : 0;
+        
+        compareDiv.innerHTML = `
+            <div style="font-weight:bold; color:#2e7d32; margin-bottom:5px;">📊 競拍結果 vs 模型預估比對</div>
+            <div style="display:flex; gap:20px; flex-wrap:wrap;">
+                <div>
+                    <span style="color:#666;">實際加權均價：</span>
+                    <b style="color:#1565c0; font-size:16px;">${finalPrice}</b> 元
+                </div>
+                ${theoVal > 0 ? `
+                <div>
+                    <span style="color:#666;">理論價：</span>
+                    <b>${theoVal.toFixed(2)}</b> 元
+                </div>
+                <div>
+                    <span style="color:#666;">實際溢價率：</span>
+                    <b style="color:#e65100;">${((finalPrice/theoVal - 1) * 100).toFixed(2)}%</b>
+                </div>
+                ` : ''}
+            </div>
+            <div style="margin-top:5px; font-size:11px; color:#666;">
+                💡 點擊「開始AI評估」後，可在結果中比對各維度預估與實際差距
+            </div>
+        `;
+        compareDiv.style.display = 'block';
+    } else {
+        if (compareDiv) compareDiv.style.display = 'none';
+    }
+    
+    // 觸發各欄位的 change 事件
     ['capital', 'industry', 'issueSize', 'conversionPrice', 'years', 'guarantee', 'rating', 'broker'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.dispatchEvent(new Event('change'));
     });
     
-    // 觸發股價和轉換價的 input 事件
     ['stockPrice', 'actualConversionPrice', 'floorPrice'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.dispatchEvent(new Event('input'));
     });
+}
+
+// ==========================================
+// v3.70 回測分析功能模組
+// ==========================================
+
+/**
+ * 從區間字串提取中間值（全局版本）
+ */
+function getRangeMidValue(rangeStr, type) {
+    if (typeof rangeStr === 'number' && !isNaN(rangeStr)) return rangeStr;
+    const str = String(rangeStr || '');
+    // 轉換價區間
+    if (type === 'conversion') {
+        if (str.includes('小於20')) return 15;
+        if (str.includes('20~50')) return 35;
+        if (str.includes('50~100')) return 75;
+        if (str.includes('100~150')) return 125;
+        if (str.includes('150~200')) return 175;
+        if (str.includes('大於200')) return 250;
+    }
+    // 股本區間
+    if (type === 'capital') {
+        if (str.includes('小於3')) return 2;
+        if (str.includes('3~6')) return 4.5;
+        if (str.includes('6~10')) return 8;
+        if (str.includes('10~15')) return 12.5;
+        if (str.includes('15~20')) return 17.5;
+        if (str.includes('大於20')) return 30;
+    }
+    // 發行規模區間
+    if (type === 'size') {
+        if (str.includes('小於2')) return 1.5;
+        if (str.includes('2~5')) return 3.5;
+        if (str.includes('5~10')) return 7.5;
+        if (str.includes('10~15')) return 12.5;
+        if (str.includes('15~20')) return 17.5;
+        if (str.includes('大於20')) return 30;
+    }
+    // 嘗試解析為數字
+    const num = parseFloat(str);
+    return isNaN(num) ? 0 : num;
+}
+
+/**
+ * 計算近N檔競拍的市場氛圍
+ * @param {number} n - 要計算的近期案例數量（預設5）
+ * @returns {Object|null} 市場氛圍數據
+ */
+function calcMarketAtmosphere(n = 5) {
+    if (!auctionRawData || auctionRawData.length === 0) return null;
+    
+    // 按開標日期排序（最新的在前）
+    const sortedData = [...auctionRawData]
+        .filter(d => d.openDate && d.avgPremium !== null && d.avgPremium !== undefined && d.bidMultiple > 0)
+        .sort((a, b) => {
+            const dateA = new Date(a.openDate);
+            const dateB = new Date(b.openDate);
+            return dateB - dateA;
+        });
+    
+    if (sortedData.length === 0) return null;
+    
+    // 取近N檔
+    const recentCases = sortedData.slice(0, Math.min(n, sortedData.length));
+    
+    // 計算平均溢價率和平均投標倍數
+    let totalPremium = 0, totalMultiple = 0, validCount = 0;
+    recentCases.forEach(d => {
+        if (d.avgPremium !== null && !isNaN(d.avgPremium)) {
+            totalPremium += d.avgPremium;
+            validCount++;
+        }
+        if (d.bidMultiple > 0) {
+            totalMultiple += d.bidMultiple;
+        }
+    });
+    
+    const avgPremium = validCount > 0 ? totalPremium / validCount : 0;
+    const avgMultiple = recentCases.length > 0 ? totalMultiple / recentCases.length : 0;
+    
+    // 計算氛圍指數 (0~100)
+    // 溢價率貢獻 (60%): 0%=30分, 5%=50分, 10%=70分, 15%+=90分
+    // 投標倍數貢獻 (40%): 1x=20分, 2x=40分, 3x=60分, 4x+=80分
+    let premiumScore = Math.min(90, Math.max(10, 30 + avgPremium * 4));
+    let multipleScore = Math.min(80, Math.max(20, avgMultiple * 20));
+    const atmosphereIndex = Math.round(premiumScore * 0.6 + multipleScore * 0.4);
+    
+    // 判斷氛圍等級
+    let level, levelColor, suggestion;
+    if (atmosphereIndex >= 75) {
+        level = '極熱';
+        levelColor = '#d32f2f';
+        suggestion = '市場競爭激烈，建議溢價率 +3~4%';
+    } else if (atmosphereIndex >= 60) {
+        level = '偏熱';
+        levelColor = '#ff5722';
+        suggestion = '市場偏熱，建議溢價率 +1~2%';
+    } else if (atmosphereIndex >= 45) {
+        level = '普通';
+        levelColor = '#ff9800';
+        suggestion = '市場正常，按歷史均值投標';
+    } else if (atmosphereIndex >= 30) {
+        level = '偏冷';
+        levelColor = '#2196f3';
+        suggestion = '市場偏冷，可考慮溢價率 -1~2%';
+    } else {
+        level = '極冷';
+        levelColor = '#1565c0';
+        suggestion = '市場冷清，可大膽降低溢價率 -2~3%';
+    }
+    
+    return {
+        recentCases: recentCases,
+        avgPremium: avgPremium,
+        avgMultiple: avgMultiple,
+        atmosphereIndex: atmosphereIndex,
+        level: level,
+        levelColor: levelColor,
+        suggestion: suggestion,
+        caseCount: recentCases.length
+    };
+}
+
+/**
+ * 計算熱度指數
+ * @param {Object} params - 計算參數
+ * @returns {Object} 熱度分析結果
+ */
+function calcHeatIndex(params) {
+    const { issueSize, theoreticalPrice, industry, years, atmosphereIndex } = params;
+    
+    let totalScore = 0;
+    const breakdown = [];
+    
+    // 1. 發行規模評分 (滿分25)
+    let sizeScore = 8;
+    if (issueSize < 5) sizeScore = 25;
+    else if (issueSize < 10) sizeScore = 18;
+    else if (issueSize < 15) sizeScore = 15;
+    else sizeScore = 8;
+    totalScore += sizeScore;
+    breakdown.push({ dim: '發行規模', value: `${issueSize}億`, score: sizeScore, max: 25 });
+    
+    // 2. 理論價位評分 (滿分22)
+    let theoScore = 10;
+    if (theoreticalPrice >= 105) theoScore = 22;      // 價內
+    else if (theoreticalPrice >= 95) theoScore = 18;  // 平價
+    else if (theoreticalPrice >= 85) theoScore = 14;  // 價外
+    else theoScore = 10;                               // 深價外
+    totalScore += theoScore;
+    
+    let theoLabel = '深價外';
+    if (theoreticalPrice >= 105) theoLabel = '價內';
+    else if (theoreticalPrice >= 95) theoLabel = '平價';
+    else if (theoreticalPrice >= 85) theoLabel = '價外';
+    breakdown.push({ dim: '理論價位', value: `${theoreticalPrice}元(${theoLabel})`, score: theoScore, max: 22 });
+    
+    // 3. 產業評分 (滿分17)
+    let industryScore = 12;
+    const industryStr = String(industry || '').toLowerCase();
+    if (industryStr.includes('電子') || industryStr.includes('資訊') || industryStr.includes('通信')) {
+        industryScore = 17;
+    } else if (industryStr.includes('半導體') || industryStr.includes('光電')) {
+        industryScore = 15;
+    } else if (industryStr.includes('生技') || industryStr.includes('醫療')) {
+        industryScore = 14;
+    } else if (industryStr.includes('建材') || industryStr.includes('營建') || industryStr.includes('塑膠') || industryStr.includes('鋼鐵')) {
+        industryScore = 8;
+    } else {
+        industryScore = 12; // 傳產/其他
+    }
+    totalScore += industryScore;
+    breakdown.push({ dim: '產業類別', value: industry || '未指定', score: industryScore, max: 17 });
+    
+    // 4. 年期評分 (滿分15)
+    let yearScore = 10;
+    if (years == 3) yearScore = 15;
+    else if (years == 5) yearScore = 10;
+    else if (years == 7) yearScore = 8;
+    totalScore += yearScore;
+    breakdown.push({ dim: '發行年期', value: `${years}年`, score: yearScore, max: 15 });
+    
+    // 5. 市場氛圍評分 (滿分15)
+    let atmScore = 8;
+    if (atmosphereIndex >= 75) atmScore = 15;
+    else if (atmosphereIndex >= 60) atmScore = 12;
+    else if (atmosphereIndex >= 45) atmScore = 8;
+    else if (atmosphereIndex >= 30) atmScore = 5;
+    else atmScore = 3;
+    totalScore += atmScore;
+    breakdown.push({ dim: '市場氛圍', value: `指數${atmosphereIndex}`, score: atmScore, max: 15 });
+    
+    // 計算熱度等級和建議調整
+    let heatLevel, heatColor, premiumAdjust;
+    if (totalScore >= 80) {
+        heatLevel = '極熱';
+        heatColor = '#d32f2f';
+        premiumAdjust = 4;
+    } else if (totalScore >= 65) {
+        heatLevel = '熱';
+        heatColor = '#ff5722';
+        premiumAdjust = 2;
+    } else if (totalScore >= 50) {
+        heatLevel = '普通';
+        heatColor = '#ff9800';
+        premiumAdjust = 0;
+    } else if (totalScore >= 35) {
+        heatLevel = '冷';
+        heatColor = '#2196f3';
+        premiumAdjust = -2;
+    } else {
+        heatLevel = '極冷';
+        heatColor = '#1565c0';
+        premiumAdjust = -3;
+    }
+    
+    // 預期投標倍數（根據熱度估算）
+    let expectedMultiple = 1.5;
+    if (totalScore >= 80) expectedMultiple = 4.0;
+    else if (totalScore >= 65) expectedMultiple = 3.0;
+    else if (totalScore >= 50) expectedMultiple = 2.2;
+    else if (totalScore >= 35) expectedMultiple = 1.5;
+    else expectedMultiple = 1.2;
+    
+    return {
+        totalScore: totalScore,
+        maxScore: 94,
+        heatLevel: heatLevel,
+        heatColor: heatColor,
+        premiumAdjust: premiumAdjust,
+        expectedMultiple: expectedMultiple,
+        breakdown: breakdown
+    };
+}
+
+/**
+ * 查找同類案件
+ * @param {Object} params - 查詢參數
+ * @returns {Object} 同類案件統計
+ */
+function findSimilarCases(params) {
+    const { theoreticalPrice, issueSize, industry } = params;
+    
+    if (!auctionRawData || auctionRawData.length === 0) {
+        return { cases: [], stats: null };
+    }
+    
+    // 定義理論價區間
+    let theoMin, theoMax;
+    if (theoreticalPrice >= 105) {
+        theoMin = 105; theoMax = 999;
+    } else if (theoreticalPrice >= 95) {
+        theoMin = 95; theoMax = 105;
+    } else if (theoreticalPrice >= 85) {
+        theoMin = 85; theoMax = 95;
+    } else {
+        theoMin = 0; theoMax = 85;
+    }
+    
+    // 定義發行規模區間
+    let sizeMin, sizeMax;
+    if (issueSize < 5) {
+        sizeMin = 0; sizeMax = 5;
+    } else if (issueSize < 10) {
+        sizeMin = 5; sizeMax = 10;
+    } else if (issueSize < 15) {
+        sizeMin = 10; sizeMax = 15;
+    } else {
+        sizeMin = 15; sizeMax = 999;
+    }
+    
+    // 篩選同類案件
+    let similarCases = auctionRawData.filter(d => {
+        const theo = d.theoreticalPrice || 0;
+        const size = d.issueSize || 0;
+        const matchTheo = theo >= theoMin && theo < theoMax;
+        const matchSize = size >= sizeMin && size < sizeMax;
+        return matchTheo && matchSize && d.avgPremium !== null && d.avgPremium !== undefined;
+    });
+    
+    // 如果有產業條件，進一步篩選
+    let industryMatchCases = [];
+    if (industry) {
+        industryMatchCases = similarCases.filter(d => d.industry === industry);
+    }
+    
+    // 計算統計數據
+    const calcStats = (cases) => {
+        if (cases.length === 0) return null;
+        
+        const premiums = cases.map(d => d.avgPremium).filter(p => p !== null && !isNaN(p));
+        const multiples = cases.map(d => d.bidMultiple).filter(m => m > 0);
+        
+        if (premiums.length === 0) return null;
+        
+        const avgPremium = premiums.reduce((a, b) => a + b, 0) / premiums.length;
+        const minPremium = Math.min(...premiums);
+        const maxPremium = Math.max(...premiums);
+        
+        // 計算標準差
+        const variance = premiums.reduce((sum, p) => sum + Math.pow(p - avgPremium, 2), 0) / premiums.length;
+        const stdDev = Math.sqrt(variance);
+        
+        const avgMultiple = multiples.length > 0 ? multiples.reduce((a, b) => a + b, 0) / multiples.length : 0;
+        
+        return {
+            count: cases.length,
+            avgPremium: avgPremium,
+            minPremium: minPremium,
+            maxPremium: maxPremium,
+            stdDev: stdDev,
+            avgMultiple: avgMultiple
+        };
+    };
+    
+    return {
+        allCases: similarCases,
+        allStats: calcStats(similarCases),
+        industryCases: industryMatchCases,
+        industryStats: calcStats(industryMatchCases),
+        theoRange: `${theoMin}~${theoMax === 999 ? '∞' : theoMax}`,
+        sizeRange: `${sizeMin}~${sizeMax === 999 ? '∞' : sizeMax}億`
+    };
+}
+
+/**
+ * 生成熱度分析HTML
+ */
+function generateHeatAnalysisHTML(heatResult, similarCases, atmosphere) {
+    if (!heatResult) return '';
+    
+    // 熱度儀表板
+    const scorePercent = Math.round((heatResult.totalScore / heatResult.maxScore) * 100);
+    
+    let html = `
+    <div class="detail-section" style="border: 2px solid ${heatResult.heatColor}; border-radius: 12px; margin-top: 20px;">
+        <h3 style="color:${heatResult.heatColor};">🔥 v3.70 回測熱度分析</h3>
+        
+        <!-- 熱度儀表 -->
+        <div style="background: linear-gradient(135deg, #fafafa 0%, #f0f0f0 100%); padding: 15px; border-radius: 10px; margin-bottom: 15px;">
+            <div style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
+                <div style="flex: 0 0 120px;">
+                    <div style="font-size: 13px; color: #666;">熱度指數</div>
+                    <div style="font-size: 36px; font-weight: bold; color: ${heatResult.heatColor};">${heatResult.totalScore}</div>
+                    <div style="font-size: 12px; color: #999;">滿分 ${heatResult.maxScore}</div>
+                </div>
+                <div style="flex: 1; min-width: 200px;">
+                    <div style="background: #e0e0e0; height: 20px; border-radius: 10px; overflow: hidden;">
+                        <div style="background: linear-gradient(90deg, #4caf50, #ffeb3b, #ff9800, #f44336); width: ${scorePercent}%; height: 100%; border-radius: 10px;"></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 10px; color: #999; margin-top: 3px;">
+                        <span>極冷</span><span>冷</span><span>普通</span><span>熱</span><span>極熱</span>
+                    </div>
+                </div>
+                <div style="flex: 0 0 auto;">
+                    <div style="display: inline-block; padding: 8px 16px; border-radius: 20px; background: ${heatResult.heatColor}; color: white; font-weight: bold;">
+                        ${heatResult.heatLevel}
+                    </div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 12px; padding: 10px; background: #fff3e0; border-radius: 6px; border-left: 4px solid ${heatResult.heatColor};">
+                <div style="font-size: 13px;">
+                    <b>💡 建議溢價率調整：</b>
+                    <span style="color: ${heatResult.heatColor}; font-weight: bold;">
+                        ${heatResult.premiumAdjust >= 0 ? '+' : ''}${heatResult.premiumAdjust}%
+                    </span>
+                    <span style="margin-left: 15px;"><b>預期投標倍數：</b>${heatResult.expectedMultiple.toFixed(1)}x</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 評分細項 -->
+        <div style="margin-bottom: 15px;">
+            <div style="font-size: 13px; font-weight: bold; color: #333; margin-bottom: 8px;">📊 評分細項</div>
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                <tr style="background: #f5f5f5;">
+                    <th style="padding: 6px; text-align: left; border: 1px solid #ddd;">維度</th>
+                    <th style="padding: 6px; text-align: center; border: 1px solid #ddd;">數值</th>
+                    <th style="padding: 6px; text-align: center; border: 1px solid #ddd;">得分</th>
+                    <th style="padding: 6px; text-align: center; border: 1px solid #ddd;">滿分</th>
+                </tr>`;
+    
+    heatResult.breakdown.forEach(item => {
+        const ratio = item.score / item.max;
+        let barColor = '#4caf50';
+        if (ratio < 0.4) barColor = '#f44336';
+        else if (ratio < 0.6) barColor = '#ff9800';
+        else if (ratio < 0.8) barColor = '#ffeb3b';
+        
+        html += `
+                <tr>
+                    <td style="padding: 6px; border: 1px solid #ddd;">${item.dim}</td>
+                    <td style="padding: 6px; text-align: center; border: 1px solid #ddd;">${item.value}</td>
+                    <td style="padding: 6px; text-align: center; border: 1px solid #ddd;">
+                        <span style="color: ${barColor}; font-weight: bold;">${item.score}</span>
+                    </td>
+                    <td style="padding: 6px; text-align: center; border: 1px solid #ddd; color: #999;">${item.max}</td>
+                </tr>`;
+    });
+    
+    html += `
+            </table>
+        </div>`;
+    
+    // 同類案件統計
+    if (similarCases && similarCases.allStats) {
+        const stats = similarCases.allStats;
+        html += `
+        <div style="margin-bottom: 15px;">
+            <div style="font-size: 13px; font-weight: bold; color: #333; margin-bottom: 8px;">
+                📋 同類案件統計（理論價${similarCases.theoRange}元 × 規模${similarCases.sizeRange}）
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px;">
+                <div style="background: #e3f2fd; padding: 10px; border-radius: 6px; text-align: center;">
+                    <div style="font-size: 11px; color: #1565c0;">樣本數</div>
+                    <div style="font-size: 20px; font-weight: bold; color: #0d47a1;">${stats.count}</div>
+                </div>
+                <div style="background: #e8f5e9; padding: 10px; border-radius: 6px; text-align: center;">
+                    <div style="font-size: 11px; color: #2e7d32;">平均溢價率</div>
+                    <div style="font-size: 20px; font-weight: bold; color: #1b5e20;">${stats.avgPremium.toFixed(2)}%</div>
+                </div>
+                <div style="background: #fff3e0; padding: 10px; border-radius: 6px; text-align: center;">
+                    <div style="font-size: 11px; color: #e65100;">溢價範圍</div>
+                    <div style="font-size: 14px; font-weight: bold; color: #bf360c;">${stats.minPremium.toFixed(1)}~${stats.maxPremium.toFixed(1)}%</div>
+                </div>
+                <div style="background: #fce4ec; padding: 10px; border-radius: 6px; text-align: center;">
+                    <div style="font-size: 11px; color: #c2185b;">標準差</div>
+                    <div style="font-size: 20px; font-weight: bold; color: #880e4f;">${stats.stdDev.toFixed(2)}</div>
+                </div>
+            </div>
+        </div>`;
+        
+        // 如果有產業專屬統計
+        if (similarCases.industryStats && similarCases.industryCases.length >= 3) {
+            const iStats = similarCases.industryStats;
+            html += `
+            <div style="background: #f3e5f5; padding: 12px; border-radius: 8px; border-left: 4px solid #9c27b0;">
+                <div style="font-size: 12px; font-weight: bold; color: #6a1b9a; margin-bottom: 6px;">
+                    🏭 同產業專屬統計（${similarCases.industryCases.length}檔）
+                </div>
+                <div style="display: flex; gap: 15px; flex-wrap: wrap; font-size: 12px;">
+                    <span>平均溢價：<b style="color:#6a1b9a;">${iStats.avgPremium.toFixed(2)}%</b></span>
+                    <span>範圍：<b>${iStats.minPremium.toFixed(1)}~${iStats.maxPremium.toFixed(1)}%</b></span>
+                    <span>平均倍數：<b>${iStats.avgMultiple.toFixed(2)}x</b></span>
+                </div>
+            </div>`;
+        }
+    }
+    
+    html += `</div>`;
+    
+    return html;
+}
+
+/**
+ * 更新市場氛圍面板
+ */
+function updateAtmospherePanel() {
+    const panel = document.getElementById('atmospherePanel');
+    const content = document.getElementById('atmosphereContent');
+    
+    if (!panel || !content) return;
+    
+    const atmosphere = calcMarketAtmosphere(5);
+    
+    if (!atmosphere || atmosphere.caseCount === 0) {
+        panel.style.display = 'none';
+        return;
+    }
+    
+    panel.style.display = 'block';
+    
+    // 生成近期案例列表
+    let caseList = '';
+    atmosphere.recentCases.slice(0, 5).forEach((d, i) => {
+        const dateStr = d.openDate ? new Date(d.openDate).toLocaleDateString('zh-TW') : '-';
+        caseList += `
+        <div style="display: flex; gap: 8px; padding: 4px 0; border-bottom: 1px dashed #c8e6c9; font-size: 11px;">
+            <span style="color: #666; min-width: 70px;">${dateStr}</span>
+            <span style="font-weight: 600; min-width: 80px;">${d.name || '-'}</span>
+            <span style="color: #1565c0;">溢${d.avgPremium !== null ? d.avgPremium.toFixed(1) : '-'}%</span>
+            <span style="color: #e65100;">${d.bidMultiple > 0 ? d.bidMultiple.toFixed(1) + 'x' : '-'}</span>
+        </div>`;
+    });
+    
+    content.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 10px;">
+            <div style="flex: 1;">
+                <div style="font-size: 11px; color: #666;">近${atmosphere.caseCount}檔平均溢價</div>
+                <div style="font-size: 22px; font-weight: bold; color: #2e7d32;">${atmosphere.avgPremium.toFixed(2)}%</div>
+            </div>
+            <div style="flex: 1;">
+                <div style="font-size: 11px; color: #666;">平均投標倍數</div>
+                <div style="font-size: 22px; font-weight: bold; color: #1565c0;">${atmosphere.avgMultiple.toFixed(2)}x</div>
+            </div>
+            <div style="flex: 0 0 auto;">
+                <div style="padding: 6px 12px; border-radius: 15px; background: ${atmosphere.levelColor}; color: white; font-weight: bold; font-size: 14px;">
+                    ${atmosphere.level}
+                </div>
+            </div>
+        </div>
+        <div style="background: #fff; padding: 8px; border-radius: 6px; margin-bottom: 8px;">
+            <div style="font-size: 11px; color: #666; margin-bottom: 5px;">📋 近期開標案例</div>
+            ${caseList}
+        </div>
+        <div style="font-size: 11px; color: #2e7d32; background: #fff; padding: 8px; border-radius: 6px;">
+            💡 ${atmosphere.suggestion}
+        </div>
+    `;
 }
 
 // 系統啟動

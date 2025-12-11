@@ -1529,6 +1529,17 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
         </div>
     </div>
 
+    <!-- v3.73 新增：即時AI智能預測區塊 -->
+    <div class="form-section" style="background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%); border: 2px solid #667eea; border-radius: 12px; padding: 15px;">
+        <h3 style="color: #667eea; border-left-color: #764ba2;">🎯 AI智能預測（即時更新）</h3>
+        <div style="font-size:12px; color:#666; margin-bottom:10px;">
+            💡 基於300檔競拍統計，即時預估投標倍數與建議出價
+        </div>
+        <div id="liveAIPrediction">
+            <div style="color:#666; padding:10px;">請填寫條件後即時顯示預測結果</div>
+        </div>
+    </div>
+
     <div class="form-section">
         <h3>📊 近期市場氛圍（自動計算）</h3>
         <div style="font-size:12px; color:#666; margin-bottom:10px;">
@@ -1554,7 +1565,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 <div class="result-panel" id="resultPanel">
     <div id="welcomeMsg" class="welcome-message">
         <h2>歡迎使用AI智能競拍評估系統</h2>
-        <p style="margin-top:10px; color:#666; font-size: 14px;">v3.73 智慧提示版<br>✅ 新增300檔統計提示（不覆蓋原有卡片）<br>✅ 新增條件統計摘要面板<br>✅ 保留所有既有功能完整呈現</p>
+        <p style="margin-top:10px; color:#666; font-size: 14px;">v3.73 智慧提示版<br>✅ 新增300檔統計提示（保留原有卡片）<br>✅ 新增即時AI智能預測（隨條件變動更新）<br>✅ 新增條件統計摘要面板</p>
         <div class="stats-summary" id="statsSummary"></div>
 
 ```
@@ -5966,7 +5977,8 @@ function bindInputEvents() {
     document.getElementById('theoRange').addEventListener('change', updateSmartReminders); // v3.72 改為理論價區間
     
     // v3.72 新增：競拍前評估觸發（基於事前可知條件）
-    const evalTriggers = ['stockPrice', 'actualConversionPrice', 'theoRange', 'guarantee', 'rating', 'issueSize', 'broker', 'industry'];
+    // v3.73 修改：增加years和floorPrice觸發
+    const evalTriggers = ['stockPrice', 'actualConversionPrice', 'theoRange', 'guarantee', 'rating', 'issueSize', 'broker', 'industry', 'years', 'floorPrice'];
     evalTriggers.forEach(id => {
         const el = document.getElementById(id);
         if (el) {
@@ -8970,12 +8982,19 @@ function updateAuctionEvaluation() {
     
     if (!theoPrice || theoPrice <= 0) {
         container.innerHTML = '<div style="color:#666;padding:10px;">請輸入股價和轉換價（或選擇理論價區間）後查看評估結果</div>';
+        // v3.73：也清空即時AI預測區塊
+        const liveContainer = document.getElementById('liveAIPrediction');
+        if (liveContainer) {
+            liveContainer.innerHTML = '<div style="color:#666; padding:10px;">請填寫條件後即時顯示預測結果</div>';
+        }
         return;
     }
     
     // 檢查是否有統計數據
     if (!window.conditionStats || Object.keys(window.conditionStats).length === 0) {
         container.innerHTML = '<div style="color:#666;padding:10px;">統計數據載入中，請稍候...</div>';
+        // v3.73：統計數據載入中時，仍然嘗試顯示基於300檔統計的預測
+        updateLiveAIPrediction(theoPrice, issueSize, guarantee, broker, industry, tcri);
         return;
     }
     
@@ -9068,6 +9087,151 @@ function updateAuctionEvaluation() {
     </div>`;
     
     container.innerHTML = html;
+    
+    // v3.73 新增：即時更新AI智能預測區塊
+    updateLiveAIPrediction(theoPrice, issueSize, guarantee, broker, industry, tcri);
+}
+
+/**
+ * v3.73 即時更新AI智能預測區塊
+ */
+function updateLiveAIPrediction(theoPrice, issueSize, guarantee, broker, industry, tcri) {
+    const container = document.getElementById('liveAIPrediction');
+    if (!container) return;
+    
+    if (!theoPrice || theoPrice <= 0) {
+        container.innerHTML = '<div style="color:#666; padding:10px;">請填寫條件後即時顯示預測結果</div>';
+        return;
+    }
+    
+    // 取得底標價格
+    const floorPrice = safeFloat(document.getElementById('floorPrice')?.value) || 100;
+    
+    // 取得年期
+    const years = parseInt(document.getElementById('years')?.value) || 3;
+    
+    // 調用投標倍數預估函數
+    const multResult = estimateBidMultiple({
+        issueSize: issueSize,
+        guarantee: guarantee,
+        years: years,
+        theoreticalPrice: theoPrice,
+        industry: industry ? industry.split(' ')[0] : '',
+        broker: broker ? broker.split(' ')[0] : ''
+    });
+    
+    // 查表取得預期得標價
+    const priceExpect = getExpectedPriceByMult(multResult.estimatedMult);
+    
+    // 計算建議出價（基於理論價）
+    const condKey = `${getTheoPriceKey(theoPrice)}_${guarantee || '無擔保'}`;
+    const histData = window.conditionStats ? window.conditionStats[condKey] : null;
+    
+    let aggressivePrice, balancedPrice, conservativePrice;
+    let aggressivePremium, balancedPremium, conservativePremium;
+    
+    if (histData && histData.avgLowPremium !== undefined) {
+        aggressivePremium = histData.avgLowPremium;
+        conservativePremium = histData.avgAvgPremium || histData.avgLowPremium + 3;
+        balancedPremium = (aggressivePremium + conservativePremium) / 2;
+    } else {
+        // 使用預設溢價率
+        aggressivePremium = priceExpect.avgPrice > 100 ? (priceExpect.avgPrice - 100) * 0.6 : 2;
+        conservativePremium = priceExpect.avgPrice > 100 ? (priceExpect.avgPrice - 100) * 1.2 : 6;
+        balancedPremium = (aggressivePremium + conservativePremium) / 2;
+    }
+    
+    const basePrice = Math.max(theoPrice, floorPrice);
+    aggressivePrice = Math.max(basePrice * (1 + aggressivePremium / 100), floorPrice);
+    balancedPrice = Math.max(basePrice * (1 + balancedPremium / 100), floorPrice);
+    conservativePrice = Math.max(basePrice * (1 + conservativePremium / 100), floorPrice);
+    
+    // 熱度標籤
+    const heatLevel = multResult.estimatedMult >= 3.5 ? '🔥熱門' : (multResult.estimatedMult >= 2.5 ? '⚡一般' : '❄️冷門');
+    const heatColor = multResult.estimatedMult >= 3.5 ? '#ef4444' : (multResult.estimatedMult >= 2.5 ? '#eab308' : '#22c55e');
+    
+    // 生成因子分析HTML
+    let factorHTML = '';
+    if (multResult.adjustments && multResult.adjustments.length > 0) {
+        factorHTML = multResult.adjustments.map(adj => {
+            const valueColor = adj.value > 0.1 ? '#22c55e' : (adj.value < -0.1 ? '#ef4444' : '#666');
+            const sign = adj.value >= 0 ? '+' : '';
+            return `
+                <div style="display:flex; justify-content:space-between; padding:3px 6px; background:#f8fafc; border-radius:4px; margin-bottom:3px; font-size:11px;">
+                    <span style="color:#666;">${adj.factor}：${adj.label}</span>
+                    <span style="color:${valueColor}; font-weight:bold;">${sign}${adj.value.toFixed(2)}倍 <span style="color:#999;">(n=${adj.count})</span></span>
+                </div>`;
+        }).join('');
+    }
+    
+    // 生成HTML
+    container.innerHTML = `
+    <!-- 投標倍數預估 -->
+    <div style="background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius:10px; padding:14px; margin-bottom:12px; color:white;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <div style="font-size:13px; opacity:0.9;">📊 預估投標倍數</div>
+            <div style="background:rgba(255,255,255,0.2); padding:3px 10px; border-radius:15px; font-size:11px;">
+                ${priceExpect.range}
+            </div>
+        </div>
+        <div style="display:flex; align-items:baseline; gap:6px;">
+            <span style="font-size:36px; font-weight:bold;">${multResult.estimatedMult.toFixed(2)}</span>
+            <span style="font-size:16px; opacity:0.8;">倍</span>
+            <span style="background:${heatColor}; padding:2px 8px; border-radius:10px; font-size:12px; margin-left:8px;">
+                ${heatLevel}
+            </span>
+        </div>
+        <div style="font-size:11px; opacity:0.8; margin-top:6px;">
+            預期最低得標：<b style="font-size:14px;">${priceExpect.avgPrice.toFixed(2)}</b> 元
+        </div>
+    </div>
+    
+    <!-- 因子分析 -->
+    <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:10px; margin-bottom:12px;">
+        <div style="font-size:12px; font-weight:bold; color:#334155; margin-bottom:8px;">🔬 因子分析</div>
+        ${factorHTML || '<div style="color:#999; font-size:11px;">填寫更多條件以獲得更準確的預估</div>'}
+        <div style="border-top:1px solid #e2e8f0; margin-top:6px; padding-top:6px; font-size:10px; color:#64748b;">
+            基準 2.98 → 預估 <b style="color:#6366f1;">${multResult.estimatedMult.toFixed(2)}</b> 倍
+        </div>
+    </div>
+    
+    <!-- 建議出價 -->
+    <div style="background:#f0fdf4; border:1px solid #86efac; border-radius:6px; padding:10px;">
+        <div style="font-size:12px; color:#166534; margin-bottom:8px;">
+            <b>💰 建議出價</b>（基於理論價 ${theoPrice.toFixed(1)} 元 / 底標 ${floorPrice.toFixed(1)} 元）
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px;">
+            <div style="text-align:center; padding:8px; background:#dcfce7; border-radius:6px;">
+                <div style="font-size:10px; color:#166534;">🎯 積極型</div>
+                <div style="font-size:16px; font-weight:bold; color:#15803d;">${aggressivePrice.toFixed(2)}</div>
+                <div style="font-size:9px; color:#666;">溢價 ${aggressivePremium.toFixed(1)}%</div>
+            </div>
+            <div style="text-align:center; padding:8px; background:#dbeafe; border-radius:6px;">
+                <div style="font-size:10px; color:#1d4ed8;">⚖️ 平衡型</div>
+                <div style="font-size:16px; font-weight:bold; color:#1d4ed8;">${balancedPrice.toFixed(2)}</div>
+                <div style="font-size:9px; color:#666;">溢價 ${balancedPremium.toFixed(1)}%</div>
+            </div>
+            <div style="text-align:center; padding:8px; background:#fef3c7; border-radius:6px;">
+                <div style="font-size:10px; color:#b45309;">🛡️ 保守型</div>
+                <div style="font-size:16px; font-weight:bold; color:#b45309;">${conservativePrice.toFixed(2)}</div>
+                <div style="font-size:9px; color:#666;">溢價 ${conservativePremium.toFixed(1)}%</div>
+            </div>
+        </div>
+    </div>
+    `;
+}
+
+/**
+ * 取得理論價區間key
+ */
+function getTheoPriceKey(theoPrice) {
+    if (theoPrice < 90) return '小於90元';
+    if (theoPrice < 95) return '90~95元';
+    if (theoPrice < 100) return '95~100元';
+    if (theoPrice < 105) return '100~105元';
+    if (theoPrice < 110) return '105~110元';
+    if (theoPrice < 115) return '110~115元';
+    return '大於115元';
 }
 
 /**

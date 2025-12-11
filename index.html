@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.73 (智慧提示版)</title>
+<title>AI智能可轉債競拍系統 v3.73 (智慧預測版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="embedded_data.js" onerror="console.warn('embedded_data.js not found, using defaults.')"></script>
 
@@ -1441,123 +1441,120 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
                 </div>
             </div>
 
-```
-    <div class="form-section">
-        <h3>📌 基本資料</h3>
-        <div class="form-group">
-            <label>CB名稱 / 代號 *</label>
-            <input type="text" id="cbName" placeholder="輸入代號(如2383)或名稱搜尋歷史">
-            <div id="historyResults" class="history-results"></div>
-            <div id="cbNameInfo" class="info-box"></div>
+        <div class="form-section">
+            <h3>📌 基本資料</h3>
+            <div class="form-group">
+                <label>CB名稱 / 代號 *</label>
+                <input type="text" id="cbName" placeholder="輸入代號(如2383)或名稱搜尋歷史">
+                <div id="historyResults" class="history-results"></div>
+                <div id="cbNameInfo" class="info-box"></div>
+            </div>
+            
+            <div class="form-group"><label>股本區間 *</label><select id="capital"><option value="">請選擇...</option><option value="小於3億">小於3億</option><option value="3~6億">3~6億</option><option value="6~10億">6~10億</option><option value="10~15億">10~15億</option><option value="15~20億">15~20億</option><option value="大於20億">大於20億</option></select><div id="capitalInfo" class="info-box"></div></div>
+            <div class="form-group"><label>產業分類 *</label><select id="industry"><option value="">載入中...</option></select><div id="industryInfo" class="info-box"></div><div id="industryTip300" class="tip-300" style="display:none;"></div></div>
+            <div class="form-group"><label>發行券商</label><select id="broker"><option value="">載入中...</option></select><div id="brokerInfo" class="info-box"></div><div id="brokerTip300" class="tip-300" style="display:none;"></div></div>
+        </div>
+        <div class="form-section">
+            <h3>💰 發行條件</h3>
+            <div class="form-group"><label>發行規模區間 *</label><select id="issueSize"><option value="">請選擇...</option><option value="小於2億">小於2億</option><option value="2~5億">2~5億</option><option value="5~10億">5~10億</option><option value="10~15億">10~15億</option><option value="15~20億">15~20億</option><option value="大於20億">大於20億</option></select><div id="issueSizeInfo" class="info-box"></div><div id="issueSizeTip300" class="tip-300" style="display:none;"></div></div>
+            <div class="form-group">
+                <label>理論價區間 * <span id="theoRangeMode" style="font-size:11px; color:#1976d2; font-weight:normal;">（輸入股價/轉換價後自動計算）</span></label>
+                <select id="theoRange"><option value="">請選擇或由下方自動計算...</option><option value="小於90元">小於90元</option><option value="90~95元">90~95元</option><option value="95~100元">95~100元</option><option value="100~105元">100~105元</option><option value="105~110元">105~110元</option><option value="110~115元">110~115元</option><option value="大於115元">大於115元</option></select>
+                <div id="theoRangeInfo" class="info-box"></div>
+                <div id="theoRangeTip300" class="tip-300" style="display:none;"></div>
+                <div id="theoAutoCalcInfo" style="display:none; background:#e3f2fd; padding:8px 12px; border-radius:6px; margin-top:5px; font-size:12px;">
+                    <span style="color:#1565c0;">✅ 已自動計算：理論價 <b id="theoAutoValue">0</b> 元 → 區間 <b id="theoAutoRange">-</b></span>
+                </div>
+            </div>
+            <div class="form-group"><label>發行年期 *</label><select id="years"><option value="">請選擇...</option><option value="3">3年期</option><option value="5">5年期</option><option value="7">7年期</option></select><div id="yearsInfo" class="info-box"></div><div id="yearsTip300" class="tip-300" style="display:none;"></div></div>
+            <div class="form-group"><label>擔保情況 *</label><select id="guarantee" onchange="updateAtmospherePanel(); updateMarketSentiment();"><option value="">請選擇...</option><option value="有擔保">有擔保</option><option value="無擔保">無擔保</option></select><div id="guaranteeInfo" class="info-box"></div><div id="guaranteeTip300" class="tip-300" style="display:none;"></div></div>
+            <div class="form-group"><label>信用評等 (TCRI) *</label><select id="rating"><option value="">請選擇...</option><option value="1">TCRI 1</option><option value="2">TCRI 2</option><option value="3">TCRI 3</option><option value="4">TCRI 4</option><option value="5">TCRI 5</option><option value="6">TCRI 6</option><option value="7">TCRI 7</option><option value="8">TCRI 8</option></select><div id="ratingInfo" class="info-box"></div><div id="ratingTip300" class="tip-300" style="display:none;"></div></div>
+        </div>
+        <div class="form-section">
+            <h3>🎯 競拍資料</h3>
+            <div class="form-group">
+                <label>競拍截止日1:30收盤價格 (元) *</label>
+                <input type="number" id="stockPrice" step="0.01" placeholder="例如：461.5">
+            </div>
+            <div class="form-group">
+                <label>實際轉換價格 (元) *</label>
+                <input type="number" id="actualConversionPrice" step="0.01" placeholder="例如：450">
+            </div>
+            <div class="form-group">
+                <label>底標價格 (元)</label>
+                <input type="number" id="floorPrice" step="0.1" value="100" placeholder="預設：100">
+                <div class="warning-box">⚠️ 理論價格隨股價變動，建議於 13:30 截標前再進行最終試算<br>💡 輸入股價和轉換價後，系統會自動計算理論價並帶入上方區間</div>
+            </div>
         </div>
         
-        <div class="form-group"><label>股本區間 *</label><select id="capital"><option value="">請選擇...</option><option value="小於3億">小於3億</option><option value="3~6億">3~6億</option><option value="6~10億">6~10億</option><option value="10~15億">10~15億</option><option value="15~20億">15~20億</option><option value="大於20億">大於20億</option></select><div id="capitalInfo" class="info-box"></div></div>
-        <div class="form-group"><label>產業分類 *</label><select id="industry"><option value="">載入中...</option></select><div id="industryInfo" class="info-box"></div><div id="industryTip300" class="tip-300" style="display:none;"></div></div>
-        <div class="form-group"><label>發行券商</label><select id="broker"><option value="">載入中...</option></select><div id="brokerInfo" class="info-box"></div><div id="brokerTip300" class="tip-300" style="display:none;"></div></div>
-    </div>
-    <div class="form-section">
-        <h3>💰 發行條件</h3>
-        <div class="form-group"><label>發行規模區間 *</label><select id="issueSize"><option value="">請選擇...</option><option value="小於2億">小於2億</option><option value="2~5億">2~5億</option><option value="5~10億">5~10億</option><option value="10~15億">10~15億</option><option value="15~20億">15~20億</option><option value="大於20億">大於20億</option></select><div id="issueSizeInfo" class="info-box"></div><div id="issueSizeTip300" class="tip-300" style="display:none;"></div></div>
-        <div class="form-group">
-            <label>理論價區間 * <span id="theoRangeMode" style="font-size:11px; color:#1976d2; font-weight:normal;">（輸入股價/轉換價後自動計算）</span></label>
-            <select id="theoRange"><option value="">請選擇或由下方自動計算...</option><option value="小於90元">小於90元</option><option value="90~95元">90~95元</option><option value="95~100元">95~100元</option><option value="100~105元">100~105元</option><option value="105~110元">105~110元</option><option value="110~115元">110~115元</option><option value="大於115元">大於115元</option></select>
-            <div id="theoRangeInfo" class="info-box"></div>
-            <div id="theoRangeTip300" class="tip-300" style="display:none;"></div>
-            <div id="theoAutoCalcInfo" style="display:none; background:#e3f2fd; padding:8px 12px; border-radius:6px; margin-top:5px; font-size:12px;">
-                <span style="color:#1565c0;">✅ 已自動計算：理論價 <b id="theoAutoValue">0</b> 元 → 區間 <b id="theoAutoRange">-</b></span>
+        <!-- v3.72 新增：主力模擬出價參數 -->
+        <div class="form-section" style="background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%); border: 2px solid #9c27b0; border-radius: 12px; padding: 15px;">
+            <h3 style="color: #6a1b9a; border-left-color: #9c27b0;">🎯 主力模擬出價（v3.72新功能）</h3>
+            <div style="font-size:12px; color:#666; margin-bottom:10px;">
+                💡 基於75檔CB得標明細統計，模擬主力（得標>100張）的出價行為
+            </div>
+            <div class="form-group">
+                <label>預估投標倍數 (選填)</label>
+                <input type="number" id="estBidMultiple" step="0.1" min="0.5" max="10" placeholder="留空則自動估算">
+                <div style="font-size:11px; color:#999; margin-top:4px;">
+                    📊 冷門(<2倍)預測較準確 | 一般(2-4倍)建議保留彈性 | 熱門(>4倍)競爭激烈
+                </div>
             </div>
         </div>
-        <div class="form-group"><label>發行年期 *</label><select id="years"><option value="">請選擇...</option><option value="3">3年期</option><option value="5">5年期</option><option value="7">7年期</option></select><div id="yearsInfo" class="info-box"></div><div id="yearsTip300" class="tip-300" style="display:none;"></div></div>
-        <div class="form-group"><label>擔保情況 *</label><select id="guarantee" onchange="updateAtmospherePanel(); updateMarketSentiment();"><option value="">請選擇...</option><option value="有擔保">有擔保</option><option value="無擔保">無擔保</option></select><div id="guaranteeInfo" class="info-box"></div><div id="guaranteeTip300" class="tip-300" style="display:none;"></div></div>
-        <div class="form-group"><label>信用評等 (TCRI) *</label><select id="rating"><option value="">請選擇...</option><option value="1">TCRI 1</option><option value="2">TCRI 2</option><option value="3">TCRI 3</option><option value="4">TCRI 4</option><option value="5">TCRI 5</option><option value="6">TCRI 6</option><option value="7">TCRI 7</option><option value="8">TCRI 8</option></select><div id="ratingInfo" class="info-box"></div><div id="ratingTip300" class="tip-300" style="display:none;"></div></div>
-    </div>
-    <div class="form-section">
-        <h3>🎯 競拍資料</h3>
-        <div class="form-group">
-            <label>競拍截止日1:30收盤價格 (元) *</label>
-            <input type="number" id="stockPrice" step="0.01" placeholder="例如：461.5">
+        
+        <div class="form-section" style="background: linear-gradient(135deg, #fff9e6 0%, #ffe6cc 100%); border: 2px solid #ff9800; border-radius: 12px; padding: 15px;">
+            <h3 style="color: #e65100; margin-bottom: 10px;">⚖️ 主觀權重(選填)</h3>
+            <div class="subjective-note">
+                💡 預設為 0 表示完全依據歷史數據；若您有獨到見解，可調整此處注入主觀判斷。
+            </div>
+            <div class="form-group"><label>主觀權重 (%)</label><input type="number" id="subjectiveWeight" min="0" max="100" step="1" value="0"></div>
+            <div class="form-group"><label>主觀最低溢價 (%)</label><input type="number" id="subjectiveLowPremium" step="0.1" value="0"></div>
+            <div class="form-group"><label>主觀平均溢價 (%)</label><input type="number" id="subjectiveAvgPremium" step="0.1" value="0"></div>
         </div>
-        <div class="form-group">
-            <label>實際轉換價格 (元) *</label>
-            <input type="number" id="actualConversionPrice" step="0.01" placeholder="例如：450">
+        <!-- v3.70 新增：市場氛圍儀表板 -->
+        <div id="atmospherePanel" class="form-section" style="display:none; background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border: 2px solid #4caf50; border-radius: 12px; padding: 15px;">
+            <h3 style="color: #2e7d32; border-left-color: #4caf50;">🌡️ 市場氛圍儀表板（近期競拍）</h3>
+            <div id="atmosphereContent" style="font-size: 12px;">載入中...</div>
         </div>
-        <div class="form-group">
-            <label>底標價格 (元)</label>
-            <input type="number" id="floorPrice" step="0.1" value="100" placeholder="預設：100">
-            <div class="warning-box">⚠️ 理論價格隨股價變動，建議於 13:30 截標前再進行最終試算<br>💡 輸入股價和轉換價後，系統會自動計算理論價並帶入上方區間</div>
-        </div>
-    </div>
-    
-    <!-- v3.72 新增：主力模擬出價參數 -->
-    <div class="form-section" style="background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%); border: 2px solid #9c27b0; border-radius: 12px; padding: 15px;">
-        <h3 style="color: #6a1b9a; border-left-color: #9c27b0;">🎯 主力模擬出價（v3.72新功能）</h3>
-        <div style="font-size:12px; color:#666; margin-bottom:10px;">
-            💡 基於75檔CB得標明細統計，模擬主力（得標>100張）的出價行為
-        </div>
-        <div class="form-group">
-            <label>預估投標倍數 (選填)</label>
-            <input type="number" id="estBidMultiple" step="0.1" min="0.5" max="10" placeholder="留空則自動估算">
-            <div style="font-size:11px; color:#999; margin-top:4px;">
-                📊 冷門(<2倍)預測較準確 | 一般(2-4倍)建議保留彈性 | 熱門(>4倍)競爭激烈
+
+        <!-- v3.72 新增：競拍前綜合評估 -->
+        <div class="form-section" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border: 2px solid #1976d2; border-radius: 12px; padding: 15px;">
+            <h3 style="color: #0d47a1; border-left-color: #1976d2;">📋 競拍前綜合評估（v3.72新功能）</h3>
+            <div style="font-size:12px; color:#666; margin-bottom:10px;">
+                💡 基於歷史競拍數據，綜合評估是否值得參與本檔競拍
+            </div>
+            <div id="auctionEvaluation">
+                <div style="color:#666; padding:10px;">請輸入股價和轉換價（或選擇理論價區間）後查看評估結果</div>
             </div>
         </div>
-    </div>
-    
-    <div class="form-section" style="background: linear-gradient(135deg, #fff9e6 0%, #ffe6cc 100%); border: 2px solid #ff9800; border-radius: 12px; padding: 15px;">
-        <h3 style="color: #e65100; margin-bottom: 10px;">⚖️ 主觀權重(選填)</h3>
-        <div class="subjective-note">
-            💡 預設為 0 表示完全依據歷史數據；若您有獨到見解，可調整此處注入主觀判斷。
-        </div>
-        <div class="form-group"><label>主觀權重 (%)</label><input type="number" id="subjectiveWeight" min="0" max="100" step="1" value="0"></div>
-        <div class="form-group"><label>主觀最低溢價 (%)</label><input type="number" id="subjectiveLowPremium" step="0.1" value="0"></div>
-        <div class="form-group"><label>主觀平均溢價 (%)</label><input type="number" id="subjectiveAvgPremium" step="0.1" value="0"></div>
-    </div>
-    <!-- v3.70 新增：市場氛圍儀表板 -->
-    <div id="atmospherePanel" class="form-section" style="display:none; background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border: 2px solid #4caf50; border-radius: 12px; padding: 15px;">
-        <h3 style="color: #2e7d32; border-left-color: #4caf50;">🌡️ 市場氛圍儀表板（近期競拍）</h3>
-        <div id="atmosphereContent" style="font-size: 12px;">載入中...</div>
-    </div>
 
-    <!-- v3.72 新增：競拍前綜合評估 -->
-    <div class="form-section" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border: 2px solid #1976d2; border-radius: 12px; padding: 15px;">
-        <h3 style="color: #0d47a1; border-left-color: #1976d2;">📋 競拍前綜合評估（v3.72新功能）</h3>
-        <div style="font-size:12px; color:#666; margin-bottom:10px;">
-            💡 基於歷史競拍數據，綜合評估是否值得參與本檔競拍
+        <!-- v3.73 新增：即時AI智能預測區塊 -->
+        <div class="form-section" style="background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%); border: 2px solid #667eea; border-radius: 12px; padding: 15px;">
+            <h3 style="color: #667eea; border-left-color: #764ba2;">🎯 AI智能預測（即時更新）</h3>
+            <div style="font-size:12px; color:#666; margin-bottom:10px;">
+                💡 基於300檔競拍統計，即時預估投標倍數與建議出價
+            </div>
+            <div id="liveAIPrediction">
+                <div style="color:#666; padding:10px;">請填寫條件後即時顯示預測結果</div>
+            </div>
         </div>
-        <div id="auctionEvaluation">
-            <div style="color:#666; padding:10px;">請輸入股價和轉換價（或選擇理論價區間）後查看評估結果</div>
-        </div>
-    </div>
 
-    <!-- v3.73 新增：即時AI智能預測區塊 -->
-    <div class="form-section" style="background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%); border: 2px solid #667eea; border-radius: 12px; padding: 15px;">
-        <h3 style="color: #667eea; border-left-color: #764ba2;">🎯 AI智能預測（即時更新）</h3>
-        <div style="font-size:12px; color:#666; margin-bottom:10px;">
-            💡 基於300檔競拍統計，即時預估投標倍數與建議出價
+        <div class="form-section">
+            <h3>📊 近期市場氛圍（自動計算）</h3>
+            <div style="font-size:12px; color:#666; margin-bottom:10px;">
+                ⚠️ 需填寫<b style="color:#e65100;">產業、規模、信評</b>三個條件才能計算<br>
+                根據產業(35%)、規模(25%)、信評(40%)三維度，以近期案例加權計算
+            </div>
+            <div id="marketSentiment" class="info-box" style="display: block; background:#e3f2fd; border-left: 4px solid #2196F3;">
+                <div class="stat-row" style="color:#e65100;">⚠️ 請先填寫：產業、發行規模、信評，才能計算市場氛圍</div>
+            </div>
         </div>
-        <div id="liveAIPrediction">
-            <div style="color:#666; padding:10px;">請填寫條件後即時顯示預測結果</div>
+        <div id="smartReminders" style="display:none; margin: 15px 0; padding: 12px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 8px;">
+            <div style="font-weight: bold; color: #856404; font-size: 13px;">💡 Rex大叔提醒</div>
+            <div id="reminderContent" style="font-size: 12px; line-height: 1.7; color: #856404; margin-top:5px;"></div>
         </div>
-    </div>
-
-    <div class="form-section">
-        <h3>📊 近期市場氛圍（自動計算）</h3>
-        <div style="font-size:12px; color:#666; margin-bottom:10px;">
-            ⚠️ 需填寫<b style="color:#e65100;">產業、規模、信評</b>三個條件才能計算<br>
-            根據產業(35%)、規模(25%)、信評(40%)三維度，以近期案例加權計算
-        </div>
-        <div id="marketSentiment" class="info-box" style="display: block; background:#e3f2fd; border-left: 4px solid #2196F3;">
-            <div class="stat-row" style="color:#e65100;">⚠️ 請先填寫：產業、發行規模、信評，才能計算市場氛圍</div>
-        </div>
-    </div>
-    <div id="smartReminders" style="display:none; margin: 15px 0; padding: 12px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 8px;">
-        <div style="font-weight: bold; color: #856404; font-size: 13px;">💡 Rex大叔提醒</div>
-        <div id="reminderContent" style="font-size: 12px; line-height: 1.7; color: #856404; margin-top:5px;"></div>
-    </div>
-    <button type="submit" class="calculate-btn">🎯 開始AI評估</button>
-</form>
-```
-
+        <button type="submit" class="calculate-btn">🎯 開始AI評估</button>
+    </form>
 </div>
 
 <div class="resizer" id="resizer"></div>
@@ -1565,90 +1562,87 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 <div class="result-panel" id="resultPanel">
     <div id="welcomeMsg" class="welcome-message">
         <h2>歡迎使用AI智能競拍評估系統</h2>
-        <p style="margin-top:10px; color:#666; font-size: 14px;">v3.73 智慧提示版<br>✅ 新增300檔統計提示（保留原有卡片）<br>✅ 新增即時AI智能預測（隨條件變動更新）<br>✅ 新增條件統計摘要面板</p>
+        <p style="margin-top:10px; color:#666; font-size: 14px;">v3.73 智慧預測版<br>✅ 以「年期+擔保」為預測基準（區分有/無擔保）<br>✅ 參考市場氛圍三條件加權（產業35%/規模25%/信評15%）<br>✅ 即時AI預測隨條件變動更新</p>
         <div class="stats-summary" id="statsSummary"></div>
-
-```
-    <!-- v3.58 市場趨勢分析 -->
-    <div class="market-trend-section" id="marketTrendSection" style="margin-top:20px; text-align:left;">
-        <div class="market-trend-header">📈 市場趨勢分析（自動統計）</div>
-        <div class="market-trend-tabs">
-            <button class="market-trend-tab active" onclick="showMarketTrendTab('yearly', event)">年度趨勢</button>
-            <button class="market-trend-tab" onclick="showMarketTrendTab('guarantee', event)">擔保比較</button>
-            <button class="market-trend-tab" onclick="showMarketTrendTab('size', event)">發行規模</button>
-            <button class="market-trend-tab" onclick="showMarketTrendTab('capital', event)">股本大小</button>
-            <button class="market-trend-tab" onclick="showMarketTrendTab('conversion', event)">轉換價</button>
-            <button class="market-trend-tab" onclick="showMarketTrendTab('rating', event)">信評</button>
-            <button class="market-trend-tab" onclick="showMarketTrendTab('yearPeriod', event)">發行年期</button>
-            <button class="market-trend-tab" onclick="showMarketTrendTab('type', event)">競拍vs詢圈</button>
-            <button class="market-trend-tab" onclick="showMarketTrendTab('issueNum', event)">發行次數</button>
-            <button class="market-trend-tab" onclick="showMarketTrendTab('ky', event)">KY股分析</button>
+        
+        <!-- v3.58 市場趨勢分析 -->
+        <div class="market-trend-section" id="marketTrendSection" style="margin-top:20px; text-align:left;">
+            <div class="market-trend-header">📈 市場趨勢分析（自動統計）</div>
+            <div class="market-trend-tabs">
+                <button class="market-trend-tab active" onclick="showMarketTrendTab('yearly', event)">年度趨勢</button>
+                <button class="market-trend-tab" onclick="showMarketTrendTab('guarantee', event)">擔保比較</button>
+                <button class="market-trend-tab" onclick="showMarketTrendTab('size', event)">發行規模</button>
+                <button class="market-trend-tab" onclick="showMarketTrendTab('capital', event)">股本大小</button>
+                <button class="market-trend-tab" onclick="showMarketTrendTab('conversion', event)">轉換價</button>
+                <button class="market-trend-tab" onclick="showMarketTrendTab('rating', event)">信評</button>
+                <button class="market-trend-tab" onclick="showMarketTrendTab('yearPeriod', event)">發行年期</button>
+                <button class="market-trend-tab" onclick="showMarketTrendTab('type', event)">競拍vs詢圈</button>
+                <button class="market-trend-tab" onclick="showMarketTrendTab('issueNum', event)">發行次數</button>
+                <button class="market-trend-tab" onclick="showMarketTrendTab('ky', event)">KY股分析</button>
+            </div>
+            <div class="market-trend-content" id="marketTrendContent">
+                載入中...
+            </div>
         </div>
-        <div class="market-trend-content" id="marketTrendContent">
-            載入中...
+        
+        <!-- 市場供給量分析 -->
+        <div id="supplyAnalysis" class="supply-analysis" style="margin-top:20px; text-align:left;">
+            <div class="supply-header">📊 市場供給量分析（各期發行量與掛牌表現趨勢）</div>
+            <div id="supplyTable">載入中...</div>
+        </div>
+        
+        <!-- 年度績效排行榜 -->
+        <div id="rankingSection" class="ranking-section" style="margin-top:20px; text-align:left;">
+            <div class="ranking-header">🏆 年度績效排行榜（2022-2025年掛牌表現TOP10 / BOTTOM10）</div>
+            <div class="ranking-tabs">
+                <button type="button" class="ranking-tab active" onclick="showRankingYear(2022, event)">2022</button>
+                <button type="button" class="ranking-tab" onclick="showRankingYear(2023, event)">2023</button>
+                <button type="button" class="ranking-tab" onclick="showRankingYear(2024, event)">2024</button>
+                <button type="button" class="ranking-tab" onclick="showRankingYear(2025, event)">2025</button>
+            </div>
+            <div id="rankingContent">載入中...</div>
+        </div>
+        
+        <!-- 月均成交真實績效 -->
+        <div id="realperfSection" class="realperf-section" style="margin-top:20px; text-align:left;">
+            <div class="realperf-header">📈 月均成交真實績效（0%=掛牌低, 100%=掛牌高）</div>
+            <div class="realperf-tabs">
+                <button type="button" class="realperf-tab active" onclick="showRealPerfYear(2022, event)">2022</button>
+                <button type="button" class="realperf-tab" onclick="showRealPerfYear(2023, event)">2023</button>
+                <button type="button" class="realperf-tab" onclick="showRealPerfYear(2024, event)">2024</button>
+                <button type="button" class="realperf-tab" onclick="showRealPerfYear(2025, event)">2025</button>
+            </div>
+            <div id="realperfContent">載入中...</div>
+        </div>
+        
+        <!-- 競拍盈虧勝率分析 -->
+        <div id="profitlossSection" class="profitloss-section" style="margin-top:20px; text-align:left;">
+            <div class="profitloss-header">💰 競拍盈虧勝率分析（以得標價vs掛牌價計算盈虧機率）</div>
+            <div class="profitloss-tabs">
+                <button type="button" class="profitloss-tab active" onclick="showProfitLossYear(2022, event)">2022</button>
+                <button type="button" class="profitloss-tab" onclick="showProfitLossYear(2023, event)">2023</button>
+                <button type="button" class="profitloss-tab" onclick="showProfitLossYear(2024, event)">2024</button>
+                <button type="button" class="profitloss-tab" onclick="showProfitLossYear(2025, event)">2025</button>
+                <button type="button" class="profitloss-tab" onclick="showProfitLossYear('all', event)">全部</button>
+            </div>
+            <div id="profitlossContent">載入中...</div>
+        </div>
+        
+        <!-- 維度分析總覽 -->
+        <div id="dimensionSection" class="dimension-section" style="margin-top:20px; text-align:left;">
+            <div class="dimension-header">📊 維度分析總覽（各維度區間統計，點擊展開查看詳細標的）</div>
+            <div class="dimension-main-tabs">
+                <button type="button" class="dimension-main-tab active" onclick="showDimensionTab('capital', event)">股本</button>
+                <button type="button" class="dimension-main-tab" onclick="showDimensionTab('size', event)">規模</button>
+                <button type="button" class="dimension-main-tab" onclick="showDimensionTab('conversion', event)">轉換價</button>
+                <button type="button" class="dimension-main-tab" onclick="showDimensionTab('rating', event)">信評</button>
+                <button type="button" class="dimension-main-tab" onclick="showDimensionTab('years', event)">年期</button>
+                <button type="button" class="dimension-main-tab" onclick="showDimensionTab('guarantee', event)">擔保</button>
+            </div>
+            <div id="dimensionContent" class="dimension-content">載入中...</div>
         </div>
     </div>
-    
-    <!-- 市場供給量分析 -->
-    <div id="supplyAnalysis" class="supply-analysis" style="margin-top:20px; text-align:left;">
-        <div class="supply-header">📊 市場供給量分析（各期發行量與掛牌表現趨勢）</div>
-        <div id="supplyTable">載入中...</div>
-    </div>
-    
-    <!-- 年度績效排行榜 -->
-    <div id="rankingSection" class="ranking-section" style="margin-top:20px; text-align:left;">
-        <div class="ranking-header">🏆 年度績效排行榜（2022-2025年掛牌表現TOP10 / BOTTOM10）</div>
-        <div class="ranking-tabs">
-            <button type="button" class="ranking-tab active" onclick="showRankingYear(2022, event)">2022</button>
-            <button type="button" class="ranking-tab" onclick="showRankingYear(2023, event)">2023</button>
-            <button type="button" class="ranking-tab" onclick="showRankingYear(2024, event)">2024</button>
-            <button type="button" class="ranking-tab" onclick="showRankingYear(2025, event)">2025</button>
-        </div>
-        <div id="rankingContent">載入中...</div>
-    </div>
-    
-    <!-- 月均成交真實績效 -->
-    <div id="realperfSection" class="realperf-section" style="margin-top:20px; text-align:left;">
-        <div class="realperf-header">📈 月均成交真實績效（0%=掛牌低, 100%=掛牌高）</div>
-        <div class="realperf-tabs">
-            <button type="button" class="realperf-tab active" onclick="showRealPerfYear(2022, event)">2022</button>
-            <button type="button" class="realperf-tab" onclick="showRealPerfYear(2023, event)">2023</button>
-            <button type="button" class="realperf-tab" onclick="showRealPerfYear(2024, event)">2024</button>
-            <button type="button" class="realperf-tab" onclick="showRealPerfYear(2025, event)">2025</button>
-        </div>
-        <div id="realperfContent">載入中...</div>
-    </div>
-    
-    <!-- 競拍盈虧勝率分析 -->
-    <div id="profitlossSection" class="profitloss-section" style="margin-top:20px; text-align:left;">
-        <div class="profitloss-header">💰 競拍盈虧勝率分析（以得標價vs掛牌價計算盈虧機率）</div>
-        <div class="profitloss-tabs">
-            <button type="button" class="profitloss-tab active" onclick="showProfitLossYear(2022, event)">2022</button>
-            <button type="button" class="profitloss-tab" onclick="showProfitLossYear(2023, event)">2023</button>
-            <button type="button" class="profitloss-tab" onclick="showProfitLossYear(2024, event)">2024</button>
-            <button type="button" class="profitloss-tab" onclick="showProfitLossYear(2025, event)">2025</button>
-            <button type="button" class="profitloss-tab" onclick="showProfitLossYear('all', event)">全部</button>
-        </div>
-        <div id="profitlossContent">載入中...</div>
-    </div>
-    
-    <!-- 維度分析總覽 -->
-    <div id="dimensionSection" class="dimension-section" style="margin-top:20px; text-align:left;">
-        <div class="dimension-header">📊 維度分析總覽（各維度區間統計，點擊展開查看詳細標的）</div>
-        <div class="dimension-main-tabs">
-            <button type="button" class="dimension-main-tab active" onclick="showDimensionTab('capital', event)">股本</button>
-            <button type="button" class="dimension-main-tab" onclick="showDimensionTab('size', event)">規模</button>
-            <button type="button" class="dimension-main-tab" onclick="showDimensionTab('conversion', event)">轉換價</button>
-            <button type="button" class="dimension-main-tab" onclick="showDimensionTab('rating', event)">信評</button>
-            <button type="button" class="dimension-main-tab" onclick="showDimensionTab('years', event)">年期</button>
-            <button type="button" class="dimension-main-tab" onclick="showDimensionTab('guarantee', event)">擔保</button>
-        </div>
-        <div id="dimensionContent" class="dimension-content">載入中...</div>
-    </div>
-</div>
-<div id="evaluationResult" class="evaluation-result"></div>
-```
-
+    <div id="evaluationResult" class="evaluation-result"></div>
 </div>
 
 </div>
@@ -7432,6 +7426,13 @@ function handleQuickSelect() {
         const el = document.getElementById(id);
         if (el) el.dispatchEvent(new Event('input'));
     });
+    
+    // v3.73 新增：直接調用更新函數確保即時AI預測更新
+    setTimeout(() => {
+        if (typeof updateAuctionEvaluation === 'function') {
+            updateAuctionEvaluation();
+        }
+    }, 100);
 }
 
 // ==========================================
@@ -8378,47 +8379,99 @@ function generateConditionSummaryHTML(r) {
 }
 
 /**
- * v3.73 投標倍數預估函數
- * 基於300檔競拍統計，綜合多因子預估投標倍數
+ * v3.73 投標倍數預估函數（重新設計）
+ * 核心改進：
+ * 1. 以「年期+擔保」組合為基準（區分有擔保/無擔保）
+ * 2. 參考市場氛圍三條件加權（產業35%、規模25%、信評15%）
+ * 3. 加入理論價區間調整（15%）和券商調整（10%）
  */
 function estimateBidMultiple(params) {
-    const { issueSize, guarantee, years, theoreticalPrice, industry, broker } = params;
+    const { issueSize, guarantee, years, theoreticalPrice, industry, broker, rating } = params;
     
-    // 基準倍數（整體平均）
-    let baseMult = OVERALL_STATS.avgBidMult; // 2.98
+    // ===== Step 1: 確定基準（根據年期+擔保組合）=====
+    const guarType = guarantee === '有擔保' ? '有擔保' : '無擔保';
+    const yrs = parseInt(years) || 3;
+    const baseKey = `${guarType}_${yrs}`;
+    const baseData = TERM_GUAR_TABLE[baseKey] || TERM_GUAR_TABLE[`${guarType}_3`];
+    
+    // 基準倍數和溢價率
+    let baseMult = baseData ? baseData.avgMult : (guarType === '有擔保' ? 3.16 : 2.88);
+    let basePremium = baseData ? baseData.avgPremium : (guarType === '有擔保' ? 11.1 : 7.6);
+    let basePrice = baseData ? baseData.avgPrice : (guarType === '有擔保' ? 108.54 : 106.22);
+    const baseSampleCount = baseData ? baseData.count : 0;
+    
+    // 同擔保類型的整體平均（作為調整參考基準）
+    const guarAvgMult = guarType === '有擔保' ? 3.16 : 2.88;
+    const guarAvgPremium = guarType === '有擔保' ? 11.1 : 7.6;
+    
     let adjustments = [];
-    let confidence = 0;
     let totalWeight = 0;
+    let confidenceScore = baseSampleCount;
     
-    // 1. 發行規模調整（權重30%，相關係數-0.2467）
-    let sizeKey = 'over15';
-    if (issueSize < 3) sizeKey = 'under3';
-    else if (issueSize < 5) sizeKey = '3to5';
-    else if (issueSize < 10) sizeKey = '5to10';
-    else if (issueSize < 15) sizeKey = '10to15';
-    
-    const sizeData = SIZE_MULT_TABLE[sizeKey];
-    if (sizeData) {
-        const sizeAdj = (sizeData.avgMult - baseMult) * 0.30;
-        adjustments.push({ factor: '發行規模', label: sizeData.label, value: sizeAdj, ref: sizeData.avgMult, count: sizeData.count });
-        baseMult += sizeAdj;
-        confidence += sizeData.count;
-        totalWeight += 0.30;
+    // ===== Step 2: 產業調整（權重35%，參考市場氛圍）=====
+    const indName = industry ? industry.split(' ')[0] : '';
+    if (indName && INDUSTRY_MULT_TABLE[indName]) {
+        const indData = INDUSTRY_MULT_TABLE[indName];
+        // 調整量 = (產業平均 - 整體平均) × 權重
+        const indAdj = (indData.avgMult - OVERALL_STATS.avgBidMult) * 0.35;
+        adjustments.push({ 
+            factor: '產業', 
+            label: indName, 
+            value: indAdj, 
+            ref: indData.avgMult, 
+            count: indData.count,
+            weight: '35%'
+        });
+        baseMult += indAdj;
+        confidenceScore += indData.count;
+        totalWeight += 0.35;
     }
     
-    // 2. 年期+擔保組合調整（權重25%）
-    const termGuar = guarantee === '有擔保' ? '有擔保' : '無擔保';
-    const termKey = `${termGuar}_${years || 3}`;
-    const termData = TERM_GUAR_TABLE[termKey] || TERM_GUAR_TABLE[`${termGuar}_3`];
-    if (termData) {
-        const termAdj = (termData.avgMult - OVERALL_STATS.avgBidMult) * 0.25;
-        adjustments.push({ factor: '年期擔保', label: termKey.replace('_', '+'), value: termAdj, ref: termData.avgMult, count: termData.count });
-        baseMult += termAdj;
-        confidence += termData.count;
-        totalWeight += 0.25;
+    // ===== Step 3: 發行規模調整（權重25%，參考市場氛圍）=====
+    if (issueSize > 0) {
+        let sizeKey = 'over15';
+        if (issueSize < 3) sizeKey = 'under3';
+        else if (issueSize < 5) sizeKey = '3to5';
+        else if (issueSize < 10) sizeKey = '5to10';
+        else if (issueSize < 15) sizeKey = '10to15';
+        
+        const sizeData = SIZE_MULT_TABLE[sizeKey];
+        if (sizeData) {
+            const sizeAdj = (sizeData.avgMult - OVERALL_STATS.avgBidMult) * 0.25;
+            adjustments.push({ 
+                factor: '發行規模', 
+                label: sizeData.label, 
+                value: sizeAdj, 
+                ref: sizeData.avgMult, 
+                count: sizeData.count,
+                weight: '25%'
+            });
+            baseMult += sizeAdj;
+            confidenceScore += sizeData.count;
+            totalWeight += 0.25;
+        }
     }
     
-    // 3. 轉換價值區間調整（權重25%）
+    // ===== Step 4: 信評調整（權重15%，市場氛圍中為40%但相關性低，這裡降低）=====
+    if (rating && RATING_MULT_TABLE[rating]) {
+        const ratingData = RATING_MULT_TABLE[rating];
+        if (ratingData.count >= 5) { // 樣本數足夠才調整
+            const ratingAdj = (ratingData.avgMult - OVERALL_STATS.avgBidMult) * 0.15;
+            adjustments.push({ 
+                factor: '信評', 
+                label: `TCRI ${rating}`, 
+                value: ratingAdj, 
+                ref: ratingData.avgMult, 
+                count: ratingData.count,
+                weight: '15%'
+            });
+            baseMult += ratingAdj;
+            confidenceScore += ratingData.count;
+            totalWeight += 0.15;
+        }
+    }
+    
+    // ===== Step 5: 理論價區間調整（權重15%）=====
     if (theoreticalPrice > 0) {
         let convKey = 'out';
         if (theoreticalPrice < 90) convKey = 'deep_out';
@@ -8429,32 +8482,29 @@ function estimateBidMultiple(params) {
         
         const convData = CONV_VALUE_TABLE[convKey];
         if (convData) {
-            const convAdj = (convData.avgMult - OVERALL_STATS.avgBidMult) * 0.25;
-            adjustments.push({ factor: '轉換價值', label: convData.label, value: convAdj, ref: convData.avgMult, count: convData.count });
+            const convAdj = (convData.avgMult - OVERALL_STATS.avgBidMult) * 0.15;
+            adjustments.push({ 
+                factor: '理論價區間', 
+                label: convData.label, 
+                value: convAdj, 
+                ref: convData.avgMult, 
+                count: convData.count,
+                weight: '15%'
+            });
             baseMult += convAdj;
-            confidence += convData.count;
-            totalWeight += 0.25;
+            confidenceScore += convData.count;
+            totalWeight += 0.15;
         }
     }
     
-    // 4. 產業調整（權重10%）
-    if (industry && INDUSTRY_MULT_TABLE[industry]) {
-        const indData = INDUSTRY_MULT_TABLE[industry];
-        const indAdj = (indData.avgMult - OVERALL_STATS.avgBidMult) * 0.10;
-        adjustments.push({ factor: '產業', label: industry, value: indAdj, ref: indData.avgMult, count: indData.count });
-        baseMult += indAdj;
-        confidence += indData.count;
-        totalWeight += 0.10;
-    }
-    
-    // 5. 券商調整（權重10%）
-    if (broker) {
-        // 嘗試匹配券商名稱
-        let brokerData = BROKER_MULT_TABLE[broker];
+    // ===== Step 6: 券商調整（權重10%）=====
+    const brokerName = broker ? broker.split(' ')[0] : '';
+    if (brokerName) {
+        let brokerData = BROKER_MULT_TABLE[brokerName];
         if (!brokerData) {
             // 嘗試部分匹配
             for (const [name, data] of Object.entries(BROKER_MULT_TABLE)) {
-                if (broker.includes(name.replace('證券', '')) || name.includes(broker.replace('證券', ''))) {
+                if (brokerName.includes(name.replace('證券', '')) || name.includes(brokerName.replace('證券', ''))) {
                     brokerData = data;
                     break;
                 }
@@ -8462,9 +8512,16 @@ function estimateBidMultiple(params) {
         }
         if (brokerData) {
             const brokerAdj = (brokerData.avgMult - OVERALL_STATS.avgBidMult) * 0.10;
-            adjustments.push({ factor: '券商', label: broker, value: brokerAdj, ref: brokerData.avgMult, count: brokerData.count });
+            adjustments.push({ 
+                factor: '券商', 
+                label: brokerName, 
+                value: brokerAdj, 
+                ref: brokerData.avgMult, 
+                count: brokerData.count,
+                weight: '10%'
+            });
             baseMult += brokerAdj;
-            confidence += brokerData.count;
+            confidenceScore += brokerData.count;
             totalWeight += 0.10;
         }
     }
@@ -8474,15 +8531,20 @@ function estimateBidMultiple(params) {
     
     // 信心度評估
     let confidenceLevel = '低';
-    if (confidence >= 100) confidenceLevel = '高';
-    else if (confidence >= 50) confidenceLevel = '中';
+    if (confidenceScore >= 150 && totalWeight >= 0.6) confidenceLevel = '高';
+    else if (confidenceScore >= 80 && totalWeight >= 0.4) confidenceLevel = '中';
     
     return {
         estimatedMult: baseMult,
+        basePremium: basePremium,
+        basePrice: basePrice,
         adjustments: adjustments,
         confidence: confidenceLevel,
-        totalSamples: confidence,
-        methodology: `基於${adjustments.length}個因子加權預估`
+        totalSamples: confidenceScore,
+        totalWeight: totalWeight,
+        guarType: guarType,
+        baseKey: baseKey,
+        baseSampleCount: baseSampleCount
     };
 }
 
@@ -9093,7 +9155,11 @@ function updateAuctionEvaluation() {
 }
 
 /**
- * v3.73 即時更新AI智能預測區塊
+ * v3.73 即時更新AI智能預測區塊（重新設計）
+ * 核心改進：
+ * 1. 以「年期+擔保」組合為基準
+ * 2. 參考市場氛圍三條件加權（產業35%、規模25%、信評15%）
+ * 3. 顯示擔保類型對應的歷史溢價率
  */
 function updateLiveAIPrediction(theoPrice, issueSize, guarantee, broker, industry, tcri) {
     const container = document.getElementById('liveAIPrediction');
@@ -9104,43 +9170,52 @@ function updateLiveAIPrediction(theoPrice, issueSize, guarantee, broker, industr
         return;
     }
     
-    // 取得底標價格
+    // 取得底標價格和年期
     const floorPrice = safeFloat(document.getElementById('floorPrice')?.value) || 100;
-    
-    // 取得年期
     const years = parseInt(document.getElementById('years')?.value) || 3;
+    const rating = tcri || document.getElementById('rating')?.value || '';
     
-    // 調用投標倍數預估函數
+    // 確定擔保類型
+    const guarType = guarantee === '有擔保' ? '有擔保' : '無擔保';
+    
+    // 調用投標倍數預估函數（已包含擔保類型基準）
     const multResult = estimateBidMultiple({
         issueSize: issueSize,
-        guarantee: guarantee,
+        guarantee: guarType,
         years: years,
         theoreticalPrice: theoPrice,
         industry: industry ? industry.split(' ')[0] : '',
-        broker: broker ? broker.split(' ')[0] : ''
+        broker: broker ? broker.split(' ')[0] : '',
+        rating: rating
     });
     
     // 查表取得預期得標價
     const priceExpect = getExpectedPriceByMult(multResult.estimatedMult);
     
-    // 計算建議出價（基於理論價）
-    const condKey = `${getTheoPriceKey(theoPrice)}_${guarantee || '無擔保'}`;
+    // ===== 計算建議出價（基於擔保類型的歷史溢價率）=====
+    // 優先使用 conditionStats 中的精確數據
+    const condKey = `${getTheoPriceKey(theoPrice)}_${guarType}`;
     const histData = window.conditionStats ? window.conditionStats[condKey] : null;
     
     let aggressivePrice, balancedPrice, conservativePrice;
     let aggressivePremium, balancedPremium, conservativePremium;
+    let premiumSource = '';
     
     if (histData && histData.avgLowPremium !== undefined) {
+        // 使用精確的歷史統計數據
         aggressivePremium = histData.avgLowPremium;
         conservativePremium = histData.avgAvgPremium || histData.avgLowPremium + 3;
         balancedPremium = (aggressivePremium + conservativePremium) / 2;
+        premiumSource = `${condKey}（${histData.count || '-'}筆）`;
     } else {
-        // 使用預設溢價率
-        aggressivePremium = priceExpect.avgPrice > 100 ? (priceExpect.avgPrice - 100) * 0.6 : 2;
-        conservativePremium = priceExpect.avgPrice > 100 ? (priceExpect.avgPrice - 100) * 1.2 : 6;
-        balancedPremium = (aggressivePremium + conservativePremium) / 2;
+        // 使用年期+擔保組合的溢價率作為基準
+        aggressivePremium = multResult.basePremium * 0.7; // 積極：基準溢價的70%
+        conservativePremium = multResult.basePremium * 1.1; // 保守：基準溢價的110%
+        balancedPremium = multResult.basePremium; // 平衡：基準溢價
+        premiumSource = `${multResult.baseKey}基準（${multResult.baseSampleCount}筆）`;
     }
     
+    // 計算實際出價（確保不低於底標）
     const basePrice = Math.max(theoPrice, floorPrice);
     aggressivePrice = Math.max(basePrice * (1 + aggressivePremium / 100), floorPrice);
     balancedPrice = Math.max(basePrice * (1 + balancedPremium / 100), floorPrice);
@@ -9150,26 +9225,58 @@ function updateLiveAIPrediction(theoPrice, issueSize, guarantee, broker, industr
     const heatLevel = multResult.estimatedMult >= 3.5 ? '🔥熱門' : (multResult.estimatedMult >= 2.5 ? '⚡一般' : '❄️冷門');
     const heatColor = multResult.estimatedMult >= 3.5 ? '#ef4444' : (multResult.estimatedMult >= 2.5 ? '#eab308' : '#22c55e');
     
-    // 生成因子分析HTML
+    // 擔保類型標籤顏色
+    const guarColor = guarType === '有擔保' ? '#16a34a' : '#ea580c';
+    const guarBg = guarType === '有擔保' ? '#dcfce7' : '#ffedd5';
+    
+    // 生成因子分析HTML（包含權重）
     let factorHTML = '';
     if (multResult.adjustments && multResult.adjustments.length > 0) {
         factorHTML = multResult.adjustments.map(adj => {
-            const valueColor = adj.value > 0.1 ? '#22c55e' : (adj.value < -0.1 ? '#ef4444' : '#666');
+            const valueColor = adj.value > 0.1 ? '#16a34a' : (adj.value < -0.1 ? '#dc2626' : '#666');
             const sign = adj.value >= 0 ? '+' : '';
             return `
-                <div style="display:flex; justify-content:space-between; padding:3px 6px; background:#f8fafc; border-radius:4px; margin-bottom:3px; font-size:11px;">
-                    <span style="color:#666;">${adj.factor}：${adj.label}</span>
-                    <span style="color:${valueColor}; font-weight:bold;">${sign}${adj.value.toFixed(2)}倍 <span style="color:#999;">(n=${adj.count})</span></span>
+                <div style="display:flex; justify-content:space-between; padding:4px 8px; background:#f8fafc; border-radius:4px; margin-bottom:3px; font-size:11px;">
+                    <span style="color:#666;">
+                        <b>${adj.factor}</b>（${adj.weight}）：${adj.label}
+                    </span>
+                    <span style="color:${valueColor}; font-weight:bold;">
+                        ${sign}${adj.value.toFixed(2)}倍
+                        <span style="color:#999; font-size:10px;">(參考${adj.ref.toFixed(2)}x, n=${adj.count})</span>
+                    </span>
                 </div>`;
         }).join('');
     }
     
+    // 計算基準調整說明
+    const baseAdjInfo = guarType === '有擔保' 
+        ? '有擔保平均溢價較高（11.1%），競爭通常較激烈'
+        : '無擔保平均溢價較低（7.6%），競爭相對溫和';
+    
     // 生成HTML
     container.innerHTML = `
+    <!-- 基準說明 -->
+    <div style="background:${guarBg}; border:1px solid ${guarColor}; border-radius:8px; padding:10px; margin-bottom:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+                <span style="font-size:12px; color:#666;">預測基準：</span>
+                <b style="color:${guarColor}; font-size:14px;">${multResult.baseKey.replace('_', '+')}期</b>
+                <span style="font-size:11px; color:#666;">（${multResult.baseSampleCount}檔）</span>
+            </div>
+            <div style="text-align:right;">
+                <div style="font-size:11px; color:#666;">基準倍數</div>
+                <b style="color:${guarColor}; font-size:16px;">${TERM_GUAR_TABLE[multResult.baseKey]?.avgMult.toFixed(2) || '-'}x</b>
+            </div>
+        </div>
+        <div style="font-size:10px; color:#666; margin-top:6px;">
+            💡 ${baseAdjInfo}
+        </div>
+    </div>
+    
     <!-- 投標倍數預估 -->
     <div style="background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius:10px; padding:14px; margin-bottom:12px; color:white;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-            <div style="font-size:13px; opacity:0.9;">📊 預估投標倍數</div>
+            <div style="font-size:13px; opacity:0.9;">📊 調整後預估倍數</div>
             <div style="background:rgba(255,255,255,0.2); padding:3px 10px; border-radius:15px; font-size:11px;">
                 ${priceExpect.range}
             </div>
@@ -9183,39 +9290,51 @@ function updateLiveAIPrediction(theoPrice, issueSize, guarantee, broker, industr
         </div>
         <div style="font-size:11px; opacity:0.8; margin-top:6px;">
             預期最低得標：<b style="font-size:14px;">${priceExpect.avgPrice.toFixed(2)}</b> 元
+            <span style="opacity:0.7;">（${priceExpect.range}歷史平均）</span>
         </div>
     </div>
     
-    <!-- 因子分析 -->
-    <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:10px; margin-bottom:12px;">
-        <div style="font-size:12px; font-weight:bold; color:#334155; margin-bottom:8px;">🔬 因子分析</div>
-        ${factorHTML || '<div style="color:#999; font-size:11px;">填寫更多條件以獲得更準確的預估</div>'}
-        <div style="border-top:1px solid #e2e8f0; margin-top:6px; padding-top:6px; font-size:10px; color:#64748b;">
-            基準 2.98 → 預估 <b style="color:#6366f1;">${multResult.estimatedMult.toFixed(2)}</b> 倍
+    <!-- 因子調整分析 -->
+    <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px; margin-bottom:12px;">
+        <div style="font-size:12px; font-weight:bold; color:#334155; margin-bottom:8px;">
+            🔬 因子調整分析（參考市場氛圍權重）
+        </div>
+        ${factorHTML || '<div style="color:#999; font-size:11px;">填寫更多條件（產業、規模、信評等）以獲得更準確預估</div>'}
+        <div style="border-top:1px solid #e2e8f0; margin-top:8px; padding-top:8px; font-size:10px; color:#64748b;">
+            基準 <b>${TERM_GUAR_TABLE[multResult.baseKey]?.avgMult.toFixed(2) || '2.98'}</b>（${guarType}+${years}年）
+            → 調整後 <b style="color:#6366f1;">${multResult.estimatedMult.toFixed(2)}</b> 倍
+            <span style="float:right;">信心度：${multResult.confidence}</span>
         </div>
     </div>
     
     <!-- 建議出價 -->
-    <div style="background:#f0fdf4; border:1px solid #86efac; border-radius:6px; padding:10px;">
-        <div style="font-size:12px; color:#166534; margin-bottom:8px;">
-            <b>💰 建議出價</b>（基於理論價 ${theoPrice.toFixed(1)} 元 / 底標 ${floorPrice.toFixed(1)} 元）
+    <div style="background:#f0fdf4; border:1px solid #86efac; border-radius:8px; padding:10px;">
+        <div style="font-size:12px; color:#166534; margin-bottom:6px;">
+            <b>💰 建議出價</b>
+            <span style="font-size:10px; color:#666; font-weight:normal;">
+                （理論價 ${theoPrice.toFixed(1)} / 底標 ${floorPrice.toFixed(1)} / 溢價來源：${premiumSource}）
+            </span>
         </div>
         <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px;">
             <div style="text-align:center; padding:8px; background:#dcfce7; border-radius:6px;">
                 <div style="font-size:10px; color:#166534;">🎯 積極型</div>
-                <div style="font-size:16px; font-weight:bold; color:#15803d;">${aggressivePrice.toFixed(2)}</div>
+                <div style="font-size:18px; font-weight:bold; color:#15803d;">${aggressivePrice.toFixed(2)}</div>
                 <div style="font-size:9px; color:#666;">溢價 ${aggressivePremium.toFixed(1)}%</div>
             </div>
-            <div style="text-align:center; padding:8px; background:#dbeafe; border-radius:6px;">
-                <div style="font-size:10px; color:#1d4ed8;">⚖️ 平衡型</div>
-                <div style="font-size:16px; font-weight:bold; color:#1d4ed8;">${balancedPrice.toFixed(2)}</div>
+            <div style="text-align:center; padding:8px; background:#dbeafe; border-radius:6px; border:2px solid #3b82f6;">
+                <div style="font-size:10px; color:#1d4ed8;">⚖️ 平衡型 ⭐</div>
+                <div style="font-size:18px; font-weight:bold; color:#1d4ed8;">${balancedPrice.toFixed(2)}</div>
                 <div style="font-size:9px; color:#666;">溢價 ${balancedPremium.toFixed(1)}%</div>
             </div>
             <div style="text-align:center; padding:8px; background:#fef3c7; border-radius:6px;">
                 <div style="font-size:10px; color:#b45309;">🛡️ 保守型</div>
-                <div style="font-size:16px; font-weight:bold; color:#b45309;">${conservativePrice.toFixed(2)}</div>
+                <div style="font-size:18px; font-weight:bold; color:#b45309;">${conservativePrice.toFixed(2)}</div>
                 <div style="font-size:9px; color:#666;">溢價 ${conservativePremium.toFixed(1)}%</div>
             </div>
+        </div>
+        <div style="margin-top:8px; font-size:10px; color:#666; text-align:center;">
+            ${guarType}歷史平均溢價：<b style="color:${guarColor};">${guarType === '有擔保' ? '11.1' : '7.6'}%</b>
+            ｜本案基準溢價：<b>${multResult.basePremium?.toFixed(1) || '-'}%</b>
         </div>
     </div>
     `;

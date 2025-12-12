@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.75 (智能主力模擬版)</title>
+<title>AI智能可轉債競拍系統 v3.75 (條件動態主力模擬版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="embedded_data.js" onerror="console.warn('embedded_data.js not found, using defaults.')"></script>
 
@@ -1488,12 +1488,13 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
         </div>
     </div>
     
-    <!-- v3.75 重新設計：智能主力模擬出價（自動計算，無需用戶填參數）-->
+    <!-- v3.75 重新設計：智能主力模擬出價（根據條件動態調整）-->
     <div class="form-section" style="background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%); border: 2px solid #9c27b0; border-radius: 12px; padding: 15px;">
-        <h3 style="color: #6a1b9a; border-left-color: #9c27b0;">🎯 主力模擬出價（智能自動計算）</h3>
+        <h3 style="color: #6a1b9a; border-left-color: #9c27b0;">🎯 主力模擬出價（根據條件動態調整）</h3>
         <div style="font-size:12px; color:#666; margin-bottom:10px;">
-            💡 基於75檔CB得標明細統計，自動推算主力（得標>100張）的出價行為<br>
-            📊 <b>核心發現</b>：94%情況下，主力最低出價與最低得標差距 <0.5元
+            💡 基於75檔CB得標明細統計，<b>根據您輸入的條件動態調整</b>主力出價預測<br>
+            📊 <b>核心發現</b>：94%情況下，主力最低出價與最低得標差距 <0.5元<br>
+            🔄 <b>動態因子</b>：發行規模、理論價、產業、擔保類型會影響主力競爭程度
         </div>
         <div id="majorPlayerSimulation">
             <div style="color:#666; padding:10px; text-align:center;">請先輸入理論價區間或股價/轉換價</div>
@@ -10089,79 +10090,170 @@ function updateLiveAIPrediction(theoPrice, issueSize, guarantee, broker, industr
     </div>
     `;
     
-    // v3.75 新增：同步更新主力模擬出價
-    updateMajorPlayerSimulation(theoPrice, expectedMinBid, multResult.estimatedMult);
+    // v3.75 新增：同步更新主力模擬出價（傳入完整條件參數）
+    updateMajorPlayerSimulation({
+        theoPrice: theoPrice,
+        expectedMinBid: expectedMinBid,
+        estimatedMult: multResult.estimatedMult,
+        issueSize: issueSize,
+        guarantee: guarType,
+        industry: industry,
+        broker: broker,
+        rating: rating,
+        years: years,
+        adjustments: multResult.adjustments  // 傳入因子調整明細
+    });
 }
 
 /**
- * v3.75 新增：智能主力模擬出價（基於75檔CB得標明細統計）
+ * v3.75 重新設計：智能主力模擬出價（根據條件動態調整）
  * 核心發現：
  * 1. 94%情況下，主力最低出價與最低得標差距 <0.5元
  * 2. 主力之間價差與主力數量相關：1-2筆→0.76元, 3-5筆→1.58元, 6-10筆→2.73元, 10+→4.70元
+ * 3. 發行規模、產業、理論價等條件會影響主力競爭程度
  */
-function updateMajorPlayerSimulation(theoPrice, expectedMinBid, estimatedMult) {
+function updateMajorPlayerSimulation(params) {
     const container = document.getElementById('majorPlayerSimulation');
     if (!container) return;
+    
+    // 解構參數
+    const {
+        theoPrice = 0,
+        expectedMinBid = 0,
+        estimatedMult = 2.5,
+        issueSize = 0,
+        guarantee = '無擔保',
+        industry = '',
+        broker = '',
+        rating = '',
+        years = 3,
+        adjustments = []
+    } = params || {};
     
     if (!theoPrice || theoPrice <= 0 || !expectedMinBid || expectedMinBid <= 0) {
         container.innerHTML = '<div style="color:#666; padding:10px; text-align:center;">請先輸入理論價區間或股價/轉換價</div>';
         return;
     }
     
-    // ===== 主力出價模型（基於75檔歷史數據）=====
+    // ===== 主力出價基礎模型（基於75檔歷史數據）=====
     const MAJOR_MODEL = {
-        // 主力最低出價 vs 最低得標的關係
-        minBidOffset: {
-            mean: 0.18,     // 平均差距（元）
-            median: 0.03,   // 中位數差距（元）
-            pct94: 0.5      // 94%的情況差距小於此值
-        },
-        // 主力之間的價差（根據主力數量）
+        minBidOffset: { mean: 0.18, median: 0.03, pct94: 0.5 },
         priceSpread: {
-            low: { range: '1-2筆', spread: 0.76, avgQty: 305 },
-            mid: { range: '3-5筆', spread: 1.58, avgQty: 1390 },
-            high: { range: '6-10筆', spread: 2.73, avgQty: 1835 },
-            veryHigh: { range: '10+筆', spread: 4.70, avgQty: 6694 }
+            low: { range: '1-2筆', spread: 0.76, avgQty: 305, label: '冷門' },
+            mid: { range: '3-5筆', spread: 1.58, avgQty: 1390, label: '一般' },
+            high: { range: '6-10筆', spread: 2.73, avgQty: 1835, label: '熱門' },
+            veryHigh: { range: '10+筆', spread: 4.70, avgQty: 6694, label: '超熱門' }
         }
     };
     
-    // 根據投標倍數預測主力數量和競爭程度
-    let majorEstimate, spreadInfo;
-    if (estimatedMult < 1.5) {
-        majorEstimate = '1-2筆（冷門）';
-        spreadInfo = MAJOR_MODEL.priceSpread.low;
-    } else if (estimatedMult < 2.5) {
-        majorEstimate = '3-5筆（一般）';
-        spreadInfo = MAJOR_MODEL.priceSpread.mid;
-    } else if (estimatedMult < 4) {
-        majorEstimate = '6-10筆（熱門）';
-        spreadInfo = MAJOR_MODEL.priceSpread.high;
-    } else {
-        majorEstimate = '10筆以上（超熱門）';
-        spreadInfo = MAJOR_MODEL.priceSpread.veryHigh;
+    // ===== 根據各維度條件動態調整主力數量預測 =====
+    let baseLevel = 'mid';  // 基準：一般熱度
+    let adjustmentFactors = [];
+    let spreadAdjustment = 0;  // 價差調整（元）
+    let qtyAdjustment = 1.0;   // 數量調整係數
+    
+    // 1. 發行規模影響（小規模更熱門）
+    if (issueSize > 0) {
+        if (issueSize < 5) {
+            adjustmentFactors.push({ factor: '發行規模', label: `${issueSize}億（小規模）`, effect: '+熱度', color: '#ef4444' });
+            spreadAdjustment += 0.5;
+            qtyAdjustment *= 1.3;
+        } else if (issueSize >= 5 && issueSize < 10) {
+            adjustmentFactors.push({ factor: '發行規模', label: `${issueSize}億（中規模）`, effect: '中性', color: '#f59e0b' });
+        } else if (issueSize >= 10) {
+            adjustmentFactors.push({ factor: '發行規模', label: `${issueSize}億（大規模）`, effect: '-熱度', color: '#22c55e' });
+            spreadAdjustment -= 0.3;
+            qtyAdjustment *= 0.8;
+        }
     }
     
-    // 計算主力出價區間
-    const majorLowBid = expectedMinBid + MAJOR_MODEL.minBidOffset.median;  // 主力最低出價
-    const majorHighBid = majorLowBid + spreadInfo.spread;  // 主力最高出價
-    const majorMidBid = (majorLowBid + majorHighBid) / 2;  // 主力中間價
+    // 2. 理論價影響（高理論價更熱門）
+    if (theoPrice >= 130) {
+        adjustmentFactors.push({ factor: '理論價', label: `${theoPrice.toFixed(1)}（深度價內）`, effect: '+熱度', color: '#ef4444' });
+        spreadAdjustment += 0.8;
+        qtyAdjustment *= 1.4;
+    } else if (theoPrice >= 110) {
+        adjustmentFactors.push({ factor: '理論價', label: `${theoPrice.toFixed(1)}（價內）`, effect: '+熱度', color: '#f97316' });
+        spreadAdjustment += 0.4;
+        qtyAdjustment *= 1.2;
+    } else if (theoPrice < 95) {
+        adjustmentFactors.push({ factor: '理論價', label: `${theoPrice.toFixed(1)}（價外）`, effect: '-熱度', color: '#22c55e' });
+        spreadAdjustment -= 0.4;
+        qtyAdjustment *= 0.7;
+    } else {
+        adjustmentFactors.push({ factor: '理論價', label: `${theoPrice.toFixed(1)}（平價區）`, effect: '中性', color: '#f59e0b' });
+    }
     
-    // 計算相對於理論價的溢價
+    // 3. 產業影響
+    const hotIndustries = ['電子', '半導體', 'IC設計', 'AI', '網通'];
+    const coldIndustries = ['傳產', '營建', '金融', '航運'];
+    const industryName = industry ? industry.split(' ')[0] : '';
+    
+    if (industryName && hotIndustries.some(h => industryName.includes(h))) {
+        adjustmentFactors.push({ factor: '產業', label: `${industryName}（熱門產業）`, effect: '+熱度', color: '#ef4444' });
+        spreadAdjustment += 0.3;
+        qtyAdjustment *= 1.15;
+    } else if (industryName && coldIndustries.some(c => industryName.includes(c))) {
+        adjustmentFactors.push({ factor: '產業', label: `${industryName}（冷門產業）`, effect: '-熱度', color: '#22c55e' });
+        spreadAdjustment -= 0.2;
+        qtyAdjustment *= 0.9;
+    } else if (industryName) {
+        adjustmentFactors.push({ factor: '產業', label: `${industryName}`, effect: '中性', color: '#f59e0b' });
+    }
+    
+    // 4. 擔保類型影響
+    if (guarantee === '有擔保') {
+        adjustmentFactors.push({ factor: '擔保', label: '有擔保', effect: '-熱度', color: '#22c55e' });
+        spreadAdjustment -= 0.2;
+        qtyAdjustment *= 0.85;
+    } else {
+        adjustmentFactors.push({ factor: '擔保', label: '無擔保', effect: '中性', color: '#f59e0b' });
+    }
+    
+    // ===== 根據投標倍數確定基礎熱度級別 =====
+    if (estimatedMult < 1.5) {
+        baseLevel = 'low';
+    } else if (estimatedMult < 2.5) {
+        baseLevel = 'mid';
+    } else if (estimatedMult < 4) {
+        baseLevel = 'high';
+    } else {
+        baseLevel = 'veryHigh';
+    }
+    
+    const baseSpreadInfo = MAJOR_MODEL.priceSpread[baseLevel];
+    
+    // ===== 計算調整後的主力出價區間 =====
+    const adjustedSpread = Math.max(0.5, baseSpreadInfo.spread + spreadAdjustment);
+    const adjustedAvgQty = Math.round(baseSpreadInfo.avgQty * qtyAdjustment);
+    
+    const majorLowBid = expectedMinBid + MAJOR_MODEL.minBidOffset.median;
+    const majorHighBid = majorLowBid + adjustedSpread;
+    const majorMidBid = (majorLowBid + majorHighBid) / 2;
+    
     const lowPremium = ((majorLowBid / theoPrice) - 1) * 100;
     const highPremium = ((majorHighBid / theoPrice) - 1) * 100;
     const midPremium = ((majorMidBid / theoPrice) - 1) * 100;
     
     // 競爭程度顏色
-    let heatColor, heatBg;
+    let heatColor, heatBg, heatLabel;
     if (estimatedMult < 1.5) {
-        heatColor = '#22c55e'; heatBg = '#dcfce7';
+        heatColor = '#22c55e'; heatBg = '#dcfce7'; heatLabel = '冷門';
     } else if (estimatedMult < 2.5) {
-        heatColor = '#f59e0b'; heatBg = '#fef3c7';
+        heatColor = '#f59e0b'; heatBg = '#fef3c7'; heatLabel = '一般';
     } else if (estimatedMult < 4) {
-        heatColor = '#f97316'; heatBg = '#fed7aa';
+        heatColor = '#f97316'; heatBg = '#fed7aa'; heatLabel = '熱門';
     } else {
-        heatColor = '#dc2626'; heatBg = '#fee2e2';
+        heatColor = '#dc2626'; heatBg = '#fee2e2'; heatLabel = '超熱門';
     }
+    
+    // 生成條件影響因子HTML
+    let factorHTML = adjustmentFactors.map(f => `
+        <div style="display:flex; justify-content:space-between; padding:4px 8px; background:#f8fafc; border-radius:4px; margin-bottom:3px;">
+            <span style="color:#666;"><b>${f.factor}</b>：${f.label}</span>
+            <span style="color:${f.color}; font-weight:bold;">${f.effect}</span>
+        </div>
+    `).join('');
     
     container.innerHTML = `
     <!-- 主力出價區間圖示 -->
@@ -10169,15 +10261,15 @@ function updateMajorPlayerSimulation(theoPrice, expectedMinBid, estimatedMult) {
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
             <div>
                 <div style="font-size:11px; opacity:0.9;">預估主力數量</div>
-                <div style="font-size:14px; font-weight:bold;">${majorEstimate}</div>
+                <div style="font-size:14px; font-weight:bold;">${baseSpreadInfo.range}（${heatLabel}）</div>
             </div>
             <div style="text-align:right;">
-                <div style="font-size:11px; opacity:0.9;">主力平均總張數</div>
-                <div style="font-size:14px; font-weight:bold;">${spreadInfo.avgQty.toLocaleString()} 張</div>
+                <div style="font-size:11px; opacity:0.9;">預估主力總張數</div>
+                <div style="font-size:14px; font-weight:bold;">${adjustedAvgQty.toLocaleString()} 張</div>
             </div>
         </div>
         <div style="background:rgba(255,255,255,0.1); padding:10px; border-radius:6px;">
-            <div style="font-size:11px; opacity:0.8; margin-bottom:6px;">🎯 主力出價區間（基於75檔歷史統計）</div>
+            <div style="font-size:11px; opacity:0.8; margin-bottom:6px;">🎯 主力出價區間（根據本檔條件動態調整）</div>
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <div style="text-align:center;">
                     <div style="font-size:10px; opacity:0.7;">最低出價</div>
@@ -10187,7 +10279,7 @@ function updateMajorPlayerSimulation(theoPrice, expectedMinBid, estimatedMult) {
                 <div style="flex:1; padding:0 15px;">
                     <div style="height:8px; background:linear-gradient(to right, #8e24aa, #e91e63); border-radius:4px; position:relative;">
                         <div style="position:absolute; left:50%; transform:translateX(-50%); top:-15px; font-size:9px; white-space:nowrap;">
-                            價差 ${spreadInfo.spread.toFixed(2)}元
+                            價差 ${adjustedSpread.toFixed(2)}元
                         </div>
                     </div>
                 </div>
@@ -10200,13 +10292,22 @@ function updateMajorPlayerSimulation(theoPrice, expectedMinBid, estimatedMult) {
         </div>
     </div>
     
+    <!-- v3.75 新增：條件影響因子 -->
+    <div style="background:#f3e5f5; border:1px solid #ce93d8; border-radius:8px; padding:10px; margin-bottom:10px;">
+        <div style="font-size:12px; font-weight:bold; color:#7b1fa2; margin-bottom:8px;">📊 條件影響因子（動態調整依據）</div>
+        ${factorHTML}
+        <div style="margin-top:6px; padding-top:6px; border-top:1px dashed #ce93d8; font-size:10px; color:#666;">
+            💡 基礎價差：${baseSpreadInfo.spread.toFixed(2)}元 → 調整後：${adjustedSpread.toFixed(2)}元（${spreadAdjustment >= 0 ? '+' : ''}${spreadAdjustment.toFixed(2)}元）
+        </div>
+    </div>
+    
     <!-- 主力行為解讀 -->
     <div style="background:${heatBg}; border:1px solid ${heatColor}40; border-radius:8px; padding:10px; margin-bottom:10px;">
-        <div style="font-size:12px; font-weight:bold; color:${heatColor}; margin-bottom:6px;">📊 主力行為解讀</div>
+        <div style="font-size:12px; font-weight:bold; color:${heatColor}; margin-bottom:6px;">📈 主力行為解讀</div>
         <div style="font-size:11px; color:#333; line-height:1.6;">
             • <b>核心發現</b>：主力最低出價 ≈ 最低得標價（94%差距<0.5元）<br>
-            • <b>競爭邏輯</b>：主力數量越多，價差越大（從0.76元到4.70元）<br>
-            • <b>本檔預測</b>：預估${majorEstimate}，價差約 ${spreadInfo.spread.toFixed(2)} 元
+            • <b>競爭邏輯</b>：小規模、高理論價、熱門產業 → 主力競爭激烈 → 價差較大<br>
+            • <b>本檔預測</b>：${heatLabel}標的，調整後價差約 ${adjustedSpread.toFixed(2)} 元
         </div>
     </div>
     
@@ -10224,7 +10325,7 @@ function updateMajorPlayerSimulation(theoPrice, expectedMinBid, estimatedMult) {
              • 若堅持低價可能落標，需評估是否值得追高`}
         </div>
         <div style="margin-top:8px; padding-top:8px; border-top:1px dashed #e2e8f0; font-size:10px; color:#94a3b8;">
-            📈 理論價基準：${theoPrice.toFixed(2)} 元 ｜ 預期最低得標：${expectedMinBid.toFixed(2)} 元 ｜ 預估倍數：${estimatedMult.toFixed(2)}x
+            📈 理論價：${theoPrice.toFixed(2)} 元 ｜ 預期最低得標：${expectedMinBid.toFixed(2)} 元 ｜ 預估倍數：${estimatedMult.toFixed(2)}x
         </div>
     </div>
     `;

@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.75 (條件動態主力模擬版)</title>
+<title>AI智能可轉債競拍系統 v3.75 (動態學習區間版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="embedded_data.js" onerror="console.warn('embedded_data.js not found, using defaults.')"></script>
 
@@ -8177,14 +8177,16 @@ function calcHeatIndex(params) {
 // 數據來源：Rex大叔競拍資料庫完整統計分析報告
 // ========================================
 
-// 投標倍數 → 最低得標對照表（核心！相關係數+0.7301）
+// 投標倍數 → 最低得標/平均得標對照表（核心！相關係數+0.7301）
+// v3.75 更新：同時記錄minPrice（最低得標）和avgPrice（平均得標）
+// 合理區間 = minPrice ~ avgPrice，差距約1.5-2元
 const BIDMULT_TO_PRICE_TABLE = {
-    'under1': { min: 0, max: 1, avgPrice: 100.95, avgPremium: 7.0, count: 27 },
-    '1to1.5': { min: 1, max: 1.5, avgPrice: 101.32, avgPremium: 4.6, count: 38 },
-    '1.5to2': { min: 1.5, max: 2, avgPrice: 103.56, avgPremium: 6.1, count: 36 },
-    '2to3': { min: 2, max: 3, avgPrice: 106.43, avgPremium: 8.7, count: 74 },
-    '3to5': { min: 3, max: 5, avgPrice: 110.15, avgPremium: 10.5, count: 86 },
-    'over5': { min: 5, max: 99, avgPrice: 113.91, avgPremium: 12.4, count: 39 }
+    'under1': { min: 0, max: 1, minPrice: 101.03, avgPrice: 102.14, gap: 1.11, avgPremium: 7.0, count: 23 },
+    '1to1.5': { min: 1, max: 1.5, minPrice: 101.22, avgPrice: 103.05, gap: 1.83, avgPremium: 4.6, count: 43 },
+    '1.5to2': { min: 1.5, max: 2, minPrice: 103.56, avgPrice: 105.71, gap: 2.15, avgPremium: 6.1, count: 36 },
+    '2to3': { min: 2, max: 3, minPrice: 106.43, avgPrice: 108.51, gap: 2.08, avgPremium: 8.7, count: 74 },
+    '3to5': { min: 3, max: 5, minPrice: 110.20, avgPrice: 111.97, gap: 1.77, avgPremium: 10.5, count: 87 },
+    'over5': { min: 5, max: 99, minPrice: 114.03, avgPrice: 115.55, gap: 1.52, avgPremium: 12.4, count: 41 }
 };
 
 // 發行規模 → 投標倍數（相關係數-0.2467）
@@ -9209,20 +9211,29 @@ function estimateBidMultiple(params) {
  * v3.73 根據投標倍數查表得到預估得標價
  */
 function getExpectedPriceByMult(bidMult) {
-    let result = { range: '', avgPrice: 106.99, avgPremium: 8.73, count: 300 };
+    // v3.75 重新設計：返回最低得標(minPrice)和平均得標(avgPrice)
+    // 合理區間 = minPrice ~ avgPrice
+    let result = { 
+        range: '', 
+        minPrice: 106.43,   // 預期最低得標（保守型基準）
+        avgPrice: 108.51,   // 預期平均得標（積極型基準）
+        gap: 2.08,          // 差距
+        avgPremium: 8.73, 
+        count: 300 
+    };
     
     if (bidMult < 1) {
-        result = { range: '<1倍（未足額）', avgPrice: 100.95, avgPremium: 0.95, count: 27 };
+        result = { range: '<1倍（未足額）', minPrice: 101.03, avgPrice: 102.14, gap: 1.11, avgPremium: 0.95, count: 23 };
     } else if (bidMult < 1.5) {
-        result = { range: '1-1.5倍', avgPrice: 101.32, avgPremium: 1.32, count: 38 };
+        result = { range: '1-1.5倍', minPrice: 101.22, avgPrice: 103.05, gap: 1.83, avgPremium: 1.32, count: 43 };
     } else if (bidMult < 2) {
-        result = { range: '1.5-2倍', avgPrice: 103.56, avgPremium: 3.56, count: 36 };
+        result = { range: '1.5-2倍', minPrice: 103.56, avgPrice: 105.71, gap: 2.15, avgPremium: 3.56, count: 36 };
     } else if (bidMult < 3) {
-        result = { range: '2-3倍', avgPrice: 106.43, avgPremium: 6.43, count: 74 };
+        result = { range: '2-3倍', minPrice: 106.43, avgPrice: 108.51, gap: 2.08, avgPremium: 6.43, count: 74 };
     } else if (bidMult < 5) {
-        result = { range: '3-5倍', avgPrice: 110.15, avgPremium: 10.15, count: 86 };
+        result = { range: '3-5倍', minPrice: 110.20, avgPrice: 111.97, gap: 1.77, avgPremium: 10.15, count: 87 };
     } else {
-        result = { range: '>5倍', avgPrice: 113.91, avgPremium: 13.91, count: 39 };
+        result = { range: '>5倍', minPrice: 114.03, avgPrice: 115.55, gap: 1.52, avgPremium: 13.91, count: 41 };
     }
     
     return result;
@@ -9865,86 +9876,48 @@ function updateLiveAIPrediction(theoPrice, issueSize, guarantee, broker, industr
     const priceExpect = getExpectedPriceByMult(multResult.estimatedMult);
     
     // ===== 智能判別：選擇計算方法 =====
-    // 當理論價 < 100 時，溢價率法會低估，改用價格法
-    // 當理論價 >= 100 時，可以用溢價率法
+    // v3.75 重新設計：三種策略基於「最低得標~平均得標」區間
+    // 保守型 = 預期最低得標（門檻價，有機會得標）
+    // 平衡型 = (最低+平均)/2（最佳性價比）
+    // 積極型 = 預期平均得標（穩定得標）
     
     let aggressivePrice, balancedPrice, conservativePrice;
     let aggressivePremium, balancedPremium, conservativePremium;
     let calcMethod = '';
     let methodNote = '';
     
-    const expectedMinBid = priceExpect.avgPrice; // 預期最低得標價（核心基準）
+    // 核心數據：從投標倍數查表取得合理區間
+    const expectedMinBid = priceExpect.minPrice;  // 預期最低得標（保守基準）
+    const expectedAvgBid = priceExpect.avgPrice;  // 預期平均得標（積極基準）
+    const priceGap = priceExpect.gap;             // 差距（約1.5-2元）
     
+    // 三種策略定義
+    conservativePrice = Math.max(expectedMinBid, floorPrice);           // 保守：最低得標
+    balancedPrice = Math.max((expectedMinBid + expectedAvgBid) / 2, floorPrice);  // 平衡：中間值
+    aggressivePrice = Math.max(expectedAvgBid, floorPrice);             // 積極：平均得標
+    
+    // 判斷計算方法
     if (theoPrice < 100) {
-        // ===== 價格法（理論價<100時使用）=====
-        // 建議出價直接基於「預期最低得標價」，而非理論價×溢價率
         calcMethod = '價格法';
-        methodNote = '理論價<100，採用價格法避免低估';
-        
-        // 保守型：低於預期最低得標（約-2%~-3%），願意承擔落標風險
-        conservativePrice = Math.max(expectedMinBid * 0.975, floorPrice);
-        // 平衡型：接近預期最低得標
-        balancedPrice = Math.max(expectedMinBid, floorPrice);
-        // 積極型：高於預期最低得標（約+2%~+3%），追求穩定得標
-        aggressivePrice = Math.max(expectedMinBid * 1.025, floorPrice);
-        
-        // 反算溢價率（相對於底標100）
-        conservativePremium = ((conservativePrice / floorPrice) - 1) * 100;
-        balancedPremium = ((balancedPrice / floorPrice) - 1) * 100;
-        aggressivePremium = ((aggressivePrice / floorPrice) - 1) * 100;
-        
+        methodNote = `理論價${theoPrice.toFixed(1)}<100，直接用價格`;
     } else {
-        // ===== 溢價率法（理論價>=100時使用）=====
-        calcMethod = '溢價率法';
-        methodNote = '理論價>=100，採用溢價率法';
-        
-        // 查詢該條件的歷史溢價率
-        const condKey = `${getTheoPriceKey(theoPrice)}_${guarType}`;
-        const histData = window.conditionStats ? window.conditionStats[condKey] : null;
-        
-        if (histData && histData.avgLowPremium !== undefined) {
-            conservativePremium = histData.avgLowPremium; // 保守：用最低溢價
-            aggressivePremium = histData.avgAvgPremium || histData.avgLowPremium + 3; // 積極：用平均溢價
-            balancedPremium = (conservativePremium + aggressivePremium) / 2;
-        } else {
-            // 使用年期+擔保組合的溢價率
-            conservativePremium = multResult.basePremium * 0.7; // 保守：基準的70%
-            aggressivePremium = multResult.basePremium * 1.1; // 積極：基準的110%
-            balancedPremium = multResult.basePremium;
-        }
-        
-        // 但仍要確保與預期最低得標一致
-        const basePrice = Math.max(theoPrice, floorPrice);
-        let tempBalanced = basePrice * (1 + balancedPremium / 100);
-        
-        if (tempBalanced < expectedMinBid * 0.95) {
-            // 溢價率法結果偏低，改用混合法
-            calcMethod = '混合法';
-            methodNote = '溢價率法結果偏低，已調整對齊預期得標';
-            
-            conservativePrice = Math.max(expectedMinBid * 0.975, floorPrice);
-            balancedPrice = Math.max(expectedMinBid, floorPrice);
-            aggressivePrice = Math.max(expectedMinBid * 1.025, floorPrice);
-            
-            conservativePremium = ((conservativePrice / basePrice) - 1) * 100;
-            balancedPremium = ((balancedPrice / basePrice) - 1) * 100;
-            aggressivePremium = ((aggressivePrice / basePrice) - 1) * 100;
-        } else {
-            conservativePrice = Math.max(basePrice * (1 + conservativePremium / 100), floorPrice);
-            balancedPrice = Math.max(tempBalanced, floorPrice);
-            aggressivePrice = Math.max(basePrice * (1 + aggressivePremium / 100), floorPrice);
-        }
+        calcMethod = '查表法';
+        methodNote = `投標倍數${multResult.estimatedMult.toFixed(2)}x對應歷史區間`;
     }
     
-    // 確保價格順序正確（保守 < 平衡 < 積極）
-    // v3.75 修正：用更直接的方式排序
+    // 計算溢價率（相對於底標或理論價）
+    const basePrice = Math.max(theoPrice, floorPrice);
+    conservativePremium = ((conservativePrice / basePrice) - 1) * 100;
+    balancedPremium = ((balancedPrice / basePrice) - 1) * 100;
+    aggressivePremium = ((aggressivePrice / basePrice) - 1) * 100;
+    
+    // v3.75 保留排序確保順序正確（保守 < 平衡 < 積極）
     const priceArray = [
         { type: 'conservative', price: conservativePrice, premium: conservativePremium },
         { type: 'balanced', price: balancedPrice, premium: balancedPremium },
         { type: 'aggressive', price: aggressivePrice, premium: aggressivePremium }
     ].sort((a, b) => a.price - b.price);
     
-    // 重新賦值：最低價=保守，中間=平衡，最高=積極
     conservativePrice = priceArray[0].price;
     conservativePremium = priceArray[0].premium;
     balancedPrice = priceArray[1].price;
@@ -9980,7 +9953,7 @@ function updateLiveAIPrediction(theoPrice, issueSize, guarantee, broker, industr
     }
     
     // 計算方法說明
-    const methodColor = calcMethod === '價格法' ? '#7c3aed' : (calcMethod === '混合法' ? '#0891b2' : '#059669');
+    const methodColor = calcMethod === '價格法' ? '#7c3aed' : '#059669';
     
     // 動態市場回饋提示
     let momentumBadge = '';
@@ -10026,8 +9999,8 @@ function updateLiveAIPrediction(theoPrice, issueSize, guarantee, broker, industr
             </span>
         </div>
         <div style="font-size:12px; opacity:0.9; margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.2);">
-            預期最低得標：<b style="font-size:18px;">${expectedMinBid.toFixed(2)}</b> 元
-            <span style="opacity:0.7; font-size:10px;">（${priceExpect.range}歷史平均，n=${priceExpect.count}）</span>
+            合理區間：<b style="font-size:16px;">${expectedMinBid.toFixed(2)}</b> ~ <b style="font-size:16px;">${expectedAvgBid.toFixed(2)}</b> 元
+            <span style="opacity:0.7; font-size:10px;">（${priceExpect.range}，差距${priceGap.toFixed(1)}元，n=${priceExpect.count}）</span>
         </div>
     </div>
     
@@ -10053,14 +10026,14 @@ function updateLiveAIPrediction(theoPrice, issueSize, guarantee, broker, industr
     <div style="background:#f0fdf4; border:1px solid #86efac; border-radius:8px; padding:10px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
             <div style="font-size:12px; color:#166534;">
-                <b>💰 建議出價</b>
+                <b>💰 建議出價區間</b>
             </div>
             <div style="font-size:10px; padding:2px 8px; background:${methodColor}20; color:${methodColor}; border-radius:10px;">
                 ${calcMethod}
             </div>
         </div>
         <div style="font-size:10px; color:#666; margin-bottom:8px;">
-            理論價 ${theoPrice.toFixed(1)} 元 / 底標 ${floorPrice.toFixed(1)} 元
+            合理區間：<b>${expectedMinBid.toFixed(2)}</b> ~ <b>${expectedAvgBid.toFixed(2)}</b> 元（差距 ${priceGap.toFixed(2)} 元）
             <span style="color:${methodColor};">｜${methodNote}</span>
         </div>
         <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px;">
@@ -10068,24 +10041,24 @@ function updateLiveAIPrediction(theoPrice, issueSize, guarantee, broker, industr
                 <div style="font-size:10px; color:#b45309;">🛡️ 保守型</div>
                 <div style="font-size:18px; font-weight:bold; color:#b45309;">${conservativePrice.toFixed(2)}</div>
                 <div style="font-size:9px; color:#666;">溢價 ${conservativePremium.toFixed(1)}%</div>
-                <div style="font-size:9px; color:#b45309;">控制成本優先</div>
+                <div style="font-size:9px; color:#b45309;">≈最低得標</div>
             </div>
             <div style="text-align:center; padding:8px; background:#dbeafe; border-radius:6px; border:2px solid #3b82f6;">
                 <div style="font-size:10px; color:#1d4ed8;">⚖️ 平衡型 ⭐</div>
                 <div style="font-size:18px; font-weight:bold; color:#1d4ed8;">${balancedPrice.toFixed(2)}</div>
                 <div style="font-size:9px; color:#666;">溢價 ${balancedPremium.toFixed(1)}%</div>
-                <div style="font-size:9px; color:#1d4ed8;">對齊預期得標</div>
+                <div style="font-size:9px; color:#1d4ed8;">最佳性價比</div>
             </div>
             <div style="text-align:center; padding:8px; background:#dcfce7; border-radius:6px;">
                 <div style="font-size:10px; color:#166534;">🎯 積極型</div>
                 <div style="font-size:18px; font-weight:bold; color:#15803d;">${aggressivePrice.toFixed(2)}</div>
                 <div style="font-size:9px; color:#666;">溢價 ${aggressivePremium.toFixed(1)}%</div>
-                <div style="font-size:9px; color:#16a34a;">追求穩定得標</div>
+                <div style="font-size:9px; color:#16a34a;">≈平均得標</div>
             </div>
         </div>
         <div style="margin-top:10px; padding:8px; background:#eff6ff; border-radius:6px; font-size:10px; color:#1e40af;">
-            💡 <b>預測邏輯</b>：預估投標倍數 ${multResult.estimatedMult.toFixed(2)}x 對應歷史平均最低得標 ${expectedMinBid.toFixed(2)} 元，
-            保守型略低（控制成本）、積極型略高（確保得標）。
+            💡 <b>策略邏輯</b>：保守=最低得標門檻 / 平衡=中間值（推薦） / 積極=平均得標｜
+            區間差 ${priceGap.toFixed(2)} 元可作為學習參考
         </div>
     </div>
     `;
@@ -10094,6 +10067,8 @@ function updateLiveAIPrediction(theoPrice, issueSize, guarantee, broker, industr
     updateMajorPlayerSimulation({
         theoPrice: theoPrice,
         expectedMinBid: expectedMinBid,
+        expectedAvgBid: expectedAvgBid,
+        priceGap: priceGap,
         estimatedMult: multResult.estimatedMult,
         issueSize: issueSize,
         guarantee: guarType,
@@ -10120,6 +10095,8 @@ function updateMajorPlayerSimulation(params) {
     const {
         theoPrice = 0,
         expectedMinBid = 0,
+        expectedAvgBid = 0,
+        priceGap = 2,
         estimatedMult = 2.5,
         issueSize = 0,
         guarantee = '無擔保',
@@ -10134,6 +10111,9 @@ function updateMajorPlayerSimulation(params) {
         container.innerHTML = '<div style="color:#666; padding:10px; text-align:center;">請先輸入理論價區間或股價/轉換價</div>';
         return;
     }
+    
+    // 計算實際平均得標（如果沒傳入就用最低得標+2）
+    const actualAvgBid = expectedAvgBid > 0 ? expectedAvgBid : expectedMinBid + 2;
     
     // ===== 主力出價基礎模型（基於75檔歷史數據）=====
     const MAJOR_MODEL = {
@@ -10325,7 +10305,7 @@ function updateMajorPlayerSimulation(params) {
              • 若堅持低價可能落標，需評估是否值得追高`}
         </div>
         <div style="margin-top:8px; padding-top:8px; border-top:1px dashed #e2e8f0; font-size:10px; color:#94a3b8;">
-            📈 理論價：${theoPrice.toFixed(2)} 元 ｜ 預期最低得標：${expectedMinBid.toFixed(2)} 元 ｜ 預估倍數：${estimatedMult.toFixed(2)}x
+            📈 合理區間：${expectedMinBid.toFixed(2)} ~ ${actualAvgBid.toFixed(2)} 元 ｜ 預估倍數：${estimatedMult.toFixed(2)}x
         </div>
     </div>
     `;

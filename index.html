@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.78 (版面優化版)</title>
+<title>AI智能可轉債競拍系統 v3.79 (版面優化版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="embedded_data.js" onerror="console.warn('embedded_data.js not found, using defaults.')"></script>
 
@@ -35,7 +35,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 .form-group input, .form-group select { width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; transition: border-color 0.3s; font-weight: 600; color:#333; }
 .form-group input:focus, .form-group select:focus { outline: none; border-color: #667eea; background: #fcfdff; }
 
-/* ===== v3.78 新增：三大功能區塊分隔樣式 ===== */
+/* ===== v3.79 新增：三大功能區塊分隔樣式 ===== */
 .zone-divider {
     display: flex;
     align-items: center;
@@ -97,7 +97,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 .panel-zone-header.stats-zone { background: linear-gradient(135deg, #009688 0%, #00796b 100%); }
 .panel-zone-header.perf-zone { background: linear-gradient(135deg, #e91e63 0%, #c2185b 100%); }
 
-/* ===== v3.78 新增：主區塊分隔樣式 ===== */
+/* ===== v3.79 新增：主區塊分隔樣式 ===== */
 .main-section {
     margin-bottom: 20px;
     border: 2px solid #e0e0e0;
@@ -1594,14 +1594,14 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.78)...</div>
+    <div>🔄 系統啟動中 (v3.79)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
 <div class="container" style="display: none;">
     <div class="header">
         <h1>🤖 AI智能可轉債競拍系統</h1>
-        <span class="version-badge">v3.78</span>
+        <span class="version-badge">v3.79</span>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -1807,7 +1807,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     <div id="welcomeMsg" class="welcome-message">
         <h2>歡迎使用AI智能競拍評估系統</h2>
         <p style="margin-top:10px; color:#666; font-size: 14px;">
-            v3.78 版面優化版<br>
+            v3.79 版面優化版<br>
             ✅ 左側三大區塊：條件輸入 → AI評估 → 市場溫度<br>
             ✅ 右側三大區塊：趨勢分析 → 維度統計 → 績效分析<br>
             ✅ 統計數據改用中位數，更穩健抵抗極端值
@@ -2077,7 +2077,7 @@ function getSmartValue(row, fieldKey) {
 function safeFloat(val) { const num = parseFloat(val); return isNaN(num) ? 0 : num; }
 function safeFixed(val, digits=2) { const num = parseFloat(val); return isNaN(num) ? '-' : num.toFixed(digits); }
 
-// v3.78 新增：通用Excel日期解析函數
+// v3.79 新增：通用Excel日期解析函數
 function parseExcelDate(dateVal) {
     if (!dateVal) return null;
     if (dateVal instanceof Date) return dateVal;
@@ -2160,7 +2160,7 @@ function getRangeLabel(category, val) {
 let statistics = { '維度統計': { '產業': {}, '發行券商': {} }, '資料期間': {} };
 let cbDatabase = {}, auctionRawData = [], inquiryRawData = [], globalMarketStats = { low: 0, avg: 0 }, cbNameMap = {};
 let listedSet = new Set(); // 掛牌中清單
-let totalAuctionCount = 0; // v3.78 動態競拍案例總數
+let totalAuctionCount = 0; // v3.79 動態競拍案例總數
 
 // ==========================================
 // 2. 資料讀取
@@ -2188,6 +2188,10 @@ async function loadStatistics() {
         const sheetIndustry = getSheetData(['16', '產業分類']); // v3.72 新增：產業分類對照表
         
         if (!sheetAuction || sheetAuction.length === 0) throw new Error("找不到競拍資料分頁");
+        
+        // v3.79 新增：保存競拍數據供KNN超級預測引擎使用
+        window.auctionDataCache = sheetAuction;
+        console.log('📊 競拍數據已載入:', sheetAuction.length, '筆（供KNN使用）');
 
         // v3.72 新增：建立產業分類對照表（從16工作表）
         window.industryMap = {};
@@ -2445,7 +2449,7 @@ async function loadStatistics() {
                 console.log('動態計算 OVERALL_STATS:', window.OVERALL_STATS);
             }
             
-            // ===== v3.78 新增：價差統計分析（最低得標 vs 加權均價）=====
+            // ===== v3.79 新增：價差統計分析（最低得標 vs 加權均價）=====
             const spreadData = [];
             sheetAuction.forEach(row => {
                 const minBid = safeFloat(row['最低得標'] || row['最低得標價格']);
@@ -2554,7 +2558,7 @@ async function loadStatistics() {
                 console.log('動態計算 SPREAD_STATS:', window.SPREAD_STATS);
             }
             
-            // ===== v3.78 新增：自適應學習引擎 =====
+            // ===== v3.79 新增：自適應學習引擎 =====
             // 核心理念：每個歷史案例都是一次學習機會
             // 系統會分析預測誤差，動態調整參數，隨著數據增加而越來越準確
             console.log('🧠 啟動自適應學習引擎...');
@@ -2764,13 +2768,13 @@ async function loadStatistics() {
                 return params;
             }
             
-            // ===== v3.78 新增：系統回測驗證 =====
+            // ===== v3.79 新增：系統回測驗證 =====
             // 用歷史案例驗證AI預測的準確度
             setTimeout(() => {
                 runSystemBacktest(sheetAuction);
             }, 500);  // 延遲執行，確保其他數據已載入
             
-            // ===== v3.78 新增：資金排擠效應分析 =====
+            // ===== v3.79 新增：資金排擠效應分析 =====
             // 分析同一週多檔競拍時的表現差異
             const crowdingData = [];
             const weekMap = {};  // 按週分組
@@ -4713,7 +4717,7 @@ function generateStandardCard(data, titleOverride=null, inquiryData=null, exclud
 }
 
 function initializeUI() {
-    // v3.78 計算競拍案例總數（動態）
+    // v3.79 計算競拍案例總數（動態）
     totalAuctionCount = auctionRawData.filter(d => d.minBidPrice > 0).length;
     
     // 更新頁面上的競拍案例數量顯示
@@ -4803,7 +4807,7 @@ function generateSupplyAnalysis() {
     
     const historicalAvg = (yearlyTotals[2022] + yearlyTotals[2023] + yearlyTotals[2024]) / 3;
     const projectedTotal = issued2025 + futureTotal;
-    // v3.78 修正：防止除以0產生Infinity
+    // v3.79 修正：防止除以0產生Infinity
     const exceedPercent = yearlyTotals[2024] > 0 ? ((projectedTotal / yearlyTotals[2024]) - 1) * 100 : 0;
     
     // === 生成HTML ===
@@ -5679,7 +5683,7 @@ let marketTrendData = {
 let dimensionData = {};
 
 function generateDimensionAnalysis() {
-    // v3.78 重構：動態從auctionRawData和inquiryRawData生成維度分析數據
+    // v3.79 重構：動態從auctionRawData和inquiryRawData生成維度分析數據
     // 合併所有有掛牌數據的CB
     const allCBData = [];
     
@@ -5879,7 +5883,7 @@ function generateDimensionAnalysis() {
     showDimensionTab('capital');
 }
 
-// v3.78 重構：市場趨勢分析（完全動態從資料庫生成）
+// v3.79 重構：市場趨勢分析（完全動態從資料庫生成）
 function generateMarketTrendAnalysis() {
     // 合併所有CB數據
     const allCBData = [];
@@ -6140,7 +6144,7 @@ function generateMarketTrendAnalysis() {
     showMarketTrendTab('yearly');
 }
 
-// v3.78 新增：右側區塊展開/收合功能
+// v3.79 新增：右側區塊展開/收合功能
 function toggleRightSection(sectionId, headerElement) {
     const content = document.getElementById(sectionId);
     if (!content) return;
@@ -8147,6 +8151,8 @@ function displayResult(r) {
     
     ${window.BACKTEST_RESULTS ? generateBacktestHTML() : ''}
     
+    ${window.SUPER_PREDICTION ? generateSuperPredictionHTML() : ''}
+    
     ${window.ADAPTIVE_PARAMS ? generateAdaptiveLearningHTML() : ''}
     
     ${window.LATEST_PREDICTION ? generateFeedbackUI() : ''}
@@ -8901,7 +8907,7 @@ window.OVERALL_STATS = {
     avgPremium: 8.73,
     avgQualified: 474,
     avgBidShares: 34.5,
-    get totalSamples() { return totalAuctionCount || 300; }  // v3.78 動態取值
+    get totalSamples() { return totalAuctionCount || 300; }  // v3.79 動態取值
 };
 
 // 信評等級 → 投標倍數
@@ -9696,7 +9702,7 @@ function estimateBidMultiple(params) {
         totalWeight += 0.35;
     }
     
-    // ===== Step 3: 發行規模調整（v3.78 優化：權重40%，小規模額外加成）=====
+    // ===== Step 3: 發行規模調整（v3.79 優化：權重40%，小規模額外加成）=====
     // 回測發現：小規模(<3億)低估0.66x，大規模(>15億)高估0.42x
     if (issueSize > 0) {
         let sizeKey = 'over15';
@@ -9707,11 +9713,11 @@ function estimateBidMultiple(params) {
         
         const sizeData = window.SIZE_MULT_TABLE[sizeKey];
         if (sizeData) {
-            // v3.78: 權重從25%提高到40%
+            // v3.79: 權重從25%提高到40%
             let sizeWeight = 0.40;
             let sizeAdj = (sizeData.avgMult - window.OVERALL_STATS.avgBidMult) * sizeWeight;
             
-            // v3.78: 小規模額外加成（因為回測顯示低估嚴重）
+            // v3.79: 小規模額外加成（因為回測顯示低估嚴重）
             if (sizeKey === 'under3') {
                 sizeAdj += 0.3;  // 額外+0.3倍補償
             } else if (sizeKey === 'over15') {
@@ -9829,7 +9835,7 @@ function estimateBidMultiple(params) {
         };
     }
     
-    // ===== Step 8: 🧠 自適應學習調整（v3.78新增）=====
+    // ===== Step 8: 🧠 自適應學習調整（v3.79新增）=====
     // 根據歷史誤差動態調整，讓系統越來越準確
     let adaptiveAdj = 0;
     let adaptiveInfo = null;
@@ -9921,7 +9927,7 @@ function estimateBidMultiple(params) {
  */
 function getExpectedPriceByMult(bidMult) {
     // v3.75 重新設計：返回最低得標(minPrice)和平均得標(avgPrice)
-    // v3.78 加入自適應學習：根據歷史誤差動態調整
+    // v3.79 加入自適應學習：根據歷史誤差動態調整
     // 合理區間 = minPrice ~ avgPrice
     
     // 基礎查表值
@@ -9955,7 +9961,7 @@ function getExpectedPriceByMult(bidMult) {
         multKey = 'over5';
     }
     
-    // v3.78 自適應學習調整
+    // v3.79 自適應學習調整
     if (window.ADAPTIVE_PARAMS && window.ADAPTIVE_PARAMS.multPriceAdjust) {
         const priceAdj = window.ADAPTIVE_PARAMS.multPriceAdjust[multKey];
         if (priceAdj && priceAdj.samples >= 5) {
@@ -10020,7 +10026,7 @@ function predictMajorPlayerBid(theoPrice, bidMultiple, issueSize, broker, guaran
     const priceGap = priceExpect.gap;              // 區間差距
     
     // Step 3：三種策略計算
-    // v3.78 修正：智能處理不同理論價情況
+    // v3.79 修正：智能處理不同理論價情況
     let conservativePrice, balancedPrice, aggressivePrice;
     
     if (expectedMinBid >= theoPrice || theoPrice <= 100) {
@@ -10402,7 +10408,7 @@ function evaluateAuctionOpportunity(params) {
     const positiveFactors = scoredFactors.filter(f => f.positive && f.score >= f.maxScore * 0.7);
     const negativeFactors = scoredFactors.filter(f => !f.positive && f.score < f.maxScore * 0.5);
     
-    // ===== v3.78 新增：預測快照保存（用於閉環學習）=====
+    // ===== v3.79 新增：預測快照保存（用於閉環學習）=====
     // 記錄每次預測的完整資訊，開標後可回饋學習
     const predictionSnapshot = {
         id: `pred_${Date.now()}`,
@@ -10478,7 +10484,7 @@ function evaluateAuctionOpportunity(params) {
             recentCount,
             useRecent
         },
-        // v3.78: 加入快照ID供追蹤
+        // v3.79: 加入快照ID供追蹤
         snapshotId: predictionSnapshot.id
     };
 }
@@ -10544,6 +10550,21 @@ function updateAuctionEvaluation() {
         broker,
         industry
     });
+    
+    // v3.79 新增：執行超級預測引擎（KNN + 蒙地卡羅）
+    try {
+        const years = parseInt(document.getElementById('years')?.value) || 3;
+        runSuperPredictionEngine({
+            theoPrice,
+            issueSize,
+            guarantee,
+            years,
+            industry,
+            rating: tcri
+        });
+    } catch (e) {
+        console.warn('超級預測引擎執行失敗:', e);
+    }
     
     // 生成評估HTML
     let html = `
@@ -10685,7 +10706,7 @@ function updateLiveAIPrediction(theoPrice, issueSize, guarantee, broker, industr
     const expectedAvgBid = priceExpect.avgPrice;  // 預期平均得標（積極基準）
     const priceGap = priceExpect.gap;             // 差距（約1.5-2元）
     
-    // v3.78 修正：智能處理不同理論價情況
+    // v3.79 修正：智能處理不同理論價情況
     // 核心原則：建議出價 >= max(底標, 理論價)，且三種策略要有合理差距
     const minBidFloor = Math.max(floorPrice, theoPrice);
     
@@ -10700,7 +10721,7 @@ function updateLiveAIPrediction(theoPrice, issueSize, guarantee, broker, industr
         methodNote = `投標倍數${multResult.estimatedMult.toFixed(2)}x對應歷史區間`;
     } else {
         // 高理論價情況：查表價格 < 理論價
-        // v3.78 優化：回測發現100-110元區間得標率只有58.9%，需要更積極
+        // v3.79 優化：回測發現100-110元區間得標率只有58.9%，需要更積極
         
         // 根據理論價區間調整縮減係數
         let scaleFactor = 0.5;  // 基礎縮減係數
@@ -11575,7 +11596,7 @@ function findSimilarCases(params) {
 }
 
 /**
- * v3.78 新增：系統回測驗證函數
+ * v3.79 新增：系統回測驗證函數
  * 用歷史案例驗證AI預測的準確度
  */
 function runSystemBacktest(sheetAuction) {
@@ -11617,7 +11638,7 @@ function runSystemBacktest(sheetAuction) {
         results.valid++;
         
         // 模擬系統預測
-        // v3.78 修正：使用系統估算的投標倍數（而非實際倍數）
+        // v3.79 修正：使用系統估算的投標倍數（而非實際倍數）
         // 這才是真正驗證「預測系統」準確度的方式
         const multEstimate = estimateBidMultiple({
             issueSize: size,
@@ -11721,7 +11742,7 @@ function runSystemBacktest(sheetAuction) {
             });
         }
         
-        // v3.78 新增：投標倍數預估準確度
+        // v3.79 新增：投標倍數預估準確度
         if (!results.multAccuracy) results.multAccuracy = { diffs: [], count: 0 };
         if (mult > 0) {
             results.multAccuracy.diffs.push(estimatedMult - mult);
@@ -11741,7 +11762,7 @@ function runSystemBacktest(sheetAuction) {
     const balRate = results.balanced.total > 0 ? (results.balanced.win / results.balanced.total * 100) : 0;
     const aggRate = results.aggressive.total > 0 ? (results.aggressive.win / results.aggressive.total * 100) : 0;
     
-    // v3.78 新增：計算投標倍數預估準確度
+    // v3.79 新增：計算投標倍數預估準確度
     let multAvgDiff = 0, multMAE = 0;
     if (results.multAccuracy && results.multAccuracy.diffs.length > 0) {
         const diffs = results.multAccuracy.diffs;
@@ -11778,8 +11799,552 @@ function runSystemBacktest(sheetAuction) {
     return window.BACKTEST_RESULTS;
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// v3.79 超級預測引擎：K近鄰相似案例匹配 + 蒙地卡羅模擬 + 最佳出價策略
+// ═══════════════════════════════════════════════════════════════════════
+
 /**
- * v3.78 新增：生成自適應學習報告HTML
+ * v3.79 K近鄰相似案例匹配引擎（KNN）
+ * 找出歷史上最相似的K個案例，用於精準預測
+ * @param {object} target - 目標CB的條件
+ * @param {number} k - 要找的相似案例數量（預設10）
+ * @returns {object} 相似案例及加權預測結果
+ */
+function findSimilarCases(target, k = 10) {
+    if (!window.auctionDataCache || window.auctionDataCache.length === 0) {
+        console.warn('KNN: 沒有歷史數據');
+        return { cases: [], prediction: null };
+    }
+    
+    const {
+        theoPrice = 100,
+        issueSize = 5,
+        guarantee = '無擔保',
+        years = 3,
+        industry = '',
+        rating = '6'
+    } = target;
+    
+    // 特徵權重配置
+    const weights = {
+        theoPrice: 0.30,    // 理論價（最重要）
+        issueSize: 0.25,    // 發行規模
+        guarantee: 0.15,    // 擔保類型
+        industry: 0.15,     // 產業
+        rating: 0.10,       // 信評
+        years: 0.05         // 年期
+    };
+    
+    // 標準化參數（用於計算距離）
+    const normalize = {
+        theoPrice: { min: 70, max: 150, range: 80 },
+        issueSize: { min: 0.5, max: 30, range: 29.5 },
+        rating: { min: 1, max: 9, range: 8 },
+        years: { min: 1, max: 7, range: 6 }
+    };
+    
+    // 計算每個歷史案例的相似度距離
+    const casesWithDistance = window.auctionDataCache
+        .filter(row => {
+            const mult = safeFloat(row['投標倍數']);
+            const minBid = safeFloat(row['最低得標'] || row['最低得標價格']);
+            return mult > 0 && minBid > 0;
+        })
+        .map(row => {
+            const caseTheo = safeFloat(row['理論價']);
+            const caseSize = safeFloat(row['發行規模']);
+            const caseGuar = (row['擔保'] || '').includes('有') ? '有擔保' : '無擔保';
+            const caseYears = parseInt(row['年期']) || 3;
+            const caseIndustry = row['產業分類'] || '';
+            const caseRating = row['TCRI'] || row['信評'] || '6';
+            
+            // 計算各維度的標準化距離
+            let distance = 0;
+            
+            // 1. 理論價距離（連續型）
+            const theoDiff = Math.abs(theoPrice - caseTheo) / normalize.theoPrice.range;
+            distance += weights.theoPrice * Math.pow(theoDiff, 2);
+            
+            // 2. 發行規模距離（連續型）
+            const sizeDiff = Math.abs(issueSize - caseSize) / normalize.issueSize.range;
+            distance += weights.issueSize * Math.pow(sizeDiff, 2);
+            
+            // 3. 擔保類型距離（類別型：相同=0，不同=1）
+            const guarDiff = guarantee === caseGuar ? 0 : 1;
+            distance += weights.guarantee * Math.pow(guarDiff, 2);
+            
+            // 4. 產業距離（類別型：相同=0，不同=1）
+            const indDiff = industry && caseIndustry && industry.includes(caseIndustry.split(' ')[0]) ? 0 : 1;
+            distance += weights.industry * Math.pow(indDiff, 2);
+            
+            // 5. 信評距離（順序型）
+            const ratingNum = parseInt(rating) || 6;
+            const caseRatingNum = parseInt(caseRating) || 6;
+            const ratingDiff = Math.abs(ratingNum - caseRatingNum) / normalize.rating.range;
+            distance += weights.rating * Math.pow(ratingDiff, 2);
+            
+            // 6. 年期距離
+            const yearsDiff = Math.abs(years - caseYears) / normalize.years.range;
+            distance += weights.years * Math.pow(yearsDiff, 2);
+            
+            // 歐氏距離
+            const euclideanDist = Math.sqrt(distance);
+            
+            // 相似度 = 1 / (1 + 距離)，距離越小相似度越高
+            const similarity = 1 / (1 + euclideanDist * 10);
+            
+            return {
+                name: row['名稱'] || row['CB名稱'] || '',
+                date: row['開標日'] || row['開標日期'] || '',
+                theoPrice: caseTheo,
+                issueSize: caseSize,
+                guarantee: caseGuar,
+                industry: caseIndustry,
+                years: caseYears,
+                rating: caseRating,
+                bidMultiple: safeFloat(row['投標倍數']),
+                minBid: safeFloat(row['最低得標'] || row['最低得標價格']),
+                avgBid: safeFloat(row['平均得標'] || row['平均得標價格']),
+                distance: euclideanDist,
+                similarity: similarity
+            };
+        })
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, k);
+    
+    if (casesWithDistance.length === 0) {
+        return { cases: [], prediction: null };
+    }
+    
+    // 用相似度加權計算預測值
+    const totalSimilarity = casesWithDistance.reduce((sum, c) => sum + c.similarity, 0);
+    
+    const weightedPrediction = {
+        bidMultiple: casesWithDistance.reduce((sum, c) => sum + c.similarity * c.bidMultiple, 0) / totalSimilarity,
+        minBid: casesWithDistance.reduce((sum, c) => sum + c.similarity * c.minBid, 0) / totalSimilarity,
+        avgBid: casesWithDistance.reduce((sum, c) => sum + c.similarity * c.avgBid, 0) / totalSimilarity,
+        
+        // 統計特性（用於蒙地卡羅）
+        stats: {
+            multMean: casesWithDistance.reduce((s, c) => s + c.bidMultiple, 0) / casesWithDistance.length,
+            multStd: Math.sqrt(casesWithDistance.reduce((s, c) => s + Math.pow(c.bidMultiple - casesWithDistance.reduce((s2, c2) => s2 + c2.bidMultiple, 0) / casesWithDistance.length, 2), 0) / casesWithDistance.length),
+            minBidMean: casesWithDistance.reduce((s, c) => s + c.minBid, 0) / casesWithDistance.length,
+            minBidStd: Math.sqrt(casesWithDistance.reduce((s, c) => s + Math.pow(c.minBid - casesWithDistance.reduce((s2, c2) => s2 + c2.minBid, 0) / casesWithDistance.length, 2), 0) / casesWithDistance.length),
+            avgBidMean: casesWithDistance.reduce((s, c) => s + c.avgBid, 0) / casesWithDistance.length,
+            avgBidStd: Math.sqrt(casesWithDistance.reduce((s, c) => s + Math.pow(c.avgBid - casesWithDistance.reduce((s2, c2) => s2 + c2.avgBid, 0) / casesWithDistance.length, 2), 0) / casesWithDistance.length)
+        }
+    };
+    
+    console.log('🔍 KNN找到', casesWithDistance.length, '個相似案例');
+    console.log('  加權預測 - 倍數:', weightedPrediction.bidMultiple.toFixed(2), 
+                '最低:', weightedPrediction.minBid.toFixed(2),
+                '平均:', weightedPrediction.avgBid.toFixed(2));
+    
+    return {
+        cases: casesWithDistance,
+        prediction: weightedPrediction,
+        targetConditions: target
+    };
+}
+
+/**
+ * v3.79 蒙地卡羅模擬引擎
+ * 模擬大量情境，計算每個出價點的得標機率
+ * @param {object} knnResult - K近鄰的結果（包含統計特性）
+ * @param {number} simulations - 模擬次數（預設10000）
+ * @returns {object} 模擬結果和得標機率曲線
+ */
+function runMonteCarloSimulation(knnResult, simulations = 10000) {
+    if (!knnResult || !knnResult.prediction) {
+        console.warn('蒙地卡羅: 缺少KNN結果');
+        return null;
+    }
+    
+    const stats = knnResult.prediction.stats;
+    
+    // Box-Muller 轉換生成常態分布隨機數
+    function randomNormal(mean, std) {
+        const u1 = Math.random();
+        const u2 = Math.random();
+        const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+        return mean + z * std;
+    }
+    
+    // 確保標準差不為0或太小
+    const minBidStd = Math.max(stats.minBidStd || 2, 1.5);
+    const avgBidStd = Math.max(stats.avgBidStd || 2, 1.5);
+    
+    // 模擬結果存儲
+    const simResults = {
+        minBids: [],
+        avgBids: [],
+        multiples: []
+    };
+    
+    // 執行模擬
+    for (let i = 0; i < simulations; i++) {
+        // 模擬最低得標價（常態分布）
+        let simMinBid = randomNormal(stats.minBidMean, minBidStd);
+        simMinBid = Math.max(100, Math.min(130, simMinBid)); // 限制合理範圍
+        
+        // 模擬平均得標價（必須 >= 最低得標）
+        let simAvgBid = randomNormal(stats.avgBidMean, avgBidStd);
+        simAvgBid = Math.max(simMinBid, Math.min(135, simAvgBid));
+        
+        // 模擬投標倍數
+        let simMult = randomNormal(stats.multMean, stats.multStd || 0.8);
+        simMult = Math.max(0.3, Math.min(10, simMult));
+        
+        simResults.minBids.push(simMinBid);
+        simResults.avgBids.push(simAvgBid);
+        simResults.multiples.push(simMult);
+    }
+    
+    // 計算每個出價點的得標機率
+    const priceRange = [];
+    for (let price = 100; price <= 125; price += 0.5) {
+        // 得標條件：出價 >= 最低得標
+        const winCount = simResults.minBids.filter(minBid => price >= minBid).length;
+        const winProb = winCount / simulations;
+        
+        // 在合理區間的機率：最低得標 <= 出價 <= 平均得標
+        const optimalCount = simResults.minBids.filter((minBid, idx) => 
+            price >= minBid && price <= simResults.avgBids[idx]
+        ).length;
+        const optimalProb = optimalCount / simulations;
+        
+        priceRange.push({
+            price: price,
+            winProb: winProb,
+            winPct: (winProb * 100).toFixed(1),
+            optimalProb: optimalProb,
+            optimalPct: (optimalProb * 100).toFixed(1)
+        });
+    }
+    
+    // 找出關鍵機率點
+    const prob50 = priceRange.find(p => p.winProb >= 0.50);
+    const prob70 = priceRange.find(p => p.winProb >= 0.70);
+    const prob85 = priceRange.find(p => p.winProb >= 0.85);
+    const prob95 = priceRange.find(p => p.winProb >= 0.95);
+    
+    // 統計模擬結果
+    const result = {
+        simulations: simulations,
+        stats: {
+            minBid: {
+                mean: simResults.minBids.reduce((a, b) => a + b, 0) / simulations,
+                std: minBidStd,
+                p5: simResults.minBids.sort((a, b) => a - b)[Math.floor(simulations * 0.05)],
+                p25: simResults.minBids.sort((a, b) => a - b)[Math.floor(simulations * 0.25)],
+                p50: simResults.minBids.sort((a, b) => a - b)[Math.floor(simulations * 0.50)],
+                p75: simResults.minBids.sort((a, b) => a - b)[Math.floor(simulations * 0.75)],
+                p95: simResults.minBids.sort((a, b) => a - b)[Math.floor(simulations * 0.95)]
+            },
+            avgBid: {
+                mean: simResults.avgBids.reduce((a, b) => a + b, 0) / simulations,
+                std: avgBidStd,
+                p50: simResults.avgBids.sort((a, b) => a - b)[Math.floor(simulations * 0.50)]
+            },
+            multiple: {
+                mean: simResults.multiples.reduce((a, b) => a + b, 0) / simulations,
+                p50: simResults.multiples.sort((a, b) => a - b)[Math.floor(simulations * 0.50)]
+            }
+        },
+        probabilityCurve: priceRange,
+        keyPrices: {
+            prob50: prob50?.price || 0,
+            prob70: prob70?.price || 0,
+            prob85: prob85?.price || 0,
+            prob95: prob95?.price || 0
+        }
+    };
+    
+    console.log('🎲 蒙地卡羅模擬完成 (' + simulations + '次)');
+    console.log('  最低得標分布: μ=' + result.stats.minBid.mean.toFixed(2) + ', σ=' + result.stats.minBid.std.toFixed(2));
+    console.log('  50%得標價:', result.keyPrices.prob50, '| 70%:', result.keyPrices.prob70, '| 85%:', result.keyPrices.prob85);
+    
+    return result;
+}
+
+/**
+ * v3.79 最佳出價策略計算
+ * 結合得標機率和預期獲利，找出期望值最大的出價點
+ * @param {object} mcResult - 蒙地卡羅模擬結果
+ * @param {number} expectedListingPrice - 預期上市價格
+ * @param {string} riskPreference - 風險偏好（conservative/balanced/aggressive）
+ * @returns {object} 最佳出價建議
+ */
+function calculateOptimalBid(mcResult, expectedListingPrice = 105, riskPreference = 'balanced') {
+    if (!mcResult || !mcResult.probabilityCurve) {
+        return null;
+    }
+    
+    const curve = mcResult.probabilityCurve;
+    
+    // 計算每個出價點的期望值
+    const evCurve = curve.map(point => {
+        const profit = expectedListingPrice - point.price;  // 潛在獲利
+        const ev = point.winProb * profit;  // 期望值 = 機率 × 獲利
+        
+        // 風險調整後的效用值
+        let utilityMultiplier = 1;
+        if (riskPreference === 'conservative') {
+            // 保守型：更重視獲利空間（低成本）
+            utilityMultiplier = profit > 0 ? Math.pow(profit / 10, 0.5) : 0.1;
+        } else if (riskPreference === 'aggressive') {
+            // 積極型：更重視得標機率（搶標）
+            utilityMultiplier = Math.sqrt(point.winProb);
+        }
+        
+        const adjustedEV = ev * utilityMultiplier;
+        
+        return {
+            ...point,
+            profit: profit,
+            ev: ev,
+            adjustedEV: adjustedEV
+        };
+    });
+    
+    // 找出期望值最大的出價點
+    const maxEV = evCurve.reduce((max, point) => point.ev > max.ev ? point : max, evCurve[0]);
+    const maxAdjustedEV = evCurve.reduce((max, point) => point.adjustedEV > max.adjustedEV ? point : max, evCurve[0]);
+    
+    // 建議出價範圍（保守=低成本，積極=搶標）
+    const recommendations = {
+        conservative: {
+            price: mcResult.keyPrices.prob50,
+            winProb: 50,
+            description: '保守策略：低成本、高獲利空間'
+        },
+        balanced: {
+            price: maxAdjustedEV.price,
+            winProb: (maxAdjustedEV.winProb * 100).toFixed(0),
+            ev: maxAdjustedEV.ev.toFixed(2),
+            description: '均衡策略：期望值最大化'
+        },
+        aggressive: {
+            price: mcResult.keyPrices.prob85,
+            winProb: 85,
+            description: '積極策略：高得標機率搶標'
+        }
+    };
+    
+    // 根據風險偏好選擇主要建議
+    const primaryRec = recommendations[riskPreference] || recommendations.balanced;
+    
+    console.log('💰 最佳出價計算完成');
+    console.log('  預期上市價:', expectedListingPrice);
+    console.log('  建議出價:', primaryRec.price, '(', primaryRec.description, ')');
+    
+    return {
+        expectedListingPrice: expectedListingPrice,
+        riskPreference: riskPreference,
+        evCurve: evCurve,
+        maxEV: maxEV,
+        recommendations: recommendations,
+        primaryRecommendation: primaryRec
+    };
+}
+
+/**
+ * v3.79 整合超級預測引擎
+ * 一次執行KNN + 蒙地卡羅 + 最佳出價
+ */
+function runSuperPredictionEngine(target, expectedListingPrice = null) {
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('🚀 啟動超級預測引擎 v3.79');
+    console.log('═══════════════════════════════════════════════════════');
+    
+    // Step 1: K近鄰相似案例匹配
+    const knnResult = findSimilarCases(target, 10);
+    
+    if (!knnResult.prediction) {
+        console.warn('超級預測引擎: KNN失敗');
+        return null;
+    }
+    
+    // Step 2: 蒙地卡羅模擬
+    const mcResult = runMonteCarloSimulation(knnResult, 10000);
+    
+    // Step 3: 計算預期上市價（如果沒有提供）
+    if (!expectedListingPrice) {
+        // 用理論價作為預期上市價的基準
+        const theo = target.theoPrice || 100;
+        // 一般來說上市價會略高於競拍價
+        expectedListingPrice = Math.max(theo, knnResult.prediction.avgBid + 2);
+    }
+    
+    // Step 4: 最佳出價策略
+    const optimalBid = {
+        conservative: calculateOptimalBid(mcResult, expectedListingPrice, 'conservative'),
+        balanced: calculateOptimalBid(mcResult, expectedListingPrice, 'balanced'),
+        aggressive: calculateOptimalBid(mcResult, expectedListingPrice, 'aggressive')
+    };
+    
+    // 保存結果到全域變數
+    window.SUPER_PREDICTION = {
+        timestamp: new Date().toISOString(),
+        target: target,
+        knn: knnResult,
+        monteCarlo: mcResult,
+        optimalBid: optimalBid,
+        summary: {
+            similarCases: knnResult.cases.length,
+            predictedMult: knnResult.prediction.bidMultiple.toFixed(2),
+            predictedMinBid: knnResult.prediction.minBid.toFixed(2),
+            predictedAvgBid: knnResult.prediction.avgBid.toFixed(2),
+            prob50Price: mcResult?.keyPrices.prob50,
+            prob70Price: mcResult?.keyPrices.prob70,
+            prob85Price: mcResult?.keyPrices.prob85
+        }
+    };
+    
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('✅ 超級預測引擎執行完成');
+    console.log('  KNN預測 - 倍數:', window.SUPER_PREDICTION.summary.predictedMult, 
+                '最低:', window.SUPER_PREDICTION.summary.predictedMinBid,
+                '平均:', window.SUPER_PREDICTION.summary.predictedAvgBid);
+    console.log('  得標機率 - 50%@', mcResult?.keyPrices.prob50, 
+                '70%@', mcResult?.keyPrices.prob70,
+                '85%@', mcResult?.keyPrices.prob85);
+    console.log('═══════════════════════════════════════════════════════');
+    
+    return window.SUPER_PREDICTION;
+}
+
+/**
+ * v3.79 生成超級預測引擎UI
+ */
+function generateSuperPredictionHTML() {
+    const sp = window.SUPER_PREDICTION;
+    if (!sp) return '';
+    
+    const knn = sp.knn;
+    const mc = sp.monteCarlo;
+    const summary = sp.summary;
+    
+    // 相似案例列表
+    let caseRows = (knn.cases || []).slice(0, 5).map((c, idx) => {
+        const simPct = (c.similarity * 100).toFixed(0);
+        const simColor = simPct > 70 ? '#22c55e' : (simPct > 50 ? '#f59e0b' : '#666');
+        return `<tr style="background:${idx % 2 === 0 ? '#fff' : '#f9fafb'};">
+            <td style="padding:4px 6px; border:1px solid #e5e7eb; font-size:10px;">${c.name}</td>
+            <td style="padding:4px 6px; border:1px solid #e5e7eb; text-align:center;">${c.theoPrice?.toFixed(1) || '-'}</td>
+            <td style="padding:4px 6px; border:1px solid #e5e7eb; text-align:center;">${c.bidMultiple?.toFixed(2) || '-'}x</td>
+            <td style="padding:4px 6px; border:1px solid #e5e7eb; text-align:center;">${c.minBid?.toFixed(1) || '-'}</td>
+            <td style="padding:4px 6px; border:1px solid #e5e7eb; text-align:center; color:${simColor}; font-weight:bold;">${simPct}%</td>
+        </tr>`;
+    }).join('');
+    
+    // 得標機率曲線（簡化顯示關鍵點）
+    const keyPrices = mc?.keyPrices || {};
+    
+    // 機率條（視覺化）- 綠色=低成本保守，紅色=高成本積極
+    const probBar = `
+        <div style="display:flex; align-items:center; height:30px; background:#f3f4f6; border-radius:15px; overflow:hidden; margin:10px 0;">
+            <div style="width:50%; height:100%; background:linear-gradient(90deg, #dcfce7 0%, #bbf7d0 100%); display:flex; align-items:center; justify-content:center;">
+                <span style="font-size:10px; color:#16a34a;">≤${keyPrices.prob50 || '-'}元 (50%保守)</span>
+            </div>
+            <div style="width:20%; height:100%; background:linear-gradient(90deg, #fef3c7 0%, #fde68a 100%); display:flex; align-items:center; justify-content:center;">
+                <span style="font-size:10px; color:#d97706;">${keyPrices.prob70 || '-'}元</span>
+            </div>
+            <div style="width:15%; height:100%; background:linear-gradient(90deg, #fed7aa 0%, #fdba74 100%); display:flex; align-items:center; justify-content:center;">
+                <span style="font-size:10px; color:#ea580c;">${keyPrices.prob85 || '-'}元</span>
+            </div>
+            <div style="width:15%; height:100%; background:#ef4444; display:flex; align-items:center; justify-content:center;">
+                <span style="font-size:10px; color:white;">≥${keyPrices.prob95 || '-'}元</span>
+            </div>
+        </div>
+    `;
+    
+    return `
+    <div style="border:3px solid #6366f1; border-radius:12px; padding:15px; margin-top:15px; background:linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);">
+        <h3 style="color:#4f46e5; margin:0 0 15px 0;">🚀 超級預測引擎 v3.79</h3>
+        
+        <!-- KNN預測摘要 -->
+        <div style="background:white; padding:12px; border-radius:8px; margin-bottom:12px;">
+            <div style="font-size:12px; font-weight:bold; color:#333; margin-bottom:8px;">
+                🔍 K近鄰相似案例預測（${summary.similarCases}個相似案例）
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; text-align:center;">
+                <div style="background:#f0fdf4; padding:10px; border-radius:8px;">
+                    <div style="font-size:10px; color:#666;">預測投標倍數</div>
+                    <div style="font-size:20px; font-weight:bold; color:#16a34a;">${summary.predictedMult}x</div>
+                </div>
+                <div style="background:#fef3c7; padding:10px; border-radius:8px;">
+                    <div style="font-size:10px; color:#666;">預測最低得標</div>
+                    <div style="font-size:20px; font-weight:bold; color:#d97706;">${summary.predictedMinBid}元</div>
+                </div>
+                <div style="background:#fee2e2; padding:10px; border-radius:8px;">
+                    <div style="font-size:10px; color:#666;">預測平均得標</div>
+                    <div style="font-size:20px; font-weight:bold; color:#dc2626;">${summary.predictedAvgBid}元</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 蒙地卡羅模擬結果 -->
+        <div style="background:white; padding:12px; border-radius:8px; margin-bottom:12px;">
+            <div style="font-size:12px; font-weight:bold; color:#333; margin-bottom:8px;">
+                🎲 蒙地卡羅模擬（${mc?.simulations?.toLocaleString() || 10000}次情境模擬）
+            </div>
+            
+            <div style="font-size:11px; color:#666; margin-bottom:6px;">得標機率分布：</div>
+            ${probBar}
+            
+            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-top:10px;">
+                <div style="text-align:center; padding:8px; background:#dcfce7; border-radius:6px;">
+                    <div style="font-size:10px; color:#16a34a;">50%得標</div>
+                    <div style="font-size:16px; font-weight:bold;">${keyPrices.prob50 || '-'}元</div>
+                    <div style="font-size:9px; color:#666;">保守低成本</div>
+                </div>
+                <div style="text-align:center; padding:8px; background:#fef3c7; border-radius:6px;">
+                    <div style="font-size:10px; color:#d97706;">70%得標</div>
+                    <div style="font-size:16px; font-weight:bold;">${keyPrices.prob70 || '-'}元</div>
+                    <div style="font-size:9px; color:#666;">均衡策略</div>
+                </div>
+                <div style="text-align:center; padding:8px; background:#fed7aa; border-radius:6px;">
+                    <div style="font-size:10px; color:#ea580c;">85%得標</div>
+                    <div style="font-size:16px; font-weight:bold;">${keyPrices.prob85 || '-'}元</div>
+                    <div style="font-size:9px; color:#666;">積極搶標</div>
+                </div>
+                <div style="text-align:center; padding:8px; background:#fecaca; border-radius:6px;">
+                    <div style="font-size:10px; color:#dc2626;">95%得標</div>
+                    <div style="font-size:16px; font-weight:bold;">${keyPrices.prob95 || '-'}元</div>
+                    <div style="font-size:9px; color:#666;">必搶高成本</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 相似案例明細 -->
+        <div style="background:white; padding:12px; border-radius:8px;">
+            <div style="font-size:12px; font-weight:bold; color:#333; margin-bottom:8px;">
+                📊 最相似的5個歷史案例
+            </div>
+            <table style="width:100%; border-collapse:collapse; font-size:11px;">
+                <tr style="background:#f3f4f6;">
+                    <th style="padding:4px 6px; border:1px solid #e5e7eb;">名稱</th>
+                    <th style="padding:4px 6px; border:1px solid #e5e7eb;">理論價</th>
+                    <th style="padding:4px 6px; border:1px solid #e5e7eb;">倍數</th>
+                    <th style="padding:4px 6px; border:1px solid #e5e7eb;">最低得標</th>
+                    <th style="padding:4px 6px; border:1px solid #e5e7eb;">相似度</th>
+                </tr>
+                ${caseRows || '<tr><td colspan="5" style="text-align:center; color:#999;">無相似案例</td></tr>'}
+            </table>
+        </div>
+        
+        <div style="margin-top:10px; padding:8px; background:#f8fafc; border-radius:6px; font-size:10px; color:#666;">
+            💡 <b>使用建議：</b>
+            保守型參考50%得標價，成本低、獲利空間大；
+            積極型參考85%得標價，確保得標但成本較高；
+            一般建議在50%-70%區間內出價，控制成本同時維持合理得標機率。
+        </div>
+    </div>`;
+}
+
+/**
+ * v3.79 新增：生成自適應學習報告HTML
  */
 function generateAdaptiveLearningHTML() {
     const ap = window.ADAPTIVE_PARAMS;
@@ -11927,7 +12492,7 @@ function generateAdaptiveLearningHTML() {
 }
 
 /**
- * v3.78 新增：生成結果回饋UI
+ * v3.79 新增：生成結果回饋UI
  * 讓用戶在開標後輸入實際結果，系統進行閉環學習
  */
 function generateFeedbackUI() {
@@ -12000,7 +12565,7 @@ function generateFeedbackUI() {
 }
 
 /**
- * v3.78 新增：提交回饋並執行學習
+ * v3.79 新增：提交回饋並執行學習
  */
 function submitFeedbackAndLearn() {
     const latest = window.LATEST_PREDICTION;
@@ -12081,7 +12646,7 @@ function submitFeedbackAndLearn() {
 }
 
 /**
- * v3.78 新增：執行閉環學習
+ * v3.79 新增：執行閉環學習
  * 根據預測誤差動態調整系統參數
  */
 function executeClosedLoopLearning(prediction, errors) {
@@ -12195,7 +12760,7 @@ function clearFeedback() {
 }
 
 /**
- * v3.78 新增：生成學習歷史報告
+ * v3.79 新增：生成學習歷史報告
  */
 function generateLearningHistoryHTML() {
     const ap = window.ADAPTIVE_PARAMS;
@@ -12342,7 +12907,7 @@ function generateBacktestHTML() {
             </table>
         </div>
         
-        <!-- v3.78 新增：投標倍數預估準確度 -->
+        <!-- v3.79 新增：投標倍數預估準確度 -->
         ${bt.multPrediction ? `
         <div style="margin-bottom:10px; padding:10px; background:#fef3c7; border-radius:8px; border-left:4px solid #f59e0b;">
             <div style="font-size:12px; font-weight:bold; color:#b45309; margin-bottom:6px;">🎯 投標倍數預估準確度</div>
@@ -12371,7 +12936,7 @@ function generateBacktestHTML() {
 }
 
 /**
- * v3.78 新增：生成資金排擠效應HTML
+ * v3.79 新增：生成資金排擠效應HTML
  */
 function generateCrowdingHTML() {
     const cs = window.CROWDING_STATS;
@@ -12604,7 +13169,7 @@ function generateHeatAnalysisHTML(heatResult, similarCases, atmosphere) {
     
     html += `</div>`;
     
-    // v3.78 新增：價差統計分析區塊
+    // v3.79 新增：價差統計分析區塊
     if (window.SPREAD_STATS) {
         const ss = window.SPREAD_STATS;
         const dist = ss.distribution;

@@ -9165,7 +9165,8 @@ function updateAuctionEvaluation() {
  * 核心改進：
  * 1. 以「年期+擔保」組合為基準
  * 2. 參考市場氛圍三條件加權（產業35%、規模25%、信評15%）
- * 3. 顯示擔保類型對應的歷史溢價率
+ * 3. 智能判別：理論價<100時改用「價格法」，>=100時用「溢價率法」
+ * 4. 確保建議出價與預期最低得標一致
  */
 function updateLiveAIPrediction(theoPrice, issueSize, guarantee, broker, industry, tcri) {
     const container = document.getElementById('liveAIPrediction');
@@ -9195,41 +9196,95 @@ function updateLiveAIPrediction(theoPrice, issueSize, guarantee, broker, industr
         rating: rating
     });
     
-    // 查表取得預期得標價
+    // 查表取得預期得標價（這是核心預測）
     const priceExpect = getExpectedPriceByMult(multResult.estimatedMult);
     
-    // ===== 計算建議出價（基於擔保類型的歷史溢價率）=====
-    // 優先使用 conditionStats 中的精確數據
-    const condKey = `${getTheoPriceKey(theoPrice)}_${guarType}`;
-    const histData = window.conditionStats ? window.conditionStats[condKey] : null;
+    // ===== 智能判別：選擇計算方法 =====
+    // 當理論價 < 100 時，溢價率法會低估，改用價格法
+    // 當理論價 >= 100 時，可以用溢價率法
     
     let aggressivePrice, balancedPrice, conservativePrice;
     let aggressivePremium, balancedPremium, conservativePremium;
-    let premiumSource = '';
+    let calcMethod = '';
+    let methodNote = '';
     
-    if (histData && histData.avgLowPremium !== undefined) {
-        // 使用精確的歷史統計數據
-        aggressivePremium = histData.avgLowPremium;
-        conservativePremium = histData.avgAvgPremium || histData.avgLowPremium + 3;
-        balancedPremium = (aggressivePremium + conservativePremium) / 2;
-        premiumSource = `${condKey}（${histData.count || '-'}筆）`;
+    const expectedMinBid = priceExpect.avgPrice; // 預期最低得標價（核心基準）
+    
+    if (theoPrice < 100) {
+        // ===== 價格法（理論價<100時使用）=====
+        // 建議出價直接基於「預期最低得標價」，而非理論價×溢價率
+        calcMethod = '價格法';
+        methodNote = '理論價<100，採用價格法避免低估';
+        
+        // 積極型：略低於預期最低得標（約-1%~-2%）
+        aggressivePrice = Math.max(expectedMinBid * 0.985, floorPrice);
+        // 平衡型：接近預期最低得標
+        balancedPrice = Math.max(expectedMinBid, floorPrice);
+        // 保守型：略高於預期最低得標（約+2%~+3%）
+        conservativePrice = Math.max(expectedMinBid * 1.025, floorPrice);
+        
+        // 反算溢價率（相對於底標100）
+        aggressivePremium = ((aggressivePrice / floorPrice) - 1) * 100;
+        balancedPremium = ((balancedPrice / floorPrice) - 1) * 100;
+        conservativePremium = ((conservativePrice / floorPrice) - 1) * 100;
+        
     } else {
-        // 使用年期+擔保組合的溢價率作為基準
-        aggressivePremium = multResult.basePremium * 0.7; // 積極：基準溢價的70%
-        conservativePremium = multResult.basePremium * 1.1; // 保守：基準溢價的110%
-        balancedPremium = multResult.basePremium; // 平衡：基準溢價
-        premiumSource = `${multResult.baseKey}基準（${multResult.baseSampleCount}筆）`;
+        // ===== 溢價率法（理論價>=100時使用）=====
+        calcMethod = '溢價率法';
+        methodNote = '理論價>=100，採用溢價率法';
+        
+        // 查詢該條件的歷史溢價率
+        const condKey = `${getTheoPriceKey(theoPrice)}_${guarType}`;
+        const histData = window.conditionStats ? window.conditionStats[condKey] : null;
+        
+        if (histData && histData.avgLowPremium !== undefined) {
+            aggressivePremium = histData.avgLowPremium;
+            conservativePremium = histData.avgAvgPremium || histData.avgLowPremium + 3;
+            balancedPremium = (aggressivePremium + conservativePremium) / 2;
+        } else {
+            // 使用年期+擔保組合的溢價率
+            aggressivePremium = multResult.basePremium * 0.7;
+            conservativePremium = multResult.basePremium * 1.1;
+            balancedPremium = multResult.basePremium;
+        }
+        
+        // 但仍要確保與預期最低得標一致
+        // 如果計算出的平衡型價格明顯低於預期最低得標，則調整
+        const basePrice = Math.max(theoPrice, floorPrice);
+        let tempBalanced = basePrice * (1 + balancedPremium / 100);
+        
+        if (tempBalanced < expectedMinBid * 0.95) {
+            // 溢價率法結果偏低，改用混合法
+            calcMethod = '混合法';
+            methodNote = '溢價率法結果偏低，已調整對齊預期得標';
+            
+            aggressivePrice = Math.max(expectedMinBid * 0.985, floorPrice);
+            balancedPrice = Math.max(expectedMinBid, floorPrice);
+            conservativePrice = Math.max(expectedMinBid * 1.025, floorPrice);
+            
+            aggressivePremium = ((aggressivePrice / basePrice) - 1) * 100;
+            balancedPremium = ((balancedPrice / basePrice) - 1) * 100;
+            conservativePremium = ((conservativePrice / basePrice) - 1) * 100;
+        } else {
+            aggressivePrice = Math.max(basePrice * (1 + aggressivePremium / 100), floorPrice);
+            balancedPrice = Math.max(tempBalanced, floorPrice);
+            conservativePrice = Math.max(basePrice * (1 + conservativePremium / 100), floorPrice);
+        }
     }
     
-    // 計算實際出價（確保不低於底標）
-    const basePrice = Math.max(theoPrice, floorPrice);
-    aggressivePrice = Math.max(basePrice * (1 + aggressivePremium / 100), floorPrice);
-    balancedPrice = Math.max(basePrice * (1 + balancedPremium / 100), floorPrice);
-    conservativePrice = Math.max(basePrice * (1 + conservativePremium / 100), floorPrice);
+    // 確保價格順序正確（積極 < 平衡 < 保守）
+    if (aggressivePrice > balancedPrice) {
+        [aggressivePrice, balancedPrice] = [balancedPrice, aggressivePrice];
+        [aggressivePremium, balancedPremium] = [balancedPremium, aggressivePremium];
+    }
+    if (balancedPrice > conservativePrice) {
+        [balancedPrice, conservativePrice] = [conservativePrice, balancedPrice];
+        [balancedPremium, conservativePremium] = [conservativePremium, balancedPremium];
+    }
     
     // 熱度標籤
-    const heatLevel = multResult.estimatedMult >= 3.5 ? '🔥熱門' : (multResult.estimatedMult >= 2.5 ? '⚡一般' : '❄️冷門');
-    const heatColor = multResult.estimatedMult >= 3.5 ? '#ef4444' : (multResult.estimatedMult >= 2.5 ? '#eab308' : '#22c55e');
+    const heatLevel = multResult.estimatedMult >= 3.5 ? '🔥熱門' : (multResult.estimatedMult >= 2.5 ? '⚡偏熱' : (multResult.estimatedMult >= 1.5 ? '😐一般' : '❄️冷門'));
+    const heatColor = multResult.estimatedMult >= 3.5 ? '#ef4444' : (multResult.estimatedMult >= 2.5 ? '#f97316' : (multResult.estimatedMult >= 1.5 ? '#eab308' : '#22c55e'));
     
     // 擔保類型標籤顏色
     const guarColor = guarType === '有擔保' ? '#16a34a' : '#ea580c';
@@ -9254,35 +9309,15 @@ function updateLiveAIPrediction(theoPrice, issueSize, guarantee, broker, industr
         }).join('');
     }
     
-    // 計算基準調整說明
-    const baseAdjInfo = guarType === '有擔保' 
-        ? '有擔保平均溢價較高（11.1%），競爭通常較激烈'
-        : '無擔保平均溢價較低（7.6%），競爭相對溫和';
+    // 計算方法說明
+    const methodColor = calcMethod === '價格法' ? '#7c3aed' : (calcMethod === '混合法' ? '#0891b2' : '#059669');
     
     // 生成HTML
     container.innerHTML = `
-    <!-- 基準說明 -->
-    <div style="background:${guarBg}; border:1px solid ${guarColor}; border-radius:8px; padding:10px; margin-bottom:12px;">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-            <div>
-                <span style="font-size:12px; color:#666;">預測基準：</span>
-                <b style="color:${guarColor}; font-size:14px;">${multResult.baseKey.replace('_', '+')}期</b>
-                <span style="font-size:11px; color:#666;">（${multResult.baseSampleCount}檔）</span>
-            </div>
-            <div style="text-align:right;">
-                <div style="font-size:11px; color:#666;">基準倍數</div>
-                <b style="color:${guarColor}; font-size:16px;">${TERM_GUAR_TABLE[multResult.baseKey]?.avgMult.toFixed(2) || '-'}x</b>
-            </div>
-        </div>
-        <div style="font-size:10px; color:#666; margin-top:6px;">
-            💡 ${baseAdjInfo}
-        </div>
-    </div>
-    
-    <!-- 投標倍數預估 -->
+    <!-- 預估投標倍數區塊 -->
     <div style="background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius:10px; padding:14px; margin-bottom:12px; color:white;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-            <div style="font-size:13px; opacity:0.9;">📊 調整後預估倍數</div>
+            <div style="font-size:13px; opacity:0.9;">📊 預估投標倍數</div>
             <div style="background:rgba(255,255,255,0.2); padding:3px 10px; border-radius:15px; font-size:11px;">
                 ${priceExpect.range}
             </div>
@@ -9294,20 +9329,25 @@ function updateLiveAIPrediction(theoPrice, issueSize, guarantee, broker, industr
                 ${heatLevel}
             </span>
         </div>
-        <div style="font-size:11px; opacity:0.8; margin-top:6px;">
-            預期最低得標：<b style="font-size:14px;">${priceExpect.avgPrice.toFixed(2)}</b> 元
-            <span style="opacity:0.7;">（${priceExpect.range}歷史平均）</span>
+        <div style="font-size:12px; opacity:0.9; margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.2);">
+            預期最低得標：<b style="font-size:18px;">${expectedMinBid.toFixed(2)}</b> 元
+            <span style="opacity:0.7; font-size:10px;">（${priceExpect.range}歷史平均，n=${priceExpect.count}）</span>
         </div>
     </div>
     
     <!-- 因子調整分析 -->
     <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px; margin-bottom:12px;">
-        <div style="font-size:12px; font-weight:bold; color:#334155; margin-bottom:8px;">
-            🔬 因子調整分析（參考市場氛圍權重）
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <div style="font-size:12px; font-weight:bold; color:#334155;">
+                🔬 投標倍數預估因子分析
+            </div>
+            <div style="font-size:10px; color:#666;">
+                基準：<b style="color:${guarColor};">${guarType}+${years}年</b>
+            </div>
         </div>
         ${factorHTML || '<div style="color:#999; font-size:11px;">填寫更多條件（產業、規模、信評等）以獲得更準確預估</div>'}
         <div style="border-top:1px solid #e2e8f0; margin-top:8px; padding-top:8px; font-size:10px; color:#64748b;">
-            基準 <b>${TERM_GUAR_TABLE[multResult.baseKey]?.avgMult.toFixed(2) || '2.98'}</b>（${guarType}+${years}年）
+            基準 <b>${TERM_GUAR_TABLE[multResult.baseKey]?.avgMult.toFixed(2) || '2.98'}</b>
             → 調整後 <b style="color:#6366f1;">${multResult.estimatedMult.toFixed(2)}</b> 倍
             <span style="float:right;">信心度：${multResult.confidence}</span>
         </div>
@@ -9315,32 +9355,41 @@ function updateLiveAIPrediction(theoPrice, issueSize, guarantee, broker, industr
     
     <!-- 建議出價 -->
     <div style="background:#f0fdf4; border:1px solid #86efac; border-radius:8px; padding:10px;">
-        <div style="font-size:12px; color:#166534; margin-bottom:6px;">
-            <b>💰 建議出價</b>
-            <span style="font-size:10px; color:#666; font-weight:normal;">
-                （理論價 ${theoPrice.toFixed(1)} / 底標 ${floorPrice.toFixed(1)} / 溢價來源：${premiumSource}）
-            </span>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <div style="font-size:12px; color:#166534;">
+                <b>💰 建議出價</b>
+            </div>
+            <div style="font-size:10px; padding:2px 8px; background:${methodColor}20; color:${methodColor}; border-radius:10px;">
+                ${calcMethod}
+            </div>
+        </div>
+        <div style="font-size:10px; color:#666; margin-bottom:8px;">
+            理論價 ${theoPrice.toFixed(1)} 元 / 底標 ${floorPrice.toFixed(1)} 元
+            <span style="color:${methodColor};">｜${methodNote}</span>
         </div>
         <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px;">
             <div style="text-align:center; padding:8px; background:#dcfce7; border-radius:6px;">
                 <div style="font-size:10px; color:#166534;">🎯 積極型</div>
                 <div style="font-size:18px; font-weight:bold; color:#15803d;">${aggressivePrice.toFixed(2)}</div>
                 <div style="font-size:9px; color:#666;">溢價 ${aggressivePremium.toFixed(1)}%</div>
+                <div style="font-size:9px; color:#16a34a;">追求最低價得標</div>
             </div>
             <div style="text-align:center; padding:8px; background:#dbeafe; border-radius:6px; border:2px solid #3b82f6;">
                 <div style="font-size:10px; color:#1d4ed8;">⚖️ 平衡型 ⭐</div>
                 <div style="font-size:18px; font-weight:bold; color:#1d4ed8;">${balancedPrice.toFixed(2)}</div>
                 <div style="font-size:9px; color:#666;">溢價 ${balancedPremium.toFixed(1)}%</div>
+                <div style="font-size:9px; color:#1d4ed8;">對齊預期得標</div>
             </div>
             <div style="text-align:center; padding:8px; background:#fef3c7; border-radius:6px;">
                 <div style="font-size:10px; color:#b45309;">🛡️ 保守型</div>
                 <div style="font-size:18px; font-weight:bold; color:#b45309;">${conservativePrice.toFixed(2)}</div>
                 <div style="font-size:9px; color:#666;">溢價 ${conservativePremium.toFixed(1)}%</div>
+                <div style="font-size:9px; color:#b45309;">追求穩定得標</div>
             </div>
         </div>
-        <div style="margin-top:8px; font-size:10px; color:#666; text-align:center;">
-            ${guarType}歷史平均溢價：<b style="color:${guarColor};">${guarType === '有擔保' ? '11.1' : '7.6'}%</b>
-            ｜本案基準溢價：<b>${multResult.basePremium?.toFixed(1) || '-'}%</b>
+        <div style="margin-top:10px; padding:8px; background:#eff6ff; border-radius:6px; font-size:10px; color:#1e40af;">
+            💡 <b>預測邏輯說明</b>：預估投標倍數 ${multResult.estimatedMult.toFixed(2)}x 對應歷史平均最低得標 ${expectedMinBid.toFixed(2)} 元，
+            建議出價以此為基準，積極型略低、保守型略高。
         </div>
     </div>
     `;

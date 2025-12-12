@@ -1400,14 +1400,14 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.73)...</div>
+    <div>🔄 系統啟動中 (v3.74)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
 <div class="container" style="display: none;">
     <div class="header">
         <h1>🤖 AI智能可轉債競拍系統</h1>
-        <span class="version-badge">v3.73</span>
+        <span class="version-badge">v3.74</span>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -2401,6 +2401,150 @@ async function loadStatistics() {
             }
             
             console.log('✅ 所有統計表格已從Excel動態計算完成');
+            
+            // ===== v3.74 新增：計算各維度區間排名（按平均掛牌最高排名）=====
+            window.dimensionRankings = {};
+            
+            // 建立CB代號到掛牌資料的對照（用於排名計算）
+            const listingMapForRank = {};
+            if (sheetAllCB) {
+                sheetAllCB.forEach(row => {
+                    const cbCode = String(row['CB代號'] || '').replace('.0', '').trim();
+                    if (cbCode) {
+                        listingMapForRank[cbCode] = {
+                            marketHigh: safeFloat(row['掛牌最高']),
+                            marketLow: safeFloat(row['掛牌最低'])
+                        };
+                    }
+                });
+            }
+            
+            // 合併競拍資料與掛牌資料
+            const rankData = sheetAuction.map(row => {
+                const cbCode = String(row['CB代號'] || '').replace('.0', '').trim();
+                const listing = listingMapForRank[cbCode] || {};
+                return {
+                    issueSize: safeFloat(row['發行規模']),
+                    capital: safeFloat(row['股本'] || row['股本(億)']),
+                    theoreticalPrice: safeFloat(row['理論價']),
+                    rating: String(row['信評'] || row['TCRI'] || '').replace(/[^0-9]/g, ''),
+                    industry: row['產業分類'] || row['產業'] || '',
+                    broker: row['發行券商'] || row['券商'] || '',
+                    marketHigh: listing.marketHigh || 0,
+                    marketLow: listing.marketLow || 0
+                };
+            }).filter(d => d.marketHigh > 0);
+            
+            // 計算發行規模區間排名
+            const sizeRanges = [
+                { key: '小於2億', filter: d => d.issueSize > 0 && d.issueSize < 2 },
+                { key: '2~5億', filter: d => d.issueSize >= 2 && d.issueSize < 5 },
+                { key: '5~10億', filter: d => d.issueSize >= 5 && d.issueSize < 10 },
+                { key: '10~15億', filter: d => d.issueSize >= 10 && d.issueSize < 15 },
+                { key: '15~20億', filter: d => d.issueSize >= 15 && d.issueSize < 20 },
+                { key: '大於20億', filter: d => d.issueSize >= 20 }
+            ];
+            const sizeStats = sizeRanges.map(r => {
+                const filtered = rankData.filter(r.filter);
+                const avgHigh = filtered.length > 0 ? filtered.reduce((s, d) => s + d.marketHigh, 0) / filtered.length : 0;
+                return { key: r.key, avgHigh, count: filtered.length };
+            }).sort((a, b) => b.avgHigh - a.avgHigh);
+            window.dimensionRankings['發行規模'] = {};
+            sizeStats.forEach((s, idx) => {
+                window.dimensionRankings['發行規模'][s.key] = { avgHigh: s.avgHigh, rank: idx + 1, total: sizeStats.length, count: s.count };
+            });
+            
+            // 計算股本區間排名
+            const capitalRanges = [
+                { key: '小於3億', filter: d => d.capital > 0 && d.capital < 3 },
+                { key: '3~6億', filter: d => d.capital >= 3 && d.capital < 6 },
+                { key: '6~10億', filter: d => d.capital >= 6 && d.capital < 10 },
+                { key: '10~15億', filter: d => d.capital >= 10 && d.capital < 15 },
+                { key: '15~20億', filter: d => d.capital >= 15 && d.capital < 20 },
+                { key: '大於20億', filter: d => d.capital >= 20 }
+            ];
+            const capitalStats = capitalRanges.map(r => {
+                const filtered = rankData.filter(r.filter);
+                const avgHigh = filtered.length > 0 ? filtered.reduce((s, d) => s + d.marketHigh, 0) / filtered.length : 0;
+                return { key: r.key, avgHigh, count: filtered.length };
+            }).sort((a, b) => b.avgHigh - a.avgHigh);
+            window.dimensionRankings['股本'] = {};
+            capitalStats.forEach((s, idx) => {
+                window.dimensionRankings['股本'][s.key] = { avgHigh: s.avgHigh, rank: idx + 1, total: capitalStats.length, count: s.count };
+            });
+            
+            // 計算理論價區間排名
+            const theoRanges = [
+                { key: '小於90元', filter: d => d.theoreticalPrice > 0 && d.theoreticalPrice < 90 },
+                { key: '90~95元', filter: d => d.theoreticalPrice >= 90 && d.theoreticalPrice < 95 },
+                { key: '95~100元', filter: d => d.theoreticalPrice >= 95 && d.theoreticalPrice < 100 },
+                { key: '100~105元', filter: d => d.theoreticalPrice >= 100 && d.theoreticalPrice < 105 },
+                { key: '105~110元', filter: d => d.theoreticalPrice >= 105 && d.theoreticalPrice < 110 },
+                { key: '110~115元', filter: d => d.theoreticalPrice >= 110 && d.theoreticalPrice < 115 },
+                { key: '大於115元', filter: d => d.theoreticalPrice >= 115 }
+            ];
+            const theoStats = theoRanges.map(r => {
+                const filtered = rankData.filter(r.filter);
+                const avgHigh = filtered.length > 0 ? filtered.reduce((s, d) => s + d.marketHigh, 0) / filtered.length : 0;
+                return { key: r.key, avgHigh, count: filtered.length };
+            }).sort((a, b) => b.avgHigh - a.avgHigh);
+            window.dimensionRankings['理論價'] = {};
+            theoStats.forEach((s, idx) => {
+                window.dimensionRankings['理論價'][s.key] = { avgHigh: s.avgHigh, rank: idx + 1, total: theoStats.length, count: s.count };
+            });
+            
+            // 計算信評排名
+            const ratingStats = [];
+            for (let i = 1; i <= 9; i++) {
+                const filtered = rankData.filter(d => d.rating === String(i));
+                const avgHigh = filtered.length > 0 ? filtered.reduce((s, d) => s + d.marketHigh, 0) / filtered.length : 0;
+                if (filtered.length > 0) {
+                    ratingStats.push({ key: String(i), avgHigh, count: filtered.length });
+                }
+            }
+            ratingStats.sort((a, b) => b.avgHigh - a.avgHigh);
+            window.dimensionRankings['信評'] = {};
+            ratingStats.forEach((s, idx) => {
+                window.dimensionRankings['信評'][s.key] = { avgHigh: s.avgHigh, rank: idx + 1, total: ratingStats.length, count: s.count };
+            });
+            
+            // 計算產業排名
+            const industryGroups2 = {};
+            rankData.forEach(d => {
+                if (d.industry) {
+                    if (!industryGroups2[d.industry]) industryGroups2[d.industry] = [];
+                    industryGroups2[d.industry].push(d.marketHigh);
+                }
+            });
+            const industryStats = Object.keys(industryGroups2).map(key => ({
+                key,
+                avgHigh: industryGroups2[key].reduce((s, v) => s + v, 0) / industryGroups2[key].length,
+                count: industryGroups2[key].length
+            })).filter(s => s.count >= 3).sort((a, b) => b.avgHigh - a.avgHigh);
+            window.dimensionRankings['產業'] = {};
+            industryStats.forEach((s, idx) => {
+                window.dimensionRankings['產業'][s.key] = { avgHigh: s.avgHigh, rank: idx + 1, total: industryStats.length, count: s.count };
+            });
+            
+            // 計算券商排名
+            const brokerGroups2 = {};
+            rankData.forEach(d => {
+                if (d.broker) {
+                    if (!brokerGroups2[d.broker]) brokerGroups2[d.broker] = [];
+                    brokerGroups2[d.broker].push(d.marketHigh);
+                }
+            });
+            const brokerStats = Object.keys(brokerGroups2).map(key => ({
+                key,
+                avgHigh: brokerGroups2[key].reduce((s, v) => s + v, 0) / brokerGroups2[key].length,
+                count: brokerGroups2[key].length
+            })).filter(s => s.count >= 3).sort((a, b) => b.avgHigh - a.avgHigh);
+            window.dimensionRankings['發行券商'] = {};
+            brokerStats.forEach((s, idx) => {
+                window.dimensionRankings['發行券商'][s.key] = { avgHigh: s.avgHigh, rank: idx + 1, total: brokerStats.length, count: s.count };
+            });
+            
+            console.log('✅ 各維度區間排名計算完成:', Object.keys(window.dimensionRankings));
         }
         
         // v3.72 新增：計算各條件組合的歷史統計（用於競拍前評估）
@@ -3518,11 +3662,27 @@ function generateHistoryCard(d) {
 }
 
 // v3.52 修改：generateStandardCard 增加排除前三的參數，獨立成兩個表格，並加入擔保類型細分
-function generateStandardCard(data, titleOverride=null, inquiryData=null, excludeTop3Data=null, excludeTop3InquiryData=null, guaranteedAuctionData=null, guaranteedInquiryData=null, unguaranteedAuctionData=null, unguaranteedInquiryData=null) {
+// v3.74 新增：rankingInfo 參數 { avgHigh, rank, total, count }
+function generateStandardCard(data, titleOverride=null, inquiryData=null, excludeTop3Data=null, excludeTop3InquiryData=null, guaranteedAuctionData=null, guaranteedInquiryData=null, unguaranteedAuctionData=null, unguaranteedInquiryData=null, rankingInfo=null) {
     if (!data) return `<div class="stat-row" style="color:#999;">查無資料</div>`;
     
     const valStr = (v, s='') => (v!==undefined && v!==null && v!=='' && v!==0) ? `${safeFixed(v,2)}${s}` : '-';
     const title = data['區間名稱'] ? `區間統計: ${data['區間名稱']}` : (titleOverride || '歷史統計');
+    
+    // v3.74 新增：生成排名標籤
+    let rankingBadge = '';
+    if (rankingInfo && rankingInfo.rank && rankingInfo.total) {
+        const rankColor = rankingInfo.rank <= 2 ? '#dc2626' : (rankingInfo.rank <= Math.ceil(rankingInfo.total / 2) ? '#f59e0b' : '#22c55e');
+        const rankIcon = rankingInfo.rank === 1 ? '🥇' : (rankingInfo.rank === 2 ? '🥈' : (rankingInfo.rank === 3 ? '🥉' : ''));
+        rankingBadge = `
+            <div style="display:flex; align-items:center; gap:8px; margin-top:6px; padding:6px 10px; background:linear-gradient(135deg, ${rankColor}15 0%, ${rankColor}08 100%); border:1px solid ${rankColor}40; border-radius:6px;">
+                <span style="font-size:11px; color:#666;">平均掛牌高</span>
+                <span style="font-size:14px; font-weight:bold; color:${rankColor};">${rankingInfo.avgHigh.toFixed(1)}元</span>
+                <span style="font-size:11px; color:#666;">｜</span>
+                <span style="font-size:12px; font-weight:bold; color:${rankColor};">${rankIcon} 第${rankingInfo.rank}名</span>
+                <span style="font-size:10px; color:#999;">/ ${rankingInfo.total}個區間</span>
+            </div>`;
+    }
 
     // 計算競拍振幅
     const aH = safeFloat(data['平均掛牌最高']);
@@ -3585,6 +3745,11 @@ function generateStandardCard(data, titleOverride=null, inquiryData=null, exclud
     if (exTH > 0 && exTL > 0) exTAmp = ((exTH - exTL) / exTL * 100).toFixed(1);
 
     let html = `<div class="stats-header">📊 ${title}</div>`;
+    
+    // v3.74 新增：加入排名標籤
+    if (rankingBadge) {
+        html += rankingBadge;
+    }
     
     // v3.53 修改：競拍得標數據表格化（有擔保/無擔保/全部）
     const hasBidData = data['樣本數'] && data['樣本數'] > 0;
@@ -6225,6 +6390,7 @@ function bindInputEvents() {
     });
 
     // v3.52 修改：其他欄位綁定，傳入排除前三 + 擔保類型細分
+    // v3.74 新增：傳入排名資訊
     const bind = (id, cat) => {
         const handler = function() {
             const rawVal = this.value;
@@ -6234,7 +6400,15 @@ function bindInputEvents() {
                 if(['股本','發行規模','轉換價'].includes(cat)) displayTitle = getRangeLabel(cat, val);
                 
                 const smartResult = getStatsSmart(cat, val);
-                // v3.52: 傳入排除前三 + 擔保類型細分數據
+                
+                // v3.74 新增：取得排名資訊
+                let rankingInfo = null;
+                if (window.dimensionRankings && window.dimensionRankings[cat]) {
+                    // 嘗試用原始值或顯示標題查找
+                    rankingInfo = window.dimensionRankings[cat][rawVal] || window.dimensionRankings[cat][displayTitle] || window.dimensionRankings[cat][val];
+                }
+                
+                // v3.52: 傳入排除前三 + 擔保類型細分數據 + v3.74排名
                 show(id+'Info', generateStandardCard(
                     smartResult.rawData, 
                     `區間統計: ${displayTitle}`, 
@@ -6244,7 +6418,8 @@ function bindInputEvents() {
                     smartResult.guaranteedAuctionData,
                     smartResult.guaranteedInquiryData,
                     smartResult.unguaranteedAuctionData,
-                    smartResult.unguaranteedInquiryData
+                    smartResult.unguaranteedInquiryData,
+                    rankingInfo
                 ));
                 if(cat==='轉換價'||cat==='信評') updateSmartReminders();
             }

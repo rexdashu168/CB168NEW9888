@@ -2077,6 +2077,30 @@ function getSmartValue(row, fieldKey) {
 function safeFloat(val) { const num = parseFloat(val); return isNaN(num) ? 0 : num; }
 function safeFixed(val, digits=2) { const num = parseFloat(val); return isNaN(num) ? '-' : num.toFixed(digits); }
 
+// v3.76 新增：通用Excel日期解析函數
+function parseExcelDate(dateVal) {
+    if (!dateVal) return null;
+    if (dateVal instanceof Date) return dateVal;
+    if (typeof dateVal === 'number') {
+        // Excel序列數轉換
+        return new Date((dateVal - 25569) * 86400 * 1000);
+    }
+    if (typeof dateVal === 'string') {
+        // 處理 "2024/06/15" 或 "2024-06-15" 格式
+        if (dateVal.includes('/')) {
+            const parts = dateVal.split('/');
+            if (parts.length === 3) {
+                let year = parseInt(parts[0]);
+                if (year < 100) year += 2000;
+                return new Date(year, parseInt(parts[1]) - 1, parseInt(parts[2]));
+            }
+        }
+        const d = new Date(dateVal);
+        if (!isNaN(d.getTime())) return d;
+    }
+    return null;
+}
+
 function formatDate(dateVal) {
     if (!dateVal) return '-';
     if (typeof dateVal === 'number') {
@@ -2615,8 +2639,8 @@ async function loadStatistics() {
                 const dateRaw = row['開標日期'] || row['開標日'] || '';
                 let year = '';
                 if (dateRaw) {
-                    const d = new Date(dateRaw);
-                    if (!isNaN(d.getTime())) year = String(d.getFullYear());
+                    const d = parseExcelDate(dateRaw);
+                    if (d) year = String(d.getFullYear());
                 }
                 const mult = safeFloat(row['投標倍數']);
                 const price = safeFloat(row['最低得標'] || row['最低得標價格']);
@@ -2651,8 +2675,8 @@ async function loadStatistics() {
                 
                 if (dateRaw && mult > 0 && price > 0) {
                     let dateStr = '';
-                    const d = new Date(dateRaw);
-                    if (!isNaN(d.getTime())) {
+                    const d = parseExcelDate(dateRaw);
+                    if (d) {
                         dateStr = d.toISOString().split('T')[0]; // YYYY-MM-DD
                         recentAuctions.push({
                             name: name,
@@ -2859,8 +2883,8 @@ async function loadStatistics() {
                 // 判斷日期（近期為2024年後）
                 let isRecent = false;
                 if (listing.listDate) {
-                    const d = new Date(listing.listDate);
-                    isRecent = d.getFullYear() >= 2024;
+                    const d = parseExcelDate(listing.listDate);
+                    if (d) isRecent = d.getFullYear() >= 2024;
                 }
                 
                 // 理論價分組
@@ -3043,16 +3067,9 @@ async function loadStatistics() {
                 let listingDate = '';
                 const listDateRaw = row['掛牌日'];
                 if (listDateRaw && listDateRaw !== '未定') {
-                    if (listDateRaw instanceof Date) {
-                        listingDate = listDateRaw.toISOString().split('T')[0];
-                    } else {
-                        const dateStr = String(listDateRaw);
-                        if (dateStr.includes('-') || dateStr.includes('/')) {
-                            const d = new Date(dateStr);
-                            if (!isNaN(d.getTime())) {
-                                listingDate = d.toISOString().split('T')[0];
-                            }
-                        }
+                    const d = parseExcelDate(listDateRaw);
+                    if (d) {
+                        listingDate = d.toISOString().split('T')[0];
                     }
                 }
                 
@@ -4364,7 +4381,8 @@ function generateSupplyAnalysis() {
     
     const historicalAvg = (yearlyTotals[2022] + yearlyTotals[2023] + yearlyTotals[2024]) / 3;
     const projectedTotal = issued2025 + futureTotal;
-    const exceedPercent = ((projectedTotal / yearlyTotals[2024]) - 1) * 100;
+    // v3.76 修正：防止除以0產生Infinity
+    const exceedPercent = yearlyTotals[2024] > 0 ? ((projectedTotal / yearlyTotals[2024]) - 1) * 100 : 0;
     
     // === 生成HTML ===
     let html = '';

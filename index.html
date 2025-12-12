@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.74 (動態回饋版)</title>
+<title>AI智能可轉債競拍系統 v3.75 (智能主力模擬版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="embedded_data.js" onerror="console.warn('embedded_data.js not found, using defaults.')"></script>
 
@@ -1400,14 +1400,14 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.74)...</div>
+    <div>🔄 系統啟動中 (v3.75)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
 <div class="container" style="display: none;">
     <div class="header">
         <h1>🤖 AI智能可轉債競拍系統</h1>
-        <span class="version-badge">v3.74</span>
+        <span class="version-badge">v3.75</span>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -1488,18 +1488,15 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
         </div>
     </div>
     
-    <!-- v3.72 新增：主力模擬出價參數 -->
+    <!-- v3.75 重新設計：智能主力模擬出價（自動計算，無需用戶填參數）-->
     <div class="form-section" style="background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%); border: 2px solid #9c27b0; border-radius: 12px; padding: 15px;">
-        <h3 style="color: #6a1b9a; border-left-color: #9c27b0;">🎯 主力模擬出價（v3.72新功能）</h3>
+        <h3 style="color: #6a1b9a; border-left-color: #9c27b0;">🎯 主力模擬出價（智能自動計算）</h3>
         <div style="font-size:12px; color:#666; margin-bottom:10px;">
-            💡 基於75檔CB得標明細統計，模擬主力（得標>100張）的出價行為
+            💡 基於75檔CB得標明細統計，自動推算主力（得標>100張）的出價行為<br>
+            📊 <b>核心發現</b>：94%情況下，主力最低出價與最低得標差距 <0.5元
         </div>
-        <div class="form-group">
-            <label>預估投標倍數 (選填)</label>
-            <input type="number" id="estBidMultiple" step="0.1" min="0.5" max="10" placeholder="留空則自動估算">
-            <div style="font-size:11px; color:#999; margin-top:4px;">
-                📊 冷門(<2倍)預測較準確 | 一般(2-4倍)建議保留彈性 | 熱門(>4倍)競爭激烈
-            </div>
+        <div id="majorPlayerSimulation">
+            <div style="color:#666; padding:10px; text-align:center;">請先輸入理論價區間或股價/轉換價</div>
         </div>
     </div>
     
@@ -10068,6 +10065,146 @@ function updateLiveAIPrediction(theoPrice, issueSize, guarantee, broker, industr
         <div style="margin-top:10px; padding:8px; background:#eff6ff; border-radius:6px; font-size:10px; color:#1e40af;">
             💡 <b>預測邏輯</b>：預估投標倍數 ${multResult.estimatedMult.toFixed(2)}x 對應歷史平均最低得標 ${expectedMinBid.toFixed(2)} 元，
             保守型略低（控制成本）、積極型略高（確保得標）。
+        </div>
+    </div>
+    `;
+    
+    // v3.75 新增：同步更新主力模擬出價
+    updateMajorPlayerSimulation(theoPrice, expectedMinBid, multResult.estimatedMult);
+}
+
+/**
+ * v3.75 新增：智能主力模擬出價（基於75檔CB得標明細統計）
+ * 核心發現：
+ * 1. 94%情況下，主力最低出價與最低得標差距 <0.5元
+ * 2. 主力之間價差與主力數量相關：1-2筆→0.76元, 3-5筆→1.58元, 6-10筆→2.73元, 10+→4.70元
+ */
+function updateMajorPlayerSimulation(theoPrice, expectedMinBid, estimatedMult) {
+    const container = document.getElementById('majorPlayerSimulation');
+    if (!container) return;
+    
+    if (!theoPrice || theoPrice <= 0 || !expectedMinBid || expectedMinBid <= 0) {
+        container.innerHTML = '<div style="color:#666; padding:10px; text-align:center;">請先輸入理論價區間或股價/轉換價</div>';
+        return;
+    }
+    
+    // ===== 主力出價模型（基於75檔歷史數據）=====
+    const MAJOR_MODEL = {
+        // 主力最低出價 vs 最低得標的關係
+        minBidOffset: {
+            mean: 0.18,     // 平均差距（元）
+            median: 0.03,   // 中位數差距（元）
+            pct94: 0.5      // 94%的情況差距小於此值
+        },
+        // 主力之間的價差（根據主力數量）
+        priceSpread: {
+            low: { range: '1-2筆', spread: 0.76, avgQty: 305 },
+            mid: { range: '3-5筆', spread: 1.58, avgQty: 1390 },
+            high: { range: '6-10筆', spread: 2.73, avgQty: 1835 },
+            veryHigh: { range: '10+筆', spread: 4.70, avgQty: 6694 }
+        }
+    };
+    
+    // 根據投標倍數預測主力數量和競爭程度
+    let majorEstimate, spreadInfo;
+    if (estimatedMult < 1.5) {
+        majorEstimate = '1-2筆（冷門）';
+        spreadInfo = MAJOR_MODEL.priceSpread.low;
+    } else if (estimatedMult < 2.5) {
+        majorEstimate = '3-5筆（一般）';
+        spreadInfo = MAJOR_MODEL.priceSpread.mid;
+    } else if (estimatedMult < 4) {
+        majorEstimate = '6-10筆（熱門）';
+        spreadInfo = MAJOR_MODEL.priceSpread.high;
+    } else {
+        majorEstimate = '10筆以上（超熱門）';
+        spreadInfo = MAJOR_MODEL.priceSpread.veryHigh;
+    }
+    
+    // 計算主力出價區間
+    const majorLowBid = expectedMinBid + MAJOR_MODEL.minBidOffset.median;  // 主力最低出價
+    const majorHighBid = majorLowBid + spreadInfo.spread;  // 主力最高出價
+    const majorMidBid = (majorLowBid + majorHighBid) / 2;  // 主力中間價
+    
+    // 計算相對於理論價的溢價
+    const lowPremium = ((majorLowBid / theoPrice) - 1) * 100;
+    const highPremium = ((majorHighBid / theoPrice) - 1) * 100;
+    const midPremium = ((majorMidBid / theoPrice) - 1) * 100;
+    
+    // 競爭程度顏色
+    let heatColor, heatBg;
+    if (estimatedMult < 1.5) {
+        heatColor = '#22c55e'; heatBg = '#dcfce7';
+    } else if (estimatedMult < 2.5) {
+        heatColor = '#f59e0b'; heatBg = '#fef3c7';
+    } else if (estimatedMult < 4) {
+        heatColor = '#f97316'; heatBg = '#fed7aa';
+    } else {
+        heatColor = '#dc2626'; heatBg = '#fee2e2';
+    }
+    
+    container.innerHTML = `
+    <!-- 主力出價區間圖示 -->
+    <div style="background:linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%); color:white; padding:12px; border-radius:8px; margin-bottom:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <div>
+                <div style="font-size:11px; opacity:0.9;">預估主力數量</div>
+                <div style="font-size:14px; font-weight:bold;">${majorEstimate}</div>
+            </div>
+            <div style="text-align:right;">
+                <div style="font-size:11px; opacity:0.9;">主力平均總張數</div>
+                <div style="font-size:14px; font-weight:bold;">${spreadInfo.avgQty.toLocaleString()} 張</div>
+            </div>
+        </div>
+        <div style="background:rgba(255,255,255,0.1); padding:10px; border-radius:6px;">
+            <div style="font-size:11px; opacity:0.8; margin-bottom:6px;">🎯 主力出價區間（基於75檔歷史統計）</div>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div style="text-align:center;">
+                    <div style="font-size:10px; opacity:0.7;">最低出價</div>
+                    <div style="font-size:20px; font-weight:bold;">${majorLowBid.toFixed(2)}</div>
+                    <div style="font-size:10px; opacity:0.7;">溢價 ${lowPremium.toFixed(1)}%</div>
+                </div>
+                <div style="flex:1; padding:0 15px;">
+                    <div style="height:8px; background:linear-gradient(to right, #8e24aa, #e91e63); border-radius:4px; position:relative;">
+                        <div style="position:absolute; left:50%; transform:translateX(-50%); top:-15px; font-size:9px; white-space:nowrap;">
+                            價差 ${spreadInfo.spread.toFixed(2)}元
+                        </div>
+                    </div>
+                </div>
+                <div style="text-align:center;">
+                    <div style="font-size:10px; opacity:0.7;">最高出價</div>
+                    <div style="font-size:20px; font-weight:bold;">${majorHighBid.toFixed(2)}</div>
+                    <div style="font-size:10px; opacity:0.7;">溢價 ${highPremium.toFixed(1)}%</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 主力行為解讀 -->
+    <div style="background:${heatBg}; border:1px solid ${heatColor}40; border-radius:8px; padding:10px; margin-bottom:10px;">
+        <div style="font-size:12px; font-weight:bold; color:${heatColor}; margin-bottom:6px;">📊 主力行為解讀</div>
+        <div style="font-size:11px; color:#333; line-height:1.6;">
+            • <b>核心發現</b>：主力最低出價 ≈ 最低得標價（94%差距<0.5元）<br>
+            • <b>競爭邏輯</b>：主力數量越多，價差越大（從0.76元到4.70元）<br>
+            • <b>本檔預測</b>：預估${majorEstimate}，價差約 ${spreadInfo.spread.toFixed(2)} 元
+        </div>
+    </div>
+    
+    <!-- 散戶策略建議 -->
+    <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px;">
+        <div style="font-size:12px; font-weight:bold; color:#475569; margin-bottom:6px;">💡 散戶策略建議</div>
+        <div style="font-size:11px; color:#666; line-height:1.6;">
+            ${estimatedMult < 2 ? 
+            `• 冷門標的：主力少、價差小，可考慮出價接近 <b style="color:#9c27b0;">${majorLowBid.toFixed(2)}</b> 元<br>
+             • 落標風險較低，價格控制空間較大` :
+            estimatedMult < 3.5 ?
+            `• 中等熱度：建議出價在 <b style="color:#9c27b0;">${majorMidBid.toFixed(2)}</b> 元左右<br>
+             • 主力競爭適中，需預留價差空間` :
+            `• 超熱門標的：主力競爭激烈，建議出價接近 <b style="color:#9c27b0;">${majorHighBid.toFixed(2)}</b> 元<br>
+             • 若堅持低價可能落標，需評估是否值得追高`}
+        </div>
+        <div style="margin-top:8px; padding-top:8px; border-top:1px dashed #e2e8f0; font-size:10px; color:#94a3b8;">
+            📈 理論價基準：${theoPrice.toFixed(2)} 元 ｜ 預期最低得標：${expectedMinBid.toFixed(2)} 元 ｜ 預估倍數：${estimatedMult.toFixed(2)}x
         </div>
     </div>
     `;

@@ -1732,7 +1732,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
             <div class="form-section" style="background: white; border: 1px solid #ce93d8; border-radius: 10px; padding: 12px; margin-bottom: 12px;">
                 <div style="font-size:13px; font-weight:bold; color:#667eea; margin-bottom:8px;">📊 AI預測結果</div>
                 <div style="font-size:11px; color:#666; margin-bottom:8px;">
-                    💡 基於300檔競拍統計，即時預估投標倍數與建議出價
+                    💡 基於<span id="auctionCountLabel">--</span>檔競拍統計，即時預估投標倍數與建議出價
                 </div>
                 <div id="liveAIPrediction">
                     <div style="color:#666; padding:10px; text-align:center; font-size:12px;">請填寫條件後即時顯示預測結果</div>
@@ -2136,6 +2136,7 @@ function getRangeLabel(category, val) {
 let statistics = { '維度統計': { '產業': {}, '發行券商': {} }, '資料期間': {} };
 let cbDatabase = {}, auctionRawData = [], inquiryRawData = [], globalMarketStats = { low: 0, avg: 0 }, cbNameMap = {};
 let listedSet = new Set(); // 掛牌中清單
+let totalAuctionCount = 0; // v3.76 動態競拍案例總數
 
 // ==========================================
 // 2. 資料讀取
@@ -4258,6 +4259,13 @@ function generateStandardCard(data, titleOverride=null, inquiryData=null, exclud
 }
 
 function initializeUI() {
+    // v3.76 計算競拍案例總數（動態）
+    totalAuctionCount = auctionRawData.filter(d => d.minBidPrice > 0).length;
+    
+    // 更新頁面上的競拍案例數量顯示
+    const countLabel = document.getElementById('auctionCountLabel');
+    if (countLabel) countLabel.textContent = totalAuctionCount;
+    
     document.getElementById('headerSubtitle').textContent = `競拍資料庫 ${Object.keys(cbDatabase).length} 筆`;
     populateSelect('industry', statistics['維度統計']['產業']); 
     populateSelect('broker', statistics['維度統計']['發行券商']);
@@ -5216,389 +5224,199 @@ let marketTrendData = {
 let dimensionData = {};
 
 function generateDimensionAnalysis() {
-    // 從01工作表建立完整的CB資料（含詢圈和競拍）
-    // 這裡使用硬編碼的統計數據，實際數據已從Excel分析得出
+    // v3.76 重構：動態從auctionRawData和inquiryRawData生成維度分析數據
+    // 合併所有有掛牌數據的CB
+    const allCBData = [];
+    
+    // 競拍資料
+    auctionRawData.forEach(d => {
+        if (d.marketHigh > 0 && d.marketLow > 0) {
+            const amp = ((d.marketHigh - d.marketLow) / d.marketLow * 100);
+            allCBData.push({
+                id: d.id,
+                name: d.name,
+                type: '競拍',
+                high: d.marketHigh,
+                low: d.marketLow,
+                amp: amp,
+                capital: d.capital || 0,
+                issueSize: d.issueSize || 0,
+                conversionPrice: d.conversionPrice || 0,
+                rating: d.rating || '',
+                years: d.years || 0,
+                guarantee: d.guarantee || '',
+                status: listedSet.has(d.id) ? '掛牌中' : '已下市'
+            });
+        }
+    });
+    
+    // 詢圈資料
+    inquiryRawData.forEach(d => {
+        if (d.marketHigh > 0 && d.marketLow > 0) {
+            // 避免重複（如果已在競拍中）
+            if (allCBData.find(a => a.id === d.id)) return;
+            
+            const amp = ((d.marketHigh - d.marketLow) / d.marketLow * 100);
+            allCBData.push({
+                id: d.id,
+                name: d.name,
+                type: '詢圈',
+                high: d.marketHigh,
+                low: d.marketLow,
+                amp: amp,
+                capital: d.capital || 0,
+                issueSize: d.issueSize || 0,
+                conversionPrice: d.conversionPrice || 0,
+                rating: d.rating || '',
+                years: d.years || 0,
+                guarantee: d.guarantee || '',
+                status: listedSet.has(d.id) ? '掛牌中' : '已下市'
+            });
+        }
+    });
+    
+    // 輔助函數：計算區間統計
+    function calcRangeStats(data, label) {
+        if (data.length === 0) return null;
+        const auction = data.filter(d => d.type === '競拍').length;
+        const inquiry = data.filter(d => d.type === '詢圈').length;
+        const avgHigh = data.reduce((s, d) => s + d.high, 0) / data.length;
+        const avgLow = data.reduce((s, d) => s + d.low, 0) / data.length;
+        const avgAmp = data.reduce((s, d) => s + d.amp, 0) / data.length;
+        
+        // 取振幅前5名
+        const top5 = [...data].sort((a, b) => b.amp - a.amp).slice(0, 5);
+        
+        return {
+            label: label,
+            total: data.length,
+            auction: auction,
+            inquiry: inquiry,
+            avgHigh: avgHigh,
+            avgLow: avgLow,
+            avgAmp: avgAmp,
+            items: top5.map(d => ({
+                id: d.id,
+                name: d.name,
+                type: d.type,
+                high: d.high,
+                low: d.low,
+                amp: d.amp,
+                status: d.status
+            }))
+        };
+    }
+    
+    // 1. 股本維度
+    const capitalRanges = [
+        { label: '< 3億', min: 0, max: 3 },
+        { label: '3~6億', min: 3, max: 6 },
+        { label: '6~10億', min: 6, max: 10 },
+        { label: '10~20億', min: 10, max: 20 },
+        { label: '20~50億', min: 20, max: 50 },
+        { label: '> 50億', min: 50, max: 99999 }
+    ];
+    
+    const capitalStats = capitalRanges.map(r => {
+        const filtered = allCBData.filter(d => d.capital >= r.min && d.capital < r.max);
+        return calcRangeStats(filtered, r.label);
+    }).filter(s => s !== null);
+    
+    // 2. 發行規模維度
+    const sizeRanges = [
+        { label: '< 2億', min: 0, max: 2 },
+        { label: '2~5億', min: 2, max: 5 },
+        { label: '5~10億', min: 5, max: 10 },
+        { label: '10~20億', min: 10, max: 20 },
+        { label: '> 20億', min: 20, max: 99999 }
+    ];
+    
+    const sizeStats = sizeRanges.map(r => {
+        const filtered = allCBData.filter(d => d.issueSize >= r.min && d.issueSize < r.max);
+        return calcRangeStats(filtered, r.label);
+    }).filter(s => s !== null);
+    
+    // 3. 轉換價維度
+    const priceRanges = [
+        { label: '< 20元', min: 0, max: 20 },
+        { label: '20~50元', min: 20, max: 50 },
+        { label: '50~100元', min: 50, max: 100 },
+        { label: '100~150元', min: 100, max: 150 },
+        { label: '150~200元', min: 150, max: 200 },
+        { label: '> 200元', min: 200, max: 99999 }
+    ];
+    
+    const priceStats = priceRanges.map(r => {
+        const filtered = allCBData.filter(d => d.conversionPrice >= r.min && d.conversionPrice < r.max);
+        return calcRangeStats(filtered, r.label);
+    }).filter(s => s !== null);
+    
+    // 4. 信評維度
+    const ratingRanges = ['3', '4', '5', '6', '7', '8'];
+    const ratingStats = ratingRanges.map(r => {
+        const filtered = allCBData.filter(d => String(d.rating) === r);
+        return calcRangeStats(filtered, 'TCRI ' + r);
+    }).filter(s => s !== null && s.total > 0);
+    
+    // 5. 年期維度
+    const yearRanges = [
+        { label: '3年', min: 2.5, max: 3.5 },
+        { label: '5年', min: 4.5, max: 5.5 },
+        { label: '7年', min: 6.5, max: 7.5 }
+    ];
+    
+    const yearStats = yearRanges.map(r => {
+        const filtered = allCBData.filter(d => d.years >= r.min && d.years <= r.max);
+        return calcRangeStats(filtered, r.label);
+    }).filter(s => s !== null && s.total > 0);
+    
+    // 6. 擔保維度
+    const guaranteeStats = [];
+    const guaranteed = allCBData.filter(d => d.guarantee && d.guarantee.includes('有'));
+    const unguaranteed = allCBData.filter(d => !d.guarantee || d.guarantee.includes('無') || !d.guarantee.includes('有'));
+    
+    if (guaranteed.length > 0) guaranteeStats.push(calcRangeStats(guaranteed, '有擔保'));
+    if (unguaranteed.length > 0) guaranteeStats.push(calcRangeStats(unguaranteed, '無擔保'));
+    
+    // 生成摘要
+    function genSummary(stats, dimName) {
+        if (stats.length === 0) return '暫無資料';
+        const sorted = [...stats].sort((a, b) => b.avgAmp - a.avgAmp);
+        const best = sorted[0];
+        const worst = sorted[sorted.length - 1];
+        return `${best.label}振幅最高(${best.avgAmp.toFixed(1)}%)，${worst.label}振幅最低(${worst.avgAmp.toFixed(1)}%)。`;
+    }
     
     dimensionData = {
         capital: {
             name: '股本',
-            ranges: [
-                {
-                    label: '< 3億',
-                    total: 26, auction: 9, inquiry: 17,
-                    avgHigh: 158.9, avgLow: 101.2, avgAmp: 55.1,
-                    items: [
-                        { id: '65931', name: '台灣銘板一', type: '競拍', high: 496.0, low: 113.5, amp: 337.0, status: '掛牌中' },
-                        { id: '62592', name: '百徽二', type: '詢圈', high: 293.0, low: 100.2, amp: 192.4, status: '已下市' },
-                        { id: '27261', name: '雅茗一K', type: '詢圈', high: 250.0, low: 110.0, amp: 127.3, status: '已下市' },
-                        { id: '34341', name: '哲固一', type: '競拍', high: 219.0, low: 107.0, amp: 104.7, status: '已下市' },
-                        { id: '22501', name: 'IKKA一K', type: '詢圈', high: 185.0, low: 100.2, amp: 84.6, status: '已下市' }
-                    ]
-                },
-                {
-                    label: '3~6億',
-                    total: 214, auction: 65, inquiry: 149,
-                    avgHigh: 159.7, avgLow: 100.2, avgAmp: 58.1,
-                    items: [
-                        { id: '32051', name: '佰研一', type: '詢圈', high: 1100.0, low: 107.0, amp: 928.0, status: '已下市' },
-                        { id: '33101', name: '佳穎一', type: '詢圈', high: 489.0, low: 107.8, amp: 353.6, status: '已下市' },
-                        { id: '66641', name: '群翊一', type: '詢圈', high: 403.0, low: 102.0, amp: 295.1, status: '已下市' },
-                        { id: '35801', name: '友威科一', type: '詢圈', high: 388.0, low: 100.1, amp: 287.6, status: '已下市' },
-                        { id: '22304', name: '泰茂四', type: '競拍', high: 470.0, low: 121.5, amp: 287.0, status: '已下市' }
-                    ]
-                },
-                {
-                    label: '6~10億',
-                    total: 315, auction: 86, inquiry: 229,
-                    avgHigh: 182.2, avgLow: 100.4, avgAmp: 79.8,
-                    items: [
-                        { id: '47632', name: '材料二K', type: '詢圈', high: 1035.0, low: 99.1, amp: 944.4, status: '已下市' },
-                        { id: '52631', name: '智崴一', type: '詢圈', high: 822.0, low: 107.0, amp: 668.2, status: '已下市' },
-                        { id: '14361', name: '華友聯一', type: '競拍', high: 695.0, low: 106.0, amp: 555.7, status: '已下市' },
-                        { id: '52632', name: '智崴二', type: '詢圈', high: 629.0, low: 103.3, amp: 508.9, status: '已下市' },
-                        { id: '47633', name: '材料三K', type: '競拍', high: 601.0, low: 100.0, amp: 501.0, status: '已下市' }
-                    ]
-                },
-                {
-                    label: '10~15億',
-                    total: 239, auction: 52, inquiry: 187,
-                    avgHigh: 161.4, avgLow: 99.1, avgAmp: 62.4,
-                    items: [
-                        { id: '26364', name: '台驊投控四', type: '競拍', high: 750.0, low: 106.2, amp: 606.2, status: '已下市' },
-                        { id: '22311', name: '為升一', type: '詢圈', high: 522.0, low: 107.0, amp: 387.9, status: '已下市' },
-                        { id: '64771', name: '安集一', type: '競拍', high: 323.0, low: 91.0, amp: 254.9, status: '已下市' },
-                        { id: '62207', name: '岳豐七', type: '詢圈', high: 329.0, low: 94.8, amp: 247.0, status: '已下市' },
-                        { id: '36251', name: '西勝一', type: '詢圈', high: 366.0, low: 106.5, amp: 243.7, status: '已下市' }
-                    ]
-                },
-                {
-                    label: '15~20億',
-                    total: 103, auction: 23, inquiry: 80,
-                    avgHigh: 164.6, avgLow: 100.2, avgAmp: 63.3,
-                    items: [
-                        { id: '36651', name: '貿聯一', type: '詢圈', high: 522.0, low: 104.5, amp: 399.5, status: '已下市' },
-                        { id: '15981', name: '岱宇一', type: '詢圈', high: 381.0, low: 100.0, amp: 281.0, status: '已下市' },
-                        { id: '61801', name: '橘子一', type: '詢圈', high: 300.0, low: 100.2, amp: 199.4, status: '已下市' },
-                        { id: '98024', name: '鈺齊四K', type: '詢圈', high: 293.0, low: 102.0, amp: 187.3, status: '已下市' },
-                        { id: '62908', name: '良維八', type: '詢圈', high: 298.0, low: 107.0, amp: 178.4, status: '已下市' }
-                    ]
-                },
-                {
-                    label: '> 20億',
-                    total: 359, auction: 57, inquiry: 302,
-                    avgHigh: 166.0, avgLow: 98.8, avgAmp: 66.9,
-                    items: [
-                        { id: '17953', name: '美時三', type: '詢圈', high: 611.0, low: 107.0, amp: 471.0, status: '已下市' },
-                        { id: '37072', name: '漢磊二', type: '詢圈', high: 610.0, low: 109.8, amp: 455.8, status: '已下市' },
-                        { id: '49191', name: '新唐一', type: '競拍', high: 450.0, low: 97.0, amp: 363.9, status: '已下市' },
-                        { id: '80763', name: '伍豐三', type: '詢圈', high: 477.0, low: 107.0, amp: 345.8, status: '已下市' },
-                        { id: '52137', name: '亞昕七', type: '詢圈', high: 448.0, low: 102.0, amp: 339.2, status: '已下市' }
-                    ]
-                }
-            ],
-            summary: '6~10億區間平均振幅最高(79.8%)，小股本(<3億)因樣本少波動大。'
+            ranges: capitalStats,
+            summary: genSummary(capitalStats, '股本')
         },
         size: {
             name: '發行規模',
-            ranges: [
-                {
-                    label: '< 2億',
-                    total: 155, auction: 12, inquiry: 143,
-                    avgHigh: 186.8, avgLow: 100.0, avgAmp: 88.1,
-                    items: [
-                        { id: '82871', name: '英格爾ㄧ', type: '詢圈', high: 1390.0, low: 96.2, amp: 1344.2, status: '已下市' },
-                        { id: '32051', name: '佰研一', type: '詢圈', high: 1100.0, low: 107.0, amp: 928.0, status: '已下市' },
-                        { id: '52631', name: '智崴一', type: '詢圈', high: 822.0, low: 107.0, amp: 668.2, status: '已下市' },
-                        { id: '32521', name: '海灣一', type: '詢圈', high: 159.0, low: 24.2, amp: 557.0, status: '已下市' },
-                        { id: '52632', name: '智崴二', type: '詢圈', high: 629.0, low: 103.3, amp: 508.9, status: '已下市' }
-                    ]
-                },
-                {
-                    label: '2~5億',
-                    total: 678, auction: 105, inquiry: 573,
-                    avgHigh: 169.4, avgLow: 99.6, avgAmp: 70.4,
-                    items: [
-                        { id: '26364', name: '台驊投控四', type: '競拍', high: 750.0, low: 106.2, amp: 606.2, status: '已下市' },
-                        { id: '14361', name: '華友聯一', type: '競拍', high: 695.0, low: 106.0, amp: 555.7, status: '已下市' },
-                        { id: '55342', name: '長虹二', type: '詢圈', high: 585.0, low: 94.5, amp: 519.0, status: '已下市' },
-                        { id: '89321', name: '宏大一', type: '詢圈', high: 681.0, low: 116.0, amp: 487.1, status: '已下市' },
-                        { id: '17953', name: '美時三', type: '詢圈', high: 611.0, low: 107.0, amp: 471.0, status: '已下市' }
-                    ]
-                },
-                {
-                    label: '5~10億',
-                    total: 415, auction: 85, inquiry: 330,
-                    avgHigh: 168.7, avgLow: 98.3, avgAmp: 71.0,
-                    items: [
-                        { id: '47632', name: '材料二K', type: '詢圈', high: 1035.0, low: 99.1, amp: 944.4, status: '已下市' },
-                        { id: '47633', name: '材料三K', type: '競拍', high: 601.0, low: 100.0, amp: 501.0, status: '已下市' },
-                        { id: '37072', name: '漢磊二', type: '詢圈', high: 610.0, low: 109.8, amp: 455.8, status: '已下市' },
-                        { id: '14773', name: '聚陽三', type: '詢圈', high: 495.0, low: 106.5, amp: 364.8, status: '已下市' },
-                        { id: '33101', name: '佳穎一', type: '詢圈', high: 489.0, low: 107.8, amp: 353.6, status: '已下市' }
-                    ]
-                },
-                {
-                    label: '10~15億',
-                    total: 177, auction: 52, inquiry: 125,
-                    avgHigh: 160.0, avgLow: 96.8, avgAmp: 66.5,
-                    items: [
-                        { id: '14362', name: '華友聯二', type: '詢圈', high: 600.0, low: 111.1, amp: 440.1, status: '已下市' },
-                        { id: '33244', name: '雙鴻四', type: '詢圈', high: 496.0, low: 100.8, amp: 392.1, status: '已下市' },
-                        { id: '61874', name: '萬潤四', type: '競拍', high: 467.0, low: 98.0, amp: 376.5, status: '已下市' },
-                        { id: '52137', name: '亞昕七', type: '詢圈', high: 448.0, low: 102.0, amp: 339.2, status: '已下市' },
-                        { id: '25424', name: '興富發四', type: '詢圈', high: 415.0, low: 107.0, amp: 287.9, status: '已下市' }
-                    ]
-                },
-                {
-                    label: '15~20億',
-                    total: 72, auction: 20, inquiry: 52,
-                    avgHigh: 157.6, avgLow: 96.5, avgAmp: 64.2,
-                    items: [
-                        { id: '18083', name: '潤隆三', type: '詢圈', high: 305.0, low: 105.2, amp: 189.9, status: '已下市' },
-                        { id: '80703', name: '長華三', type: '詢圈', high: 269.0, low: 98.4, amp: 173.4, status: '已下市' },
-                        { id: '80702', name: '長華二', type: '詢圈', high: 269.0, low: 99.1, amp: 171.4, status: '已下市' },
-                        { id: '25472', name: '日勝二', type: '詢圈', high: 175.0, low: 65.2, amp: 168.4, status: '已下市' },
-                        { id: '24891', name: '瑞軒二', type: '詢圈', high: 228.0, low: 87.5, amp: 160.7, status: '已下市' }
-                    ]
-                },
-                {
-                    label: '> 20億',
-                    total: 142, auction: 22, inquiry: 120,
-                    avgHigh: 148.9, avgLow: 94.4, avgAmp: 63.7,
-                    items: [
-                        { id: '62892', name: '華上二', type: '詢圈', high: 147.9, low: 19.8, amp: 647.0, status: '已下市' },
-                        { id: '49191', name: '新唐一', type: '競拍', high: 450.0, low: 97.0, amp: 363.9, status: '已下市' },
-                        { id: '53461', name: '力晶一', type: '詢圈', high: 119.8, low: 27.2, amp: 340.4, status: '已下市' },
-                        { id: '53462', name: '力晶二', type: '詢圈', high: 121.0, low: 28.5, amp: 324.6, status: '已下市' },
-                        { id: '23835', name: '台光電五', type: '詢圈', high: 388.0, low: 97.0, amp: 300.0, status: '已下市' }
-                    ]
-                }
-            ],
-            summary: '小規模(<2億)振幅最高(88.1%)，5~10億為甜蜜點(71.0%)，大規模(>20億)振幅仍有63.7%。'
+            ranges: sizeStats,
+            summary: genSummary(sizeStats, '發行規模')
         },
-        conversion: {
+        conversionPrice: {
             name: '轉換價',
-            ranges: [
-                {
-                    label: '< 20元',
-                    total: 341, auction: 25, inquiry: 303,
-                    avgHigh: 174.5, avgLow: 100.2, avgAmp: 77.1,
-                    items: [
-                        { id: '82871', name: '英格爾ㄧ', type: '詢圈', high: 1390.0, low: 96.2, amp: 1344.2, status: '已下市' },
-                        { id: '89321', name: '宏大一', type: '詢圈', high: 681.0, low: 116.0, amp: 487.1, status: '已下市' },
-                        { id: '24822', name: '連宇二', type: '競拍', high: 552.0, low: 110.1, amp: 401.4, status: '已下市' },
-                        { id: '61082', name: '競國二', type: '詢圈', high: 305.0, low: 64.8, amp: 370.3, status: '已下市' },
-                        { id: '53461', name: '力晶一', type: '詢圈', high: 119.8, low: 27.2, amp: 340.4, status: '已下市' }
-                    ]
-                },
-                {
-                    label: '20~50元',
-                    total: 619, auction: 86, inquiry: 511,
-                    avgHigh: 167.8, avgLow: 97.0, avgAmp: 74.1,
-                    items: [
-                        { id: '32051', name: '佰研一', type: '詢圈', high: 1100.0, low: 107.0, amp: 928.0, status: '已下市' },
-                        { id: '62892', name: '華上二', type: '詢圈', high: 147.9, low: 19.8, amp: 647.0, status: '已下市' },
-                        { id: '26364', name: '台驊投控四', type: '競拍', high: 750.0, low: 106.2, amp: 606.2, status: '已下市' },
-                        { id: '32521', name: '海灣一', type: '詢圈', high: 159.0, low: 24.2, amp: 557.0, status: '已下市' },
-                        { id: '14361', name: '華友聯一', type: '競拍', high: 695.0, low: 106.0, amp: 555.7, status: '已下市' }
-                    ]
-                },
-                {
-                    label: '50~100元',
-                    total: 396, auction: 80, inquiry: 303,
-                    avgHigh: 167.0, avgLow: 98.6, avgAmp: 68.6,
-                    items: [
-                        { id: '52631', name: '智崴一', type: '詢圈', high: 822.0, low: 107.0, amp: 668.2, status: '已下市' },
-                        { id: '52632', name: '智崴二', type: '詢圈', high: 629.0, low: 103.3, amp: 508.9, status: '已下市' },
-                        { id: '17953', name: '美時三', type: '詢圈', high: 611.0, low: 107.0, amp: 471.0, status: '已下市' },
-                        { id: '37072', name: '漢磊二', type: '詢圈', high: 610.0, low: 109.8, amp: 455.8, status: '已下市' },
-                        { id: '14362', name: '華友聯二', type: '詢圈', high: 600.0, low: 111.1, amp: 440.1, status: '已下市' }
-                    ]
-                },
-                {
-                    label: '100~150元',
-                    total: 143, auction: 47, inquiry: 94,
-                    avgHigh: 164.8, avgLow: 98.2, avgAmp: 69.0,
-                    items: [
-                        { id: '47632', name: '材料二K', type: '詢圈', high: 1035.0, low: 99.1, amp: 944.4, status: '已下市' },
-                        { id: '99551', name: '佳龍一', type: '詢圈', high: 602.0, low: 100.0, amp: 502.0, status: '已下市' },
-                        { id: '47633', name: '材料三K', type: '競拍', high: 601.0, low: 100.0, amp: 501.0, status: '已下市' },
-                        { id: '22311', name: '為升一', type: '詢圈', high: 522.0, low: 107.0, amp: 387.9, status: '已下市' },
-                        { id: '36651', name: '貿聯一', type: '詢圈', high: 522.0, low: 104.5, amp: 399.5, status: '已下市' }
-                    ]
-                },
-                {
-                    label: '150~200元',
-                    total: 62, auction: 19, inquiry: 42,
-                    avgHigh: 152.8, avgLow: 99.8, avgAmp: 52.7,
-                    items: [
-                        { id: '61394', name: '亞翔四', type: '詢圈', high: 310.0, low: 110.0, amp: 181.8, status: '掛牌中' },
-                        { id: '80703', name: '長華三', type: '詢圈', high: 269.0, low: 98.4, amp: 173.4, status: '已下市' },
-                        { id: '61973', name: '佳必琪三', type: '競拍', high: 268.0, low: 101.8, amp: 163.4, status: '掛牌中' },
-                        { id: '84621', name: '柏文一', type: '詢圈', high: 259.0, low: 104.1, amp: 148.8, status: '已下市' },
-                        { id: '34132', name: '京鼎二', type: '詢圈', high: 243.0, low: 105.1, amp: 131.2, status: '已下市' }
-                    ]
-                },
-                {
-                    label: '> 200元',
-                    total: 99, auction: 39, inquiry: 58,
-                    avgHigh: 157.6, avgLow: 99.9, avgAmp: 57.2,
-                    items: [
-                        { id: '33244', name: '雙鴻四', type: '詢圈', high: 496.0, low: 100.8, amp: 392.1, status: '已下市' },
-                        { id: '23835', name: '台光電五', type: '詢圈', high: 388.0, low: 97.0, amp: 300.0, status: '已下市' },
-                        { id: '64722', name: '保瑞二', type: '競拍', high: 355.0, low: 104.0, amp: 241.3, status: '已下市' },
-                        { id: '80702', name: '長華二', type: '詢圈', high: 269.0, low: 99.1, amp: 171.4, status: '已下市' },
-                        { id: '89964', name: '高力四', type: '競拍', high: 264.0, low: 107.0, amp: 146.7, status: '掛牌中' }
-                    ]
-                }
-            ],
-            summary: '低價股(<20元)振幅最高(77.1%)，20~50元區間(74.1%)次之，高轉換價150~200元振幅最低(52.7%)。'
+            ranges: priceStats,
+            summary: genSummary(priceStats, '轉換價')
         },
         rating: {
             name: '信評',
-            ranges: [
-                {
-                    label: 'TCRI 3',
-                    total: 27, auction: 5, inquiry: 22,
-                    avgHigh: 175.2, avgLow: 99.0, avgAmp: 75.3,
-                    items: [
-                        { id: '23835', name: '台光電五', type: '詢圈', high: 388.0, low: 97.0, amp: 300.0, status: '已下市' },
-                        { id: '14774', name: '聚陽四', type: '詢圈', high: 401.0, low: 106.2, amp: 277.6, status: '已下市' },
-                        { id: '54255', name: '台半五', type: '詢圈', high: 257.0, low: 99.5, amp: 158.3, status: '已下市' },
-                        { id: '62853', name: '啟碁三', type: '詢圈', high: 251.0, low: 100.3, amp: 150.2, status: '已下市' },
-                        { id: '23836', name: '台光電六', type: '詢圈', high: 230.0, low: 101.8, amp: 126.0, status: '已下市' }
-                    ]
-                },
-                {
-                    label: 'TCRI 4',
-                    total: 135, auction: 37, inquiry: 98,
-                    avgHigh: 163.8, avgLow: 100.4, avgAmp: 62.6,
-                    items: [
-                        { id: '26364', name: '台驊投控四', type: '競拍', high: 750.0, low: 106.2, amp: 606.2, status: '已下市' },
-                        { id: '33244', name: '雙鴻四', type: '詢圈', high: 496.0, low: 100.8, amp: 392.1, status: '已下市' },
-                        { id: '49191', name: '新唐一', type: '競拍', high: 450.0, low: 97.0, amp: 363.9, status: '已下市' },
-                        { id: '30366', name: '文曄六', type: '詢圈', high: 330.0, low: 104.0, amp: 217.3, status: '已下市' },
-                        { id: '23602', name: '致茂二', type: '詢圈', high: 309.0, low: 100.0, amp: 209.0, status: '已下市' }
-                    ]
-                },
-                {
-                    label: 'TCRI 5',
-                    total: 231, auction: 55, inquiry: 176,
-                    avgHigh: 169.6, avgLow: 99.6, avgAmp: 69.2,
-                    items: [
-                        { id: '47632', name: '材料二K', type: '詢圈', high: 1035.0, low: 99.1, amp: 944.4, status: '已下市' },
-                        { id: '47633', name: '材料三K', type: '競拍', high: 601.0, low: 100.0, amp: 501.0, status: '已下市' },
-                        { id: '35523', name: '同致三', type: '詢圈', high: 545.0, low: 102.0, amp: 434.3, status: '已下市' },
-                        { id: '36651', name: '貿聯一', type: '詢圈', high: 522.0, low: 104.5, amp: 399.5, status: '已下市' },
-                        { id: '61874', name: '萬潤四', type: '競拍', high: 467.0, low: 98.0, amp: 376.5, status: '已下市' }
-                    ]
-                },
-                {
-                    label: 'TCRI 6',
-                    total: 261, auction: 72, inquiry: 189,
-                    avgHigh: 155.4, avgLow: 97.7, avgAmp: 58.6,
-                    items: [
-                        { id: '52632', name: '智崴二', type: '詢圈', high: 629.0, low: 103.3, amp: 508.9, status: '已下市' },
-                        { id: '66641', name: '群翊一', type: '詢圈', high: 403.0, low: 102.0, amp: 295.1, status: '已下市' },
-                        { id: '31631', name: '波若威一', type: '詢圈', high: 402.0, low: 107.0, amp: 275.7, status: '已下市' },
-                        { id: '64771', name: '安集一', type: '競拍', high: 323.0, low: 91.0, amp: 254.9, status: '已下市' },
-                        { id: '62207', name: '岳豐七', type: '詢圈', high: 329.0, low: 94.8, amp: 247.0, status: '已下市' }
-                    ]
-                },
-                {
-                    label: 'TCRI 7',
-                    total: 107, auction: 16, inquiry: 91,
-                    avgHigh: 143.8, avgLow: 94.6, avgAmp: 52.2,
-                    items: [
-                        { id: '26302', name: '亞航二', type: '詢圈', high: 390.0, low: 97.0, amp: 302.1, status: '已下市' },
-                        { id: '18156', name: '富喬六', type: '詢圈', high: 283.0, low: 95.6, amp: 196.0, status: '掛牌中' },
-                        { id: '50113', name: '久陽三', type: '詢圈', high: 237.0, low: 85.0, amp: 178.8, status: '已下市' },
-                        { id: '89335', name: '愛地雅五', type: '詢圈', high: 180.0, low: 72.0, amp: 150.0, status: '已下市' },
-                        { id: '27311', name: '雄獅一', type: '詢圈', high: 225.0, low: 92.0, amp: 144.6, status: '已下市' }
-                    ]
-                },
-                {
-                    label: 'TCRI 8',
-                    total: 27, auction: 6, inquiry: 21,
-                    avgHigh: 162.7, avgLow: 95.5, avgAmp: 68.8,
-                    items: [
-                        { id: '37011', name: '大眾控一', type: '詢圈', high: 441.0, low: 111.1, amp: 296.9, status: '已下市' },
-                        { id: '62209', name: '岳豐九', type: '詢圈', high: 268.0, low: 80.0, amp: 235.0, status: '已下市' },
-                        { id: '89276', name: '北基六', type: '競拍', high: 272.0, low: 98.2, amp: 177.0, status: '已下市' },
-                        { id: '13165', name: '上曜五', type: '詢圈', high: 232.0, low: 99.6, amp: 132.9, status: '已下市' },
-                        { id: '99062', name: '欣巴巴二', type: '詢圈', high: 247.0, low: 110.0, amp: 124.5, status: '已下市' }
-                    ]
-                }
-            ],
-            summary: 'TCRI 3振幅最高(75.3%)但樣本少，TCRI 5為最佳平衡點(69.2%/231檔)。'
+            ranges: ratingStats,
+            summary: genSummary(ratingStats, '信評')
         },
         years: {
             name: '年期',
-            ranges: [
-                {
-                    label: '3年期',
-                    total: 1047, auction: 225, inquiry: 822,
-                    avgHigh: 163.0, avgLow: 99.8, avgAmp: 62.2,
-                    items: [
-                        { id: '32051', name: '佰研一', type: '詢圈', high: 1100.0, low: 107.0, amp: 928.0, status: '已下市' },
-                        { id: '52631', name: '智崴一', type: '詢圈', high: 822.0, low: 107.0, amp: 668.2, status: '已下市' },
-                        { id: '26364', name: '台驊投控四', type: '競拍', high: 750.0, low: 106.2, amp: 606.2, status: '已下市' },
-                        { id: '52632', name: '智崴二', type: '詢圈', high: 629.0, low: 103.3, amp: 508.9, status: '已下市' },
-                        { id: '99551', name: '佳龍一', type: '詢圈', high: 602.0, low: 100.0, amp: 502.0, status: '已下市' }
-                    ]
-                },
-                {
-                    label: '5年期',
-                    total: 578, auction: 70, inquiry: 508,
-                    avgHigh: 176.9, avgLow: 96.1, avgAmp: 86.9,
-                    items: [
-                        { id: '82871', name: '英格爾ㄧ', type: '詢圈', high: 1390.0, low: 96.2, amp: 1344.2, status: '已下市' },
-                        { id: '47632', name: '材料二K', type: '詢圈', high: 1035.0, low: 99.1, amp: 944.4, status: '已下市' },
-                        { id: '32521', name: '海灣一', type: '詢圈', high: 159.0, low: 24.2, amp: 557.0, status: '已下市' },
-                        { id: '14361', name: '華友聯一', type: '競拍', high: 695.0, low: 106.0, amp: 555.7, status: '已下市' },
-                        { id: '47633', name: '材料三K', type: '競拍', high: 601.0, low: 100.0, amp: 501.0, status: '已下市' }
-                    ]
-                },
-                {
-                    label: '7年期',
-                    total: 1, auction: 1, inquiry: 0,
-                    avgHigh: 450.0, avgLow: 97.0, avgAmp: 363.9,
-                    items: [
-                        { id: '49191', name: '新唐一', type: '競拍', high: 450.0, low: 97.0, amp: 363.9, status: '已下市' }
-                    ]
-                }
-            ],
-            summary: '5年期振幅最佳(86.9%)，3年期為主流(1047檔/62.2%)，7年期目前僅1檔。'
+            ranges: yearStats,
+            summary: genSummary(yearStats, '年期')
         },
         guarantee: {
             name: '擔保',
-            ranges: [
-                {
-                    label: '有擔保',
-                    total: 455, auction: 100, inquiry: 355,
-                    avgHigh: 183.0, avgLow: 102.4, avgAmp: 77.0,
-                    items: [
-                        { id: '32051', name: '佰研一', type: '詢圈', high: 1100.0, low: 107.0, amp: 928.0, status: '已下市' },
-                        { id: '52631', name: '智崴一', type: '詢圈', high: 822.0, low: 107.0, amp: 668.2, status: '已下市' },
-                        { id: '14361', name: '華友聯一', type: '競拍', high: 695.0, low: 106.0, amp: 555.7, status: '已下市' },
-                        { id: '89321', name: '宏大一', type: '詢圈', high: 681.0, low: 116.0, amp: 487.1, status: '已下市' },
-                        { id: '17953', name: '美時三', type: '詢圈', high: 611.0, low: 107.0, amp: 471.0, status: '已下市' }
-                    ]
-                },
-                {
-                    label: '無擔保',
-                    total: 827, auction: 196, inquiry: 631,
-                    avgHigh: 161.0, avgLow: 98.2, avgAmp: 63.4,
-                    items: [
-                        { id: '47632', name: '材料二K', type: '詢圈', high: 1035.0, low: 99.1, amp: 944.4, status: '已下市' },
-                        { id: '26364', name: '台驊投控四', type: '競拍', high: 750.0, low: 106.2, amp: 606.2, status: '已下市' },
-                        { id: '52632', name: '智崴二', type: '詢圈', high: 629.0, low: 103.3, amp: 508.9, status: '已下市' },
-                        { id: '99551', name: '佳龍一', type: '詢圈', high: 602.0, low: 100.0, amp: 502.0, status: '已下市' },
-                        { id: '47633', name: '材料三K', type: '競拍', high: 601.0, low: 100.0, amp: 501.0, status: '已下市' }
-                    ]
-                }
-            ],
-            summary: '有擔保振幅(77.0%)高於無擔保(63.4%)，有擔保提供較高安全邊際。'
+            ranges: guaranteeStats,
+            summary: genSummary(guaranteeStats, '擔保')
         }
     };
     
@@ -5606,192 +5424,261 @@ function generateDimensionAnalysis() {
     showDimensionTab('capital');
 }
 
-// v3.59 更新：市場趨勢分析（從01工作表完整統計，多年度版）
+// v3.76 重構：市場趨勢分析（完全動態從資料庫生成）
 function generateMarketTrendAnalysis() {
-    // 完整年度數據（2010-2025，從01工作表R欄掛牌日期統計）
-    marketTrendData.yearly = [
-        { year: 2010, total: 118, inquiry: 118, auction: 0, avgAmp: 51.4 },
-        { year: 2011, total: 100, inquiry: 99, auction: 0, avgAmp: 48.8 },
-        { year: 2012, total: 76, inquiry: 75, auction: 0, avgAmp: 68.6 },
-        { year: 2013, total: 89, inquiry: 88, auction: 0, avgAmp: 91.3 },
-        { year: 2014, total: 96, inquiry: 95, auction: 0, avgAmp: 48.8 },
-        { year: 2015, total: 100, inquiry: 96, auction: 0, avgAmp: 62.2 },
-        { year: 2016, total: 55, inquiry: 55, auction: 0, avgAmp: 72.9 },
-        { year: 2017, total: 46, inquiry: 45, auction: 0, avgAmp: 60.8 },
-        { year: 2018, total: 57, inquiry: 56, auction: 0, avgAmp: 79.5 },
-        { year: 2019, total: 71, inquiry: 63, auction: 6, avgAmp: 79.1 },
-        { year: 2020, total: 97, inquiry: 73, auction: 24, avgAmp: 112.2 },
-        { year: 2021, total: 103, inquiry: 59, auction: 44, avgAmp: 79.4 },
-        { year: 2022, total: 96, inquiry: 43, auction: 53, avgAmp: 83.5 },
-        { year: 2023, total: 91, inquiry: 47, auction: 44, avgAmp: 68.3 },
-        { year: 2024, total: 139, inquiry: 64, auction: 75, avgAmp: 44.5 },
-        { year: 2025, total: 95, inquiry: 47, auction: 48, avgAmp: 22.5 }
-    ];
+    // 合併所有CB數據
+    const allCBData = [];
     
-    // 擔保比較（多年度數據）
-    marketTrendData.guarantee = {
-        overall: {
-            guaranteed: { count: 455, avgHigh: 183.0, avgLow: 102.4, avgAmp: 77.0 },
-            unguaranteed: { count: 827, avgHigh: 161.0, avgLow: 98.2, avgAmp: 63.4 }
-        },
-        yearly: [
-            { year: 2011, gCount: 35, gAmp: 48.8, uCount: 26, uAmp: 54.6 },
-            { year: 2012, gCount: 37, gAmp: 73.8, uCount: 38, uAmp: 64.3 },
-            { year: 2013, gCount: 40, gAmp: 119.0, uCount: 48, uAmp: 68.5 },
-            { year: 2014, gCount: 42, gAmp: 41.7, uCount: 53, uAmp: 54.8 },
-            { year: 2015, gCount: 52, gAmp: 73.9, uCount: 44, uAmp: 43.0 },
-            { year: 2016, gCount: 28, gAmp: 85.6, uCount: 27, uAmp: 60.2 },
-            { year: 2017, gCount: 19, gAmp: 61.8, uCount: 26, uAmp: 57.2 },
-            { year: 2018, gCount: 10, gAmp: 116.2, uCount: 46, uAmp: 72.7 },
-            { year: 2019, gCount: 27, gAmp: 70.8, uCount: 42, uAmp: 80.0 },
-            { year: 2020, gCount: 42, gAmp: 109.9, uCount: 55, uAmp: 114.3 },
-            { year: 2021, gCount: 39, gAmp: 94.8, uCount: 64, uAmp: 69.7 },
-            { year: 2022, gCount: 23, gAmp: 71.3, uCount: 73, uAmp: 86.2 },
-            { year: 2023, gCount: 17, gAmp: 107.8, uCount: 74, uAmp: 59.3 },
-            { year: 2024, gCount: 21, gAmp: 40.7, uCount: 118, uAmp: 44.8 },
-            { year: 2025, gCount: 16, gAmp: 17.7, uCount: 79, uAmp: 23.9 }
-        ]
-    };
-    
-    // 發行規模區間（依05工作表設定）
-    marketTrendData.size = {
-        ranges: [
-            { label: '小於2億', count: 155, avgHigh: 186.8, avgLow: 100.0, avgAmp: 88.1 },
-            { label: '2~5億', count: 678, avgHigh: 169.4, avgLow: 99.6, avgAmp: 70.4 },
-            { label: '5~10億', count: 415, avgHigh: 168.7, avgLow: 98.3, avgAmp: 71.0 },
-            { label: '10~15億', count: 177, avgHigh: 160.0, avgLow: 96.8, avgAmp: 66.6 },
-            { label: '15~20億', count: 72, avgHigh: 157.6, avgLow: 96.5, avgAmp: 64.2 },
-            { label: '大於20億', count: 142, avgHigh: 148.9, avgLow: 94.4, avgAmp: 63.7 }
-        ]
-    };
-    
-    // 股本區間（依05工作表設定）
-    marketTrendData.capital = {
-        ranges: [
-            { label: '小於3億', count: 26, avgHigh: 158.9, avgLow: 101.2, avgAmp: 55.1 },
-            { label: '3~6億', count: 214, avgHigh: 159.7, avgLow: 100.2, avgAmp: 58.1 },
-            { label: '6~10億', count: 315, avgHigh: 182.2, avgLow: 100.4, avgAmp: 79.8 },
-            { label: '10~15億', count: 239, avgHigh: 161.4, avgLow: 99.1, avgAmp: 62.4 },
-            { label: '15~20億', count: 103, avgHigh: 164.6, avgLow: 100.2, avgAmp: 63.3 },
-            { label: '大於20億', count: 359, avgHigh: 166.0, avgLow: 98.8, avgAmp: 66.9 }
-        ]
-    };
-    
-    // 轉換價區間（依05工作表設定）
-    marketTrendData.conversion = {
-        ranges: [
-            { label: '小於20元', count: 341, avgHigh: 174.5, avgLow: 100.2, avgAmp: 77.1 },
-            { label: '20~50元', count: 619, avgHigh: 167.8, avgLow: 97.0, avgAmp: 74.1 },
-            { label: '50~100元', count: 396, avgHigh: 167.0, avgLow: 98.6, avgAmp: 68.6 },
-            { label: '100~150元', count: 143, avgHigh: 164.8, avgLow: 98.2, avgAmp: 69.0 },
-            { label: '150~200元', count: 62, avgHigh: 152.8, avgLow: 99.8, avgAmp: 52.7 },
-            { label: '大於200元', count: 99, avgHigh: 157.6, avgLow: 99.9, avgAmp: 57.2 }
-        ]
-    };
-    
-    // 信評區間（動態從00工作表E欄信用評等計算）
-    const ratingRanges = [];
-    for (let tcri = 1; tcri <= 8; tcri++) {
-        const tcriStr = String(tcri);
-        const allData = [...auctionRawData, ...inquiryRawData];
-        const filtered = allData.filter(d => {
-            const r = String(d.rating || '').trim();
-            return r === tcriStr || r === 'TCRI' + tcriStr || r === 'TCRI ' + tcriStr;
-        });
-        const withMarket = filtered.filter(d => d.marketHigh > 0 && d.marketLow > 0);
-        
-        let avgHigh = 0, avgLow = 0, avgAmp = 0;
-        if (withMarket.length > 0) {
-            avgHigh = withMarket.reduce((s, d) => s + d.marketHigh, 0) / withMarket.length;
-            avgLow = withMarket.reduce((s, d) => s + d.marketLow, 0) / withMarket.length;
-            avgAmp = avgHigh - avgLow;
+    // 從auctionRawData取得數據（含openDate）
+    auctionRawData.forEach(d => {
+        let year = null;
+        if (d.openDate) {
+            if (typeof d.openDate === 'number') {
+                const date = new Date((d.openDate - 25569) * 86400 * 1000);
+                year = date.getFullYear();
+            } else if (typeof d.openDate === 'string') {
+                const parts = d.openDate.split(/[\/\-]/);
+                year = parseInt(parts[0]);
+                if (year < 100) year += 2000;
+            }
         }
         
-        ratingRanges.push({
-            label: 'TCRI ' + tcri,
-            count: filtered.length,
-            avgHigh: parseFloat(avgHigh.toFixed(1)),
-            avgLow: parseFloat(avgLow.toFixed(1)),
+        const hasMarket = d.marketHigh > 0 && d.marketLow > 0;
+        const amp = hasMarket ? ((d.marketHigh - d.marketLow) / d.marketLow * 100) : 0;
+        
+        allCBData.push({
+            id: d.id,
+            name: d.name || '',
+            type: '競拍',
+            year: year,
+            high: d.marketHigh || 0,
+            low: d.marketLow || 0,
+            amp: amp,
+            hasMarket: hasMarket,
+            capital: d.capital || 0,
+            issueSize: d.issueSize || 0,
+            conversionPrice: d.conversionPrice || 0,
+            rating: d.rating || '',
+            years: d.years || 0,
+            guarantee: d.guarantee || '',
+            isKY: (d.name || '').includes('K')
+        });
+    });
+    
+    // 從inquiryRawData取得數據
+    inquiryRawData.forEach(d => {
+        if (allCBData.find(a => a.id === d.id)) return; // 避免重複
+        
+        let year = null;
+        if (d.openDate) {
+            if (typeof d.openDate === 'number') {
+                const date = new Date((d.openDate - 25569) * 86400 * 1000);
+                year = date.getFullYear();
+            } else if (typeof d.openDate === 'string') {
+                const parts = d.openDate.split(/[\/\-]/);
+                year = parseInt(parts[0]);
+                if (year < 100) year += 2000;
+            }
+        }
+        
+        const hasMarket = d.marketHigh > 0 && d.marketLow > 0;
+        const amp = hasMarket ? ((d.marketHigh - d.marketLow) / d.marketLow * 100) : 0;
+        
+        allCBData.push({
+            id: d.id,
+            name: d.name || '',
+            type: '詢圈',
+            year: year,
+            high: d.marketHigh || 0,
+            low: d.marketLow || 0,
+            amp: amp,
+            hasMarket: hasMarket,
+            capital: d.capital || 0,
+            issueSize: d.issueSize || 0,
+            conversionPrice: d.conversionPrice || 0,
+            rating: d.rating || '',
+            years: d.years || 0,
+            guarantee: d.guarantee || '',
+            isKY: (d.name || '').includes('K')
+        });
+    });
+    
+    // 輔助函數：計算區間統計
+    function calcStats(data) {
+        const withMarket = data.filter(d => d.hasMarket);
+        if (withMarket.length === 0) return { count: data.length, avgHigh: 0, avgLow: 0, avgAmp: 0 };
+        return {
+            count: data.length,
+            avgHigh: withMarket.reduce((s, d) => s + d.high, 0) / withMarket.length,
+            avgLow: withMarket.reduce((s, d) => s + d.low, 0) / withMarket.length,
+            avgAmp: withMarket.reduce((s, d) => s + d.amp, 0) / withMarket.length
+        };
+    }
+    
+    // 1. 年度數據（動態生成2010-當前年）
+    const currentYear = new Date().getFullYear();
+    const yearlyData = [];
+    for (let y = 2010; y <= currentYear; y++) {
+        const yearCB = allCBData.filter(d => d.year === y);
+        const auction = yearCB.filter(d => d.type === '競拍');
+        const inquiry = yearCB.filter(d => d.type === '詢圈');
+        const withMarket = yearCB.filter(d => d.hasMarket);
+        const avgAmp = withMarket.length > 0 ? withMarket.reduce((s, d) => s + d.amp, 0) / withMarket.length : 0;
+        
+        yearlyData.push({
+            year: y,
+            total: yearCB.length,
+            auction: auction.length,
+            inquiry: inquiry.length,
             avgAmp: parseFloat(avgAmp.toFixed(1))
         });
     }
-    marketTrendData.rating = {
-        ranges: ratingRanges.filter(r => r.count > 0) // 只顯示有資料的等級
+    marketTrendData.yearly = yearlyData.filter(d => d.total > 0);
+    
+    // 2. 擔保比較（動態生成）
+    const guaranteed = allCBData.filter(d => d.guarantee && d.guarantee.includes('有'));
+    const unguaranteed = allCBData.filter(d => !d.guarantee || d.guarantee.includes('無') || !d.guarantee.includes('有'));
+    const gStats = calcStats(guaranteed);
+    const uStats = calcStats(unguaranteed);
+    
+    marketTrendData.guarantee = {
+        overall: {
+            guaranteed: { count: gStats.count, avgHigh: gStats.avgHigh, avgLow: gStats.avgLow, avgAmp: gStats.avgAmp },
+            unguaranteed: { count: uStats.count, avgHigh: uStats.avgHigh, avgLow: uStats.avgLow, avgAmp: uStats.avgAmp }
+        },
+        yearly: [] // 簡化處理，移除年度細分
     };
     
-    // 發行年期（依05工作表設定）
+    // 3. 發行規模區間（動態生成）
+    const sizeRanges = [
+        { label: '小於2億', min: 0, max: 2 },
+        { label: '2~5億', min: 2, max: 5 },
+        { label: '5~10億', min: 5, max: 10 },
+        { label: '10~15億', min: 10, max: 15 },
+        { label: '15~20億', min: 15, max: 20 },
+        { label: '大於20億', min: 20, max: 99999 }
+    ];
+    marketTrendData.size = {
+        ranges: sizeRanges.map(r => {
+            const filtered = allCBData.filter(d => d.issueSize >= r.min && d.issueSize < r.max);
+            const stats = calcStats(filtered);
+            return { label: r.label, count: stats.count, avgHigh: stats.avgHigh, avgLow: stats.avgLow, avgAmp: stats.avgAmp };
+        }).filter(r => r.count > 0)
+    };
+    
+    // 4. 股本區間（動態生成）
+    const capitalRanges = [
+        { label: '小於3億', min: 0, max: 3 },
+        { label: '3~6億', min: 3, max: 6 },
+        { label: '6~10億', min: 6, max: 10 },
+        { label: '10~15億', min: 10, max: 15 },
+        { label: '15~20億', min: 15, max: 20 },
+        { label: '大於20億', min: 20, max: 99999 }
+    ];
+    marketTrendData.capital = {
+        ranges: capitalRanges.map(r => {
+            const filtered = allCBData.filter(d => d.capital >= r.min && d.capital < r.max);
+            const stats = calcStats(filtered);
+            return { label: r.label, count: stats.count, avgHigh: stats.avgHigh, avgLow: stats.avgLow, avgAmp: stats.avgAmp };
+        }).filter(r => r.count > 0)
+    };
+    
+    // 5. 轉換價區間（動態生成）
+    const priceRanges = [
+        { label: '小於20元', min: 0, max: 20 },
+        { label: '20~50元', min: 20, max: 50 },
+        { label: '50~100元', min: 50, max: 100 },
+        { label: '100~150元', min: 100, max: 150 },
+        { label: '150~200元', min: 150, max: 200 },
+        { label: '大於200元', min: 200, max: 99999 }
+    ];
+    marketTrendData.conversion = {
+        ranges: priceRanges.map(r => {
+            const filtered = allCBData.filter(d => d.conversionPrice >= r.min && d.conversionPrice < r.max);
+            const stats = calcStats(filtered);
+            return { label: r.label, count: stats.count, avgHigh: stats.avgHigh, avgLow: stats.avgLow, avgAmp: stats.avgAmp };
+        }).filter(r => r.count > 0)
+    };
+    
+    // 6. 信評區間（動態生成）
+    const ratingRanges = [];
+    for (let tcri = 1; tcri <= 8; tcri++) {
+        const tcriStr = String(tcri);
+        const filtered = allCBData.filter(d => {
+            const r = String(d.rating || '').trim();
+            return r === tcriStr || r === 'TCRI' + tcriStr || r === 'TCRI ' + tcriStr;
+        });
+        const stats = calcStats(filtered);
+        if (stats.count > 0) {
+            ratingRanges.push({
+                label: 'TCRI ' + tcri,
+                count: stats.count,
+                avgHigh: parseFloat(stats.avgHigh.toFixed(1)),
+                avgLow: parseFloat(stats.avgLow.toFixed(1)),
+                avgAmp: parseFloat(stats.avgAmp.toFixed(1))
+            });
+        }
+    }
+    marketTrendData.rating = { ranges: ratingRanges };
+    
+    // 7. 發行年期（動態生成）
+    const yearRanges = [
+        { label: '3年期', min: 2.5, max: 3.5 },
+        { label: '5年期', min: 4.5, max: 5.5 },
+        { label: '7年期', min: 6.5, max: 7.5 }
+    ];
     marketTrendData.years = {
-        ranges: [
-            { label: '3年期', count: 1047, avgHigh: 163.0, avgLow: 99.8, avgAmp: 62.2 },
-            { label: '5年期', count: 578, avgHigh: 176.9, avgLow: 96.1, avgAmp: 86.9 },
-            { label: '7年期', count: 1, avgHigh: 450.0, avgLow: 97.0, avgAmp: 363.9 }
-        ]
+        ranges: yearRanges.map(r => {
+            const filtered = allCBData.filter(d => d.years >= r.min && d.years <= r.max);
+            const stats = calcStats(filtered);
+            return { label: r.label, count: stats.count, avgHigh: stats.avgHigh, avgLow: stats.avgLow, avgAmp: stats.avgAmp };
+        }).filter(r => r.count > 0)
     };
     
-    // 競拍vs詢圈
+    // 8. 競拍vs詢圈（動態生成）
+    const auctionCB = allCBData.filter(d => d.type === '競拍');
+    const inquiryCB = allCBData.filter(d => d.type === '詢圈');
+    const aStats = calcStats(auctionCB);
+    const iStats = calcStats(inquiryCB);
     marketTrendData.type = {
-        auction: { count: 296, avgHigh: 164.5, avgLow: 100.8, avgAmp: 62.8 },
-        inquiry: { count: 964, avgHigh: 170.5, avgLow: 98.1, avgAmp: 75.2 }
+        auction: { count: aStats.count, avgHigh: aStats.avgHigh, avgLow: aStats.avgLow, avgAmp: aStats.avgAmp },
+        inquiry: { count: iStats.count, avgHigh: iStats.avgHigh, avgLow: iStats.avgLow, avgAmp: iStats.avgAmp }
     };
     
-    // 發行次數分析（完整到第10次）
-    marketTrendData.issueNum = {
-        byNumber: [
-            { num: 1, total: 948, count: 931, avgHigh: 174.1, avgLow: 97.6, avgAmp: 80.2 },
-            { num: 2, total: 548, count: 540, avgHigh: 167.7, avgLow: 96.9, avgAmp: 76.6 },
-            { num: 3, total: 324, count: 319, avgHigh: 170.7, avgLow: 99.9, avgAmp: 71.8 },
-            { num: 4, total: 178, count: 178, avgHigh: 169.9, avgLow: 98.7, avgAmp: 71.9 },
-            { num: 5, total: 95, count: 94, avgHigh: 162.7, avgLow: 99.6, avgAmp: 63.2 },
-            { num: 6, total: 50, count: 47, avgHigh: 169.0, avgLow: 100.0, avgAmp: 68.7 },
-            { num: 7, total: 28, count: 26, avgHigh: 180.7, avgLow: 101.7, avgAmp: 77.1 },
-            { num: 8, total: 12, count: 11, avgHigh: 176.4, avgLow: 97.9, avgAmp: 80.0 },
-            { num: 9, total: 5, count: 5, avgHigh: 216.6, avgLow: 97.3, avgAmp: 127.7 },
-            { num: 10, total: 2, count: 2, avgHigh: 189.1, avgLow: 104.9, avgAmp: 75.2 }
-        ],
-        yearly: [
-            { year: 2010, first: 45, firstAmp: 44.0, multi: 72, multiAmp: 56.2 },
-            { year: 2011, first: 34, firstAmp: 41.6, multi: 64, multiAmp: 51.8 },
-            { year: 2012, first: 24, firstAmp: 72.7, multi: 50, multiAmp: 65.6 },
-            { year: 2013, first: 37, firstAmp: 109.6, multi: 52, multiAmp: 78.5 },
-            { year: 2014, first: 41, firstAmp: 46.9, multi: 54, multiAmp: 50.8 },
-            { year: 2015, first: 41, firstAmp: 62.4, multi: 57, multiAmp: 62.1 },
-            { year: 2016, first: 17, firstAmp: 75.3, multi: 38, multiAmp: 72.2 },
-            { year: 2017, first: 14, firstAmp: 60.9, multi: 32, multiAmp: 60.8 },
-            { year: 2018, first: 16, firstAmp: 65.7, multi: 41, multiAmp: 85.1 },
-            { year: 2019, first: 34, firstAmp: 61.4, multi: 37, multiAmp: 94.9 },
-            { year: 2020, first: 31, firstAmp: 109.0, multi: 66, multiAmp: 114.0 },
-            { year: 2021, first: 29, firstAmp: 86.1, multi: 74, multiAmp: 76.5 },
-            { year: 2022, first: 35, firstAmp: 84.8, multi: 60, multiAmp: 82.5 },
-            { year: 2023, first: 26, firstAmp: 67.0, multi: 65, multiAmp: 69.0 },
-            { year: 2024, first: 37, firstAmp: 47.4, multi: 100, multiAmp: 43.4 },
-            { year: 2025, first: 29, firstAmp: 19.6, multi: 65, multiAmp: 24.4 }
-        ]
-    };
+    // 9. 發行次數分析（動態生成）
+    const issueNumData = [];
+    for (let num = 1; num <= 10; num++) {
+        // 從CB名稱末尾提取發行次數（如：佳必琪三→3）
+        const numChar = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'][num];
+        const filtered = allCBData.filter(d => {
+            const name = d.name || '';
+            return name.endsWith(numChar) || name.endsWith(num + 'K') || name.endsWith(numChar + 'K');
+        });
+        const stats = calcStats(filtered);
+        if (stats.count > 0) {
+            issueNumData.push({
+                num: num,
+                total: filtered.length,
+                count: filtered.filter(d => d.hasMarket).length,
+                avgHigh: parseFloat(stats.avgHigh.toFixed(1)),
+                avgLow: parseFloat(stats.avgLow.toFixed(1)),
+                avgAmp: parseFloat(stats.avgAmp.toFixed(1))
+            });
+        }
+    }
+    marketTrendData.issueNum = { byNumber: issueNumData, yearly: [] };
     
-    // KY股分析（多年度）
+    // 10. KY股分析（動態生成）
+    const kyCB = allCBData.filter(d => d.isKY);
+    const nonKyCB = allCBData.filter(d => !d.isKY);
+    const kyStats = calcStats(kyCB);
+    const nonKyStats = calcStats(nonKyCB);
     marketTrendData.ky = {
         overall: {
-            ky: { count: 120, avgHigh: 154.3, avgLow: 95.9, avgAmp: 63.5 },
-            nonKy: { count: 2074, avgHigh: 172.7, avgLow: 98.2, avgAmp: 77.6 }
+            ky: { count: kyStats.count, avgHigh: kyStats.avgHigh, avgLow: kyStats.avgLow, avgAmp: kyStats.avgAmp },
+            nonKy: { count: nonKyStats.count, avgHigh: nonKyStats.avgHigh, avgLow: nonKyStats.avgLow, avgAmp: nonKyStats.avgAmp }
         },
-        yearly: [
-            { year: 2010, total: 118, ky: 0, kyRatio: 0, kyAmp: 0, nonKyAmp: 51.4 },
-            { year: 2011, total: 100, ky: 0, kyRatio: 0, kyAmp: 0, nonKyAmp: 48.8 },
-            { year: 2012, total: 76, ky: 1, kyRatio: 1.3, kyAmp: 33.8, nonKyAmp: 69.0 },
-            { year: 2013, total: 89, ky: 3, kyRatio: 3.4, kyAmp: 97.6, nonKyAmp: 91.0 },
-            { year: 2014, total: 96, ky: 6, kyRatio: 6.2, kyAmp: 50.0, nonKyAmp: 48.9 },
-            { year: 2015, total: 100, ky: 11, kyRatio: 11.0, kyAmp: 40.4, nonKyAmp: 64.3 },
-            { year: 2016, total: 55, ky: 4, kyRatio: 7.3, kyAmp: 69.8, nonKyAmp: 73.4 },
-            { year: 2017, total: 46, ky: 7, kyRatio: 15.2, kyAmp: 29.6, nonKyAmp: 66.4 },
-            { year: 2018, total: 57, ky: 11, kyRatio: 19.3, kyAmp: 55.7, nonKyAmp: 85.3 },
-            { year: 2019, total: 71, ky: 7, kyRatio: 9.9, kyAmp: 81.7, nonKyAmp: 78.6 },
-            { year: 2020, total: 97, ky: 12, kyRatio: 12.4, kyAmp: 111.5, nonKyAmp: 112.5 },
-            { year: 2021, total: 103, ky: 10, kyRatio: 9.7, kyAmp: 27.4, nonKyAmp: 84.8 },
-            { year: 2022, total: 96, ky: 8, kyRatio: 8.3, kyAmp: 142.9, nonKyAmp: 77.1 },
-            { year: 2023, total: 91, ky: 9, kyRatio: 9.9, kyAmp: 67.7, nonKyAmp: 68.5 },
-            { year: 2024, total: 139, ky: 10, kyRatio: 7.2, kyAmp: 51.9, nonKyAmp: 43.6 },
-            { year: 2025, total: 95, ky: 11, kyRatio: 11.6, kyAmp: 14.1, nonKyAmp: 24.0 }
-        ]
+        yearly: [] // 簡化處理
     };
     
     // 顯示預設Tab
@@ -8457,7 +8344,7 @@ function calcHeatIndex(params) {
 // ==========================================
 // v3.72 主力模擬出價預測模組
 // ========================================
-// v3.73 新增：基於300檔競拍統計的完整查表系統
+// v3.73 新增：基於${totalAuctionCount}檔競拍統計的完整查表系統
 // 數據來源：Rex大叔競拍資料庫完整統計分析報告
 // ========================================
 
@@ -8551,7 +8438,7 @@ window.OVERALL_STATS = {
     avgPremium: 8.73,
     avgQualified: 474,
     avgBidShares: 34.5,
-    totalSamples: 300
+    get totalSamples() { return totalAuctionCount || 300; }  // v3.76 動態取值
 };
 
 // 信評等級 → 投標倍數
@@ -8605,7 +8492,7 @@ function showIndustryTip(industry) {
     tipBox.innerHTML = `
         <div class="tip-title">
             <span style="color:${heatColor};">${heatLevel}</span> 
-            📊 300檔統計：${indName}（${data.count}檔）
+            📊 ${totalAuctionCount}檔統計：${indName}（${data.count}檔）
         </div>
         <div class="tip-stats">
             <span>投標倍數：<b style="color:#6366f1;">${data.avgMult.toFixed(2)}x</b></span>
@@ -8646,7 +8533,7 @@ function showBrokerTip(broker) {
     tipBox.innerHTML = `
         <div class="tip-title">
             <span style="color:${heatColor};">${heatLevel}</span> 
-            🏦 300檔統計：${brokerName}（${data.count}檔）
+            🏦 ${totalAuctionCount}檔統計：${brokerName}（${data.count}檔）
         </div>
         <div class="tip-stats">
             <span>投標倍數：<b style="color:#6366f1;">${data.avgMult.toFixed(2)}x</b></span>
@@ -8696,7 +8583,7 @@ function showSizeTip(sizeRange) {
     tipBox.innerHTML = `
         <div class="tip-title">
             <span style="color:${heatColor};">${heatLevel}</span> 
-            📦 300檔統計：${data.label}（${data.count}檔，佔${(data.count/300*100).toFixed(1)}%）
+            📦 ${totalAuctionCount}檔統計：${data.label}（${data.count}檔，佔${(data.count/totalAuctionCount*100).toFixed(1)}%）
         </div>
         <div class="tip-stats">
             <span>投標倍數：<b style="color:#6366f1;">${data.avgMult.toFixed(2)}x</b></span>
@@ -8726,7 +8613,7 @@ function showTermGuaranteeTip() {
         if (yearData) {
             const heatColor = yearData.avgMult >= 3 ? '#ef4444' : (yearData.avgMult >= 2.5 ? '#eab308' : '#22c55e');
             yearsTipBox.innerHTML = `
-                <div class="tip-title">📅 300檔統計：${yearData.label}（佔${yearData.pct}%）</div>
+                <div class="tip-title">📅 ${totalAuctionCount}檔統計：${yearData.label}（佔${yearData.pct}%）</div>
                 <div class="tip-stats">
                     <span>投標倍數：<b style="color:${heatColor};">${yearData.avgMult.toFixed(2)}x</b></span>
                     <span>平均得標：<b>${yearData.avgPrice.toFixed(1)}元</b></span>
@@ -8759,7 +8646,7 @@ function showTermGuaranteeTip() {
                     const comboColor = comboData.avgMult >= 3 ? '#ef4444' : (comboData.avgMult >= 2.5 ? '#eab308' : '#22c55e');
                     guarTipBox.innerHTML = `
                         <div class="tip-title">
-                            <span style="color:${comboColor};">🎯 300檔統計：${guarantee}+${years}年組合</span>（${comboData.count}檔）
+                            <span style="color:${comboColor};">🎯 ${totalAuctionCount}檔統計：${guarantee}+${years}年組合</span>（${comboData.count}檔）
                         </div>
                         <div class="tip-stats">
                             <span>投標倍數：<b style="color:#6366f1;">${comboData.avgMult.toFixed(2)}x</b></span>
@@ -8774,7 +8661,7 @@ function showTermGuaranteeTip() {
             
             // 只有擔保
             guarTipBox.innerHTML = `
-                <div class="tip-title">🛡️ 300檔統計：${guarantee}（佔${guarData.pct}%）</div>
+                <div class="tip-title">🛡️ ${totalAuctionCount}檔統計：${guarantee}（佔${guarData.pct}%）</div>
                 <div class="tip-stats">
                     <span>投標倍數：<b style="color:${heatColor};">${guarData.avgMult.toFixed(2)}x</b></span>
                     <span>平均溢價：<b>${guarData.avgPremium.toFixed(1)}%</b></span>
@@ -8828,7 +8715,7 @@ function showTheoPriceTip(theoRange) {
     }
     
     tipBox.innerHTML = `
-        <div class="tip-title">📈 300檔統計：${data.label}（${data.count}檔，佔${(data.count/300*100).toFixed(1)}%）</div>
+        <div class="tip-title">📈 ${totalAuctionCount}檔統計：${data.label}（${data.count}檔，佔${(data.count/totalAuctionCount*100).toFixed(1)}%）</div>
         <div class="tip-stats">
             <span>投標倍數：<b style="color:${heatColor};">${data.avgMult.toFixed(2)}x</b></span>
             <span>平均得標：<b style="color:#059669;">${data.avgPrice.toFixed(1)}元</b></span>
@@ -8874,7 +8761,7 @@ function showRatingTip(rating) {
     
     tipBox.innerHTML = `
         <div class="tip-title">
-            ⭐ 300檔統計：TCRI ${rating} - <span style="color:${riskColor};">${riskLevel}</span>（${data.count}檔，佔${(data.count/300*100).toFixed(1)}%）
+            ⭐ ${totalAuctionCount}檔統計：TCRI ${rating} - <span style="color:${riskColor};">${riskLevel}</span>（${data.count}檔，佔${(data.count/totalAuctionCount*100).toFixed(1)}%）
         </div>
         <div class="tip-stats">
             <span>投標倍數：<b style="color:${heatColor};">${data.avgMult.toFixed(2)}x</b></span>
@@ -9132,7 +9019,7 @@ function generateConditionSummaryHTML(r) {
         </h3>
         <div style="padding:5px 0 10px;">
             <div style="font-size:12px; color:#64748b; margin-bottom:12px;">
-                💡 以下為您所選條件在300檔歷史競拍中的統計數據（倍數/得標價）
+                💡 以下為您所選條件在${totalAuctionCount}檔歷史競拍中的統計數據（倍數/得標價）
             </div>
             <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:10px;">
                 ${itemsHTML}
@@ -9504,7 +9391,7 @@ function getExpectedPriceByMult(bidMult) {
         avgPrice: 108.30,   // 預期平均得標（積極型基準）
         gap: 2.20,          // 差距
         avgPremium: 8.73, 
-        count: 300 
+        count: totalAuctionCount || 300  // v3.76 動態取值
     };
     
     if (bidMult < 1) {
@@ -9541,7 +9428,7 @@ function getExpectedPriceByMult(bidMult) {
 function predictMajorPlayerBid(theoPrice, bidMultiple, issueSize, broker, guarantee, years = 3, industry = '') {
     
     // ========================================
-    // v3.73 重新設計：基於300檔競拍統計的智能預測
+    // v3.73 重新設計：基於${totalAuctionCount}檔競拍統計的智能預測
     // 核心邏輯：
     // 1. 預估投標倍數（多因子加權）
     // 2. 查表得到預期得標價區間
@@ -9667,7 +9554,7 @@ function predictMajorPlayerBid(theoPrice, bidMultiple, issueSize, broker, guaran
         guarKey: guarKey,
         
         // === 統計來源說明 ===
-        dataSource: `基於300檔競拍統計（${priceExpect.count}檔同倍數區間）`
+        dataSource: `基於${totalAuctionCount}檔競拍統計（${priceExpect.count}檔同倍數區間）`
     };
 }
 
@@ -10024,7 +9911,7 @@ function updateAuctionEvaluation() {
     // 檢查是否有統計數據
     if (!window.conditionStats || Object.keys(window.conditionStats).length === 0) {
         container.innerHTML = '<div style="color:#666;padding:10px;">統計數據載入中，請稍候...</div>';
-        // v3.73：統計數據載入中時，仍然嘗試顯示基於300檔統計的預測
+        // v3.73：統計數據載入中時，仍然嘗試顯示基於${totalAuctionCount}檔統計的預測
         updateLiveAIPrediction(theoPrice, issueSize, guarantee, broker, industry, tcri);
         return;
     }
@@ -10702,7 +10589,7 @@ function generateMajorPlayerHTML(mpResult, floorPrice, theoPrice, guarantee) {
     <div class="major-player-panel">
         <div class="major-player-header">
             🎯 v3.73 AI智能競拍預測
-            <span style="float:right; font-size:12px; font-weight:normal;">${mpResult.dataSource || '基於300檔競拍統計'}</span>
+            <span style="float:right; font-size:12px; font-weight:normal;">${mpResult.dataSource || '基於${totalAuctionCount}檔競拍統計'}</span>
         </div>
         <div class="major-player-content">
             <!-- 投標倍數預估區塊（核心新功能） -->
@@ -10733,7 +10620,7 @@ function generateMajorPlayerHTML(mpResult, floorPrice, theoPrice, guarantee) {
                 </div>
                 ${factorHTML || '<div style="color:#999; font-size:12px;">無可用因子數據</div>'}
                 <div style="border-top:1px solid #e2e8f0; margin-top:8px; padding-top:8px; font-size:11px; color:#64748b;">
-                    基準倍數 2.98（300檔平均）→ 預估 <b style="color:#6366f1;">${mpResult.estimatedMult?.toFixed(2) || '2.98'}</b> 倍
+                    基準倍數 2.98（${totalAuctionCount}檔平均）→ 預估 <b style="color:#6366f1;">${mpResult.estimatedMult?.toFixed(2) || '2.98'}</b> 倍
                 </div>
             </div>
             

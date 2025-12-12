@@ -9574,13 +9574,30 @@ function predictMajorPlayerBid(theoPrice, bidMultiple, issueSize, broker, guaran
     const expectedAvgBid = priceExpect.avgPrice;   // 預期平均得標（積極基準）
     const priceGap = priceExpect.gap;              // 區間差距
     
-    // Step 3：三種策略直接對應查表區間
-    // 保守型 = 預期最低得標（門檻價，有機會得標）
-    // 平衡型 = (最低+平均)/2（最佳性價比）
-    // 積極型 = 預期平均得標（穩定得標）
-    const conservativePrice = expectedMinBid;
-    const balancedPrice = (expectedMinBid + expectedAvgBid) / 2;
-    const aggressivePrice = expectedAvgBid;
+    // Step 3：三種策略計算
+    // v3.76 修正：智能處理不同理論價情況
+    let conservativePrice, balancedPrice, aggressivePrice;
+    
+    if (expectedMinBid >= theoPrice || theoPrice <= 100) {
+        // 正常情況：查表價格 >= 理論價，或理論價 <= 100
+        conservativePrice = expectedMinBid;
+        balancedPrice = (expectedMinBid + expectedAvgBid) / 2;
+        aggressivePrice = expectedAvgBid;
+    } else {
+        // 高理論價情況：查表價格 < 理論價
+        // 以理論價為基準，加上縮減後的溢價率，並維持合理區間
+        const scaleFactor = 0.5;  // 高理論價標的溢價率較低
+        const histMinPremium = ((expectedMinBid / 100) - 1) * 100 * scaleFactor;
+        const histAvgPremium = ((expectedAvgBid / 100) - 1) * 100 * scaleFactor;
+        const minSpread = priceGap * 0.8;  // 確保區間差距
+        
+        conservativePrice = Math.max(theoPrice * (1 + histMinPremium / 100), theoPrice);
+        aggressivePrice = Math.max(
+            theoPrice * (1 + histAvgPremium / 100), 
+            conservativePrice + minSpread
+        );
+        balancedPrice = (conservativePrice + aggressivePrice) / 2;
+    }
     
     // 計算溢價率（相對於理論價）
     const conservativePremium = theoPrice > 0 ? ((conservativePrice / theoPrice) - 1) * 100 : 0;
@@ -10166,18 +10183,39 @@ function updateLiveAIPrediction(theoPrice, issueSize, guarantee, broker, industr
     const expectedAvgBid = priceExpect.avgPrice;  // 預期平均得標（積極基準）
     const priceGap = priceExpect.gap;             // 差距（約1.5-2元）
     
-    // 三種策略定義
-    conservativePrice = Math.max(expectedMinBid, floorPrice);           // 保守：最低得標
-    balancedPrice = Math.max((expectedMinBid + expectedAvgBid) / 2, floorPrice);  // 平衡：中間值
-    aggressivePrice = Math.max(expectedAvgBid, floorPrice);             // 積極：平均得標
+    // v3.76 修正：智能處理不同理論價情況
+    // 核心原則：建議出價 >= max(底標, 理論價)，且三種策略要有合理差距
+    const minBidFloor = Math.max(floorPrice, theoPrice);
     
-    // 判斷計算方法
-    if (theoPrice < 100) {
-        calcMethod = '價格法';
-        methodNote = `理論價${theoPrice.toFixed(1)}<100，直接用價格`;
-    } else {
+    // 三種策略定義
+    if (expectedMinBid >= theoPrice) {
+        // 正常情況：查表價格 >= 理論價，直接使用查表結果
+        conservativePrice = Math.max(expectedMinBid, floorPrice);
+        aggressivePrice = Math.max(expectedAvgBid, floorPrice);
+        balancedPrice = (conservativePrice + aggressivePrice) / 2;
+        
         calcMethod = '查表法';
         methodNote = `投標倍數${multResult.estimatedMult.toFixed(2)}x對應歷史區間`;
+    } else {
+        // 高理論價情況：查表價格 < 理論價
+        // 策略：以理論價為基準，維持合理的溢價區間
+        const scaleFactor = 0.5;  // 溢價率縮減係數（高理論價標的溢價率較低）
+        const histMinPremium = ((expectedMinBid / 100) - 1) * 100 * scaleFactor;
+        const histAvgPremium = ((expectedAvgBid / 100) - 1) * 100 * scaleFactor;
+        
+        // 確保區間差距至少是 priceGap * 0.8
+        const minSpread = priceGap * 0.8;
+        
+        conservativePrice = Math.max(theoPrice * (1 + histMinPremium / 100), theoPrice, floorPrice);
+        aggressivePrice = Math.max(
+            theoPrice * (1 + histAvgPremium / 100), 
+            conservativePrice + minSpread,
+            floorPrice
+        );
+        balancedPrice = (conservativePrice + aggressivePrice) / 2;
+        
+        calcMethod = '溢價率法';
+        methodNote = `理論價${theoPrice.toFixed(1)}元較高，套用縮減溢價率`;
     }
     
     // 計算溢價率（相對於底標或理論價）

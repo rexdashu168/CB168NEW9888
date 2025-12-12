@@ -3570,6 +3570,19 @@ async function loadStatistics() {
                     return '大於200元';
                 };
                 
+                // v3.79 新增：計算理論價區間
+                const getTheoRange = (stockP, convP) => {
+                    if (stockP <= 0 || convP <= 0) return '';
+                    const theo = (stockP / convP) * 100;
+                    if (theo < 90) return '小於90元';
+                    if (theo < 95) return '90~95元';
+                    if (theo < 100) return '95~100元';
+                    if (theo < 105) return '100~105元';
+                    if (theo < 110) return '105~110元';
+                    if (theo < 115) return '110~115元';
+                    return '大於115元';
+                };
+                
                 // 從產業對照表獲取產業
                 const industry = window.industryMap[stockCode] || '其他';
                 
@@ -3587,6 +3600,7 @@ async function loadStatistics() {
                     capitalRange: getCapitalRange(capital),
                     convPrice: convPrice,
                     convRange: getConvRange(convPrice),
+                    theoRange: getTheoRange(stockPrice, convPrice),  // v3.79 新增
                     years: years,
                     guarantee: guarantee,
                     rating: rating,
@@ -8437,8 +8451,12 @@ function handleQuickSelect() {
     // 發行規模區間
     if (c.sizeRange) document.getElementById('issueSize').value = c.sizeRange;
     
-    // v3.72 修改：自動計算理論價區間（從股價和轉換價計算）
-    if (c.stockPrice > 0 && c.convPrice > 0) {
+    // v3.79 改進：有股價/轉換價才計算理論價，沒有就留空讓用戶輸入
+    if (c.theoRange) {
+        // 如果caseObj已有theoRange，直接使用
+        document.getElementById('theoRange').value = c.theoRange;
+    } else if (c.stockPrice > 0 && c.convPrice > 0) {
+        // 從股價和轉換價計算
         const theoPrice = (c.stockPrice / c.convPrice) * 100;
         let theoRange = '';
         if (theoPrice < 90) theoRange = '小於90元';
@@ -8450,6 +8468,7 @@ function handleQuickSelect() {
         else theoRange = '大於115元';
         document.getElementById('theoRange').value = theoRange;
     }
+    // 如果沒有股價/轉換價，就不設定理論價區間，讓用戶自行輸入
     
     // 發行年期
     if (c.years) document.getElementById('years').value = c.years;
@@ -10516,20 +10535,40 @@ function updateAuctionEvaluation() {
     
     // 計算理論價
     let theoPrice = 0;
+    let theoPriceSource = '';
+    
     if (stockPrice > 0 && convPrice > 0) {
         theoPrice = (stockPrice / convPrice) * 100;
+        theoPriceSource = '股價/轉換價計算';
     } else {
         // 嘗試從理論價區間獲取
         const theoRangeStr = document.getElementById('theoRange')?.value || '';
         theoPrice = getTheoRangeMidValue(theoRangeStr);
+        if (theoPrice > 0) {
+            theoPriceSource = '理論價區間估算';
+        }
     }
     
+    // v3.79 修正：沒有理論價就提醒用戶輸入，不用預設值
     if (!theoPrice || theoPrice <= 0) {
-        container.innerHTML = '<div style="color:#666;padding:10px;">請輸入股價和轉換價（或選擇理論價區間）後查看評估結果</div>';
-        // v3.73：也清空即時AI預測區塊
+        container.innerHTML = `
+            <div style="padding:15px; background:#fff9e6; border-radius:8px; border-left:4px solid #ff9800;">
+                <div style="font-weight:bold; color:#e65100; margin-bottom:8px;">⚠️ 請補充股價和轉換價</div>
+                <div style="font-size:12px; color:#666;">
+                    系統需要股價和轉換價來計算理論價格，才能進行AI評估。<br><br>
+                    <b>方式一：</b>在上方「競拍資料」區塊輸入：<br>
+                    　• 截標日13:30收盤價<br>
+                    　• 實際轉換價格<br><br>
+                    <b>方式二：</b>直接選擇「理論價區間」
+                </div>
+                <div style="margin-top:10px; padding:8px; background:#e3f2fd; border-radius:6px; font-size:11px; color:#1565c0;">
+                    💡 提醒：理論價 = (股價 ÷ 轉換價) × 100
+                </div>
+            </div>
+        `;
         const liveContainer = document.getElementById('liveAIPrediction');
         if (liveContainer) {
-            liveContainer.innerHTML = '<div style="color:#666; padding:10px;">請填寫條件後即時顯示預測結果</div>';
+            liveContainer.innerHTML = '<div style="color:#999; padding:10px; text-align:center;">等待輸入股價/轉換價...</div>';
         }
         return;
     }
@@ -12334,11 +12373,75 @@ function generateSuperPredictionHTML() {
             </table>
         </div>
         
+        <!-- v3.79 新增：主力大戶投標策略建議 -->
+        <div style="background:white; padding:12px; border-radius:8px; margin-top:12px;">
+            <div style="font-size:12px; font-weight:bold; color:#333; margin-bottom:10px;">
+                🎯 主力大戶投標策略建議
+            </div>
+            
+            <!-- 單一價格策略 -->
+            <div style="background:#f0fdf4; padding:10px; border-radius:6px; margin-bottom:10px; border-left:4px solid #22c55e;">
+                <div style="font-weight:bold; color:#16a34a; margin-bottom:6px;">📍 單一價格策略（精準出價）</div>
+                <div style="font-size:11px; color:#333;">
+                    <div style="margin-bottom:4px;">
+                        <b>建議出價：${keyPrices.prob70 || '-'}元</b>
+                        <span style="color:#666;">（70%得標機率，平衡風險與成本）</span>
+                    </div>
+                    <div style="color:#666; font-size:10px;">
+                        💡 適合：資金有限、只想投一個價格的投資人<br>
+                        ✅ 優點：簡單明確，容易執行<br>
+                        ⚠️ 風險：若市場比預期冷，可能出價偏高
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 區間價格策略 -->
+            <div style="background:#fef3c7; padding:10px; border-radius:6px; margin-bottom:10px; border-left:4px solid #f59e0b;">
+                <div style="font-weight:bold; color:#d97706; margin-bottom:6px;">📊 區間價格策略（分批布局）</div>
+                <div style="font-size:11px; color:#333;">
+                    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:8px;">
+                        <div style="text-align:center; padding:6px; background:#fff; border-radius:4px;">
+                            <div style="font-size:10px; color:#16a34a;">低價位 30%</div>
+                            <div style="font-weight:bold;">${keyPrices.prob50 || '-'}元</div>
+                        </div>
+                        <div style="text-align:center; padding:6px; background:#fff; border-radius:4px;">
+                            <div style="font-size:10px; color:#d97706;">中價位 40%</div>
+                            <div style="font-weight:bold;">${keyPrices.prob70 || '-'}元</div>
+                        </div>
+                        <div style="text-align:center; padding:6px; background:#fff; border-radius:4px;">
+                            <div style="font-size:10px; color:#ea580c;">高價位 30%</div>
+                            <div style="font-weight:bold;">${keyPrices.prob85 || '-'}元</div>
+                        </div>
+                    </div>
+                    <div style="color:#666; font-size:10px;">
+                        💡 適合：資金較多、想確保部分得標的大戶<br>
+                        ✅ 優點：分散風險，保證部分低成本得標<br>
+                        ⚠️ 注意：高價位部分可能拉高整體成本
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 保守型策略 -->
+            <div style="background:#ecfdf5; padding:10px; border-radius:6px; border-left:4px solid #10b981;">
+                <div style="font-weight:bold; color:#059669; margin-bottom:6px;">🛡️ 極保守策略（控制成本優先）</div>
+                <div style="font-size:11px; color:#333;">
+                    <div style="margin-bottom:4px;">
+                        <b>只出：${keyPrices.prob50 || '-'}元</b>
+                        <span style="color:#666;">（50%得標機率）</span>
+                    </div>
+                    <div style="color:#666; font-size:10px;">
+                        💡 適合：認為市場可能偏冷、或只想要低成本得標的投資人<br>
+                        ✅ 優點：得標成本最低，獲利空間最大<br>
+                        ⚠️ 風險：得標機率較低，可能空手而回
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <div style="margin-top:10px; padding:8px; background:#f8fafc; border-radius:6px; font-size:10px; color:#666;">
-            💡 <b>使用建議：</b>
-            保守型參考50%得標價，成本低、獲利空間大；
-            積極型參考85%得標價，確保得標但成本較高；
-            一般建議在50%-70%區間內出價，控制成本同時維持合理得標機率。
+            💡 <b>Rex大叔提醒：</b>
+            競拍的核心是控制成本，低價得標才是贏家。在最低得標與平均得標之間得標，掛牌後的表現通常都不錯。
+            建議在50%-70%區間內出價，控制成本同時維持合理得標機率。
         </div>
     </div>`;
 }

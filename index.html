@@ -9302,9 +9302,23 @@ function predictMajorPlayerBid(theoPrice, bidMultiple, issueSize, broker, guaran
     const aggressivePremium = histAvgPremium;  // 歷史平均（積極：確保得標）
     
     // 計算實際建議價格（基於理論價）
-    const conservativePrice = theoPrice * (1 + conservativePremium / 100);
-    const balancedPrice = theoPrice * (1 + balancedPremium / 100);
-    const aggressivePrice = theoPrice * (1 + aggressivePremium / 100);
+    let conservativePrice = theoPrice * (1 + conservativePremium / 100);
+    let balancedPrice = theoPrice * (1 + balancedPremium / 100);
+    let aggressivePrice = theoPrice * (1 + aggressivePremium / 100);
+    
+    // v3.75：確保價格順序正確（保守 < 平衡 < 積極）
+    const sortedPrices = [
+        { price: conservativePrice, premium: conservativePremium },
+        { price: balancedPrice, premium: balancedPremium },
+        { price: aggressivePrice, premium: aggressivePremium }
+    ].sort((a, b) => a.price - b.price);
+    
+    const finalConservativePrice = sortedPrices[0].price;
+    const finalConservativePremium = sortedPrices[0].premium;
+    const finalBalancedPrice = sortedPrices[1].price;
+    const finalBalancedPremium = sortedPrices[1].premium;
+    const finalAggressivePrice = sortedPrices[2].price;
+    const finalAggressivePremium = sortedPrices[2].premium;
     
     // 熱度等級判斷
     let heatLevel = '一般';
@@ -9326,14 +9340,14 @@ function predictMajorPlayerBid(theoPrice, bidMultiple, issueSize, broker, guaran
         expectedMinBid: expectedMinBid,         // 預期最低得標（底標100基準）
         multRange: priceExpect.range,           // 倍數區間
         
-        // === 建議出價（基於理論價） ===
+        // === 建議出價（基於理論價，已排序確保 保守<平衡<積極）===
         theoPrice: theoPrice,
-        aggressivePrice: aggressivePrice,       // 積極型出價
-        balancedPrice: balancedPrice,           // 平衡型出價
-        conservativePrice: conservativePrice,   // 保守型出價
-        aggressivePremium: aggressivePremium,   // 積極型溢價%
-        balancedPremium: balancedPremium,       // 平衡型溢價%
-        conservativePremium: conservativePremium, // 保守型溢價%
+        aggressivePrice: finalAggressivePrice,       // 積極型出價（最高）
+        balancedPrice: finalBalancedPrice,           // 平衡型出價（中間）
+        conservativePrice: finalConservativePrice,   // 保守型出價（最低）
+        aggressivePremium: finalAggressivePremium,   // 積極型溢價%
+        balancedPremium: finalBalancedPremium,       // 平衡型溢價%
+        conservativePremium: finalConservativePremium, // 保守型溢價%
         
         // === 熱度與信心度 ===
         heatLevel: heatLevel,
@@ -9922,14 +9936,20 @@ function updateLiveAIPrediction(theoPrice, issueSize, guarantee, broker, industr
     }
     
     // 確保價格順序正確（保守 < 平衡 < 積極）
-    if (conservativePrice > balancedPrice) {
-        [conservativePrice, balancedPrice] = [balancedPrice, conservativePrice];
-        [conservativePremium, balancedPremium] = [balancedPremium, conservativePremium];
-    }
-    if (balancedPrice > aggressivePrice) {
-        [balancedPrice, aggressivePrice] = [aggressivePrice, balancedPrice];
-        [balancedPremium, aggressivePremium] = [aggressivePremium, balancedPremium];
-    }
+    // v3.75 修正：用更直接的方式排序
+    const priceArray = [
+        { type: 'conservative', price: conservativePrice, premium: conservativePremium },
+        { type: 'balanced', price: balancedPrice, premium: balancedPremium },
+        { type: 'aggressive', price: aggressivePrice, premium: aggressivePremium }
+    ].sort((a, b) => a.price - b.price);
+    
+    // 重新賦值：最低價=保守，中間=平衡，最高=積極
+    conservativePrice = priceArray[0].price;
+    conservativePremium = priceArray[0].premium;
+    balancedPrice = priceArray[1].price;
+    balancedPremium = priceArray[1].premium;
+    aggressivePrice = priceArray[2].price;
+    aggressivePremium = priceArray[2].premium;
     
     // 熱度標籤
     const heatLevel = multResult.estimatedMult >= 3.5 ? '🔥熱門' : (multResult.estimatedMult >= 2.5 ? '⚡偏熱' : (multResult.estimatedMult >= 1.5 ? '😐一般' : '❄️冷門'));
@@ -10253,10 +10273,20 @@ function generateMajorPlayerHTML(mpResult, floorPrice, theoPrice, guarantee) {
     const fp = parseFloat(floorPrice) || 100;
     const tp = parseFloat(theoPrice) || mpResult.theoPrice || 100;
     
-    // v3.73：直接使用計算好的價格，但確保不低於底標
-    const aggressivePrice = Math.max(mpResult.aggressivePrice || fp, fp);
-    const balancedPrice = Math.max(mpResult.balancedPrice || fp, fp);
-    const conservativePrice = Math.max(mpResult.conservativePrice || fp, fp);
+    // v3.75：確保價格順序正確（保守 < 平衡 < 積極）
+    let rawPrices = [
+        { type: 'conservative', price: Math.max(mpResult.conservativePrice || fp, fp), premium: mpResult.conservativePremium || 0 },
+        { type: 'balanced', price: Math.max(mpResult.balancedPrice || fp, fp), premium: mpResult.balancedPremium || 0 },
+        { type: 'aggressive', price: Math.max(mpResult.aggressivePrice || fp, fp), premium: mpResult.aggressivePremium || 0 }
+    ].sort((a, b) => a.price - b.price);
+    
+    // 排序後重新賦值：最低=保守，中間=平衡，最高=積極
+    const conservativePrice = rawPrices[0].price;
+    const conservativePremium = rawPrices[0].premium;
+    const balancedPrice = rawPrices[1].price;
+    const balancedPremium = rawPrices[1].premium;
+    const aggressivePrice = rawPrices[2].price;
+    const aggressivePremium = rawPrices[2].premium;
     
     // 信心度樣式
     const confClass = mpResult.confidence === '高' ? 'high' : (mpResult.confidence === '中' ? 'medium' : 'low');
@@ -10344,19 +10374,19 @@ function generateMajorPlayerHTML(mpResult, floorPrice, theoPrice, guarantee) {
                         <div class="mp-strategy-card safe">
                             <h5>🛡️ 保守型</h5>
                             <div class="mp-price">${conservativePrice.toFixed(2)}</div>
-                            <div class="mp-rate">溢價 ${mpResult.conservativePremium?.toFixed(2) || '-'}%</div>
+                            <div class="mp-rate">溢價 ${conservativePremium.toFixed(2)}%</div>
                             <div class="mp-rate" style="color:#f59e0b; font-size:11px;">控制成本優先</div>
                         </div>
                         <div class="mp-strategy-card stable">
                             <h5>⚖️ 平衡型</h5>
                             <div class="mp-price">${balancedPrice.toFixed(2)}</div>
-                            <div class="mp-rate">溢價 ${mpResult.balancedPremium?.toFixed(2) || '-'}%</div>
+                            <div class="mp-rate">溢價 ${balancedPremium.toFixed(2)}%</div>
                             <div class="mp-rate" style="color:#3b82f6; font-size:11px;">兼顧得標與成本</div>
                         </div>
                         <div class="mp-strategy-card sniper">
                             <h5>🎯 積極型</h5>
                             <div class="mp-price">${aggressivePrice.toFixed(2)}</div>
-                            <div class="mp-rate">溢價 ${mpResult.aggressivePremium?.toFixed(2) || '-'}%</div>
+                            <div class="mp-rate">溢價 ${aggressivePremium.toFixed(2)}%</div>
                             <div class="mp-rate" style="color:#22c55e; font-size:11px;">追求穩定得標</div>
                         </div>
                     </div>

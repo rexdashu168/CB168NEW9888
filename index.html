@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.73 (智慧預測版)</title>
+<title>AI智能可轉債競拍系統 v3.74 (動態回饋版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="embedded_data.js" onerror="console.warn('embedded_data.js not found, using defaults.')"></script>
 
@@ -1540,6 +1540,39 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
         </div>
     </div>
 
+    <!-- v3.74 新增：動態市場回饋區塊 -->
+    <div class="form-section" style="background: linear-gradient(135deg, #fce4ec 0%, #f8bbd9 100%); border: 2px solid #e91e63; border-radius: 12px; padding: 15px;">
+        <h3 style="color: #c2185b; border-left-color: #e91e63;">📡 動態市場回饋（近期開標結果）</h3>
+        <div style="font-size:12px; color:#666; margin-bottom:10px;">
+            💡 輸入最近1~5檔的實際開標結果，系統會自動調整預測以反映當前市場氛圍
+        </div>
+        
+        <!-- 回饋輸入區 -->
+        <div id="recentAuctionInputs" style="margin-bottom:12px;">
+            <div class="recent-auction-row" style="display:grid; grid-template-columns:80px 1fr 80px 80px 30px; gap:6px; margin-bottom:6px; align-items:center;">
+                <input type="text" class="ra-name" placeholder="名稱" style="padding:6px; border:1px solid #ddd; border-radius:4px; font-size:11px;">
+                <input type="date" class="ra-date" style="padding:6px; border:1px solid #ddd; border-radius:4px; font-size:11px;">
+                <input type="number" class="ra-mult" placeholder="實際倍數" step="0.01" style="padding:6px; border:1px solid #ddd; border-radius:4px; font-size:11px;">
+                <input type="number" class="ra-price" placeholder="最低得標" step="0.01" style="padding:6px; border:1px solid #ddd; border-radius:4px; font-size:11px;">
+                <button type="button" onclick="removeRecentAuctionRow(this)" style="background:#ef4444; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;">✕</button>
+            </div>
+        </div>
+        
+        <div style="display:flex; gap:8px; margin-bottom:12px;">
+            <button type="button" onclick="addRecentAuctionRow()" style="flex:1; padding:8px; background:#e91e63; color:white; border:none; border-radius:6px; cursor:pointer; font-size:12px; font-weight:bold;">
+                ➕ 新增一檔
+            </button>
+            <button type="button" onclick="calculateMarketMomentum()" style="flex:1; padding:8px; background:#7b1fa2; color:white; border:none; border-radius:6px; cursor:pointer; font-size:12px; font-weight:bold;">
+                📊 計算市場動能
+            </button>
+        </div>
+        
+        <!-- 市場動能結果 -->
+        <div id="marketMomentumResult" style="display:none;">
+            <!-- 動態生成 -->
+        </div>
+    </div>
+
     <div class="form-section">
         <h3>📊 近期市場氛圍（自動計算）</h3>
         <div style="font-size:12px; color:#666; margin-bottom:10px;">
@@ -1565,7 +1598,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 <div class="result-panel" id="resultPanel">
     <div id="welcomeMsg" class="welcome-message">
         <h2>歡迎使用AI智能競拍評估系統</h2>
-        <p style="margin-top:10px; color:#666; font-size: 14px;">v3.73 智慧預測版<br>✅ 以「年期+擔保」為預測基準（區分有/無擔保）<br>✅ 參考市場氛圍三條件加權（產業35%/規模25%/信評15%）<br>✅ 即時AI預測隨條件變動更新</p>
+        <p style="margin-top:10px; color:#666; font-size: 14px;">v3.74 動態回饋版<br>✅ 新增動態市場回饋功能（輸入近期開標結果自動調整預測）<br>✅ 智能判別計算方法（價格法/溢價率法/混合法）<br>✅ 保守/平衡/積極價格順序修正</p>
         <div class="stats-summary" id="statsSummary"></div>
 
 ```
@@ -8384,6 +8417,217 @@ function generateConditionSummaryHTML(r) {
     </div>`;
 }
 
+// ==========================================
+// v3.74 動態市場回饋功能
+// ==========================================
+
+// 全局變數：儲存市場動能調整係數
+window.marketMomentum = {
+    adjustment: 0,          // 倍數調整值（正數=市場偏熱，負數=市場偏冷）
+    priceAdjustment: 0,     // 價格調整值
+    trend: '中性',           // 趨勢描述
+    sampleCount: 0,         // 樣本數
+    lastUpdated: null,      // 最後更新時間
+    details: []             // 詳細資料
+};
+
+/**
+ * 新增一行近期競拍輸入
+ */
+function addRecentAuctionRow() {
+    const container = document.getElementById('recentAuctionInputs');
+    const rows = container.querySelectorAll('.recent-auction-row');
+    
+    if (rows.length >= 5) {
+        alert('最多只能輸入5檔近期競拍結果');
+        return;
+    }
+    
+    const newRow = document.createElement('div');
+    newRow.className = 'recent-auction-row';
+    newRow.style.cssText = 'display:grid; grid-template-columns:80px 1fr 80px 80px 30px; gap:6px; margin-bottom:6px; align-items:center;';
+    newRow.innerHTML = `
+        <input type="text" class="ra-name" placeholder="名稱" style="padding:6px; border:1px solid #ddd; border-radius:4px; font-size:11px;">
+        <input type="date" class="ra-date" style="padding:6px; border:1px solid #ddd; border-radius:4px; font-size:11px;">
+        <input type="number" class="ra-mult" placeholder="實際倍數" step="0.01" style="padding:6px; border:1px solid #ddd; border-radius:4px; font-size:11px;">
+        <input type="number" class="ra-price" placeholder="最低得標" step="0.01" style="padding:6px; border:1px solid #ddd; border-radius:4px; font-size:11px;">
+        <button type="button" onclick="removeRecentAuctionRow(this)" style="background:#ef4444; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;">✕</button>
+    `;
+    container.appendChild(newRow);
+}
+
+/**
+ * 移除一行近期競拍輸入
+ */
+function removeRecentAuctionRow(btn) {
+    const container = document.getElementById('recentAuctionInputs');
+    const rows = container.querySelectorAll('.recent-auction-row');
+    
+    if (rows.length <= 1) {
+        // 如果只剩一行，清空內容而非刪除
+        const row = btn.closest('.recent-auction-row');
+        row.querySelectorAll('input').forEach(input => input.value = '');
+        return;
+    }
+    
+    btn.closest('.recent-auction-row').remove();
+}
+
+/**
+ * 計算市場動能調整係數
+ * 基於最近開標結果與歷史平均的差異
+ */
+function calculateMarketMomentum() {
+    const container = document.getElementById('recentAuctionInputs');
+    const rows = container.querySelectorAll('.recent-auction-row');
+    const resultDiv = document.getElementById('marketMomentumResult');
+    
+    // 收集有效數據
+    const validData = [];
+    rows.forEach(row => {
+        const name = row.querySelector('.ra-name').value.trim();
+        const date = row.querySelector('.ra-date').value;
+        const mult = parseFloat(row.querySelector('.ra-mult').value);
+        const price = parseFloat(row.querySelector('.ra-price').value);
+        
+        if (mult > 0) {
+            validData.push({ name, date, mult, price });
+        }
+    });
+    
+    if (validData.length === 0) {
+        resultDiv.style.display = 'block';
+        resultDiv.innerHTML = `
+            <div style="background:#fff3cd; padding:10px; border-radius:6px; color:#856404; font-size:12px;">
+                ⚠️ 請至少輸入一檔有效的競拍結果（需填寫實際倍數）
+            </div>`;
+        return;
+    }
+    
+    // 計算與歷史平均的差異
+    const historyAvgMult = OVERALL_STATS.avgBidMult; // 2.98
+    const historyAvgPrice = 106.99; // 歷史平均最低得標
+    
+    let totalMultDiff = 0;
+    let totalPriceDiff = 0;
+    let details = [];
+    
+    validData.forEach(d => {
+        const multDiff = (d.mult - historyAvgMult) / historyAvgMult; // 百分比差異
+        const priceDiff = d.price > 0 ? (d.price - historyAvgPrice) : 0;
+        
+        totalMultDiff += multDiff;
+        if (d.price > 0) totalPriceDiff += priceDiff;
+        
+        details.push({
+            name: d.name || '未命名',
+            date: d.date,
+            mult: d.mult,
+            price: d.price,
+            multDiff: multDiff,
+            multDiffPct: (multDiff * 100).toFixed(1)
+        });
+    });
+    
+    const avgMultDiff = totalMultDiff / validData.length;
+    const avgPriceDiff = totalPriceDiff / validData.filter(d => d.price > 0).length || 0;
+    
+    // 判斷趨勢
+    let trend = '中性';
+    let trendColor = '#666';
+    let trendIcon = '😐';
+    
+    if (avgMultDiff > 0.3) { trend = '非常熱絡'; trendColor = '#dc2626'; trendIcon = '🔥🔥'; }
+    else if (avgMultDiff > 0.15) { trend = '偏熱'; trendColor = '#ea580c'; trendIcon = '🔥'; }
+    else if (avgMultDiff > 0.05) { trend = '略偏熱'; trendColor = '#f59e0b'; trendIcon = '⬆️'; }
+    else if (avgMultDiff < -0.3) { trend = '非常冷清'; trendColor = '#0d9488'; trendIcon = '❄️❄️'; }
+    else if (avgMultDiff < -0.15) { trend = '偏冷'; trendColor = '#0891b2'; trendIcon = '❄️'; }
+    else if (avgMultDiff < -0.05) { trend = '略偏冷'; trendColor = '#06b6d4'; trendIcon = '⬇️'; }
+    
+    // 計算調整值
+    // 調整邏輯：市場偏熱時，預估倍數應向上調整；偏冷時向下調整
+    // 調整幅度 = 平均差異 × 調整權重（0.5，避免過度調整）
+    const adjustmentWeight = 0.5;
+    const multAdjustment = avgMultDiff * adjustmentWeight;
+    
+    // 價格調整：基於倍數調整反推
+    const priceAdjustment = avgPriceDiff * 0.3; // 價格調整幅度較小
+    
+    // 更新全局變數
+    window.marketMomentum = {
+        adjustment: multAdjustment,
+        priceAdjustment: priceAdjustment,
+        trend: trend,
+        sampleCount: validData.length,
+        lastUpdated: new Date().toLocaleString('zh-TW'),
+        details: details,
+        avgMultDiff: avgMultDiff,
+        avgPriceDiff: avgPriceDiff
+    };
+    
+    // 生成結果HTML
+    let detailsHTML = details.map(d => {
+        const diffColor = parseFloat(d.multDiffPct) > 0 ? '#dc2626' : (parseFloat(d.multDiffPct) < 0 ? '#0891b2' : '#666');
+        const diffSign = parseFloat(d.multDiffPct) >= 0 ? '+' : '';
+        return `
+            <div style="display:flex; justify-content:space-between; padding:4px 8px; background:#fff; border-radius:4px; margin-bottom:3px; font-size:11px;">
+                <span>${d.name} ${d.date ? '(' + d.date + ')' : ''}</span>
+                <span>
+                    <b>${d.mult.toFixed(2)}x</b>
+                    <span style="color:${diffColor}; margin-left:6px;">${diffSign}${d.multDiffPct}%</span>
+                </span>
+            </div>`;
+    }).join('');
+    
+    resultDiv.style.display = 'block';
+    resultDiv.innerHTML = `
+        <!-- 市場動能摘要 -->
+        <div style="background:linear-gradient(135deg, ${trendColor}20 0%, ${trendColor}10 100%); border:2px solid ${trendColor}; border-radius:8px; padding:12px; margin-bottom:10px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <div style="font-size:11px; color:#666;">當前市場氛圍</div>
+                    <div style="font-size:22px; font-weight:bold; color:${trendColor};">
+                        ${trendIcon} ${trend}
+                    </div>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-size:11px; color:#666;">倍數調整</div>
+                    <div style="font-size:18px; font-weight:bold; color:${trendColor};">
+                        ${multAdjustment >= 0 ? '+' : ''}${(multAdjustment * 100).toFixed(0)}%
+                    </div>
+                </div>
+            </div>
+            <div style="margin-top:8px; font-size:11px; color:#666;">
+                基於 ${validData.length} 檔近期開標，平均倍數較歷史（${historyAvgMult.toFixed(2)}x）
+                <b style="color:${trendColor};">${avgMultDiff >= 0 ? '高' : '低'} ${Math.abs(avgMultDiff * 100).toFixed(1)}%</b>
+            </div>
+        </div>
+        
+        <!-- 各檔明細 -->
+        <div style="background:#f8fafc; border-radius:6px; padding:10px;">
+            <div style="font-size:11px; font-weight:bold; color:#334155; margin-bottom:6px;">📋 各檔明細</div>
+            ${detailsHTML}
+            <div style="border-top:1px solid #e2e8f0; margin-top:6px; padding-top:6px; font-size:10px; color:#64748b;">
+                歷史平均倍數：${historyAvgMult.toFixed(2)}x｜近期平均：${(validData.reduce((s, d) => s + d.mult, 0) / validData.length).toFixed(2)}x
+            </div>
+        </div>
+        
+        <!-- 調整說明 -->
+        <div style="margin-top:10px; padding:8px; background:#eff6ff; border-radius:6px; font-size:10px; color:#1e40af;">
+            💡 <b>調整說明</b>：系統將根據此動能數據，自動調整預估投標倍數
+            ${multAdjustment > 0 ? '向上' : (multAdjustment < 0 ? '向下' : '不')}調整約 ${Math.abs(multAdjustment * 100).toFixed(0)}%。
+            按「開始AI評估」或修改條件後即可看到調整後的預測結果。
+        </div>
+    `;
+    
+    // 自動觸發預測更新
+    const event = new Event('input', { bubbles: true });
+    const stockPriceInput = document.getElementById('stockPrice');
+    if (stockPriceInput && stockPriceInput.value) {
+        stockPriceInput.dispatchEvent(event);
+    }
+}
+
 /**
  * v3.73 投標倍數預估函數（重新設計）
  * 核心改進：
@@ -8532,6 +8776,29 @@ function estimateBidMultiple(params) {
         }
     }
     
+    // ===== Step 7: 動態市場回饋調整（v3.74新增）=====
+    let momentumAdj = 0;
+    let momentumInfo = null;
+    if (window.marketMomentum && window.marketMomentum.adjustment !== 0 && window.marketMomentum.sampleCount > 0) {
+        // 動態調整 = 基準倍數 × 動能調整比例
+        momentumAdj = baseMult * window.marketMomentum.adjustment;
+        adjustments.push({
+            factor: '📡 市場動能',
+            label: window.marketMomentum.trend + '（' + window.marketMomentum.sampleCount + '檔）',
+            value: momentumAdj,
+            ref: baseMult,
+            count: window.marketMomentum.sampleCount,
+            weight: '動態'
+        });
+        baseMult += momentumAdj;
+        
+        momentumInfo = {
+            trend: window.marketMomentum.trend,
+            adjustment: window.marketMomentum.adjustment,
+            sampleCount: window.marketMomentum.sampleCount
+        };
+    }
+    
     // 限制範圍（歷史最低0.18，最高11.04）
     baseMult = Math.max(0.5, Math.min(8, baseMult));
     
@@ -8550,7 +8817,8 @@ function estimateBidMultiple(params) {
         totalWeight: totalWeight,
         guarType: guarType,
         baseKey: baseKey,
-        baseSampleCount: baseSampleCount
+        baseSampleCount: baseSampleCount,
+        momentumInfo: momentumInfo  // v3.74 新增：動態市場回饋資訊
     };
 }
 
@@ -9311,14 +9579,40 @@ function updateLiveAIPrediction(theoPrice, issueSize, guarantee, broker, industr
     // 計算方法說明
     const methodColor = calcMethod === '價格法' ? '#7c3aed' : (calcMethod === '混合法' ? '#0891b2' : '#059669');
     
+    // 動態市場回饋提示
+    let momentumBadge = '';
+    if (multResult.momentumInfo) {
+        const mColor = multResult.momentumInfo.adjustment > 0 ? '#dc2626' : '#0891b2';
+        const mSign = multResult.momentumInfo.adjustment >= 0 ? '+' : '';
+        momentumBadge = `
+            <div style="background:${mColor}; padding:2px 8px; border-radius:10px; font-size:10px; margin-left:6px;">
+                📡 ${multResult.momentumInfo.trend}
+            </div>`;
+    }
+    
     // 生成HTML
     container.innerHTML = `
+    ${multResult.momentumInfo ? `
+    <!-- 動態市場回饋提示 -->
+    <div style="background:linear-gradient(135deg, #fce4ec 0%, #f8bbd9 100%); border:1px solid #e91e63; border-radius:8px; padding:8px 12px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+        <div style="font-size:11px; color:#880e4f;">
+            📡 <b>動態回饋已啟用</b>：根據近 ${multResult.momentumInfo.sampleCount} 檔開標結果，市場氛圍 <b>${multResult.momentumInfo.trend}</b>
+        </div>
+        <div style="font-size:12px; font-weight:bold; color:#c2185b;">
+            ${multResult.momentumInfo.adjustment >= 0 ? '↑' : '↓'} ${Math.abs(multResult.momentumInfo.adjustment * 100).toFixed(0)}%
+        </div>
+    </div>
+    ` : ''}
+    
     <!-- 預估投標倍數區塊 -->
     <div style="background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius:10px; padding:14px; margin-bottom:12px; color:white;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
             <div style="font-size:13px; opacity:0.9;">📊 預估投標倍數</div>
-            <div style="background:rgba(255,255,255,0.2); padding:3px 10px; border-radius:15px; font-size:11px;">
-                ${priceExpect.range}
+            <div style="display:flex; align-items:center;">
+                <div style="background:rgba(255,255,255,0.2); padding:3px 10px; border-radius:15px; font-size:11px;">
+                    ${priceExpect.range}
+                </div>
+                ${momentumBadge}
             </div>
         </div>
         <div style="display:flex; align-items:baseline; gap:6px;">

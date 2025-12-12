@@ -2191,11 +2191,26 @@ async function loadStatistics() {
                 let listDate;
                 if (listDateRaw instanceof Date) {
                     listDate = listDateRaw;
+                } else if (typeof listDateRaw === 'number') {
+                    // Excel序列數轉換（Excel日期從1900-01-01開始，但要減2天修正）
+                    listDate = new Date((listDateRaw - 25569) * 86400 * 1000);
+                } else if (typeof listDateRaw === 'string') {
+                    // 嘗試解析字串日期
+                    if (listDateRaw.includes('/')) {
+                        const parts = listDateRaw.split('/');
+                        if (parts.length === 3) {
+                            let year = parseInt(parts[0]);
+                            if (year < 100) year += 2000;
+                            listDate = new Date(year, parseInt(parts[1]) - 1, parseInt(parts[2]));
+                        }
+                    } else {
+                        listDate = new Date(listDateRaw);
+                    }
                 } else {
-                    listDate = new Date(listDateRaw);
+                    return;
                 }
                 
-                if (isNaN(listDate.getTime())) return;
+                if (!listDate || isNaN(listDate.getTime())) return;
                 
                 const year = listDate.getFullYear();
                 if (year < 2022) return; // 只統計2022年以後

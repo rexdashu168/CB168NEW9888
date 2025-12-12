@@ -2445,6 +2445,115 @@ async function loadStatistics() {
                 console.log('動態計算 OVERALL_STATS:', window.OVERALL_STATS);
             }
             
+            // ===== v3.76 新增：價差統計分析（最低得標 vs 加權均價）=====
+            const spreadData = [];
+            sheetAuction.forEach(row => {
+                const minBid = safeFloat(row['最低得標'] || row['最低得標價格']);
+                const avgBid = safeFloat(row['加權均價'] || row['平均得標'] || row['平均得標價格'] || row['得標加權平均價格']);
+                const size = safeFloat(row['發行規模']);
+                const theo = safeFloat(row['理論價']);
+                const mult = safeFloat(row['投標倍數']);
+                const guarantee = row['擔保'] || '無擔保';
+                
+                if (minBid > 0 && avgBid > 0 && avgBid >= minBid) {
+                    const spread = avgBid - minBid;
+                    const spreadPct = (spread / minBid) * 100;
+                    spreadData.push({ minBid, avgBid, spread, spreadPct, size, theo, mult, guarantee });
+                }
+            });
+            
+            if (spreadData.length > 0) {
+                // 整體統計
+                const spreads = spreadData.map(d => d.spread);
+                const sortedSpreads = [...spreads].sort((a, b) => a - b);
+                const avgSpread = spreads.reduce((s, v) => s + v, 0) / spreads.length;
+                const medianSpread = sortedSpreads[Math.floor(sortedSpreads.length / 2)];
+                const stdSpread = Math.sqrt(spreads.reduce((s, v) => s + Math.pow(v - avgSpread, 2), 0) / spreads.length);
+                
+                // 價差分布
+                const spreadDist = {
+                    tiny: spreadData.filter(d => d.spread < 0.5).length,      // <0.5元：極小
+                    small: spreadData.filter(d => d.spread >= 0.5 && d.spread < 1).length,  // 0.5~1元：小
+                    medium: spreadData.filter(d => d.spread >= 1 && d.spread < 2).length,   // 1~2元：中等
+                    large: spreadData.filter(d => d.spread >= 2 && d.spread < 3).length,    // 2~3元：大
+                    huge: spreadData.filter(d => d.spread >= 3).length        // >3元：極大
+                };
+                
+                // 按規模分組
+                const sizeSpread = {
+                    'under3': { spreads: [], label: '<3億' },
+                    '3to5': { spreads: [], label: '3-5億' },
+                    '5to10': { spreads: [], label: '5-10億' },
+                    '10to15': { spreads: [], label: '10-15億' },
+                    'over15': { spreads: [], label: '>15億' }
+                };
+                spreadData.forEach(d => {
+                    let key = 'over15';
+                    if (d.size < 3) key = 'under3';
+                    else if (d.size < 5) key = '3to5';
+                    else if (d.size < 10) key = '5to10';
+                    else if (d.size < 15) key = '10to15';
+                    sizeSpread[key].spreads.push(d.spread);
+                });
+                Object.keys(sizeSpread).forEach(key => {
+                    const arr = sizeSpread[key].spreads;
+                    if (arr.length > 0) {
+                        sizeSpread[key].avg = arr.reduce((s, v) => s + v, 0) / arr.length;
+                        sizeSpread[key].count = arr.length;
+                    }
+                });
+                
+                // 按投標倍數分組
+                const multSpread = {
+                    'low': { spreads: [], label: '<2倍' },
+                    'medium': { spreads: [], label: '2-3倍' },
+                    'high': { spreads: [], label: '3-4倍' },
+                    'veryHigh': { spreads: [], label: '>4倍' }
+                };
+                spreadData.forEach(d => {
+                    let key = 'veryHigh';
+                    if (d.mult < 2) key = 'low';
+                    else if (d.mult < 3) key = 'medium';
+                    else if (d.mult < 4) key = 'high';
+                    multSpread[key].spreads.push(d.spread);
+                });
+                Object.keys(multSpread).forEach(key => {
+                    const arr = multSpread[key].spreads;
+                    if (arr.length > 0) {
+                        multSpread[key].avg = arr.reduce((s, v) => s + v, 0) / arr.length;
+                        multSpread[key].count = arr.length;
+                    }
+                });
+                
+                // 按擔保類型分組
+                const guarSpread = { '有擔保': { spreads: [] }, '無擔保': { spreads: [] } };
+                spreadData.forEach(d => {
+                    const key = d.guarantee.includes('有') ? '有擔保' : '無擔保';
+                    guarSpread[key].spreads.push(d.spread);
+                });
+                Object.keys(guarSpread).forEach(key => {
+                    const arr = guarSpread[key].spreads;
+                    if (arr.length > 0) {
+                        guarSpread[key].avg = arr.reduce((s, v) => s + v, 0) / arr.length;
+                        guarSpread[key].count = arr.length;
+                    }
+                });
+                
+                window.SPREAD_STATS = {
+                    total: spreadData.length,
+                    avgSpread: avgSpread,
+                    medianSpread: medianSpread,
+                    stdSpread: stdSpread,
+                    minSpread: sortedSpreads[0],
+                    maxSpread: sortedSpreads[sortedSpreads.length - 1],
+                    distribution: spreadDist,
+                    bySize: sizeSpread,
+                    byMultiple: multSpread,
+                    byGuarantee: guarSpread
+                };
+                console.log('動態計算 SPREAD_STATS:', window.SPREAD_STATS);
+            }
+            
             // ===== 動態計算 SIZE_MULT_TABLE =====
             const sizeGroups = { under3: [], '3to5': [], '5to10': [], '10to15': [], over15: [] };
             sheetAuction.forEach(row => {
@@ -10288,6 +10397,24 @@ function updateLiveAIPrediction(theoPrice, issueSize, guarantee, broker, industr
             💡 <b>策略邏輯</b>：保守=最低得標門檻 / 平衡=中間值（推薦） / 積極=平均得標｜
             區間差 ${priceGap.toFixed(2)} 元可作為學習參考
         </div>
+        ${window.SPREAD_STATS ? `
+        <div style="margin-top:8px; padding:8px; background:linear-gradient(135deg, #e8f5e9, #c8e6c9); border-radius:6px; font-size:10px; color:#2e7d32;">
+            📊 <b>價差參考</b>：歷史${window.SPREAD_STATS.total}檔平均價差 <b>${window.SPREAD_STATS.avgSpread.toFixed(2)}元</b>（中位數${window.SPREAD_STATS.medianSpread.toFixed(2)}元）
+            ${(() => {
+                const ss = window.SPREAD_STATS;
+                let sizeKey = 'over15';
+                if (issueSize < 3) sizeKey = 'under3';
+                else if (issueSize < 5) sizeKey = '3to5';
+                else if (issueSize < 10) sizeKey = '5to10';
+                else if (issueSize < 15) sizeKey = '10to15';
+                const sizeSpread = ss.bySize[sizeKey];
+                if (sizeSpread && sizeSpread.avg) {
+                    return `｜同規模(${sizeSpread.label})：<b>${sizeSpread.avg.toFixed(2)}元</b>(n=${sizeSpread.count})`;
+                }
+                return '';
+            })()}
+        </div>
+        ` : ''}
     </div>
     `;
     
@@ -11080,6 +11207,62 @@ function generateHeatAnalysisHTML(heatResult, similarCases, atmosphere) {
     }
     
     html += `</div>`;
+    
+    // v3.76 新增：價差統計分析區塊
+    if (window.SPREAD_STATS) {
+        const ss = window.SPREAD_STATS;
+        const dist = ss.distribution;
+        const total = ss.total;
+        
+        html += `
+        <div style="margin-top: 15px; padding: 12px; background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-radius: 10px; border: 1px solid #81c784;">
+            <div style="font-size: 13px; font-weight: bold; color: #2e7d32; margin-bottom: 10px;">
+                📊 價差分析（最低得標 vs 加權均價）
+            </div>
+            
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px;">
+                <div style="background: white; padding: 8px; border-radius: 6px; text-align: center;">
+                    <div style="font-size: 10px; color: #666;">平均價差</div>
+                    <div style="font-size: 18px; font-weight: bold; color: #1565c0;">${ss.avgSpread.toFixed(2)}元</div>
+                </div>
+                <div style="background: white; padding: 8px; border-radius: 6px; text-align: center;">
+                    <div style="font-size: 10px; color: #666;">中位數</div>
+                    <div style="font-size: 18px; font-weight: bold; color: #2e7d32;">${ss.medianSpread.toFixed(2)}元</div>
+                </div>
+                <div style="background: white; padding: 8px; border-radius: 6px; text-align: center;">
+                    <div style="font-size: 10px; color: #666;">標準差</div>
+                    <div style="font-size: 18px; font-weight: bold; color: #e65100;">${ss.stdSpread.toFixed(2)}元</div>
+                </div>
+                <div style="background: white; padding: 8px; border-radius: 6px; text-align: center;">
+                    <div style="font-size: 10px; color: #666;">樣本數</div>
+                    <div style="font-size: 18px; font-weight: bold; color: #333;">${total}檔</div>
+                </div>
+            </div>
+            
+            <div style="font-size: 12px; margin-bottom: 8px;"><b>價差分布：</b></div>
+            <div style="display: flex; gap: 6px; flex-wrap: wrap; font-size: 11px;">
+                <span style="background:#4caf50; color:white; padding:3px 8px; border-radius:10px;">
+                    <0.5元: ${dist.tiny}檔(${(dist.tiny/total*100).toFixed(0)}%)
+                </span>
+                <span style="background:#8bc34a; color:white; padding:3px 8px; border-radius:10px;">
+                    0.5~1元: ${dist.small}檔(${(dist.small/total*100).toFixed(0)}%)
+                </span>
+                <span style="background:#ffeb3b; color:#333; padding:3px 8px; border-radius:10px;">
+                    1~2元: ${dist.medium}檔(${(dist.medium/total*100).toFixed(0)}%)
+                </span>
+                <span style="background:#ff9800; color:white; padding:3px 8px; border-radius:10px;">
+                    2~3元: ${dist.large}檔(${(dist.large/total*100).toFixed(0)}%)
+                </span>
+                <span style="background:#f44336; color:white; padding:3px 8px; border-radius:10px;">
+                    >3元: ${dist.huge}檔(${(dist.huge/total*100).toFixed(0)}%)
+                </span>
+            </div>
+            
+            <div style="margin-top: 10px; padding: 8px; background: #fff; border-radius: 6px; font-size: 11px; color: #555;">
+                <b>💡 應用提示：</b>價差反映市場分歧程度。價差小(<1元)代表共識強，用最低得標價投標就有機會；價差大(>2元)代表競爭激烈，可能需要接近均價才能得標。
+            </div>
+        </div>`;
+    }
     
     return html;
 }

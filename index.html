@@ -2554,6 +2554,109 @@ async function loadStatistics() {
                 console.log('動態計算 SPREAD_STATS:', window.SPREAD_STATS);
             }
             
+            // ===== v3.76 新增：系統回測驗證 =====
+            // 用歷史案例驗證AI預測的準確度
+            setTimeout(() => {
+                runSystemBacktest(sheetAuction);
+            }, 500);  // 延遲執行，確保其他數據已載入
+            
+            // ===== v3.76 新增：資金排擠效應分析 =====
+            // 分析同一週多檔競拍時的表現差異
+            const crowdingData = [];
+            const weekMap = {};  // 按週分組
+            
+            sheetAuction.forEach(row => {
+                const dateRaw = row['開標日'] || row['開標日期'];
+                const minBid = safeFloat(row['最低得標'] || row['最低得標價格']);
+                const mult = safeFloat(row['投標倍數']);
+                const name = row['名稱'] || row['CB名稱'] || '';
+                
+                if (!dateRaw || minBid <= 0) return;
+                
+                const date = parseExcelDate(dateRaw);
+                if (!date || isNaN(date.getTime())) return;
+                
+                // 計算週次（以年+週數為key）
+                const year = date.getFullYear();
+                const startOfYear = new Date(year, 0, 1);
+                const weekNum = Math.ceil(((date - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7);
+                const weekKey = `${year}-W${weekNum.toString().padStart(2, '0')}`;
+                
+                if (!weekMap[weekKey]) weekMap[weekKey] = [];
+                weekMap[weekKey].push({
+                    name, date, minBid, mult,
+                    dateStr: `${date.getMonth()+1}/${date.getDate()}`
+                });
+            });
+            
+            // 分析每週的競拍數量
+            const singleWeeks = [];   // 該週只有1檔
+            const crowdedWeeks = [];  // 該週有2檔以上
+            
+            Object.keys(weekMap).forEach(weekKey => {
+                const cases = weekMap[weekKey].sort((a, b) => a.date - b.date);
+                if (cases.length === 1) {
+                    singleWeeks.push(cases[0]);
+                } else {
+                    // 標記順序（第1檔、第2檔...）
+                    cases.forEach((c, idx) => {
+                        crowdedWeeks.push({
+                            ...c,
+                            weekKey,
+                            order: idx + 1,
+                            totalInWeek: cases.length
+                        });
+                    });
+                }
+            });
+            
+            if (singleWeeks.length > 0 && crowdedWeeks.length > 0) {
+                // 單獨週的平均
+                const singleAvgMult = singleWeeks.reduce((s, c) => s + c.mult, 0) / singleWeeks.length;
+                const singleAvgPrice = singleWeeks.reduce((s, c) => s + c.minBid, 0) / singleWeeks.length;
+                
+                // 密集週的平均
+                const crowdedAvgMult = crowdedWeeks.reduce((s, c) => s + c.mult, 0) / crowdedWeeks.length;
+                const crowdedAvgPrice = crowdedWeeks.reduce((s, c) => s + c.minBid, 0) / crowdedWeeks.length;
+                
+                // 密集週中，按順序分組
+                const byOrder = {};
+                crowdedWeeks.forEach(c => {
+                    const orderKey = c.order <= 3 ? c.order : '4+';
+                    if (!byOrder[orderKey]) byOrder[orderKey] = [];
+                    byOrder[orderKey].push(c);
+                });
+                
+                const orderStats = {};
+                Object.keys(byOrder).forEach(key => {
+                    const arr = byOrder[key];
+                    orderStats[key] = {
+                        count: arr.length,
+                        avgMult: arr.reduce((s, c) => s + c.mult, 0) / arr.length,
+                        avgPrice: arr.reduce((s, c) => s + c.minBid, 0) / arr.length
+                    };
+                });
+                
+                window.CROWDING_STATS = {
+                    singleWeeks: {
+                        count: singleWeeks.length,
+                        avgMult: singleAvgMult,
+                        avgPrice: singleAvgPrice
+                    },
+                    crowdedWeeks: {
+                        count: crowdedWeeks.length,
+                        avgMult: crowdedAvgMult,
+                        avgPrice: crowdedAvgPrice
+                    },
+                    byOrder: orderStats,
+                    multDiff: crowdedAvgMult - singleAvgMult,
+                    priceDiff: crowdedAvgPrice - singleAvgPrice,
+                    crowdedWeekCount: Object.keys(weekMap).filter(k => weekMap[k].length > 1).length
+                };
+                
+                console.log('動態計算 CROWDING_STATS:', window.CROWDING_STATS);
+            }
+            
             // ===== 動態計算 SIZE_MULT_TABLE =====
             const sizeGroups = { under3: [], '3to5': [], '5to10': [], '10to15': [], over15: [] };
             sheetAuction.forEach(row => {
@@ -7832,6 +7935,10 @@ function displayResult(r) {
     
     ${r.heatAnalysis ? generateHeatAnalysisHTML(r.heatAnalysis, r.similarCases, r.marketAtmosphere) : ''}
     
+    ${window.BACKTEST_RESULTS ? generateBacktestHTML() : ''}
+    
+    ${window.CROWDING_STATS ? generateCrowdingHTML() : ''}
+    
     ${generateConditionSummaryHTML(r)}
     
     ${r.majorPlayerResult ? generateMajorPlayerHTML(r.majorPlayerResult, r.floorPrice, r.theoreticalPrice, r.guarantee) : ''}
@@ -11079,6 +11186,449 @@ function findSimilarCases(params) {
         theoRange: `${theoMin}~${theoMax === 999 ? '∞' : theoMax}`,
         sizeRange: `${sizeMin}~${sizeMax === 999 ? '∞' : sizeMax}億`
     };
+}
+
+/**
+ * v3.76 新增：系統回測驗證函數
+ * 用歷史案例驗證AI預測的準確度
+ */
+function runSystemBacktest(sheetAuction) {
+    if (!sheetAuction || sheetAuction.length === 0) {
+        console.log('回測：無資料');
+        return;
+    }
+    
+    console.log('=== 開始系統回測驗證 ===');
+    
+    const results = {
+        total: 0,
+        valid: 0,
+        conservative: { win: 0, total: 0, avgDiff: 0, diffs: [] },
+        balanced: { win: 0, total: 0, avgDiff: 0, diffs: [] },
+        aggressive: { win: 0, total: 0, avgDiff: 0, diffs: [] },
+        bySize: {},
+        byTheo: {},
+        details: []
+    };
+    
+    sheetAuction.forEach(row => {
+        const actualMinBid = safeFloat(row['最低得標'] || row['最低得標價格']);
+        const theo = safeFloat(row['理論價']);
+        const size = safeFloat(row['發行規模']);
+        const mult = safeFloat(row['投標倍數']);
+        const guar = (row['擔保'] || '').includes('有') ? '有擔保' : '無擔保';
+        const years = parseInt(row['年期']) || 3;
+        const industry = row['產業'] || '';
+        const broker = row['承銷商'] || '';
+        const floorPrice = safeFloat(row['底標價格']) || 100;
+        const name = row['名稱'] || row['CB名稱'] || '';
+        
+        results.total++;
+        
+        // 必須有實際最低得標價才能回測
+        if (actualMinBid <= 0 || theo <= 0 || size <= 0) return;
+        
+        results.valid++;
+        
+        // 模擬系統預測
+        // v3.76 修正：使用系統估算的投標倍數（而非實際倍數）
+        // 這才是真正驗證「預測系統」準確度的方式
+        const multEstimate = estimateBidMultiple({
+            issueSize: size,
+            guarantee: guar,
+            years: years,
+            theoreticalPrice: theo,
+            industry: industry,
+            broker: broker
+        });
+        
+        const estimatedMult = multEstimate.estimatedMult;
+        const priceExpect = getExpectedPriceByMult(estimatedMult);  // 用預估倍數
+        
+        let conservativePrice, balancedPrice, aggressivePrice;
+        const expectedMinBid = priceExpect.minPrice;
+        const expectedAvgBid = priceExpect.avgPrice;
+        const priceGap = priceExpect.gap;
+        
+        if (expectedMinBid >= theo) {
+            conservativePrice = Math.max(expectedMinBid, floorPrice);
+            aggressivePrice = Math.max(expectedAvgBid, floorPrice);
+            balancedPrice = (conservativePrice + aggressivePrice) / 2;
+        } else {
+            const scaleFactor = 0.5;
+            const histMinPremium = ((expectedMinBid / 100) - 1) * 100 * scaleFactor;
+            const histAvgPremium = ((expectedAvgBid / 100) - 1) * 100 * scaleFactor;
+            const minSpread = priceGap * 0.8;
+            
+            conservativePrice = Math.max(theo * (1 + histMinPremium / 100), theo, floorPrice);
+            aggressivePrice = Math.max(
+                theo * (1 + histAvgPremium / 100), 
+                conservativePrice + minSpread,
+                floorPrice
+            );
+            balancedPrice = (conservativePrice + aggressivePrice) / 2;
+        }
+        
+        // 判斷是否得標（建議價 >= 實際最低得標價）
+        const conWin = conservativePrice >= actualMinBid;
+        const balWin = balancedPrice >= actualMinBid;
+        const aggWin = aggressivePrice >= actualMinBid;
+        
+        // 統計
+        results.conservative.total++;
+        results.balanced.total++;
+        results.aggressive.total++;
+        
+        if (conWin) results.conservative.win++;
+        if (balWin) results.balanced.win++;
+        if (aggWin) results.aggressive.win++;
+        
+        // 記錄差距（建議價 - 實際最低得標）
+        const conDiff = conservativePrice - actualMinBid;
+        const balDiff = balancedPrice - actualMinBid;
+        const aggDiff = aggressivePrice - actualMinBid;
+        
+        results.conservative.diffs.push(conDiff);
+        results.balanced.diffs.push(balDiff);
+        results.aggressive.diffs.push(aggDiff);
+        
+        // 按規模分組統計
+        let sizeKey = 'over15';
+        if (size < 3) sizeKey = 'under3';
+        else if (size < 5) sizeKey = '3to5';
+        else if (size < 10) sizeKey = '5to10';
+        else if (size < 15) sizeKey = '10to15';
+        
+        if (!results.bySize[sizeKey]) {
+            results.bySize[sizeKey] = { con: 0, bal: 0, agg: 0, total: 0 };
+        }
+        results.bySize[sizeKey].total++;
+        if (conWin) results.bySize[sizeKey].con++;
+        if (balWin) results.bySize[sizeKey].bal++;
+        if (aggWin) results.bySize[sizeKey].agg++;
+        
+        // 按理論價分組統計
+        let theoKey = 'over115';
+        if (theo < 90) theoKey = 'under90';
+        else if (theo < 100) theoKey = '90to100';
+        else if (theo < 110) theoKey = '100to110';
+        else if (theo < 115) theoKey = '110to115';
+        
+        if (!results.byTheo[theoKey]) {
+            results.byTheo[theoKey] = { con: 0, bal: 0, agg: 0, total: 0 };
+        }
+        results.byTheo[theoKey].total++;
+        if (conWin) results.byTheo[theoKey].con++;
+        if (balWin) results.byTheo[theoKey].bal++;
+        if (aggWin) results.byTheo[theoKey].agg++;
+        
+        // 記錄詳情（保留未得標案例供分析）
+        if (!balWin) {
+            results.details.push({
+                name, theo, size, mult, guar,
+                estimatedMult: estimatedMult.toFixed(2),
+                actualMinBid,
+                conservativePrice: conservativePrice.toFixed(2),
+                balancedPrice: balancedPrice.toFixed(2),
+                aggressivePrice: aggressivePrice.toFixed(2),
+                shortfall: (actualMinBid - balancedPrice).toFixed(2)
+            });
+        }
+        
+        // v3.76 新增：投標倍數預估準確度
+        if (!results.multAccuracy) results.multAccuracy = { diffs: [], count: 0 };
+        if (mult > 0) {
+            results.multAccuracy.diffs.push(estimatedMult - mult);
+            results.multAccuracy.count++;
+        }
+    });
+    
+    // 計算平均差距
+    if (results.conservative.diffs.length > 0) {
+        results.conservative.avgDiff = results.conservative.diffs.reduce((s, v) => s + v, 0) / results.conservative.diffs.length;
+        results.balanced.avgDiff = results.balanced.diffs.reduce((s, v) => s + v, 0) / results.balanced.diffs.length;
+        results.aggressive.avgDiff = results.aggressive.diffs.reduce((s, v) => s + v, 0) / results.aggressive.diffs.length;
+    }
+    
+    // 計算得標率
+    const conRate = results.conservative.total > 0 ? (results.conservative.win / results.conservative.total * 100) : 0;
+    const balRate = results.balanced.total > 0 ? (results.balanced.win / results.balanced.total * 100) : 0;
+    const aggRate = results.aggressive.total > 0 ? (results.aggressive.win / results.aggressive.total * 100) : 0;
+    
+    // v3.76 新增：計算投標倍數預估準確度
+    let multAvgDiff = 0, multMAE = 0;
+    if (results.multAccuracy && results.multAccuracy.diffs.length > 0) {
+        const diffs = results.multAccuracy.diffs;
+        multAvgDiff = diffs.reduce((s, v) => s + v, 0) / diffs.length;  // 平均誤差（正=高估，負=低估）
+        multMAE = diffs.reduce((s, v) => s + Math.abs(v), 0) / diffs.length;  // 平均絕對誤差
+    }
+    
+    // 儲存結果
+    window.BACKTEST_RESULTS = {
+        ...results,
+        rates: {
+            conservative: conRate,
+            balanced: balRate,
+            aggressive: aggRate
+        },
+        multPrediction: {
+            avgDiff: multAvgDiff,
+            mae: multMAE,
+            count: results.multAccuracy ? results.multAccuracy.count : 0
+        },
+        timestamp: new Date().toISOString()
+    };
+    
+    console.log('=== 回測結果摘要 ===');
+    console.log(`有效樣本數: ${results.valid} / ${results.total}`);
+    console.log(`保守型得標率: ${conRate.toFixed(1)}% (${results.conservative.win}/${results.conservative.total})`);
+    console.log(`平衡型得標率: ${balRate.toFixed(1)}% (${results.balanced.win}/${results.balanced.total})`);
+    console.log(`積極型得標率: ${aggRate.toFixed(1)}% (${results.aggressive.win}/${results.aggressive.total})`);
+    console.log(`投標倍數預估：平均誤差 ${multAvgDiff.toFixed(2)}x, MAE ${multMAE.toFixed(2)}x`);
+    console.log('按規模分組:', results.bySize);
+    console.log('按理論價分組:', results.byTheo);
+    console.log('未得標案例數:', results.details.length);
+    
+    return window.BACKTEST_RESULTS;
+}
+
+/**
+ * 生成回測結果HTML（供UI顯示）
+ */
+function generateBacktestHTML() {
+    const bt = window.BACKTEST_RESULTS;
+    if (!bt) return '<div style="color:#999;">回測資料載入中...</div>';
+    
+    const conRate = bt.rates.conservative;
+    const balRate = bt.rates.balanced;
+    const aggRate = bt.rates.aggressive;
+    
+    // 評估準確度
+    let conStatus = conRate >= 40 ? '✅ 合格' : '⚠️ 偏低';
+    let balStatus = balRate >= 60 ? '✅ 合格' : '⚠️ 偏低';
+    let aggStatus = aggRate >= 80 ? '✅ 合格' : '⚠️ 偏低';
+    
+    // 按規模分組
+    const sizeLabels = { under3: '<3億', '3to5': '3-5億', '5to10': '5-10億', '10to15': '10-15億', over15: '>15億' };
+    let sizeRows = '';
+    Object.keys(sizeLabels).forEach(key => {
+        const data = bt.bySize[key];
+        if (data && data.total > 0) {
+            sizeRows += `<tr>
+                <td style="padding:4px 8px; border:1px solid #ddd;">${sizeLabels[key]}</td>
+                <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${data.total}</td>
+                <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${(data.con/data.total*100).toFixed(0)}%</td>
+                <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${(data.bal/data.total*100).toFixed(0)}%</td>
+                <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${(data.agg/data.total*100).toFixed(0)}%</td>
+            </tr>`;
+        }
+    });
+    
+    // 按理論價分組
+    const theoLabels = { under90: '<90元', '90to100': '90-100元', '100to110': '100-110元', '110to115': '110-115元', over115: '>115元' };
+    let theoRows = '';
+    Object.keys(theoLabels).forEach(key => {
+        const data = bt.byTheo[key];
+        if (data && data.total > 0) {
+            theoRows += `<tr>
+                <td style="padding:4px 8px; border:1px solid #ddd;">${theoLabels[key]}</td>
+                <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${data.total}</td>
+                <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${(data.con/data.total*100).toFixed(0)}%</td>
+                <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${(data.bal/data.total*100).toFixed(0)}%</td>
+                <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${(data.agg/data.total*100).toFixed(0)}%</td>
+            </tr>`;
+        }
+    });
+    
+    return `
+    <div style="border:2px solid #6366f1; border-radius:12px; padding:15px; margin-top:15px; background:linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);">
+        <h3 style="color:#4338ca; margin:0 0 15px 0;">📊 系統回測驗證（${bt.valid}檔歷史資料）</h3>
+        
+        <!-- 整體得標率 -->
+        <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-bottom:15px;">
+            <div style="background:white; padding:12px; border-radius:8px; text-align:center; border:2px solid #fbbf24;">
+                <div style="font-size:11px; color:#b45309;">🛡️ 保守型</div>
+                <div style="font-size:28px; font-weight:bold; color:#b45309;">${conRate.toFixed(1)}%</div>
+                <div style="font-size:10px; color:#666;">目標40% ${conStatus}</div>
+                <div style="font-size:10px; color:#999;">平均差距 ${bt.conservative.avgDiff.toFixed(2)}元</div>
+            </div>
+            <div style="background:white; padding:12px; border-radius:8px; text-align:center; border:2px solid #3b82f6;">
+                <div style="font-size:11px; color:#1d4ed8;">⚖️ 平衡型</div>
+                <div style="font-size:28px; font-weight:bold; color:#1d4ed8;">${balRate.toFixed(1)}%</div>
+                <div style="font-size:10px; color:#666;">目標60% ${balStatus}</div>
+                <div style="font-size:10px; color:#999;">平均差距 ${bt.balanced.avgDiff.toFixed(2)}元</div>
+            </div>
+            <div style="background:white; padding:12px; border-radius:8px; text-align:center; border:2px solid #22c55e;">
+                <div style="font-size:11px; color:#16a34a;">🎯 積極型</div>
+                <div style="font-size:28px; font-weight:bold; color:#16a34a;">${aggRate.toFixed(1)}%</div>
+                <div style="font-size:10px; color:#666;">目標80% ${aggStatus}</div>
+                <div style="font-size:10px; color:#999;">平均差距 ${bt.aggressive.avgDiff.toFixed(2)}元</div>
+            </div>
+        </div>
+        
+        <!-- 按規模分組 -->
+        <div style="margin-bottom:15px;">
+            <div style="font-size:12px; font-weight:bold; color:#333; margin-bottom:6px;">📏 按發行規模分組</div>
+            <table style="width:100%; border-collapse:collapse; font-size:11px;">
+                <tr style="background:#f3f4f6;">
+                    <th style="padding:4px 8px; border:1px solid #ddd;">規模</th>
+                    <th style="padding:4px 8px; border:1px solid #ddd;">樣本</th>
+                    <th style="padding:4px 8px; border:1px solid #ddd;">保守</th>
+                    <th style="padding:4px 8px; border:1px solid #ddd;">平衡</th>
+                    <th style="padding:4px 8px; border:1px solid #ddd;">積極</th>
+                </tr>
+                ${sizeRows}
+            </table>
+        </div>
+        
+        <!-- 按理論價分組 -->
+        <div style="margin-bottom:10px;">
+            <div style="font-size:12px; font-weight:bold; color:#333; margin-bottom:6px;">💰 按理論價分組</div>
+            <table style="width:100%; border-collapse:collapse; font-size:11px;">
+                <tr style="background:#f3f4f6;">
+                    <th style="padding:4px 8px; border:1px solid #ddd;">理論價</th>
+                    <th style="padding:4px 8px; border:1px solid #ddd;">樣本</th>
+                    <th style="padding:4px 8px; border:1px solid #ddd;">保守</th>
+                    <th style="padding:4px 8px; border:1px solid #ddd;">平衡</th>
+                    <th style="padding:4px 8px; border:1px solid #ddd;">積極</th>
+                </tr>
+                ${theoRows}
+            </table>
+        </div>
+        
+        <!-- v3.76 新增：投標倍數預估準確度 -->
+        ${bt.multPrediction ? `
+        <div style="margin-bottom:10px; padding:10px; background:#fef3c7; border-radius:8px; border-left:4px solid #f59e0b;">
+            <div style="font-size:12px; font-weight:bold; color:#b45309; margin-bottom:6px;">🎯 投標倍數預估準確度</div>
+            <div style="display:flex; gap:20px; font-size:12px;">
+                <div>
+                    <span style="color:#666;">平均誤差：</span>
+                    <span style="font-weight:bold; color:${bt.multPrediction.avgDiff > 0 ? '#dc2626' : '#22c55e'};">
+                        ${bt.multPrediction.avgDiff >= 0 ? '+' : ''}${bt.multPrediction.avgDiff.toFixed(2)}x
+                    </span>
+                    <span style="font-size:10px; color:#999;">(正=高估/負=低估)</span>
+                </div>
+                <div>
+                    <span style="color:#666;">MAE：</span>
+                    <span style="font-weight:bold; color:#1d4ed8;">${bt.multPrediction.mae.toFixed(2)}x</span>
+                    <span style="font-size:10px; color:#999;">(平均絕對誤差)</span>
+                </div>
+            </div>
+        </div>
+        ` : ''}
+        
+        <div style="font-size:10px; color:#666; padding:8px; background:#f8fafc; border-radius:6px;">
+            💡 <b>說明：</b>得標率 = 建議價格 >= 實際最低得標價的比例。
+            未得標案例：${bt.details.length}檔（可用於優化參數）
+        </div>
+    </div>`;
+}
+
+/**
+ * v3.76 新增：生成資金排擠效應HTML
+ */
+function generateCrowdingHTML() {
+    const cs = window.CROWDING_STATS;
+    if (!cs) return '';
+    
+    const multDiff = cs.multDiff;
+    const priceDiff = cs.priceDiff;
+    const hasCrowdingEffect = multDiff < -0.2 || priceDiff < -0.5;
+    
+    // 按順序的統計
+    let orderRows = '';
+    const orderLabels = { '1': '第1檔', '2': '第2檔', '3': '第3檔', '4+': '第4檔+' };
+    ['1', '2', '3', '4+'].forEach(key => {
+        const data = cs.byOrder[key];
+        if (data && data.count > 0) {
+            const multVsSingle = (data.avgMult - cs.singleWeeks.avgMult).toFixed(2);
+            const priceVsSingle = (data.avgPrice - cs.singleWeeks.avgPrice).toFixed(2);
+            const multColor = parseFloat(multVsSingle) < 0 ? '#dc2626' : '#22c55e';
+            const priceColor = parseFloat(priceVsSingle) < 0 ? '#dc2626' : '#22c55e';
+            
+            orderRows += `<tr>
+                <td style="padding:4px 8px; border:1px solid #ddd;">${orderLabels[key]}</td>
+                <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${data.count}</td>
+                <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${data.avgMult.toFixed(2)}x</td>
+                <td style="padding:4px 8px; border:1px solid #ddd; text-align:center; color:${multColor};">${parseFloat(multVsSingle) >= 0 ? '+' : ''}${multVsSingle}</td>
+                <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${data.avgPrice.toFixed(2)}</td>
+                <td style="padding:4px 8px; border:1px solid #ddd; text-align:center; color:${priceColor};">${parseFloat(priceVsSingle) >= 0 ? '+' : ''}${priceVsSingle}</td>
+            </tr>`;
+        }
+    });
+    
+    const effectColor = hasCrowdingEffect ? '#dc2626' : '#22c55e';
+    const effectText = hasCrowdingEffect ? '⚠️ 存在排擠效應' : '✅ 無明顯排擠效應';
+    
+    return `
+    <div style="border:2px solid #f97316; border-radius:12px; padding:15px; margin-top:15px; background:linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);">
+        <h3 style="color:#ea580c; margin:0 0 15px 0;">📅 資金排擠效應分析</h3>
+        
+        <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:15px; margin-bottom:15px;">
+            <div style="background:white; padding:12px; border-radius:8px; border-left:4px solid #22c55e;">
+                <div style="font-size:11px; color:#666;">單獨週（週內僅1檔）</div>
+                <div style="font-size:10px; color:#999;">${cs.singleWeeks.count} 檔</div>
+                <div style="display:flex; gap:15px; margin-top:6px;">
+                    <div>
+                        <span style="font-size:10px; color:#666;">平均倍數</span>
+                        <div style="font-size:18px; font-weight:bold; color:#22c55e;">${cs.singleWeeks.avgMult.toFixed(2)}x</div>
+                    </div>
+                    <div>
+                        <span style="font-size:10px; color:#666;">平均得標價</span>
+                        <div style="font-size:18px; font-weight:bold; color:#22c55e;">${cs.singleWeeks.avgPrice.toFixed(2)}元</div>
+                    </div>
+                </div>
+            </div>
+            <div style="background:white; padding:12px; border-radius:8px; border-left:4px solid #f97316;">
+                <div style="font-size:11px; color:#666;">密集週（週內2檔以上）</div>
+                <div style="font-size:10px; color:#999;">${cs.crowdedWeeks.count} 檔（${cs.crowdedWeekCount}週）</div>
+                <div style="display:flex; gap:15px; margin-top:6px;">
+                    <div>
+                        <span style="font-size:10px; color:#666;">平均倍數</span>
+                        <div style="font-size:18px; font-weight:bold; color:#f97316;">${cs.crowdedWeeks.avgMult.toFixed(2)}x</div>
+                    </div>
+                    <div>
+                        <span style="font-size:10px; color:#666;">平均得標價</span>
+                        <div style="font-size:18px; font-weight:bold; color:#f97316;">${cs.crowdedWeeks.avgPrice.toFixed(2)}元</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div style="background:white; padding:10px; border-radius:8px; margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
+            <div>
+                <span style="font-size:12px; color:#666;">差異：</span>
+                <span style="font-size:14px; font-weight:bold; color:${cs.multDiff < 0 ? '#dc2626' : '#22c55e'};">
+                    倍數 ${cs.multDiff >= 0 ? '+' : ''}${cs.multDiff.toFixed(2)}x
+                </span>
+                <span style="margin:0 8px; color:#ddd;">|</span>
+                <span style="font-size:14px; font-weight:bold; color:${cs.priceDiff < 0 ? '#dc2626' : '#22c55e'};">
+                    價格 ${cs.priceDiff >= 0 ? '+' : ''}${cs.priceDiff.toFixed(2)}元
+                </span>
+            </div>
+            <div style="padding:4px 12px; border-radius:15px; background:${effectColor}20; color:${effectColor}; font-weight:bold; font-size:12px;">
+                ${effectText}
+            </div>
+        </div>
+        
+        <div style="font-size:12px; font-weight:bold; color:#333; margin-bottom:6px;">📊 密集週內按順序分析</div>
+        <table style="width:100%; border-collapse:collapse; font-size:11px; margin-bottom:10px;">
+            <tr style="background:#f3f4f6;">
+                <th style="padding:4px 8px; border:1px solid #ddd;">順序</th>
+                <th style="padding:4px 8px; border:1px solid #ddd;">樣本</th>
+                <th style="padding:4px 8px; border:1px solid #ddd;">平均倍數</th>
+                <th style="padding:4px 8px; border:1px solid #ddd;">vs單獨</th>
+                <th style="padding:4px 8px; border:1px solid #ddd;">平均價</th>
+                <th style="padding:4px 8px; border:1px solid #ddd;">vs單獨</th>
+            </tr>
+            ${orderRows}
+        </table>
+        
+        <div style="font-size:10px; color:#666; padding:8px; background:#f8fafc; border-radius:6px;">
+            💡 <b>應用提示：</b>若同一週有多檔競拍，後面開標的標的可能因資金被前面標的卡住而表現較弱。
+            ${hasCrowdingEffect ? '建議對密集週的後序標的採用較保守的出價策略。' : '目前數據未顯示明顯排擠效應。'}
+        </div>
+    </div>`;
 }
 
 /**

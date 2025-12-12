@@ -4062,148 +4062,196 @@ function generateStandardCard(data, titleOverride=null, inquiryData=null, exclud
         html += `</table></div>`;
     }
     
-    // === v3.76 整合版：掛牌統計（全部 + 排除極值 + 擔保類型）===
+    // === 第一個表格：完整數據 ===
     const hasAuction = aH > 0 || aL > 0;
     const hasInquiry = iH > 0 || iL > 0;
-    const hasExcludeAuction = exAH > 0 || exAL > 0;
-    const hasExcludeInquiry = exIH > 0 || exIL > 0;
-    
-    // 檢查依擔保類型數據
-    const hasGuaranteedAuction = guaranteedAuctionData && safeFloat(guaranteedAuctionData['平均掛牌最高']) > 0;
-    const hasGuaranteedInquiry = guaranteedInquiryData && safeFloat(guaranteedInquiryData['平均掛牌最高']) > 0;
-    const hasUnguaranteedAuction = unguaranteedAuctionData && safeFloat(unguaranteedAuctionData['平均掛牌最高']) > 0;
-    const hasUnguaranteedInquiry = unguaranteedInquiryData && safeFloat(unguaranteedInquiryData['平均掛牌最低']) > 0;
     
     if (hasAuction || hasInquiry) {
-        html += `<div style="font-size:11px; color:#2e7d32; font-weight:bold; margin:8px 0 4px 0;">📈 掛牌統計</div>`;
-        
-        // 整合表格：全部 vs 排除極值
+        html += `<div style="font-size:11px; color:#2e7d32; font-weight:bold; margin:8px 0 4px 0;">📈 掛牌統計（全部）</div>`;
         html += `<table class="card-market-table">
-        <tr>
-            <th rowspan="2" style="vertical-align:middle;"></th>
-            <th colspan="3" style="background:#2e7d32; text-align:center;">全部數據</th>
-            <th colspan="2" style="background:#1565c0; text-align:center;">排除前3高</th>
-        </tr>
-        <tr>
-            <th style="background:#388e3c;">掛牌高</th>
-            <th style="background:#388e3c;">掛牌低</th>
-            <th style="background:#388e3c;">振幅</th>
-            <th style="background:#1976d2;">掛牌高</th>
-            <th style="background:#1976d2;">振幅</th>
-        </tr>`;
+        <tr><th></th><th>掛牌高</th><th>掛牌低</th><th>振幅</th></tr>`;
         
-        // 競拍行
         if (hasAuction) {
-            const ampDiff = (hasExcludeAuction && parseFloat(aAmp) > 0 && parseFloat(exAAmp) > 0) 
-                ? ((parseFloat(aAmp) - parseFloat(exAAmp)) / parseFloat(aAmp) * 100).toFixed(0) 
-                : null;
-            const ampDiffColor = ampDiff && parseFloat(ampDiff) > 15 ? '#e65100' : '#666';
-            
             html += `<tr>
                 <td class="type-label">競拍<span class="count">${aCount}</span></td>
                 <td class="val-blue">${aH > 0 ? safeFixed(aH,1) : '-'}</td>
                 <td class="val-blue">${aL > 0 ? safeFixed(aL,1) : '-'}</td>
                 <td class="val-pink">${aAmp}%</td>
-                <td class="val-blue" style="background:#e3f2fd;">${hasExcludeAuction && exAH > 0 ? safeFixed(exAH,1) : '-'}<span class="count" style="color:#1565c0;">${exACount || ''}</span></td>
-                <td style="background:#e3f2fd; color:${ampDiffColor}; font-weight:bold;">${hasExcludeAuction ? exAAmp + '%' : '-'}${ampDiff && parseFloat(ampDiff) > 15 ? '<span style="font-size:9px;color:#e65100;"> ↓' + ampDiff + '%</span>' : ''}</td>
             </tr>`;
         }
         
-        // 詢圈行
         if (hasInquiry) {
-            const ampDiff = (hasExcludeInquiry && parseFloat(iAmp) > 0 && parseFloat(exIAmp) > 0)
-                ? ((parseFloat(iAmp) - parseFloat(exIAmp)) / parseFloat(iAmp) * 100).toFixed(0)
-                : null;
-            const ampDiffColor = ampDiff && parseFloat(ampDiff) > 15 ? '#e65100' : '#666';
-            
             html += `<tr>
                 <td class="type-label">詢圈<span class="count">${iCount}</span></td>
                 <td class="val-blue">${iH > 0 ? safeFixed(iH,1) : '-'}</td>
                 <td class="val-blue">${iL > 0 ? safeFixed(iL,1) : '-'}</td>
                 <td class="val-pink">${iAmp}%</td>
-                <td class="val-blue" style="background:#e3f2fd;">${hasExcludeInquiry && exIH > 0 ? safeFixed(exIH,1) : '-'}<span class="count" style="color:#1565c0;">${exICount || ''}</span></td>
-                <td style="background:#e3f2fd; color:${ampDiffColor}; font-weight:bold;">${hasExcludeInquiry ? exIAmp + '%' : '-'}${ampDiff && parseFloat(ampDiff) > 15 ? '<span style="font-size:9px;color:#e65100;"> ↓' + ampDiff + '%</span>' : ''}</td>
             </tr>`;
         }
         
-        // 合計行
         if (hasAuction && hasInquiry) {
-            const tAmpDiff = (parseFloat(tAmp) > 0 && parseFloat(exTAmp) > 0)
-                ? ((parseFloat(tAmp) - parseFloat(exTAmp)) / parseFloat(tAmp) * 100).toFixed(0)
-                : null;
-            
             html += `<tr class="total-row">
                 <td class="type-label">合計<span class="count">${totalCount}</span></td>
                 <td class="val-blue">${tH > 0 ? safeFixed(tH,1) : '-'}</td>
                 <td class="val-blue">${tL > 0 ? safeFixed(tL,1) : '-'}</td>
                 <td class="val-pink">${tAmp}%</td>
-                <td class="val-blue" style="background:#bbdefb;">${exTH > 0 ? safeFixed(exTH,1) : '-'}<span class="count" style="color:#1565c0;">${exTotalCount || ''}</span></td>
-                <td style="background:#bbdefb; font-weight:bold;">${exTAmp}%${tAmpDiff && parseFloat(tAmpDiff) > 15 ? '<span style="font-size:9px;color:#e65100;"> ↓' + tAmpDiff + '%</span>' : ''}</td>
+            </tr>`;
+        }
+        
+        html += `</table>`;
+    }
+    
+    // === 第二個表格：排除前三高 ===
+    const hasExcludeAuction = exAH > 0 || exAL > 0;
+    const hasExcludeInquiry = exIH > 0 || exIL > 0;
+    
+    if (hasExcludeAuction || hasExcludeInquiry) {
+        html += `<div style="font-size:11px; color:#1565c0; font-weight:bold; margin:12px 0 4px 0;">📉 掛牌統計（排除前3高）</div>`;
+        html += `<table class="card-market-table" style="background:#e3f2fd;">
+        <tr><th style="background:#1565c0;"></th><th style="background:#1565c0;">掛牌高</th><th style="background:#1565c0;">掛牌低</th><th style="background:#1565c0;">振幅</th></tr>`;
+        
+        if (hasExcludeAuction) {
+            html += `<tr>
+                <td class="type-label" style="color:#1565c0;">競拍<span class="count">${exACount}</span></td>
+                <td class="val-blue">${exAH > 0 ? safeFixed(exAH,1) : '-'}</td>
+                <td class="val-blue">${exAL > 0 ? safeFixed(exAL,1) : '-'}</td>
+                <td class="val-pink">${exAAmp}%</td>
+            </tr>`;
+        }
+        
+        if (hasExcludeInquiry) {
+            html += `<tr>
+                <td class="type-label" style="color:#1565c0;">詢圈<span class="count">${exICount}</span></td>
+                <td class="val-blue">${exIH > 0 ? safeFixed(exIH,1) : '-'}</td>
+                <td class="val-blue">${exIL > 0 ? safeFixed(exIL,1) : '-'}</td>
+                <td class="val-pink">${exIAmp}%</td>
+            </tr>`;
+        }
+        
+        if (hasExcludeAuction && hasExcludeInquiry) {
+            html += `<tr class="total-row" style="background:#bbdefb;">
+                <td class="type-label" style="color:#1565c0;">合計<span class="count">${exTotalCount}</span></td>
+                <td class="val-blue">${exTH > 0 ? safeFixed(exTH,1) : '-'}</td>
+                <td class="val-blue">${exTL > 0 ? safeFixed(exTL,1) : '-'}</td>
+                <td class="val-pink">${exTAmp}%</td>
             </tr>`;
         }
         
         html += `</table>`;
         
-        // === 依擔保類型細分（緊湊版）===
-        if (hasGuaranteedAuction || hasGuaranteedInquiry || hasUnguaranteedAuction || hasUnguaranteedInquiry) {
-            html += `<div style="font-size:10px; color:#7b1fa2; font-weight:bold; margin:8px 0 3px 0;">🏷️ 依擔保類型</div>`;
-            html += `<table class="card-market-table" style="background:#f3e5f5; font-size:10px;">
-            <tr><th style="background:#7b1fa2;"></th><th style="background:#7b1fa2;">掛牌高</th><th style="background:#7b1fa2;">掛牌低</th><th style="background:#7b1fa2;">振幅</th></tr>`;
+        // === 計算落差並顯示提醒（分開競拍和詢圈）===
+        let warnings = [];
+        
+        // 競拍落差檢查
+        if (hasAuction && hasExcludeAuction) {
+            const aAmpNum = parseFloat(aAmp);
+            const exAAmpNum = parseFloat(exAAmp);
             
-            // 有擔保-競拍
+            if (!isNaN(aAmpNum) && !isNaN(exAAmpNum) && aAmpNum > 0) {
+                const aAmpDiffPct = ((aAmpNum - exAAmpNum) / aAmpNum) * 100;
+                
+                if (aAmpDiffPct > 15) {
+                    const aAmpDiff = (aAmpNum - exAAmpNum).toFixed(1);
+                    const aHighDiff = (aH - exAH).toFixed(1);
+                    warnings.push(`🎯 競拍：振幅落差 ${aAmpDiff}%（降幅${aAmpDiffPct.toFixed(0)}%），掛牌高均價差 ${aHighDiff} 元`);
+                }
+            }
+        }
+        
+        // 詢圈落差檢查
+        if (hasInquiry && hasExcludeInquiry) {
+            const iAmpNum = parseFloat(iAmp);
+            const exIAmpNum = parseFloat(exIAmp);
+            
+            if (!isNaN(iAmpNum) && !isNaN(exIAmpNum) && iAmpNum > 0) {
+                const iAmpDiffPct = ((iAmpNum - exIAmpNum) / iAmpNum) * 100;
+                
+                if (iAmpDiffPct > 15) {
+                    const iAmpDiff = (iAmpNum - exIAmpNum).toFixed(1);
+                    const iHighDiff = (iH - exIH).toFixed(1);
+                    warnings.push(`📋 詢圈：振幅落差 ${iAmpDiff}%（降幅${iAmpDiffPct.toFixed(0)}%），掛牌高均價差 ${iHighDiff} 元`);
+                }
+            }
+        }
+        
+        if (warnings.length > 0) {
+            html += `<div style="margin-top:6px; padding:6px 8px; background:#fff3e0; border-left:3px solid #ff9800; border-radius:4px; font-size:10px; color:#e65100; line-height:1.6;">
+                <div style="font-weight:bold; margin-bottom:3px;">⚠️ 前3高對整體影響顯著：</div>
+                ${warnings.join('<br>')}
+            </div>`;
+        }
+    }
+    
+    // === 第三個表格：依擔保類型細分 ===
+    const hasGuaranteedAuction = guaranteedAuctionData && safeFloat(guaranteedAuctionData['平均掛牌最高']) > 0;
+    const hasGuaranteedInquiry = guaranteedInquiryData && safeFloat(guaranteedInquiryData['平均掛牌最高']) > 0;
+    const hasUnguaranteedAuction = unguaranteedAuctionData && safeFloat(unguaranteedAuctionData['平均掛牌最高']) > 0;
+    const hasUnguaranteedInquiry = unguaranteedInquiryData && safeFloat(unguaranteedInquiryData['平均掛牌最高']) > 0;
+    
+    if (hasGuaranteedAuction || hasGuaranteedInquiry || hasUnguaranteedAuction || hasUnguaranteedInquiry) {
+        html += `<div style="font-size:11px; color:#7b1fa2; font-weight:bold; margin:12px 0 4px 0;">🏷️ 依擔保類型細分</div>`;
+        html += `<table class="card-market-table" style="background:#f3e5f5;">
+        <tr><th style="background:#7b1fa2;"></th><th style="background:#7b1fa2;">掛牌高</th><th style="background:#7b1fa2;">掛牌低</th><th style="background:#7b1fa2;">振幅</th></tr>`;
+        
+        // 有擔保
+        if (hasGuaranteedAuction || hasGuaranteedInquiry) {
+            // 有擔保 - 競拍
             if (hasGuaranteedAuction) {
                 const gaH = safeFloat(guaranteedAuctionData['平均掛牌最高']);
                 const gaL = safeFloat(guaranteedAuctionData['平均掛牌最低']);
                 const gaAmp = (gaH > 0 && gaL > 0) ? ((gaH - gaL) / gaL * 100).toFixed(1) : '-';
                 html += `<tr>
-                    <td class="type-label" style="color:#7b1fa2; font-size:10px;">有擔-競<span class="count">${guaranteedAuctionData['樣本數']}</span></td>
-                    <td class="val-blue" style="font-size:10px;">${safeFixed(gaH,1)}</td>
-                    <td class="val-blue" style="font-size:10px;">${safeFixed(gaL,1)}</td>
-                    <td class="val-pink" style="font-size:10px;">${gaAmp}%</td>
+                    <td class="type-label" style="color:#7b1fa2;">有擔保-競拍<span class="count">${guaranteedAuctionData['樣本數']}</span></td>
+                    <td class="val-blue">${gaH > 0 ? safeFixed(gaH,1) : '-'}</td>
+                    <td class="val-blue">${gaL > 0 ? safeFixed(gaL,1) : '-'}</td>
+                    <td class="val-pink">${gaAmp}%</td>
                 </tr>`;
             }
             
-            // 有擔保-詢圈
+            // 有擔保 - 詢圈
             if (hasGuaranteedInquiry) {
                 const giH = safeFloat(guaranteedInquiryData['平均掛牌最高']);
                 const giL = safeFloat(guaranteedInquiryData['平均掛牌最低']);
                 const giAmp = (giH > 0 && giL > 0) ? ((giH - giL) / giL * 100).toFixed(1) : '-';
                 html += `<tr>
-                    <td class="type-label" style="color:#7b1fa2; font-size:10px;">有擔-詢<span class="count">${guaranteedInquiryData['樣本數']}</span></td>
-                    <td class="val-blue" style="font-size:10px;">${safeFixed(giH,1)}</td>
-                    <td class="val-blue" style="font-size:10px;">${safeFixed(giL,1)}</td>
-                    <td class="val-pink" style="font-size:10px;">${giAmp}%</td>
+                    <td class="type-label" style="color:#7b1fa2;">有擔保-詢圈<span class="count">${guaranteedInquiryData['樣本數']}</span></td>
+                    <td class="val-blue">${giH > 0 ? safeFixed(giH,1) : '-'}</td>
+                    <td class="val-blue">${giL > 0 ? safeFixed(giL,1) : '-'}</td>
+                    <td class="val-pink">${giAmp}%</td>
                 </tr>`;
             }
-            
-            // 無擔保-競拍
+        }
+        
+        // 無擔保
+        if (hasUnguaranteedAuction || hasUnguaranteedInquiry) {
+            // 無擔保 - 競拍
             if (hasUnguaranteedAuction) {
                 const uaH = safeFloat(unguaranteedAuctionData['平均掛牌最高']);
                 const uaL = safeFloat(unguaranteedAuctionData['平均掛牌最低']);
                 const uaAmp = (uaH > 0 && uaL > 0) ? ((uaH - uaL) / uaL * 100).toFixed(1) : '-';
                 html += `<tr style="background:#ede7f6;">
-                    <td class="type-label" style="color:#512da8; font-size:10px;">無擔-競<span class="count">${unguaranteedAuctionData['樣本數']}</span></td>
-                    <td class="val-blue" style="font-size:10px;">${safeFixed(uaH,1)}</td>
-                    <td class="val-blue" style="font-size:10px;">${safeFixed(uaL,1)}</td>
-                    <td class="val-pink" style="font-size:10px;">${uaAmp}%</td>
+                    <td class="type-label" style="color:#512da8;">無擔保-競拍<span class="count">${unguaranteedAuctionData['樣本數']}</span></td>
+                    <td class="val-blue">${uaH > 0 ? safeFixed(uaH,1) : '-'}</td>
+                    <td class="val-blue">${uaL > 0 ? safeFixed(uaL,1) : '-'}</td>
+                    <td class="val-pink">${uaAmp}%</td>
                 </tr>`;
             }
             
-            // 無擔保-詢圈
+            // 無擔保 - 詢圈
             if (hasUnguaranteedInquiry) {
                 const uiH = safeFloat(unguaranteedInquiryData['平均掛牌最高']);
                 const uiL = safeFloat(unguaranteedInquiryData['平均掛牌最低']);
                 const uiAmp = (uiH > 0 && uiL > 0) ? ((uiH - uiL) / uiL * 100).toFixed(1) : '-';
                 html += `<tr style="background:#ede7f6;">
-                    <td class="type-label" style="color:#512da8; font-size:10px;">無擔-詢<span class="count">${unguaranteedInquiryData['樣本數']}</span></td>
-                    <td class="val-blue" style="font-size:10px;">${safeFixed(uiH,1)}</td>
-                    <td class="val-blue" style="font-size:10px;">${safeFixed(uiL,1)}</td>
-                    <td class="val-pink" style="font-size:10px;">${uiAmp}%</td>
+                    <td class="type-label" style="color:#512da8;">無擔保-詢圈<span class="count">${unguaranteedInquiryData['樣本數']}</span></td>
+                    <td class="val-blue">${uiH > 0 ? safeFixed(uiH,1) : '-'}</td>
+                    <td class="val-blue">${uiL > 0 ? safeFixed(uiL,1) : '-'}</td>
+                    <td class="val-pink">${uiAmp}%</td>
                 </tr>`;
             }
-            
-            html += `</table>`;
         }
+        
+        html += `</table>`;
     }
     
     return html;

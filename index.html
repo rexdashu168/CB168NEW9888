@@ -14079,11 +14079,13 @@ function generateAdaptiveLearningHTML(r) {
     // v3.90 核心修正：使用溢價率而非固定價格
     // 建議價格 = max(理論價, 底標) × (1 + 歷史溢價率)
     
-    // 取得用戶當前條件（確保都是數字）
+    // 取得用戶當前條件（確保都是數字，加強防護）
     const userIssueSize = r?.issueSize || '';
-    const userTheo = parseFloat(r?.theoreticalPrice) || 0;
-    const userFloor = parseFloat(r?.floorPrice) || 100;
-    const userIndustry = r?.industry ? r.industry.split(' ')[0] : '';
+    const userTheoRaw = r?.theoreticalPrice;
+    const userTheo = (typeof userTheoRaw === 'number' && !isNaN(userTheoRaw)) ? userTheoRaw : (parseFloat(userTheoRaw) || 0);
+    const userFloorRaw = r?.floorPrice;
+    const userFloor = (typeof userFloorRaw === 'number' && !isNaN(userFloorRaw)) ? userFloorRaw : (parseFloat(userFloorRaw) || 100);
+    const userIndustry = r?.industry ? String(r.industry).split(' ')[0] : '';
     const userGuarantee = r?.guarantee || '無擔保';
     
     // 從歷史數據計算各區間的平均溢價率
@@ -14221,7 +14223,7 @@ function generateAdaptiveLearningHTML(r) {
             <div style="font-size:11px; opacity:0.9; margin-bottom:8px;">🎯 您的條件 → 學習引擎建議</div>
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <div style="font-size:11px;">
-                    <div style="margin-bottom:4px;">理論價：<b>${userTheo.toFixed(2)}元</b></div>
+                <div style="margin-bottom:4px;">理論價：<b>${Number(userTheo).toFixed(2)}元</b></div>
                     <div>溢價率：<b>${userPremiumRate.toFixed(1)}%</b>${sizeAdjustment !== 0 ? ` ${sizeAdjustment > 0 ? '+' : ''}${sizeAdjustment}%（規模）` : ''} = <b>${totalPremiumRate.toFixed(1)}%</b></div>
                 </div>
                 <div style="text-align:right;">
@@ -14230,7 +14232,7 @@ function generateAdaptiveLearningHTML(r) {
                 </div>
             </div>
             <div style="margin-top:8px; padding:6px; background:rgba(255,255,255,0.15); border-radius:4px; font-size:10px;">
-                💡 計算：max(${userTheo.toFixed(1)}, ${userFloor}) × (1 + ${totalPremiumRate.toFixed(1)}%) = ${userRecommendedPrice.toFixed(2)}元
+                💡 計算：max(${Number(userTheo).toFixed(1)}, ${Number(userFloor).toFixed(0)}) × (1 + ${Number(totalPremiumRate).toFixed(1)}%) = ${Number(userRecommendedPrice).toFixed(2)}元
             </div>
         </div>
     ` : `

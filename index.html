@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.90 (信評擔保增強版)</title>
+<title>AI智能可轉債競拍系統 v3.92 (分條件市場動能版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="embedded_data.js" onerror="console.warn('embedded_data.js not found, using defaults.')"></script>
 
@@ -1818,7 +1818,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
                 <span style="font-size:11px; color:#666; margin-left:auto;">近期市場熱度參考</span>
             </div>
             
-            <!-- 📡 即時市場動能 -->
+            <!-- 📡 即時市場動能（整體摘要） -->
             <div class="form-section" style="background: white; border: 1px solid #81c784; border-radius: 10px; padding: 12px; margin-bottom: 12px;">
                 <div style="font-size:13px; font-weight:bold; color:#c2185b; margin-bottom:8px;">📡 即時市場動能（近10檔開標）</div>
                 <div id="marketMomentumResult">
@@ -1828,6 +1828,23 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
                     <summary style="cursor:pointer; font-size:11px; color:#2e7d32; font-weight:bold;">📋 查看近期開標明細</summary>
                     <div id="recentAuctionDetails" style="margin-top:8px; max-height:200px; overflow-y:auto; font-size:11px;"></div>
                 </details>
+            </div>
+            
+            <!-- 🔥 v3.91新增：分條件市場動能 -->
+            <div class="form-section" style="background: white; border: 2px solid #ff9800; border-radius: 10px; padding: 12px; margin-bottom: 12px;">
+                <div style="font-size:13px; font-weight:bold; color:#e65100; margin-bottom:10px;">🔥 分條件市場動能（近期統計）</div>
+                
+                <!-- 條件篩選Tab -->
+                <div style="display:flex; gap:4px; margin-bottom:10px; flex-wrap:wrap;">
+                    <button type="button" class="momentum-tab active" onclick="showMomentumTab('byGuarantee', this)" style="padding:6px 10px; border:none; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; background:#ff9800; color:white;">擔保類型</button>
+                    <button type="button" class="momentum-tab" onclick="showMomentumTab('byTheoPrice', this)" style="padding:6px 10px; border:none; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; background:#ffe0b2; color:#e65100;">理論價區間</button>
+                    <button type="button" class="momentum-tab" onclick="showMomentumTab('bySize', this)" style="padding:6px 10px; border:none; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; background:#ffe0b2; color:#e65100;">發行規模</button>
+                    <button type="button" class="momentum-tab" onclick="showMomentumTab('combined', this)" style="padding:6px 10px; border:none; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; background:#ffe0b2; color:#e65100;">組合分析</button>
+                </div>
+                
+                <div id="momentumByCondition">
+                    <div style="color:#666; padding:10px; text-align:center; font-size:12px;">⏳ 載入中...</div>
+                </div>
             </div>
             
             <!-- 🌡️ 市場氛圍儀表板 -->
@@ -1866,22 +1883,23 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     <div id="welcomeMsg" class="welcome-message">
         <h2>歡迎使用AI智能競拍評估系統</h2>
         <p style="margin-top:10px; color:#666; font-size: 14px;">
-            v3.90 權重修正版<br>
-            • 分析法一二權重：產業30%、信評22%、理論價15%、券商13%、規模10%、股本5%、年期5%<br>
-            • 市場氛圍權重：產業35%、規模25%、信評40%（三維度）<br>
-            • 自適應學習：以溢價率計算，建議價=理論價×(1+溢價率)
+            v3.92 分條件市場動能版<br>
+            • 右側面板預設收合，點選標題展開查看<br>
+            • 年度趨勢整合歷史發行量與半年度變化<br>
+            • 競拍VS詢圈新增歷年統計表格<br>
+            • 修復詢圈數據年度統計問題
         </p>
         <div class="stats-summary" id="statsSummary"></div>
         
         <!-- ========== 右側第一區塊：市場趨勢分析 ========== -->
         <div class="right-section section-trend" style="margin-top:20px;">
-            <div class="right-section-header" onclick="toggleRightSection('trendSection', this)">
+            <div class="right-section-header collapsed" onclick="toggleRightSection('trendSection', this)">
                 <span style="font-size:18px;">📈</span>
                 <span>一、市場趨勢分析</span>
                 <span style="font-size:11px; font-weight:normal; opacity:0.9;">（宏觀歷史數據）</span>
                 <span class="toggle-icon">▼</span>
             </div>
-            <div class="right-section-content" id="trendSection">
+            <div class="right-section-content collapsed" id="trendSection" style="max-height:0;">
         
         <!-- 市場趨勢分析 -->
         <div class="market-trend-section" id="marketTrendSection" style="text-align:left;">
@@ -1913,13 +1931,13 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
         
         <!-- ========== 右側第二區塊：維度統計分析 ========== -->
         <div class="right-section section-dimension" style="margin-top:15px;">
-            <div class="right-section-header" onclick="toggleRightSection('dimensionSectionContent', this)">
+            <div class="right-section-header collapsed" onclick="toggleRightSection('dimensionSectionContent', this)">
                 <span style="font-size:18px;">📊</span>
                 <span>二、維度統計分析</span>
                 <span style="font-size:11px; font-weight:normal; opacity:0.9;">（各條件歷史表現）</span>
                 <span class="toggle-icon">▼</span>
             </div>
-            <div class="right-section-content" id="dimensionSectionContent">
+            <div class="right-section-content collapsed" id="dimensionSectionContent" style="max-height:0;">
         
         <!-- 維度分析總覽 -->
         <div id="dimensionSection" class="dimension-section" style="text-align:left;">
@@ -1939,13 +1957,13 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
         
         <!-- ========== 右側第三區塊：績效分析 ========== -->
         <div class="right-section section-performance" style="margin-top:15px;">
-            <div class="right-section-header" onclick="toggleRightSection('performanceSection', this)">
+            <div class="right-section-header collapsed" onclick="toggleRightSection('performanceSection', this)">
                 <span style="font-size:18px;">💰</span>
                 <span>三、績效分析</span>
                 <span style="font-size:11px; font-weight:normal; opacity:0.9;">（歷史盈虧驗證）</span>
                 <span class="toggle-icon">▼</span>
             </div>
-            <div class="right-section-content" id="performanceSection">
+            <div class="right-section-content collapsed" id="performanceSection" style="max-height:0;">
         
         <!-- 年度績效排行榜 -->
         <div id="rankingSection" class="ranking-section" style="text-align:left;">
@@ -4246,6 +4264,7 @@ async function loadStatistics() {
                 return {
                     'id': id,
                     'name': getSmartValue(row, 'name') || row['名稱'] || '',
+                    'openDate': row['掛牌日期'] || row['開標日期'] || row['發行日期'] || '',  // v3.91 新增：讀取詢圈案例的日期
                     'industry': getSmartValue(row, 'industry') || row['產業分類'] || '',
                     'broker': getSmartValue(row, 'broker') || row['發行券商'] || row['承銷券商'] || '',
                     'guarantee': getSmartValue(row, 'guarantee') || row['擔保'] || row['有無擔保'] || '',
@@ -6543,12 +6562,31 @@ function generateMarketTrendAnalysis() {
     const gStats = calcStats(guaranteed);
     const uStats = calcStats(unguaranteed);
     
+    // v3.91 新增：各年度擔保比較統計
+    const guaranteeYearly = [];
+    for (let y = 2010; y <= currentYear; y++) {
+        const yearGuaranteed = allCBData.filter(d => d.year === y && d.guarantee && d.guarantee.includes('有'));
+        const yearUnguaranteed = allCBData.filter(d => d.year === y && (!d.guarantee || d.guarantee.includes('無') || !d.guarantee.includes('有')));
+        
+        if (yearGuaranteed.length > 0 || yearUnguaranteed.length > 0) {
+            const yGStats = calcStats(yearGuaranteed);
+            const yUStats = calcStats(yearUnguaranteed);
+            guaranteeYearly.push({
+                year: y,
+                gCount: yearGuaranteed.length,
+                gAmp: yGStats.avgAmp || 0,
+                uCount: yearUnguaranteed.length,
+                uAmp: yUStats.avgAmp || 0
+            });
+        }
+    }
+    
     marketTrendData.guarantee = {
         overall: {
             guaranteed: { count: gStats.count, avgHigh: gStats.avgHigh, avgLow: gStats.avgLow, avgAmp: gStats.avgAmp },
             unguaranteed: { count: uStats.count, avgHigh: uStats.avgHigh, avgLow: uStats.avgLow, avgAmp: uStats.avgAmp }
         },
-        yearly: [] // 簡化處理，移除年度細分
+        yearly: guaranteeYearly // v3.91 新增：各年度統計
     };
     
     // 3. 發行規模區間（動態生成）
@@ -6768,6 +6806,9 @@ function renderYearlyTrend() {
     const data = marketTrendData.yearly;
     if (!data || data.length === 0) return '<div>暫無數據</div>';
     
+    // v3.91 新增：取得半年度統計數據
+    const halfYearStats = window.halfYearStats || {};
+    
     let html = `
     <div style="font-size:12px; font-weight:bold; color:#e65100; margin-bottom:10px;">📊 2010-2025年完整年度統計（從01工作表掛牌日期統計）</div>
     <table class="trend-year-table">
@@ -6776,24 +6817,32 @@ function renderYearlyTrend() {
             <th>總檔數</th>
             <th>詢圈</th>
             <th>競拍</th>
+            <th>發行量(億)</th>
             <th>平均振幅</th>
         </tr>`;
     
-    let totalAll = 0, totalInquiry = 0, totalAuction = 0;
+    let totalAll = 0, totalInquiry = 0, totalAuction = 0, totalAmount = 0;
     data.forEach(d => {
         const ampClass = d.avgAmp >= 80 ? 'amp-high' : (d.avgAmp < 30 ? 'amp-low' : '');
-        const auctionNote = d.auction === 0 ? '' : '';
+        
+        // v3.91 新增：計算該年度發行量（從半年度統計累加）
+        const h1Key = d.year + 'H1';
+        const h2Key = d.year + 'H2';
+        const yearAmount = (halfYearStats[h1Key]?.issueAmount || 0) + (halfYearStats[h2Key]?.issueAmount || 0);
+        
         html += `
         <tr>
             <td class="year-cell">${d.year}年</td>
             <td><b>${d.total}</b></td>
-            <td style="color:#1565c0;">${d.inquiry}</td>
+            <td style="color:#1565c0;">${d.inquiry > 0 ? d.inquiry : '-'}</td>
             <td style="color:#e65100;">${d.auction > 0 ? d.auction : '-'}</td>
+            <td style="color:#2e7d32; font-weight:bold;">${yearAmount > 0 ? yearAmount.toFixed(0) : '-'}</td>
             <td class="${ampClass}">${d.avgAmp > 0 ? d.avgAmp.toFixed(1) + '%' : '-'}</td>
         </tr>`;
         totalAll += d.total;
         totalInquiry += d.inquiry;
         totalAuction += d.auction;
+        totalAmount += yearAmount;
     });
     
     // 合計列
@@ -6803,10 +6852,62 @@ function renderYearlyTrend() {
             <td><b>${totalAll}</b></td>
             <td style="color:#1565c0;"><b>${totalInquiry}</b></td>
             <td style="color:#e65100;"><b>${totalAuction}</b></td>
+            <td style="color:#2e7d32;"><b>${totalAmount > 0 ? totalAmount.toFixed(0) : '-'}</b></td>
             <td>-</td>
         </tr>`;
     
     html += `</table>`;
+    
+    // v3.91 新增：半年度發行量變化表格（2022H1起）
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().getMonth();
+    const periods = [];
+    for (let y = 2022; y <= currentYear; y++) {
+        periods.push(y + 'H1');
+        if (y < currentYear || (y === currentYear && currentMonth >= 6)) {
+            periods.push(y + 'H2');
+        }
+    }
+    
+    if (periods.length > 0) {
+        html += `
+        <div style="font-size:12px; font-weight:bold; color:#1565c0; margin:15px 0 10px 0;">📈 近年半年度發行量變化（2022年起）</div>
+        <table class="trend-year-table">
+            <tr>
+                <th>期間</th>
+                <th>發行檔數</th>
+                <th>發行量(億)</th>
+                <th>競拍佔比</th>
+                <th>平均規模</th>
+            </tr>`;
+        
+        periods.forEach(p => {
+            const stats = halfYearStats[p];
+            if (stats) {
+                const auctionRatio = stats.count > 0 ? ((stats.auctionCount || 0) / stats.count * 100) : 0;
+                const avgSize = stats.count > 0 ? (stats.issueAmount / stats.count) : 0;
+                html += `
+            <tr>
+                <td class="year-cell">${p}</td>
+                <td>${stats.count || 0}</td>
+                <td style="color:#2e7d32; font-weight:bold;">${stats.issueAmount ? stats.issueAmount.toFixed(0) : '-'}</td>
+                <td style="color:#e65100;">${auctionRatio > 0 ? auctionRatio.toFixed(0) + '%' : '-'}</td>
+                <td>${avgSize > 0 ? avgSize.toFixed(1) + '億' : '-'}</td>
+            </tr>`;
+            } else {
+                html += `
+            <tr>
+                <td class="year-cell">${p}</td>
+                <td>-</td>
+                <td>-</td>
+                <td>-</td>
+                <td>-</td>
+            </tr>`;
+            }
+        });
+        
+        html += `</table>`;
+    }
     
     // 趨勢洞察
     const peak = data.reduce((max, d) => d.avgAmp > max.avgAmp ? d : max, data[0]);
@@ -7146,6 +7247,7 @@ function renderTypeCompare() {
     const diff = Math.abs(a.avgAmp - i.avgAmp).toFixed(1);
     
     let html = `
+    <div style="font-size:12px; font-weight:bold; color:#e65100; margin-bottom:10px;">📊 整體競拍 vs 詢圈比較（全部年度）</div>
     <div class="trend-compare-grid">
         <div class="trend-compare-card">
             <h4>🎯 競拍</h4>
@@ -7185,12 +7287,69 @@ function renderTypeCompare() {
                 <span class="trend-compare-value ${i.avgAmp > a.avgAmp ? 'positive' : ''}">${i.avgAmp.toFixed(1)}%</span>
             </div>
         </div>
-    </div>
+    </div>`;
+    
+    // v3.91 新增：各年度競拍 vs 詢圈統計表格
+    const yearlyData = marketTrendData.yearly || [];
+    if (yearlyData.length > 0) {
+        // 只顯示有競拍數據的年份（2019年起）
+        const recentYears = yearlyData.filter(d => d.year >= 2019 && (d.auction > 0 || d.inquiry > 0));
+        
+        if (recentYears.length > 0) {
+            html += `
+    <div style="font-size:12px; font-weight:bold; color:#e65100; margin:15px 0 10px 0;">📈 各年度 競拍 vs 詢圈 檔數統計（2019年起）</div>
+    <table class="trend-year-table">
+        <tr>
+            <th>年度</th>
+            <th>總檔數</th>
+            <th>競拍</th>
+            <th>競拍佔比</th>
+            <th>詢圈</th>
+            <th>詢圈佔比</th>
+        </tr>`;
+            
+            let totalSum = 0, auctionSum = 0, inquirySum = 0;
+            recentYears.forEach(d => {
+                const auctionPct = d.total > 0 ? (d.auction / d.total * 100) : 0;
+                const inquiryPct = d.total > 0 ? (d.inquiry / d.total * 100) : 0;
+                html += `
+        <tr>
+            <td class="year-cell">${d.year}年</td>
+            <td><b>${d.total}</b></td>
+            <td style="color:#e65100; font-weight:bold;">${d.auction > 0 ? d.auction : '-'}</td>
+            <td style="color:#e65100;">${auctionPct > 0 ? auctionPct.toFixed(0) + '%' : '-'}</td>
+            <td style="color:#1565c0; font-weight:bold;">${d.inquiry > 0 ? d.inquiry : '-'}</td>
+            <td style="color:#1565c0;">${inquiryPct > 0 ? inquiryPct.toFixed(0) + '%' : '-'}</td>
+        </tr>`;
+                totalSum += d.total;
+                auctionSum += d.auction;
+                inquirySum += d.inquiry;
+            });
+            
+            // 合計列
+            const totalAuctionPct = totalSum > 0 ? (auctionSum / totalSum * 100) : 0;
+            const totalInquiryPct = totalSum > 0 ? (inquirySum / totalSum * 100) : 0;
+            html += `
+        <tr class="total-row">
+            <td><b>合計</b></td>
+            <td><b>${totalSum}</b></td>
+            <td style="color:#e65100;"><b>${auctionSum}</b></td>
+            <td style="color:#e65100;"><b>${totalAuctionPct.toFixed(0)}%</b></td>
+            <td style="color:#1565c0;"><b>${inquirySum}</b></td>
+            <td style="color:#1565c0;"><b>${totalInquiryPct.toFixed(0)}%</b></td>
+        </tr>`;
+            
+            html += `</table>`;
+        }
+    }
+    
+    html += `
     <div class="trend-insight-box">
         <div class="insight-title">📊 Rex大叔分析結論</div>
         <div class="insight-content">
             <strong>${winner}</strong>整體振幅較高，差距${diff}%。
             ${winner === '詢圈' ? '詢圈案例數據量大(涵蓋歷年)，表現優於競拍。但2019年後競拍制度上路，近年數據須分開觀察。' : '競拍透過公開拍賣取得籌碼，市場對其定價較為理性。'}
+            2022年後競拍比例快速提升，已成為CB發行主流方式。
         </div>
     </div>`;
     
@@ -10593,6 +10752,414 @@ function calculateMarketMomentum() {
     }
     
     console.log('市場動能計算完成:', window.marketMomentum);
+    
+    // v3.91 新增：計算分條件市場動能
+    calculateConditionMomentum();
+}
+
+/**
+ * v3.91 新增：分條件市場動能計算
+ * 將近期開標案例按不同條件分類統計
+ */
+function calculateConditionMomentum() {
+    // 從window.recentAuctionData取得近期資料（已在loadStatistics中建立）
+    // 同時從auctionRawData取得更完整的歷史資料
+    const recentData = window.recentAuctionData || [];
+    
+    // 取近30檔有完整資料的案例進行分析
+    const validData = auctionRawData
+        .filter(d => d.openDate && d.avgPremium !== null && d.bidMultiple > 0 && d.theoreticalPrice > 0)
+        .sort((a, b) => {
+            const parseDate = (dateStr) => {
+                if (!dateStr || dateStr === '-') return new Date(0);
+                if (typeof dateStr === 'number') return new Date((dateStr - 25569) * 86400 * 1000);
+                const parts = String(dateStr).split(/[\/\-]/);
+                if (parts.length >= 3) return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+                return new Date(dateStr);
+            };
+            return parseDate(b.openDate) - parseDate(a.openDate);
+        })
+        .slice(0, 30);
+    
+    if (validData.length === 0) {
+        document.getElementById('momentumByCondition').innerHTML = 
+            '<div style="color:#666; text-align:center; padding:10px;">⚠️ 資料不足</div>';
+        return;
+    }
+    
+    // 儲存分條件統計結果
+    window.conditionMomentum = {
+        // 按擔保類型
+        byGuarantee: {
+            guaranteed: calcConditionStats(validData.filter(d => d.guarantee === '有擔保')),
+            unguaranteed: calcConditionStats(validData.filter(d => d.guarantee !== '有擔保'))
+        },
+        // 按理論價區間
+        byTheoPrice: {
+            above110: calcConditionStats(validData.filter(d => d.theoreticalPrice >= 110)),
+            between100and110: calcConditionStats(validData.filter(d => d.theoreticalPrice >= 100 && d.theoreticalPrice < 110)),
+            between90and100: calcConditionStats(validData.filter(d => d.theoreticalPrice >= 90 && d.theoreticalPrice < 100)),
+            below90: calcConditionStats(validData.filter(d => d.theoreticalPrice < 90))
+        },
+        // 按發行規模
+        bySize: {
+            large: calcConditionStats(validData.filter(d => d.issueSize >= 10)),
+            small: calcConditionStats(validData.filter(d => d.issueSize < 10))
+        },
+        // 組合分析：擔保+規模
+        combined: {
+            guaranteed_large: calcConditionStats(validData.filter(d => d.guarantee === '有擔保' && d.issueSize >= 10)),
+            guaranteed_small: calcConditionStats(validData.filter(d => d.guarantee === '有擔保' && d.issueSize < 10)),
+            unguaranteed_large: calcConditionStats(validData.filter(d => d.guarantee !== '有擔保' && d.issueSize >= 10)),
+            unguaranteed_small: calcConditionStats(validData.filter(d => d.guarantee !== '有擔保' && d.issueSize < 10))
+        },
+        // 組合分析：擔保+理論價
+        combinedTheo: {
+            guaranteed_high: calcConditionStats(validData.filter(d => d.guarantee === '有擔保' && d.theoreticalPrice >= 100)),
+            guaranteed_low: calcConditionStats(validData.filter(d => d.guarantee === '有擔保' && d.theoreticalPrice < 100)),
+            unguaranteed_high: calcConditionStats(validData.filter(d => d.guarantee !== '有擔保' && d.theoreticalPrice >= 100)),
+            unguaranteed_low: calcConditionStats(validData.filter(d => d.guarantee !== '有擔保' && d.theoreticalPrice < 100))
+        },
+        totalCount: validData.length,
+        rawData: validData
+    };
+    
+    // 預設顯示「擔保類型」
+    showMomentumTab('byGuarantee');
+    
+    console.log('分條件市場動能計算完成:', window.conditionMomentum);
+}
+
+/**
+ * 計算特定條件的統計數據
+ */
+function calcConditionStats(data) {
+    if (!data || data.length === 0) {
+        return { count: 0, avgPremium: 0, avgMult: 0, avgMinBid: 0, avgAvgBid: 0, cases: [] };
+    }
+    
+    const avgPremium = data.reduce((s, d) => s + (d.avgPremium || 0), 0) / data.length;
+    const avgMult = data.reduce((s, d) => s + (d.bidMultiple || 0), 0) / data.length;
+    const avgMinBid = data.filter(d => d.minBidPrice > 0).reduce((s, d) => s + d.minBidPrice, 0) / 
+                      (data.filter(d => d.minBidPrice > 0).length || 1);
+    const avgAvgBid = data.filter(d => d.avgBidPrice > 0).reduce((s, d) => s + d.avgBidPrice, 0) / 
+                      (data.filter(d => d.avgBidPrice > 0).length || 1);
+    const minPremium = data.reduce((s, d) => s + (d.lowPremium || 0), 0) / data.length;
+    
+    // 取最近5檔案例
+    const recentCases = data.slice(0, 5).map(d => ({
+        name: d.name,
+        date: formatDate(d.openDate),
+        premium: d.avgPremium,
+        minPremium: d.lowPremium,
+        mult: d.bidMultiple,
+        minBid: d.minBidPrice,
+        theoPrice: d.theoreticalPrice,
+        size: d.issueSize,
+        guarantee: d.guarantee
+    }));
+    
+    return {
+        count: data.length,
+        avgPremium: avgPremium,
+        minPremium: minPremium,
+        avgMult: avgMult,
+        avgMinBid: avgMinBid,
+        avgAvgBid: avgAvgBid,
+        cases: recentCases
+    };
+}
+
+/**
+ * 切換分條件顯示Tab
+ */
+function showMomentumTab(tabName, btnEl) {
+    // 更新Tab樣式
+    document.querySelectorAll('.momentum-tab').forEach(btn => {
+        btn.style.background = '#ffe0b2';
+        btn.style.color = '#e65100';
+    });
+    if (btnEl) {
+        btnEl.style.background = '#ff9800';
+        btnEl.style.color = 'white';
+    } else {
+        // 預設選中第一個
+        const firstBtn = document.querySelector('.momentum-tab');
+        if (firstBtn) {
+            firstBtn.style.background = '#ff9800';
+            firstBtn.style.color = 'white';
+        }
+    }
+    
+    const container = document.getElementById('momentumByCondition');
+    if (!window.conditionMomentum) {
+        container.innerHTML = '<div style="color:#666; text-align:center; padding:10px;">⏳ 資料載入中...</div>';
+        return;
+    }
+    
+    let html = '';
+    
+    if (tabName === 'byGuarantee') {
+        html = renderGuaranteeMomentum();
+    } else if (tabName === 'byTheoPrice') {
+        html = renderTheoPriceMomentum();
+    } else if (tabName === 'bySize') {
+        html = renderSizeMomentum();
+    } else if (tabName === 'combined') {
+        html = renderCombinedMomentum();
+    }
+    
+    container.innerHTML = html;
+}
+
+/**
+ * 渲染擔保類型分析
+ */
+function renderGuaranteeMomentum() {
+    const data = window.conditionMomentum.byGuarantee;
+    const g = data.guaranteed;
+    const u = data.unguaranteed;
+    
+    // 判斷熱度
+    const getHeatLevel = (mult) => {
+        if (mult >= 4) return { text: '極熱', color: '#d32f2f', bg: '#ffebee' };
+        if (mult >= 3) return { text: '偏熱', color: '#ff5722', bg: '#fff3e0' };
+        if (mult >= 2) return { text: '普通', color: '#ff9800', bg: '#fff8e1' };
+        return { text: '偏冷', color: '#2196f3', bg: '#e3f2fd' };
+    };
+    
+    const gHeat = getHeatLevel(g.avgMult);
+    const uHeat = getHeatLevel(u.avgMult);
+    
+    let html = `
+    <div style="font-size:11px; color:#666; margin-bottom:8px;">📊 近${window.conditionMomentum.totalCount}檔按擔保類型統計</div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+        <!-- 有擔保 -->
+        <div style="background:${gHeat.bg}; border:2px solid ${gHeat.color}; border-radius:8px; padding:10px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <span style="font-weight:bold; color:#2e7d32;">🛡️ 有擔保</span>
+                <span style="background:${gHeat.color}; color:white; padding:2px 8px; border-radius:10px; font-size:10px; font-weight:bold;">${gHeat.text}</span>
+            </div>
+            <div style="font-size:11px; color:#666; margin-bottom:6px;">近${g.count}檔</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; font-size:12px;">
+                <div>
+                    <div style="font-size:10px; color:#666;">平均溢價</div>
+                    <div style="font-weight:bold; color:#2e7d32;">${g.avgPremium.toFixed(2)}%</div>
+                </div>
+                <div>
+                    <div style="font-size:10px; color:#666;">投標倍數</div>
+                    <div style="font-weight:bold; color:#e65100;">${g.avgMult.toFixed(2)}x</div>
+                </div>
+                <div>
+                    <div style="font-size:10px; color:#666;">最低得標均</div>
+                    <div style="font-weight:bold; color:#1565c0;">${g.avgMinBid.toFixed(2)}</div>
+                </div>
+                <div>
+                    <div style="font-size:10px; color:#666;">平均得標均</div>
+                    <div style="font-weight:bold; color:#7b1fa2;">${g.avgAvgBid.toFixed(2)}</div>
+                </div>
+            </div>
+        </div>
+        <!-- 無擔保 -->
+        <div style="background:${uHeat.bg}; border:2px solid ${uHeat.color}; border-radius:8px; padding:10px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <span style="font-weight:bold; color:#1565c0;">📋 無擔保</span>
+                <span style="background:${uHeat.color}; color:white; padding:2px 8px; border-radius:10px; font-size:10px; font-weight:bold;">${uHeat.text}</span>
+            </div>
+            <div style="font-size:11px; color:#666; margin-bottom:6px;">近${u.count}檔</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; font-size:12px;">
+                <div>
+                    <div style="font-size:10px; color:#666;">平均溢價</div>
+                    <div style="font-weight:bold; color:#2e7d32;">${u.avgPremium.toFixed(2)}%</div>
+                </div>
+                <div>
+                    <div style="font-size:10px; color:#666;">投標倍數</div>
+                    <div style="font-weight:bold; color:#e65100;">${u.avgMult.toFixed(2)}x</div>
+                </div>
+                <div>
+                    <div style="font-size:10px; color:#666;">最低得標均</div>
+                    <div style="font-weight:bold; color:#1565c0;">${u.avgMinBid.toFixed(2)}</div>
+                </div>
+                <div>
+                    <div style="font-size:10px; color:#666;">平均得標均</div>
+                    <div style="font-weight:bold; color:#7b1fa2;">${u.avgAvgBid.toFixed(2)}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div style="margin-top:10px; padding:8px; background:#fff3e0; border-radius:6px; font-size:11px; color:#e65100;">
+        💡 <b>Rex大叔提醒：</b>
+        有擔保溢價率通常較高(${(g.avgPremium - u.avgPremium).toFixed(2)}%差距)，
+        ${g.avgMult > u.avgMult ? '且競爭較激烈' : '但近期競爭較無擔保緩和'}。
+        投標時應參考同類型案例。
+    </div>`;
+    
+    return html;
+}
+
+/**
+ * 渲染理論價區間分析
+ */
+function renderTheoPriceMomentum() {
+    const data = window.conditionMomentum.byTheoPrice;
+    
+    const renderCard = (label, stats, color, hint) => {
+        if (stats.count === 0) return '';
+        const heatLevel = stats.avgMult >= 4 ? '極熱' : (stats.avgMult >= 3 ? '偏熱' : (stats.avgMult >= 2 ? '普通' : '偏冷'));
+        return `
+        <div style="background:white; border:1px solid ${color}; border-left:4px solid ${color}; border-radius:6px; padding:8px; margin-bottom:6px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-weight:bold; color:${color}; font-size:12px;">${label}</span>
+                <span style="font-size:10px; color:#666;">${stats.count}檔</span>
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:4px; margin-top:6px; font-size:11px;">
+                <div><span style="color:#666;">溢價</span><br><b style="color:#2e7d32;">${stats.avgPremium.toFixed(1)}%</b></div>
+                <div><span style="color:#666;">倍數</span><br><b style="color:#e65100;">${stats.avgMult.toFixed(2)}x</b></div>
+                <div><span style="color:#666;">最低得標</span><br><b style="color:#1565c0;">${stats.avgMinBid.toFixed(1)}</b></div>
+                <div><span style="color:#666;">熱度</span><br><b style="color:${color};">${heatLevel}</b></div>
+            </div>
+            <div style="font-size:10px; color:#888; margin-top:4px;">${hint}</div>
+        </div>`;
+    };
+    
+    let html = `
+    <div style="font-size:11px; color:#666; margin-bottom:8px;">📊 近${window.conditionMomentum.totalCount}檔按理論價區間統計</div>
+    ${renderCard('理論價 ≥110元（高轉換價值）', data.above110, '#4caf50', '→ 以溢價率法評估，競爭通常激烈')}
+    ${renderCard('理論價 100~110元（具轉換價值）', data.between100and110, '#ff9800', '→ 以溢價率法評估，標準競拍')}
+    ${renderCard('理論價 90~100元（接近平價）', data.between90and100, '#2196f3', '→ 可參考歷史得標價，溢價空間有限')}
+    ${renderCard('理論價 <90元（價外）', data.below90, '#9c27b0', '→ 建議採歷史得標價法，較保守出價')}
+    <div style="margin-top:8px; padding:8px; background:#e8f5e9; border-radius:6px; font-size:11px; color:#2e7d32;">
+        💡 <b>評估建議：</b>理論價≥100元可用溢價率法(理論價×(1+溢價率))；
+        理論價<100元建議參考同條件歷史得標價區間。
+    </div>`;
+    
+    return html;
+}
+
+/**
+ * 渲染發行規模分析
+ */
+function renderSizeMomentum() {
+    const data = window.conditionMomentum.bySize;
+    const large = data.large;
+    const small = data.small;
+    
+    const getHeatLevel = (mult) => {
+        if (mult >= 4) return { text: '極熱', color: '#d32f2f' };
+        if (mult >= 3) return { text: '偏熱', color: '#ff5722' };
+        if (mult >= 2) return { text: '普通', color: '#ff9800' };
+        return { text: '偏冷', color: '#2196f3' };
+    };
+    
+    let html = `
+    <div style="font-size:11px; color:#666; margin-bottom:8px;">📊 近${window.conditionMomentum.totalCount}檔按發行規模統計</div>
+    <table style="width:100%; border-collapse:collapse; font-size:11px;">
+        <tr style="background:#fff3e0;">
+            <th style="padding:8px; text-align:left; border-bottom:2px solid #ff9800;">規模區間</th>
+            <th style="padding:8px; text-align:center; border-bottom:2px solid #ff9800;">檔數</th>
+            <th style="padding:8px; text-align:center; border-bottom:2px solid #ff9800;">平均溢價</th>
+            <th style="padding:8px; text-align:center; border-bottom:2px solid #ff9800;">投標倍數</th>
+            <th style="padding:8px; text-align:center; border-bottom:2px solid #ff9800;">最低得標</th>
+            <th style="padding:8px; text-align:center; border-bottom:2px solid #ff9800;">熱度</th>
+        </tr>
+        <tr style="background:#fff;">
+            <td style="padding:8px; font-weight:bold; color:#e65100;">≥10億（大型）</td>
+            <td style="padding:8px; text-align:center;">${large.count}</td>
+            <td style="padding:8px; text-align:center; color:#2e7d32; font-weight:bold;">${large.avgPremium.toFixed(2)}%</td>
+            <td style="padding:8px; text-align:center; color:#e65100; font-weight:bold;">${large.avgMult.toFixed(2)}x</td>
+            <td style="padding:8px; text-align:center; color:#1565c0; font-weight:bold;">${large.avgMinBid.toFixed(2)}</td>
+            <td style="padding:8px; text-align:center;"><span style="color:${getHeatLevel(large.avgMult).color}; font-weight:bold;">${getHeatLevel(large.avgMult).text}</span></td>
+        </tr>
+        <tr style="background:#fafafa;">
+            <td style="padding:8px; font-weight:bold; color:#1565c0;"><10億（小型）</td>
+            <td style="padding:8px; text-align:center;">${small.count}</td>
+            <td style="padding:8px; text-align:center; color:#2e7d32; font-weight:bold;">${small.avgPremium.toFixed(2)}%</td>
+            <td style="padding:8px; text-align:center; color:#e65100; font-weight:bold;">${small.avgMult.toFixed(2)}x</td>
+            <td style="padding:8px; text-align:center; color:#1565c0; font-weight:bold;">${small.avgMinBid.toFixed(2)}</td>
+            <td style="padding:8px; text-align:center;"><span style="color:${getHeatLevel(small.avgMult).color}; font-weight:bold;">${getHeatLevel(small.avgMult).text}</span></td>
+        </tr>
+    </table>
+    <div style="margin-top:10px; padding:8px; background:#e3f2fd; border-radius:6px; font-size:11px; color:#1565c0;">
+        💡 <b>Rex大叔分析：</b>
+        ${small.avgMult > large.avgMult ? 
+            '小型發行(< 10億)競爭較激烈，籌碼稀缺推升投標倍數。' : 
+            '大型發行(≥ 10億)近期競爭較激烈，可能因指數成分股效應。'}
+        差距：${Math.abs(small.avgMult - large.avgMult).toFixed(2)}x
+    </div>`;
+    
+    return html;
+}
+
+/**
+ * 渲染組合分析
+ */
+function renderCombinedMomentum() {
+    const combined = window.conditionMomentum.combined;
+    const combinedTheo = window.conditionMomentum.combinedTheo;
+    
+    const getHeatBg = (mult) => {
+        if (mult >= 4) return '#ffebee';
+        if (mult >= 3) return '#fff3e0';
+        if (mult >= 2) return '#fff8e1';
+        return '#e3f2fd';
+    };
+    
+    const renderCell = (stats, label) => {
+        if (stats.count === 0) return `<td style="padding:6px; text-align:center; color:#999;">-</td>`;
+        return `
+        <td style="padding:6px; text-align:center; background:${getHeatBg(stats.avgMult)};">
+            <div style="font-size:10px; color:#666;">${stats.count}檔</div>
+            <div style="font-weight:bold; color:#e65100;">${stats.avgMult.toFixed(2)}x</div>
+            <div style="font-size:10px; color:#2e7d32;">溢${stats.avgPremium.toFixed(1)}%</div>
+        </td>`;
+    };
+    
+    let html = `
+    <div style="font-size:11px; color:#666; margin-bottom:8px;">📊 擔保×規模 組合分析（近${window.conditionMomentum.totalCount}檔）</div>
+    <table style="width:100%; border-collapse:collapse; font-size:11px; margin-bottom:12px;">
+        <tr style="background:#f5f5f5;">
+            <th style="padding:6px; border:1px solid #ddd;"></th>
+            <th style="padding:6px; border:1px solid #ddd; color:#e65100;">≥10億</th>
+            <th style="padding:6px; border:1px solid #ddd; color:#1565c0;"><10億</th>
+        </tr>
+        <tr>
+            <td style="padding:6px; border:1px solid #ddd; font-weight:bold; background:#e8f5e9; color:#2e7d32;">🛡️ 有擔保</td>
+            ${renderCell(combined.guaranteed_large)}
+            ${renderCell(combined.guaranteed_small)}
+        </tr>
+        <tr>
+            <td style="padding:6px; border:1px solid #ddd; font-weight:bold; background:#e3f2fd; color:#1565c0;">📋 無擔保</td>
+            ${renderCell(combined.unguaranteed_large)}
+            ${renderCell(combined.unguaranteed_small)}
+        </tr>
+    </table>
+    
+    <div style="font-size:11px; color:#666; margin-bottom:8px;">📊 擔保×理論價 組合分析</div>
+    <table style="width:100%; border-collapse:collapse; font-size:11px;">
+        <tr style="background:#f5f5f5;">
+            <th style="padding:6px; border:1px solid #ddd;"></th>
+            <th style="padding:6px; border:1px solid #ddd; color:#4caf50;">理論價≥100</th>
+            <th style="padding:6px; border:1px solid #ddd; color:#9c27b0;">理論價<100</th>
+        </tr>
+        <tr>
+            <td style="padding:6px; border:1px solid #ddd; font-weight:bold; background:#e8f5e9; color:#2e7d32;">🛡️ 有擔保</td>
+            ${renderCell(combinedTheo.guaranteed_high)}
+            ${renderCell(combinedTheo.guaranteed_low)}
+        </tr>
+        <tr>
+            <td style="padding:6px; border:1px solid #ddd; font-weight:bold; background:#e3f2fd; color:#1565c0;">📋 無擔保</td>
+            ${renderCell(combinedTheo.unguaranteed_high)}
+            ${renderCell(combinedTheo.unguaranteed_low)}
+        </tr>
+    </table>
+    
+    <div style="margin-top:10px; padding:8px; background:#fff3e0; border-radius:6px; font-size:11px; color:#e65100;">
+        💡 <b>組合評估建議：</b>
+        找到您的標的對應區塊，參考該條件組合的近期市場熱度。
+        顏色越紅代表競爭越激烈，應適度提高出價。
+    </div>`;
+    
+    return html;
 }
 
 /**

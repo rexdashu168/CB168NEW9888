@@ -10759,7 +10759,7 @@ function calculateMarketMomentum() {
 
 /**
  * v3.92 重新設計：分條件市場動能計算
- * 將近期開標案例按不同條件分類統計，支援多區間（5/10/20/30/全部）
+ * 將近期開標案例按不同條件分類統計，支援多區間（5/10/20/30/最熱/全部）
  */
 function calculateConditionMomentum() {
     // 從auctionRawData取得完整歷史資料
@@ -10782,20 +10782,88 @@ function calculateConditionMomentum() {
         return;
     }
     
+    // ===== 找出最熱半年度區間 =====
+    const parseOpenDate = (dateStr) => {
+        if (!dateStr || dateStr === '-') return null;
+        if (typeof dateStr === 'number') return new Date((dateStr - 25569) * 86400 * 1000);
+        const parts = String(dateStr).split(/[\/\-]/);
+        if (parts.length >= 3) return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        return new Date(dateStr);
+    };
+    
+    // 按半年度分組統計
+    const halfYearGroups = {};
+    allValidData.forEach(d => {
+        const date = parseOpenDate(d.openDate);
+        if (!date || date.getFullYear() < 2019) return;
+        const year = date.getFullYear();
+        const half = date.getMonth() < 6 ? 'H1' : 'H2';
+        const period = `${year}${half}`;
+        if (!halfYearGroups[period]) halfYearGroups[period] = [];
+        halfYearGroups[period].push(d);
+    });
+    
+    // 計算各半年度熱度（以投標倍數為主要指標）
+    const halfYearHeat = {};
+    Object.keys(halfYearGroups).forEach(period => {
+        const cases = halfYearGroups[period];
+        if (cases.length < 3) return; // 至少3檔才有參考價值
+        const avgMult = cases.reduce((s, d) => s + d.bidMultiple, 0) / cases.length;
+        const avgPremium = cases.reduce((s, d) => s + d.avgPremium, 0) / cases.length;
+        halfYearHeat[period] = {
+            period: period,
+            count: cases.length,
+            avgMult: avgMult,
+            avgPremium: avgPremium,
+            heatScore: avgMult * 0.6 + avgPremium * 0.04 // 綜合熱度分數
+        };
+    });
+    
+    // 找出最熱區間
+    let hottestPeriod = null;
+    let maxHeat = 0;
+    Object.keys(halfYearHeat).forEach(period => {
+        if (halfYearHeat[period].heatScore > maxHeat) {
+            maxHeat = halfYearHeat[period].heatScore;
+            hottestPeriod = period;
+        }
+    });
+    
+    // 儲存最熱區間資訊
+    window.hottestPeriod = {
+        period: hottestPeriod,
+        label: hottestPeriod ? `${hottestPeriod.slice(0,4)}年${hottestPeriod.slice(4) === 'H1' ? '上' : '下'}半年` : '無',
+        data: hottestPeriod ? halfYearGroups[hottestPeriod] : [],
+        stats: hottestPeriod ? halfYearHeat[hottestPeriod] : null,
+        allPeriods: halfYearHeat
+    };
+    
+    console.log('半年度熱度統計:', halfYearHeat);
+    console.log('最熱區間:', window.hottestPeriod);
+    
     // 定義統計區間
     const ranges = [5, 10, 20, 30];
     
-    // 計算多區間統計的輔助函數
+    // 計算多區間統計的輔助函數（含最熱區間）
     function calcMultiRangeStats(filterFn) {
         const filteredAll = allValidData.filter(filterFn);
         const result = { all: calcConditionStats(filteredAll) };
         ranges.forEach(n => {
             result['n' + n] = calcConditionStats(filteredAll.slice(0, n));
         });
+        
+        // 計算最熱區間的同條件數據
+        if (window.hottestPeriod && window.hottestPeriod.data.length > 0) {
+            const hottestFiltered = window.hottestPeriod.data.filter(filterFn);
+            result['hottest'] = calcConditionStats(hottestFiltered);
+        } else {
+            result['hottest'] = { count: 0, avgPremium: 0, avgMult: 0, avgMinBid: 0, avgAvgBid: 0, cases: [] };
+        }
+        
         return result;
     }
     
-    // 儲存分條件統計結果（多區間版本）
+    // 儲存分條件統計結果（多區間版本，含最熱區間）
     window.conditionMomentum = {
         // 按擔保類型（多區間）
         byGuarantee: {
@@ -10829,7 +10897,8 @@ function calculateConditionMomentum() {
             unguaranteed_low: calcMultiRangeStats(d => d.guarantee !== '有擔保' && d.theoreticalPrice < 100)
         },
         totalCount: allValidData.length,
-        rawData: allValidData
+        rawData: allValidData,
+        hottestPeriod: window.hottestPeriod
     };
     
     // 預設顯示「擔保類型」
@@ -10922,10 +10991,12 @@ function showMomentumTab(tabName, btnEl) {
 
 /**
  * 渲染擔保類型分析（表格形式，多區間）
- * v3.92改進：異常數據才框顏色，字體加大
+ * v3.92改進：異常數據才框顏色，字體加大，加入最熱區間
  */
 function renderGuaranteeMomentum() {
     const data = window.conditionMomentum.byGuarantee;
+    const hottest = window.hottestPeriod;
+    const hottestLabel = hottest && hottest.label ? hottest.label : '最熱區間';
     
     // 判斷數據是否異常（與全部比較）
     const getAnomalyBg = (recentVal, allVal, isHigherBetter) => {
@@ -10939,8 +11010,8 @@ function renderGuaranteeMomentum() {
     
     // 通用表格生成函數
     const renderStatsTable = (stats, title, icon, color) => {
-        const ranges = ['n5', 'n10', 'n20', 'n30', 'all'];
-        const rangeLabels = ['近5檔', '近10檔', '近20檔', '近30檔', '全部'];
+        const ranges = ['n5', 'n10', 'n20', 'n30', 'hottest', 'all'];
+        const rangeLabels = ['近5檔', '近10檔', '近20檔', '近30檔', `🔥${hottestLabel}`, '全部'];
         
         // 計算趨勢（近5檔 vs 全部的差異）
         const multTrend = stats.n5.avgMult - stats.all.avgMult;
@@ -10956,47 +11027,58 @@ function renderGuaranteeMomentum() {
             <table style="width:100%; border-collapse:collapse; font-size:13px;">
                 <tr style="background:#f5f5f5;">
                     <th style="padding:6px; text-align:left; border:1px solid #ddd; width:90px;">指標</th>
-                    ${rangeLabels.map((label, i) => `<th style="padding:6px; text-align:center; border:1px solid #ddd;">${label}<br><span style="font-size:11px; color:#888;">(${stats[ranges[i]].count})</span></th>`).join('')}
+                    ${rangeLabels.map((label, i) => {
+                        const isHottest = ranges[i] === 'hottest';
+                        return `<th style="padding:6px; text-align:center; border:1px solid #ddd; ${isHottest ? 'background:#fff0f0; color:#d32f2f;' : ''}">${label}<br><span style="font-size:11px; color:#888;">(${stats[ranges[i]].count})</span></th>`;
+                    }).join('')}
                 </tr>
                 <tr>
                     <td style="padding:6px; border:1px solid #ddd; font-weight:bold;">平均溢價</td>
                     ${ranges.map((r, i) => {
-                        const bg = i < 4 ? getAnomalyBg(stats[r].avgPremium, stats.all.avgPremium, true) : '';
-                        return `<td style="padding:6px; text-align:center; border:1px solid #ddd; color:#2e7d32; font-weight:${i === 0 ? 'bold' : 'normal'}; ${bg ? 'background:' + bg + ';' : ''}">${stats[r].avgPremium.toFixed(2)}%</td>`;
+                        const isHottest = r === 'hottest';
+                        const bg = (r !== 'all' && r !== 'hottest') ? getAnomalyBg(stats[r].avgPremium, stats.all.avgPremium, true) : (isHottest ? '#fff0f0' : '');
+                        return `<td style="padding:6px; text-align:center; border:1px solid #ddd; color:#2e7d32; font-weight:${i === 0 ? 'bold' : 'normal'}; ${bg ? 'background:' + bg + ';' : ''}">${stats[r].count > 0 ? stats[r].avgPremium.toFixed(2) + '%' : '-'}</td>`;
                     }).join('')}
                 </tr>
                 <tr style="background:#fafafa;">
                     <td style="padding:6px; border:1px solid #ddd; font-weight:bold;">投標倍數</td>
                     ${ranges.map((r, i) => {
-                        const bg = i < 4 ? getAnomalyBg(stats[r].avgMult, stats.all.avgMult, true) : '';
-                        return `<td style="padding:6px; text-align:center; border:1px solid #ddd; color:#e65100; font-weight:${i === 0 ? 'bold' : 'normal'}; ${bg ? 'background:' + bg + ';' : ''}">${stats[r].avgMult.toFixed(2)}x</td>`;
+                        const isHottest = r === 'hottest';
+                        const bg = (r !== 'all' && r !== 'hottest') ? getAnomalyBg(stats[r].avgMult, stats.all.avgMult, true) : (isHottest ? '#fff0f0' : '');
+                        return `<td style="padding:6px; text-align:center; border:1px solid #ddd; color:#e65100; font-weight:${i === 0 ? 'bold' : 'normal'}; ${bg ? 'background:' + bg + ';' : ''}">${stats[r].count > 0 ? stats[r].avgMult.toFixed(2) + 'x' : '-'}</td>`;
                     }).join('')}
                 </tr>
                 <tr>
                     <td style="padding:6px; border:1px solid #ddd; font-weight:bold;">最低得標均</td>
                     ${ranges.map((r, i) => {
-                        const bg = i < 4 ? getAnomalyBg(stats[r].avgMinBid, stats.all.avgMinBid, true) : '';
-                        return `<td style="padding:6px; text-align:center; border:1px solid #ddd; color:#1565c0; font-weight:${i === 0 ? 'bold' : 'normal'}; ${bg ? 'background:' + bg + ';' : ''}">${stats[r].avgMinBid.toFixed(2)}</td>`;
+                        const isHottest = r === 'hottest';
+                        const bg = (r !== 'all' && r !== 'hottest') ? getAnomalyBg(stats[r].avgMinBid, stats.all.avgMinBid, true) : (isHottest ? '#fff0f0' : '');
+                        return `<td style="padding:6px; text-align:center; border:1px solid #ddd; color:#1565c0; font-weight:${i === 0 ? 'bold' : 'normal'}; ${bg ? 'background:' + bg + ';' : ''}">${stats[r].count > 0 ? stats[r].avgMinBid.toFixed(2) : '-'}</td>`;
                     }).join('')}
                 </tr>
                 <tr style="background:#fafafa;">
                     <td style="padding:6px; border:1px solid #ddd; font-weight:bold;">平均得標均</td>
                     ${ranges.map((r, i) => {
-                        const bg = i < 4 ? getAnomalyBg(stats[r].avgAvgBid, stats.all.avgAvgBid, true) : '';
-                        return `<td style="padding:6px; text-align:center; border:1px solid #ddd; color:#7b1fa2; font-weight:${i === 0 ? 'bold' : 'normal'}; ${bg ? 'background:' + bg + ';' : ''}">${stats[r].avgAvgBid.toFixed(2)}</td>`;
+                        const isHottest = r === 'hottest';
+                        const bg = (r !== 'all' && r !== 'hottest') ? getAnomalyBg(stats[r].avgAvgBid, stats.all.avgAvgBid, true) : (isHottest ? '#fff0f0' : '');
+                        return `<td style="padding:6px; text-align:center; border:1px solid #ddd; color:#7b1fa2; font-weight:${i === 0 ? 'bold' : 'normal'}; ${bg ? 'background:' + bg + ';' : ''}">${stats[r].count > 0 ? stats[r].avgAvgBid.toFixed(2) : '-'}</td>`;
                     }).join('')}
                 </tr>
             </table>
         </div>`;
     };
     
+    // 生成最熱區間說明
+    const hottestInfo = hottest && hottest.stats ? 
+        `🔥 歷史最熱區間：<b>${hottest.label}</b>（${hottest.stats.count}檔，平均倍數${hottest.stats.avgMult.toFixed(2)}x，平均溢價${hottest.stats.avgPremium.toFixed(2)}%）` : '';
+    
     let html = `
-    <div style="font-size:12px; color:#666; margin-bottom:10px;">📊 按擔保類型統計（<span style="background:#fce4ec; padding:1px 6px; border-radius:3px;">淡粉紅=趨熱</span> <span style="background:#e3f2fd; padding:1px 6px; border-radius:3px;">淡藍=趨冷</span>）</div>
+    <div style="font-size:12px; color:#666; margin-bottom:10px;">📊 按擔保類型統計（<span style="background:#fce4ec; padding:1px 6px; border-radius:3px;">淡粉紅=趨熱</span> <span style="background:#e3f2fd; padding:1px 6px; border-radius:3px;">淡藍=趨冷</span> <span style="background:#fff0f0; padding:1px 6px; border-radius:3px;">🔥最熱區間</span>）</div>
     ${renderStatsTable(data.guaranteed, '有擔保', '🛡️', '#2e7d32')}
     ${renderStatsTable(data.unguaranteed, '無擔保', '📋', '#1565c0')}
     <div style="padding:10px; background:#fff3e0; border-radius:6px; font-size:12px; color:#e65100;">
         💡 <b>Rex大叔提醒：</b>
-        有底色的欄位代表與歷史平均差異超過10%。
+        ${hottestInfo}<br>
         有擔保與無擔保溢價率差距約 ${(data.guaranteed.all.avgPremium - data.unguaranteed.all.avgPremium).toFixed(2)}%，
         投標倍數差距約 ${(data.guaranteed.all.avgMult - data.unguaranteed.all.avgMult).toFixed(2)}x。
     </div>`;
@@ -11006,10 +11088,12 @@ function renderGuaranteeMomentum() {
 
 /**
  * 渲染理論價區間分析（表格形式，多區間）
- * v3.92改進：異常數據才框顏色，字體加大
+ * v3.92改進：異常數據才框顏色，字體加大，加入最熱區間
  */
 function renderTheoPriceMomentum() {
     const data = window.conditionMomentum.byTheoPrice;
+    const hottest = window.hottestPeriod;
+    const hottestLabel = hottest && hottest.label ? hottest.label : '最熱區間';
     
     // 判斷數據是否異常
     const getAnomalyBg = (recentVal, allVal) => {
@@ -11022,15 +11106,18 @@ function renderTheoPriceMomentum() {
     
     // 通用表格生成函數（適用於多個區間）
     const renderCompactTable = (statsMap, configs) => {
-        const ranges = ['n5', 'n10', 'n20', 'n30', 'all'];
-        const rangeLabels = ['近5檔', '近10檔', '近20檔', '近30檔', '全部'];
+        const ranges = ['n5', 'n10', 'n20', 'n30', 'hottest', 'all'];
+        const rangeLabels = ['近5檔', '近10檔', '近20檔', '近30檔', `🔥${hottestLabel}`, '全部'];
         
         let html = `
         <table style="width:100%; border-collapse:collapse; font-size:12px; margin-bottom:12px;">
             <tr style="background:#f5f5f5;">
-                <th style="padding:5px; text-align:left; border:1px solid #ddd; width:110px;">理論價區間</th>
+                <th style="padding:5px; text-align:left; border:1px solid #ddd; width:100px;">理論價區間</th>
                 <th style="padding:5px; text-align:left; border:1px solid #ddd; width:70px;">指標</th>
-                ${rangeLabels.map(label => `<th style="padding:5px; text-align:center; border:1px solid #ddd;">${label}</th>`).join('')}
+                ${rangeLabels.map((label, i) => {
+                    const isHottest = ranges[i] === 'hottest';
+                    return `<th style="padding:5px; text-align:center; border:1px solid #ddd; ${isHottest ? 'background:#fff0f0; color:#d32f2f;' : ''}">${label}</th>`;
+                }).join('')}
             </tr>`;
         
         configs.forEach(cfg => {
@@ -11052,8 +11139,10 @@ function renderTheoPriceMomentum() {
                 html += `<td style="padding:5px; border:1px solid #ddd; font-size:11px;">${row.label}</td>`;
                 ranges.forEach((r, i) => {
                     const val = stats[r][row.field];
-                    const bg = i < 4 ? getAnomalyBg(val, stats.all[row.field]) : '';
-                    html += `<td style="padding:5px; text-align:center; border:1px solid #ddd; color:${row.color}; font-weight:${i === 0 ? 'bold' : 'normal'}; ${bg ? 'background:' + bg + ';' : ''}">${val.toFixed(2)}${row.suffix}</td>`;
+                    const count = stats[r].count;
+                    const isHottest = r === 'hottest';
+                    const bg = (r !== 'all' && r !== 'hottest' && count > 0) ? getAnomalyBg(val, stats.all[row.field]) : (isHottest ? '#fff0f0' : '');
+                    html += `<td style="padding:5px; text-align:center; border:1px solid #ddd; color:${count > 0 ? row.color : '#ccc'}; font-weight:${i === 0 ? 'bold' : 'normal'}; ${bg ? 'background:' + bg + ';' : ''}">${count > 0 ? val.toFixed(2) + row.suffix : '-'}</td>`;
                 });
                 html += `</tr>`;
             });
@@ -11071,7 +11160,7 @@ function renderTheoPriceMomentum() {
     ];
     
     let html = `
-    <div style="font-size:12px; color:#666; margin-bottom:10px;">📊 按理論價區間統計（<span style="background:#fce4ec; padding:1px 6px; border-radius:3px;">淡粉紅=趨熱</span> <span style="background:#e3f2fd; padding:1px 6px; border-radius:3px;">淡藍=趨冷</span>）</div>
+    <div style="font-size:12px; color:#666; margin-bottom:10px;">📊 按理論價區間統計（<span style="background:#fce4ec; padding:1px 6px; border-radius:3px;">淡粉紅=趨熱</span> <span style="background:#e3f2fd; padding:1px 6px; border-radius:3px;">淡藍=趨冷</span> <span style="background:#fff0f0; padding:1px 6px; border-radius:3px;">🔥最熱區間</span>）</div>
     ${renderCompactTable(data, configs)}
     <div style="padding:10px; background:#e8f5e9; border-radius:6px; font-size:12px; color:#2e7d32;">
         💡 <b>評估建議：</b><br>
@@ -11084,12 +11173,14 @@ function renderTheoPriceMomentum() {
 
 /**
  * 渲染發行規模分析（表格形式，多區間）
- * v3.92改進：異常數據才框顏色，字體加大
+ * v3.92改進：異常數據才框顏色，字體加大，加入最熱區間
  */
 function renderSizeMomentum() {
     const data = window.conditionMomentum.bySize;
-    const ranges = ['n5', 'n10', 'n20', 'n30', 'all'];
-    const rangeLabels = ['近5檔', '近10檔', '近20檔', '近30檔', '全部'];
+    const hottest = window.hottestPeriod;
+    const hottestLabel = hottest && hottest.label ? hottest.label : '最熱區間';
+    const ranges = ['n5', 'n10', 'n20', 'n30', 'hottest', 'all'];
+    const rangeLabels = ['近5檔', '近10檔', '近20檔', '近30檔', `🔥${hottestLabel}`, '全部'];
     
     // 判斷數據是否異常
     const getAnomalyBg = (recentVal, allVal) => {
@@ -11115,34 +11206,41 @@ function renderSizeMomentum() {
             <table style="width:100%; border-collapse:collapse; font-size:13px;">
                 <tr style="background:#f5f5f5;">
                     <th style="padding:6px; text-align:left; border:1px solid #ddd; width:90px;">指標</th>
-                    ${rangeLabels.map((label, i) => `<th style="padding:6px; text-align:center; border:1px solid #ddd;">${label}<br><span style="font-size:11px; color:#888;">(${stats[ranges[i]].count})</span></th>`).join('')}
+                    ${rangeLabels.map((label, i) => {
+                        const isHottest = ranges[i] === 'hottest';
+                        return `<th style="padding:6px; text-align:center; border:1px solid #ddd; ${isHottest ? 'background:#fff0f0; color:#d32f2f;' : ''}">${label}<br><span style="font-size:11px; color:#888;">(${stats[ranges[i]].count})</span></th>`;
+                    }).join('')}
                 </tr>
                 <tr>
                     <td style="padding:6px; border:1px solid #ddd; font-weight:bold;">平均溢價</td>
                     ${ranges.map((r, i) => {
-                        const bg = i < 4 ? getAnomalyBg(stats[r].avgPremium, stats.all.avgPremium) : '';
-                        return `<td style="padding:6px; text-align:center; border:1px solid #ddd; color:#2e7d32; font-weight:${i === 0 ? 'bold' : 'normal'}; ${bg ? 'background:' + bg + ';' : ''}">${stats[r].avgPremium.toFixed(2)}%</td>`;
+                        const isHottest = r === 'hottest';
+                        const bg = (r !== 'all' && r !== 'hottest') ? getAnomalyBg(stats[r].avgPremium, stats.all.avgPremium) : (isHottest ? '#fff0f0' : '');
+                        return `<td style="padding:6px; text-align:center; border:1px solid #ddd; color:#2e7d32; font-weight:${i === 0 ? 'bold' : 'normal'}; ${bg ? 'background:' + bg + ';' : ''}">${stats[r].count > 0 ? stats[r].avgPremium.toFixed(2) + '%' : '-'}</td>`;
                     }).join('')}
                 </tr>
                 <tr style="background:#fafafa;">
                     <td style="padding:6px; border:1px solid #ddd; font-weight:bold;">投標倍數</td>
                     ${ranges.map((r, i) => {
-                        const bg = i < 4 ? getAnomalyBg(stats[r].avgMult, stats.all.avgMult) : '';
-                        return `<td style="padding:6px; text-align:center; border:1px solid #ddd; color:#e65100; font-weight:${i === 0 ? 'bold' : 'normal'}; ${bg ? 'background:' + bg + ';' : ''}">${stats[r].avgMult.toFixed(2)}x</td>`;
+                        const isHottest = r === 'hottest';
+                        const bg = (r !== 'all' && r !== 'hottest') ? getAnomalyBg(stats[r].avgMult, stats.all.avgMult) : (isHottest ? '#fff0f0' : '');
+                        return `<td style="padding:6px; text-align:center; border:1px solid #ddd; color:#e65100; font-weight:${i === 0 ? 'bold' : 'normal'}; ${bg ? 'background:' + bg + ';' : ''}">${stats[r].count > 0 ? stats[r].avgMult.toFixed(2) + 'x' : '-'}</td>`;
                     }).join('')}
                 </tr>
                 <tr>
                     <td style="padding:6px; border:1px solid #ddd; font-weight:bold;">最低得標均</td>
                     ${ranges.map((r, i) => {
-                        const bg = i < 4 ? getAnomalyBg(stats[r].avgMinBid, stats.all.avgMinBid) : '';
-                        return `<td style="padding:6px; text-align:center; border:1px solid #ddd; color:#1565c0; font-weight:${i === 0 ? 'bold' : 'normal'}; ${bg ? 'background:' + bg + ';' : ''}">${stats[r].avgMinBid.toFixed(2)}</td>`;
+                        const isHottest = r === 'hottest';
+                        const bg = (r !== 'all' && r !== 'hottest') ? getAnomalyBg(stats[r].avgMinBid, stats.all.avgMinBid) : (isHottest ? '#fff0f0' : '');
+                        return `<td style="padding:6px; text-align:center; border:1px solid #ddd; color:#1565c0; font-weight:${i === 0 ? 'bold' : 'normal'}; ${bg ? 'background:' + bg + ';' : ''}">${stats[r].count > 0 ? stats[r].avgMinBid.toFixed(2) : '-'}</td>`;
                     }).join('')}
                 </tr>
                 <tr style="background:#fafafa;">
                     <td style="padding:6px; border:1px solid #ddd; font-weight:bold;">平均得標均</td>
                     ${ranges.map((r, i) => {
-                        const bg = i < 4 ? getAnomalyBg(stats[r].avgAvgBid, stats.all.avgAvgBid) : '';
-                        return `<td style="padding:6px; text-align:center; border:1px solid #ddd; color:#7b1fa2; font-weight:${i === 0 ? 'bold' : 'normal'}; ${bg ? 'background:' + bg + ';' : ''}">${stats[r].avgAvgBid.toFixed(2)}</td>`;
+                        const isHottest = r === 'hottest';
+                        const bg = (r !== 'all' && r !== 'hottest') ? getAnomalyBg(stats[r].avgAvgBid, stats.all.avgAvgBid) : (isHottest ? '#fff0f0' : '');
+                        return `<td style="padding:6px; text-align:center; border:1px solid #ddd; color:#7b1fa2; font-weight:${i === 0 ? 'bold' : 'normal'}; ${bg ? 'background:' + bg + ';' : ''}">${stats[r].count > 0 ? stats[r].avgAvgBid.toFixed(2) : '-'}</td>`;
                     }).join('')}
                 </tr>
             </table>
@@ -11150,7 +11248,7 @@ function renderSizeMomentum() {
     };
     
     let html = `
-    <div style="font-size:12px; color:#666; margin-bottom:10px;">📊 按發行規模統計（<span style="background:#fce4ec; padding:1px 6px; border-radius:3px;">淡粉紅=趨熱</span> <span style="background:#e3f2fd; padding:1px 6px; border-radius:3px;">淡藍=趨冷</span>）</div>
+    <div style="font-size:12px; color:#666; margin-bottom:10px;">📊 按發行規模統計（<span style="background:#fce4ec; padding:1px 6px; border-radius:3px;">淡粉紅=趨熱</span> <span style="background:#e3f2fd; padding:1px 6px; border-radius:3px;">淡藍=趨冷</span> <span style="background:#fff0f0; padding:1px 6px; border-radius:3px;">🔥最熱區間</span>）</div>
     ${renderSizeTable(data.large, '≥10億（大型發行）', '🏢', '#e65100')}
     ${renderSizeTable(data.small, '<10億（小型發行）', '🏠', '#1565c0')}
     <div style="padding:10px; background:#e3f2fd; border-radius:6px; font-size:12px; color:#1565c0;">
@@ -11166,13 +11264,15 @@ function renderSizeMomentum() {
 
 /**
  * 渲染組合分析（表格形式，多區間）
- * v3.92改進：異常數據才框顏色，字體加大
+ * v3.92改進：異常數據才框顏色，字體加大，加入最熱區間
  */
 function renderCombinedMomentum() {
     const combined = window.conditionMomentum.combined;
     const combinedTheo = window.conditionMomentum.combinedTheo;
-    const ranges = ['n5', 'n10', 'n20', 'n30', 'all'];
-    const rangeLabels = ['近5檔', '近10檔', '近20檔', '近30檔', '全部'];
+    const hottest = window.hottestPeriod;
+    const hottestLabel = hottest && hottest.label ? hottest.label : '最熱區間';
+    const ranges = ['n5', 'n10', 'n20', 'n30', 'hottest', 'all'];
+    const rangeLabels = ['近5檔', '近10檔', '近20檔', '近30檔', `🔥${hottestLabel}`, '全部'];
     
     // 判斷數據是否異常
     const getAnomalyBg = (recentVal, allVal) => {
@@ -11190,9 +11290,12 @@ function renderCombinedMomentum() {
             <div style="font-weight:bold; color:#e65100; font-size:13px; margin-bottom:8px;">${title}</div>
             <table style="width:100%; border-collapse:collapse; font-size:12px;">
                 <tr style="background:#f5f5f5;">
-                    <th style="padding:5px; text-align:left; border:1px solid #ddd; width:130px;">組合條件</th>
+                    <th style="padding:5px; text-align:left; border:1px solid #ddd; width:120px;">組合條件</th>
                     <th style="padding:5px; text-align:left; border:1px solid #ddd; width:70px;">指標</th>
-                    ${rangeLabels.map(label => `<th style="padding:5px; text-align:center; border:1px solid #ddd;">${label}</th>`).join('')}
+                    ${rangeLabels.map((label, i) => {
+                        const isHottest = ranges[i] === 'hottest';
+                        return `<th style="padding:5px; text-align:center; border:1px solid #ddd; ${isHottest ? 'background:#fff0f0; color:#d32f2f;' : ''}">${label}</th>`;
+                    }).join('')}
                 </tr>`;
         
         configs.forEach(cfg => {
@@ -11215,7 +11318,8 @@ function renderCombinedMomentum() {
                 ranges.forEach((r, i) => {
                     const val = stats[r][row.field];
                     const count = stats[r].count;
-                    const bg = (i < 4 && count > 0) ? getAnomalyBg(val, stats.all[row.field]) : '';
+                    const isHottest = r === 'hottest';
+                    const bg = (r !== 'all' && r !== 'hottest' && count > 0) ? getAnomalyBg(val, stats.all[row.field]) : (isHottest ? '#fff0f0' : '');
                     html += `<td style="padding:5px; text-align:center; border:1px solid #ddd; color:${count > 0 ? row.color : '#ccc'}; font-weight:${i === 0 ? 'bold' : 'normal'}; ${bg ? 'background:' + bg + ';' : ''}">${count > 0 ? val.toFixed(2) + row.suffix : '-'}</td>`;
                 });
                 html += `</tr>`;
@@ -11241,13 +11345,13 @@ function renderCombinedMomentum() {
     ];
     
     let html = `
-    <div style="font-size:12px; color:#666; margin-bottom:10px;">📊 組合條件統計（<span style="background:#fce4ec; padding:1px 6px; border-radius:3px;">淡粉紅=趨熱</span> <span style="background:#e3f2fd; padding:1px 6px; border-radius:3px;">淡藍=趨冷</span>）</div>
+    <div style="font-size:12px; color:#666; margin-bottom:10px;">📊 組合條件統計（<span style="background:#fce4ec; padding:1px 6px; border-radius:3px;">淡粉紅=趨熱</span> <span style="background:#e3f2fd; padding:1px 6px; border-radius:3px;">淡藍=趨冷</span> <span style="background:#fff0f0; padding:1px 6px; border-radius:3px;">🔥最熱區間</span>）</div>
     ${renderCombinedTable(combined, sizeConfigs, '📦 擔保類型 × 發行規模')}
     ${renderCombinedTable(combinedTheo, theoConfigs, '📈 擔保類型 × 理論價區間')}
     <div style="padding:10px; background:#fff3e0; border-radius:6px; font-size:12px; color:#e65100;">
         💡 <b>組合評估建議：</b>
-        找到您的標的對應組合，有底色的欄位代表與歷史平均差異超過10%。
-        淡粉紅代表近期該條件組合市場較熱，應適度提高出價；淡藍代表較冷，可較保守出價。
+        找到您的標的對應組合，比較「近期」與「🔥最熱區間」及「全部」。
+        若近期數據接近最熱區間，代表市場正處高溫狀態，應適度提高出價。
     </div>`;
     
     return html;

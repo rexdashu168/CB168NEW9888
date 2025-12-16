@@ -1866,11 +1866,10 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     <div id="welcomeMsg" class="welcome-message">
         <h2>歡迎使用AI智能競拍評估系統</h2>
         <p style="margin-top:10px; color:#666; font-size: 14px;">
-            v3.90 信評擔保增強版<br>
-            • 近期開標：改為取Excel最後10筆資料（最新的在最後）<br>
-            • AI預測：增加擔保類型獨立因子（權重20%）<br>
-            • AI預測：信評權重從15%提升至20%<br>
-            • 自適應學習：根據您選擇的條件高亮顯示建議
+            v3.90 權重修正版<br>
+            • 分析法一二權重：產業30%、信評22%、理論價15%、券商13%、規模10%、股本5%、年期5%<br>
+            • 市場氛圍權重：產業35%、規模25%、信評40%（三維度）<br>
+            • 自適應學習：以溢價率計算，建議價=理論價×(1+溢價率)
         </p>
         <div class="stats-summary" id="statsSummary"></div>
         
@@ -3542,7 +3541,7 @@ async function loadStatistics() {
             console.log('動態計算 YEAR_STATS_TABLE:', window.YEAR_STATS_TABLE);
             
             // ===== v3.90 修正：收集最近10檔開標資料供市場動能計算 =====
-            // v3.90 改進：直接取Excel工作表的最後10筆有效資料（用戶按時間順序新增，最新在最後）
+            // v3.90 改進：按開標日期排序，取最近10檔（不依賴Excel行號順序）
             const allAuctions = [];
             sheetAuction.forEach((row, index) => {
                 const dateRaw = row['開標日期'] || row['開標日'] || '';
@@ -3552,37 +3551,31 @@ async function loadStatistics() {
                 const theo = safeFloat(row['理論價']);
                 const guarantee = row['擔保'] || '無擔保';
                 
-                if (name && mult > 0 && price > 0) {
-                    let dateStr = '';
-                    let dateObj = null;
-                    if (dateRaw) {
-                        const d = parseExcelDate(dateRaw);
-                        if (d) {
-                            dateStr = d.toISOString().split('T')[0];
-                            dateObj = d;
-                        }
+                if (name && mult > 0 && price > 0 && dateRaw) {
+                    const d = parseExcelDate(dateRaw);
+                    if (d) {
+                        allAuctions.push({
+                            name: name,
+                            date: d.toISOString().split('T')[0],
+                            dateObj: d,
+                            mult: mult,
+                            price: price,
+                            theo: theo,
+                            guarantee: guarantee,
+                            rowIndex: index
+                        });
                     }
-                    allAuctions.push({
-                        name: name,
-                        date: dateStr || `Row${index + 2}`,
-                        dateObj: dateObj,
-                        mult: mult,
-                        price: price,
-                        theo: theo,
-                        guarantee: guarantee,
-                        rowIndex: index  // 記錄原始行號
-                    });
                 }
             });
             
-            // v3.90 核心修正：取Excel最後10筆有效資料（最新的資料在Excel最後面）
-            // 這樣用戶新增資料到Excel底部時會自動顯示最新資料
-            window.recentAuctionData = allAuctions.slice(-10).reverse();  // 取最後10筆，reverse讓最新的在前
+            // v3.90 核心：按開標日期排序（最新的在前），取最近10檔
+            allAuctions.sort((a, b) => b.dateObj - a.dateObj);
+            window.recentAuctionData = allAuctions.slice(0, 10);
             
             console.log('收集最近10檔開標資料:', window.recentAuctionData.length, '筆');
             if (window.recentAuctionData.length > 0) {
                 console.log('  最近一檔:', window.recentAuctionData[0].name, window.recentAuctionData[0].date);
-                console.log('  最早一檔:', window.recentAuctionData[window.recentAuctionData.length - 1].name);
+                console.log('  第10檔:', window.recentAuctionData[window.recentAuctionData.length - 1]?.name, window.recentAuctionData[window.recentAuctionData.length - 1]?.date);
             }
             
             console.log('✅ 所有統計表格已從Excel動態計算完成');
@@ -7775,14 +7768,12 @@ function updateMarketSentiment() {
         };
     }
     
-    // v3.85 五維度權重：產業35%、券商25%、信評20%、規模10%、理論價10%
-    // 根據2203檔CB實證數據重新設計：產業最重要、券商被低估、信評原本高估
+    // v3.90 修正：三維度權重（產業35%、規模25%、信評40%）
+    // 按用戶討論調整，移除券商和理論價維度
     const WEIGHTS = {
         industry: 0.35,
-        broker: 0.25,
-        rating: 0.20,
-        size: 0.10,
-        theoPrice: 0.10
+        size: 0.25,
+        rating: 0.40
     };
     
     // 1. 產業維度 (35%)
@@ -7792,27 +7783,7 @@ function updateMarketSentiment() {
         industryResult = calcWeightedData(industryCases);
     }
     
-    // 2. 券商維度 (25%) - v3.85 重要維度（優良率差距30%）
-    let brokerResult = { lowPremium: null, avgPremium: null, lowBidPrice: null, avgBidPrice: null, count: 0 };
-    if (broker) {
-        const brokerCases = sortedData.filter(d => {
-            const dataBroker = String(d.broker || '');
-            const selectBroker = String(broker || '');
-            // 模糊匹配
-            return dataBroker.includes(selectBroker.replace('證券', '').replace('金證', '')) ||
-                   selectBroker.includes(dataBroker.replace('證券', '').replace('金證', ''));
-        });
-        brokerResult = calcWeightedData(brokerCases);
-    }
-    
-    // 3. 信評維度 (20%)
-    let ratingResult = { lowPremium: null, avgPremium: null, lowBidPrice: null, avgBidPrice: null, count: 0 };
-    if (rating) {
-        const ratingCases = sortedData.filter(d => d.rating === rating);
-        ratingResult = calcWeightedData(ratingCases);
-    }
-    
-    // 4. 規模維度 (10%)
+    // 2. 規模維度 (25%)
     let sizeResult = { lowPremium: null, avgPremium: null, lowBidPrice: null, avgBidPrice: null, count: 0 };
     if (issueSize) {
         const sizeCases = sortedData.filter(d => {
@@ -7828,24 +7799,14 @@ function updateMarketSentiment() {
         sizeResult = calcWeightedData(sizeCases);
     }
     
-    // 5. 理論價維度 (10%) - v3.85 競拍安全邊際考量
-    let theoResult = { lowPremium: null, avgPremium: null, lowBidPrice: null, avgBidPrice: null, count: 0 };
-    if (theoRange) {
-        const theoCases = sortedData.filter(d => {
-            const theo = d.theoreticalPrice || 0;
-            if (theoRange === '小於90元') return theo > 0 && theo < 90;
-            if (theoRange === '90~95元') return theo >= 90 && theo < 95;
-            if (theoRange === '95~100元') return theo >= 95 && theo < 100;
-            if (theoRange === '100~105元') return theo >= 100 && theo < 105;
-            if (theoRange === '105~110元') return theo >= 105 && theo < 110;
-            if (theoRange === '110~115元') return theo >= 110 && theo < 115;
-            if (theoRange === '大於115元') return theo >= 115;
-            return false;
-        });
-        theoResult = calcWeightedData(theoCases);
+    // 3. 信評維度 (40%)
+    let ratingResult = { lowPremium: null, avgPremium: null, lowBidPrice: null, avgBidPrice: null, count: 0 };
+    if (rating) {
+        const ratingCases = sortedData.filter(d => d.rating === rating);
+        ratingResult = calcWeightedData(ratingCases);
     }
     
-    // v3.85 計算總加權（五維度：產業35%、券商25%、信評20%、規模10%、理論價10%）
+    // v3.90 計算總加權（三維度：產業35%、規模25%、信評40%）
     let totalLowP = 0, totalAvgP = 0;
     let totalLowB = 0, totalAvgB = 0;
     let totalWeight = 0;
@@ -7859,22 +7820,6 @@ function updateMarketSentiment() {
         totalWeight += WEIGHTS.industry;
         activeDims.push({ name: '產業', weight: WEIGHTS.industry });
     }
-    if (brokerResult.lowPremium !== null) {
-        totalLowP += brokerResult.lowPremium * WEIGHTS.broker;
-        totalAvgP += brokerResult.avgPremium * WEIGHTS.broker;
-        totalLowB += brokerResult.lowBidPrice * WEIGHTS.broker;
-        totalAvgB += brokerResult.avgBidPrice * WEIGHTS.broker;
-        totalWeight += WEIGHTS.broker;
-        activeDims.push({ name: '券商', weight: WEIGHTS.broker });
-    }
-    if (ratingResult.lowPremium !== null) {
-        totalLowP += ratingResult.lowPremium * WEIGHTS.rating;
-        totalAvgP += ratingResult.avgPremium * WEIGHTS.rating;
-        totalLowB += ratingResult.lowBidPrice * WEIGHTS.rating;
-        totalAvgB += ratingResult.avgBidPrice * WEIGHTS.rating;
-        totalWeight += WEIGHTS.rating;
-        activeDims.push({ name: '信評', weight: WEIGHTS.rating });
-    }
     if (sizeResult.lowPremium !== null) {
         totalLowP += sizeResult.lowPremium * WEIGHTS.size;
         totalAvgP += sizeResult.avgPremium * WEIGHTS.size;
@@ -7883,13 +7828,13 @@ function updateMarketSentiment() {
         totalWeight += WEIGHTS.size;
         activeDims.push({ name: '規模', weight: WEIGHTS.size });
     }
-    if (theoResult.lowPremium !== null) {
-        totalLowP += theoResult.lowPremium * WEIGHTS.theoPrice;
-        totalAvgP += theoResult.avgPremium * WEIGHTS.theoPrice;
-        totalLowB += theoResult.lowBidPrice * WEIGHTS.theoPrice;
-        totalAvgB += theoResult.avgBidPrice * WEIGHTS.theoPrice;
-        totalWeight += WEIGHTS.theoPrice;
-        activeDims.push({ name: '理論價', weight: WEIGHTS.theoPrice });
+    if (ratingResult.lowPremium !== null) {
+        totalLowP += ratingResult.lowPremium * WEIGHTS.rating;
+        totalAvgP += ratingResult.avgPremium * WEIGHTS.rating;
+        totalLowB += ratingResult.lowBidPrice * WEIGHTS.rating;
+        totalAvgB += ratingResult.avgBidPrice * WEIGHTS.rating;
+        totalWeight += WEIGHTS.rating;
+        activeDims.push({ name: '信評', weight: WEIGHTS.rating });
     }
     
     // 重新正規化（如果只有部分維度有資料）
@@ -7901,7 +7846,7 @@ function updateMarketSentiment() {
     // 顯示結果
     const guarLabel = guarantee ? `【${guarantee}】` : '';
     
-    // v3.85 更新：動態生成維度說明
+    // v3.90 更新：動態生成維度說明（三維度）
     const dimensionDesc = activeDims.length > 0 ?
         activeDims.map(d => `${d.name}(${Math.round(d.weight/totalWeight*100)}%)`).join('+') :
         '無可用維度';
@@ -7926,7 +7871,7 @@ function updateMarketSentiment() {
         </div>
     </div>`;
     
-    // v3.84 各維度明細（重新計算正規化後的權重）
+    // v3.90 三維度明細（產業35%、規模25%、信評40%）
     html += `<div style="font-size:12px; line-height:1.8;">`;
     
     if (industry) {
@@ -7937,16 +7882,16 @@ function updateMarketSentiment() {
         html += `<div>📌 產業[${industry}] ${normWeight}%：${status}</div>`;
     }
     
-    if (broker) {
-        const normWeight = totalWeight > 0 ? Math.round(WEIGHTS.broker / totalWeight * 100) : 25;
-        const status = brokerResult.count > 0 ? 
-            `溢價 <span style="color:#2e7d32;">${brokerResult.lowPremium?.toFixed(2) || '-'}%</span>~<span style="color:#d32f2f;">${brokerResult.avgPremium?.toFixed(2) || '-'}%</span> (${Math.min(brokerResult.count, 9)}筆)` : 
+    if (issueSize) {
+        const normWeight = totalWeight > 0 ? Math.round(WEIGHTS.size / totalWeight * 100) : 25;
+        const status = sizeResult.count > 0 ? 
+            `溢價 <span style="color:#2e7d32;">${sizeResult.lowPremium?.toFixed(2) || '-'}%</span>~<span style="color:#d32f2f;">${sizeResult.avgPremium?.toFixed(2) || '-'}%</span> (${Math.min(sizeResult.count, 9)}筆)` : 
             `<span style="color:#999;">無案例</span>`;
-        html += `<div>📌 券商[${broker}] ${normWeight}%：${status}</div>`;
+        html += `<div>📌 規模[${issueSize}] ${normWeight}%：${status}</div>`;
     }
     
     if (rating) {
-        const normWeight = totalWeight > 0 ? Math.round(WEIGHTS.rating / totalWeight * 100) : 20;
+        const normWeight = totalWeight > 0 ? Math.round(WEIGHTS.rating / totalWeight * 100) : 40;
         const ratingName = rating === 'BBB' ? 'BBB' : `TCRI ${rating}`;
         const status = ratingResult.count > 0 ? 
             `溢價 <span style="color:#2e7d32;">${ratingResult.lowPremium?.toFixed(2) || '-'}%</span>~<span style="color:#d32f2f;">${ratingResult.avgPremium?.toFixed(2) || '-'}%</span> (${Math.min(ratingResult.count, 9)}筆)` : 
@@ -7954,28 +7899,12 @@ function updateMarketSentiment() {
         html += `<div>📌 信評[${ratingName}] ${normWeight}%：${status}</div>`;
     }
     
-    if (issueSize) {
-        const normWeight = totalWeight > 0 ? Math.round(WEIGHTS.size / totalWeight * 100) : 10;
-        const status = sizeResult.count > 0 ? 
-            `溢價 <span style="color:#2e7d32;">${sizeResult.lowPremium?.toFixed(2) || '-'}%</span>~<span style="color:#d32f2f;">${sizeResult.avgPremium?.toFixed(2) || '-'}%</span> (${Math.min(sizeResult.count, 9)}筆)` : 
-            `<span style="color:#999;">無案例</span>`;
-        html += `<div>📌 規模[${issueSize}] ${normWeight}%：${status}</div>`;
-    }
-    
-    if (theoRange) {
-        const normWeight = totalWeight > 0 ? Math.round(WEIGHTS.theoPrice / totalWeight * 100) : 10;
-        const status = theoResult.count > 0 ? 
-            `溢價 <span style="color:#2e7d32;">${theoResult.lowPremium?.toFixed(2) || '-'}%</span>~<span style="color:#d32f2f;">${theoResult.avgPremium?.toFixed(2) || '-'}%</span> (${Math.min(theoResult.count, 9)}筆)` : 
-            `<span style="color:#999;">無案例</span>`;
-        html += `<div>📌 理論價[${theoRange}] ${normWeight}%：${status}</div>`;
-    }
-    
     html += `</div>`;
     
-    // v3.90 更新說明
+    // v3.90 更新說明（三維度）
     html += `<div style="font-size:11px; color:#666; margin-top:8px; border-top:1px solid #ddd; padding-top:6px;">
         💡 v3.90全自動智能：進入即顯示建議，選擇條件後自動更新<br>
-        📊 五維度權重：產業35%+券商25%+信評20%+規模10%+理論價10%
+        📊 三維度權重：產業35%+規模25%+信評40%
     </div>`;
     
     div.innerHTML = html;
@@ -8334,14 +8263,16 @@ function calculateEvaluation(d) {
     // v3.72 修改：根據75檔CB分析結論，重新優化維度權重
     // 按顯著性排序：理論價(30%)>承銷商(18%)>規模(12%)>產業(12%)>年期(8%)>股本(5%)>信評(3%)
     // 擔保作為調整因素（不進維度表）
+    // v3.90 修正：按建議權重配置調整
+    // 產業30%、信評22%、理論價15%、券商13%、規模10%、股本5%、年期5%
     const allDims = [
-        {k:'theoRange',c:'理論價',baseW:0.30,v:d.theoRange},        // ★★★★★ 最重要
-        {k:'broker',c:'發行券商',baseW:0.18,v:brokerName},          // ★★★★☆ 5%價差
-        {k:'size',c:'發行規模',baseW:0.12,v:d.issueSize},           // ★★★☆☆ 
-        {k:'industry',c:'產業',baseW:0.12,v:d.industry},            // ★★☆☆☆ 部分被倍數吸收
-        {k:'years',c:'年期',baseW:0.08,v:d.years},                  // ★★☆☆☆ 5年-0.5%
-        {k:'capital',c:'股本',baseW:0.05,v:d.capital},              // ★☆☆☆☆ 輕微影響
-        {k:'rating',c:'信評',baseW:0.03,v:d.rating}                 // ★☆☆☆☆ r=0.02
+        {k:'industry',c:'產業',baseW:0.30,v:d.industry},            // ★★★★★ 產業30% 實證影響最大
+        {k:'rating',c:'信評',baseW:0.22,v:d.rating},                // ★★★★☆ 信評22% 原本嚴重低估
+        {k:'theoRange',c:'理論價',baseW:0.15,v:d.theoRange},        // ★★★☆☆ 理論價15% 原本過高
+        {k:'broker',c:'發行券商',baseW:0.13,v:brokerName},          // ★★★☆☆ 券商13% 降低過度擬合
+        {k:'size',c:'發行規模',baseW:0.10,v:d.issueSize},           // ★★☆☆☆ 規模10% 中等影響
+        {k:'capital',c:'股本',baseW:0.05,v:d.capital},              // ★☆☆☆☆ 股本5% 影響較小
+        {k:'years',c:'年期',baseW:0.05,v:d.years}                   // ★☆☆☆☆ 年期5% 影響最小
     ];
     
     // 篩選有填寫的維度
@@ -14131,16 +14062,19 @@ function generateAdaptiveLearningHTML(r) {
     const ap = window.ADAPTIVE_PARAMS;
     if (!ap || ap.sampleCount === 0) return '';
     
-    // ★★★ v3.90 修正：使用動態統計數據，不寫死 ★★★
-    const ds = window.DYNAMIC_STATS || {};
-    const basePrice = ds.avgMinBid || 106.10;
-    const avgSpread = window.SPREAD_STATS?.avgSpread || 1.82;
+    // v3.90 核心修正：使用溢價率而非固定價格
+    // 建議價格 = max(理論價, 底標) × (1 + 歷史溢價率)
     
-    // v3.90 新增：取得用戶當前選擇的條件
+    // 取得用戶當前條件
     const userIssueSize = r?.issueSize || '';
     const userTheo = r?.theoreticalPrice || 0;
+    const userFloor = r?.floorPrice || 100;
     const userIndustry = r?.industry ? r.industry.split(' ')[0] : '';
     const userGuarantee = r?.guarantee || '無擔保';
+    
+    // 從歷史數據計算各區間的平均溢價率
+    const ds = window.DYNAMIC_STATS || {};
+    const theoRangeStats = ds.theoRangeStats || {};
     
     // 判斷用戶選擇對應的key
     let userSizeKey = '';
@@ -14159,158 +14093,165 @@ function generateAdaptiveLearningHTML(r) {
         else userTheoKey = 'over115';
     }
     
-    // ===== 計算各條件下的建議價格 =====
-    const sizeLabels = { under3: '<3億', '3to5': '3-5億', '5to10': '5-10億', '10to15': '10-15億', over15: '>15億' };
-    const theoLabels = { under90: '<90元', '90to100': '90-100元', '100to110': '100-110元', '110to115': '110-115元', over115: '>115元' };
+    // ===== v3.90 核心：計算各理論價區間的歷史溢價率 =====
+    const theoLabels = { 
+        under90: '<90元', 
+        '90to100': '90-100元', 
+        '100to110': '100-110元', 
+        '110to115': '110-115元', 
+        over115: '>115元' 
+    };
+    const theoMidValues = { 
+        under90: 85, 
+        '90to100': 95, 
+        '100to110': 105, 
+        '110to115': 112.5, 
+        over115: 120 
+    };
     
-    // v3.90 計算用戶條件對應的建議價格
-    let userRecommendedPrice = basePrice;
-    let userAdjustments = [];
+    // 從 CONV_VALUE_TABLE 取得各區間數據，計算溢價率
+    const convTable = window.CONV_VALUE_TABLE || {};
+    const theoKeyMap = {
+        'under90': 'deep_out',
+        '90to100': 'out', 
+        '100to110': 'par',
+        '110to115': 'in',
+        'over115': 'deep_in'
+    };
     
-    // 生成規模維度的建議價格（v3.90 高亮用戶選擇）
-    let sizeRecommendations = [];
-    Object.keys(sizeLabels).forEach(key => {
-        const adj = ap.sizeAdjustments[key];
-        if (adj && adj.samples >= 5) {
-            const adjustedPrice = basePrice + (adj.bias * 0.8);
-            const isSelected = key === userSizeKey;
-            const color = adj.bias > 0.1 ? '#dc2626' : (adj.bias < -0.1 ? '#22c55e' : '#666');
-            sizeRecommendations.push({
-                key: key,
-                label: sizeLabels[key],
-                samples: adj.samples,
-                bias: adj.bias,
-                price: adjustedPrice,
-                color: color,
-                isSelected: isSelected
-            });
-            if (isSelected) {
-                userRecommendedPrice += adj.bias * 0.8;
-                userAdjustments.push({ dim: '規模', label: sizeLabels[key], adj: adj.bias * 0.8 });
-            }
-        }
-    });
-    
-    // 生成理論價維度的建議價格（v3.90 高亮用戶選擇）
+    // 生成理論價維度的建議（改用溢價率）
     let theoRecommendations = [];
     Object.keys(theoLabels).forEach(key => {
-        const adj = ap.theoAdjustments[key];
-        if (adj && adj.samples >= 5) {
-            const adjustedPrice = basePrice + (adj.bias * 0.8);
+        const convKey = theoKeyMap[key];
+        const convData = convTable[convKey];
+        const midTheo = theoMidValues[key];
+        
+        if (convData && convData.count >= 3) {
+            // 溢價率 = (平均最低得標 / 區間中點理論價 - 1) × 100
+            const avgPrice = convData.avgPrice;
+            const premiumRate = ((avgPrice / midTheo) - 1) * 100;
+            
             const isSelected = key === userTheoKey;
-            const color = adj.bias > 0.1 ? '#dc2626' : (adj.bias < -0.1 ? '#22c55e' : '#666');
+            const color = premiumRate > 10 ? '#dc2626' : (premiumRate < 5 ? '#22c55e' : '#666');
+            
             theoRecommendations.push({
                 key: key,
                 label: theoLabels[key],
-                samples: adj.samples,
-                bias: adj.bias,
-                price: adjustedPrice,
+                samples: convData.count,
+                midTheo: midTheo,
+                avgPrice: avgPrice,
+                premiumRate: premiumRate,
                 color: color,
                 isSelected: isSelected
             });
-            if (isSelected) {
-                userRecommendedPrice += adj.bias * 0.8;
-                userAdjustments.push({ dim: '理論價', label: theoLabels[key], adj: adj.bias * 0.8 });
-            }
         }
     });
     
-    // 生成規模建議 HTML（v3.90 高亮選中項）
-    let sizeHTML = sizeRecommendations.map(r => `
-        <div style="background:${r.isSelected ? '#ede9fe' : '#f8fafc'}; padding:6px 10px; border-radius:6px; display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; ${r.isSelected ? 'border:2px solid #7c3aed;' : ''}">
-            <span style="font-size:11px;">${r.isSelected ? '✅ ' : ''}${r.label} <span style="color:#999;">(${r.samples}檔)</span></span>
-            <span style="font-size:14px; font-weight:bold; color:${r.color};">${r.price.toFixed(2)}元</span>
-        </div>
-    `).join('');
+    // 計算用戶的建議價格（基於理論價 × 溢價率）
+    let userPremiumRate = 7.5; // 預設溢價率
+    let userRecommendedPrice = userTheo > 0 ? userTheo : 100;
     
-    // 生成理論價建議 HTML（v3.90 高亮選中項）
-    let theoHTML = theoRecommendations.map(r => `
-        <div style="background:${r.isSelected ? '#ede9fe' : '#f8fafc'}; padding:6px 10px; border-radius:6px; display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; ${r.isSelected ? 'border:2px solid #7c3aed;' : ''}">
-            <span style="font-size:11px;">${r.isSelected ? '✅ ' : ''}${r.label} <span style="color:#999;">(${r.samples}檔)</span></span>
-            <span style="font-size:14px; font-weight:bold; color:${r.color};">${r.price.toFixed(2)}元</span>
-        </div>
-    `).join('');
-    
-    // 產業熱度（排序後取前8個，v3.90 高亮用戶選擇）
-    const industries = Object.keys(ap.industryHeat)
-        .filter(k => ap.industryHeat[k].samples >= 3)
-        .sort((a, b) => ap.industryHeat[b].heatFactor - ap.industryHeat[a].heatFactor)
-        .slice(0, 8);
-    
-    let industryHTML = industries.map(ind => {
-        const h = ap.industryHeat[ind];
-        const adjustedPrice = basePrice + (h.heatFactor - 1) * 2;
-        const isSelected = ind === userIndustry;
-        const color = h.heatFactor > 1.1 ? '#dc2626' : (h.heatFactor < 0.9 ? '#22c55e' : '#666');
-        const bg = isSelected ? '#7c3aed' : (h.heatFactor > 1.1 ? '#fef2f2' : (h.heatFactor < 0.9 ? '#ecfeff' : '#f5f5f5'));
-        const textColor = isSelected ? 'white' : color;
-        if (isSelected) {
-            userRecommendedPrice += (h.heatFactor - 1) * 2;
-            userAdjustments.push({ dim: '產業', label: ind, adj: (h.heatFactor - 1) * 2 });
+    if (userTheoKey && theoRecommendations.length > 0) {
+        const matched = theoRecommendations.find(t => t.key === userTheoKey);
+        if (matched) {
+            userPremiumRate = matched.premiumRate;
         }
-        return `<span style="display:inline-block; padding:4px 8px; margin:2px; border-radius:8px; background:${bg}; font-size:10px; ${isSelected ? 'border:2px solid #5b21b6;' : ''}">
-            ${isSelected ? '✅' : ''} ${ind} <b style="color:${textColor};">${adjustedPrice.toFixed(1)}元</b>
-        </span>`;
+    }
+    
+    // v3.90 核心：建議價格 = max(理論價, 底標) × (1 + 溢價率)
+    const baseForCalc = Math.max(userTheo, userFloor);
+    userRecommendedPrice = baseForCalc * (1 + userPremiumRate / 100);
+    
+    // 規模調整（較小規模競爭激烈，溢價率+1~2%）
+    let sizeAdjustment = 0;
+    const sizeLabels = { under3: '<3億', '3to5': '3-5億', '5to10': '5-10億', '10to15': '10-15億', over15: '>15億' };
+    const sizeAdjustments = { under3: 2.0, '3to5': 1.0, '5to10': 0, '10to15': -0.5, over15: -1.0 };
+    
+    if (userSizeKey && sizeAdjustments[userSizeKey] !== undefined) {
+        sizeAdjustment = sizeAdjustments[userSizeKey];
+        userRecommendedPrice = baseForCalc * (1 + (userPremiumRate + sizeAdjustment) / 100);
+    }
+    
+    // 生成理論價建議 HTML（v3.90 顯示溢價率）
+    let theoHTML = theoRecommendations.map(t => `
+        <div style="background:${t.isSelected ? '#ede9fe' : '#f8fafc'}; padding:8px 10px; border-radius:6px; margin-bottom:4px; ${t.isSelected ? 'border:2px solid #7c3aed;' : ''}">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:11px;">${t.isSelected ? '✅ ' : ''}${t.label} <span style="color:#999;">(${t.samples}檔)</span></span>
+                <span style="font-size:14px; font-weight:bold; color:${t.color};">+${t.premiumRate.toFixed(1)}%</span>
+            </div>
+            <div style="font-size:10px; color:#666; margin-top:2px;">
+                平均得標：${t.avgPrice.toFixed(2)}元（基於理論價~${t.midTheo}元）
+            </div>
+        </div>
+    `).join('');
+    
+    // 生成規模調整建議 HTML
+    let sizeHTML = Object.keys(sizeLabels).map(key => {
+        const adj = sizeAdjustments[key];
+        const isSelected = key === userSizeKey;
+        const adjText = adj > 0 ? `+${adj}%` : (adj < 0 ? `${adj}%` : '±0%');
+        const color = adj > 0 ? '#dc2626' : (adj < 0 ? '#22c55e' : '#666');
+        return `
+        <div style="background:${isSelected ? '#ede9fe' : '#f8fafc'}; padding:6px 10px; border-radius:6px; display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; ${isSelected ? 'border:2px solid #7c3aed;' : ''}">
+            <span style="font-size:11px;">${isSelected ? '✅ ' : ''}${sizeLabels[key]}</span>
+            <span style="font-size:14px; font-weight:bold; color:${color};">${adjText}</span>
+        </div>`;
     }).join('');
     
-    // v3.90 新增：用戶條件匯總建議
-    const hasUserConditions = userAdjustments.length > 0;
+    // 用戶條件匯總
+    const hasUserConditions = userTheo > 0;
+    const totalPremiumRate = userPremiumRate + sizeAdjustment;
+    
     const userSummaryHTML = hasUserConditions ? `
         <div style="background:linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); color:white; padding:12px; border-radius:8px; margin-bottom:12px;">
-            <div style="font-size:11px; opacity:0.9; margin-bottom:6px;">🎯 您選擇的條件 → 學習引擎建議</div>
+            <div style="font-size:11px; opacity:0.9; margin-bottom:8px;">🎯 您的條件 → 學習引擎建議</div>
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <div style="font-size:11px;">
-                    ${userAdjustments.map(a => `<span style="background:rgba(255,255,255,0.2); padding:2px 6px; border-radius:4px; margin-right:4px;">${a.dim}: ${a.label}</span>`).join('')}
+                    <div style="margin-bottom:4px;">理論價：<b>${userTheo.toFixed(2)}元</b></div>
+                    <div>溢價率：<b>${userPremiumRate.toFixed(1)}%</b>${sizeAdjustment !== 0 ? ` ${sizeAdjustment > 0 ? '+' : ''}${sizeAdjustment}%（規模）` : ''} = <b>${totalPremiumRate.toFixed(1)}%</b></div>
                 </div>
                 <div style="text-align:right;">
                     <div style="font-size:24px; font-weight:bold;">${userRecommendedPrice.toFixed(2)}元</div>
-                    <div style="font-size:10px; opacity:0.8;">綜合建議價格</div>
+                    <div style="font-size:10px; opacity:0.8;">建議出價</div>
                 </div>
+            </div>
+            <div style="margin-top:8px; padding:6px; background:rgba(255,255,255,0.15); border-radius:4px; font-size:10px;">
+                💡 計算：max(${userTheo.toFixed(1)}, ${userFloor}) × (1 + ${totalPremiumRate.toFixed(1)}%) = ${userRecommendedPrice.toFixed(2)}元
             </div>
         </div>
     ` : `
         <div style="background:#7c3aed; color:white; padding:10px; border-radius:8px; margin-bottom:12px; font-size:12px;">
-            💡 請選擇條件（規模、理論價、產業），系統將高亮對應的建議價格
+            💡 請輸入理論價，系統將計算建議出價 = 理論價 × (1 + 歷史溢價率)
         </div>
     `;
     
-    // v3.90 修正：說明 sampleCount 與 totalAuctionCount 可能不同的原因
-    const sampleNote = ap.sampleCount < totalAuctionCount 
-        ? `（${totalAuctionCount}檔中有${ap.sampleCount}檔有完整學習數據）`
-        : '';
-    
     return `
     <div style="border:2px solid #8b5cf6; border-radius:12px; padding:15px; margin-top:15px; background:linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);">
-        <h3 style="color:#7c3aed; margin:0 0 15px 0;">🧠 自適應學習引擎${sampleNote}</h3>
+        <h3 style="color:#7c3aed; margin:0 0 15px 0;">🧠 自適應學習引擎（${ap.sampleCount}檔歷史學習）</h3>
         
-        <!-- v3.90 新增：用戶條件匯總建議 -->
+        <!-- 用戶條件匯總建議 -->
         ${userSummaryHTML}
         
-        <!-- 各維度建議價格 -->
+        <!-- 各維度建議 -->
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
-            <!-- 規模維度建議 -->
+            <!-- 理論價區間溢價率 -->
             <div style="background:white; padding:10px; border-radius:8px;">
-                <div style="font-size:12px; font-weight:bold; color:#7c3aed; margin-bottom:8px;">📏 依規模的建議價格</div>
-                ${sizeHTML || '<div style="color:#999; font-size:11px;">數據不足</div>'}
-            </div>
-            
-            <!-- 理論價維度建議 -->
-            <div style="background:white; padding:10px; border-radius:8px;">
-                <div style="font-size:12px; font-weight:bold; color:#7c3aed; margin-bottom:8px;">💰 依理論價的建議價格</div>
+                <div style="font-size:12px; font-weight:bold; color:#7c3aed; margin-bottom:8px;">💰 各理論價區間歷史溢價率</div>
                 ${theoHTML || '<div style="color:#999; font-size:11px;">數據不足</div>'}
             </div>
-        </div>
-        
-        <!-- 產業熱度建議 -->
-        <div style="background:white; padding:10px; border-radius:8px; margin-bottom:12px;">
-            <div style="font-size:12px; font-weight:bold; color:#7c3aed; margin-bottom:8px;">🏭 依產業的建議價格（基準${basePrice.toFixed(2)}元 ± 產業調整）</div>
-            <div style="line-height:1.8;">
-                ${industryHTML || '<span style="color:#999; font-size:11px;">尚未累積足夠產業數據</span>'}
+            
+            <!-- 規模調整 -->
+            <div style="background:white; padding:10px; border-radius:8px;">
+                <div style="font-size:12px; font-weight:bold; color:#7c3aed; margin-bottom:8px;">📏 規模溢價調整</div>
+                ${sizeHTML}
+                <div style="font-size:10px; color:#666; margin-top:6px;">
+                    小規模競爭激烈需+溢價，大規模競爭較緩可-溢價
+                </div>
             </div>
         </div>
         
         <div style="padding:8px; background:#f8fafc; border-radius:6px; font-size:10px; color:#666;">
-            💡 <b>使用說明：</b>選擇條件後，對應的建議價格會以 ✅ 高亮顯示，並在頂部顯示綜合建議。
+            💡 <b>核心邏輯：</b>建議出價 = max(理論價, 底標) × (1 + 歷史溢價率 + 規模調整)
             <br>學習版本：${ap.version} ｜ 更新：${new Date(ap.lastUpdated).toLocaleString('zh-TW')}
         </div>
     </div>`;

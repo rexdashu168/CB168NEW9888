@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.82 (7維度評分版)</title>
+<title>AI智能可轉債競拍系統 v3.83 (2203檔實證版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="embedded_data.js" onerror="console.warn('embedded_data.js not found, using defaults.')"></script>
 
@@ -1594,14 +1594,14 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.82)...</div>
+    <div>🔄 系統啟動中 (v3.83)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
 <div class="container" style="display: none;">
     <div class="header">
         <h1>🤖 AI智能可轉債競拍系統</h1>
-        <span class="version-badge">v3.82</span>
+        <span class="version-badge">v3.83 2203檔實證版</span>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -1611,197 +1611,195 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <div class="evaluation-container">
     <div class="input-panel" id="inputPanel">
-
-```
-    <!-- ========== 第一區塊：競拍條件輸入 ========== -->
-    <div class="panel-section" style="background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%); border: 2px solid #667eea; border-radius: 12px; padding: 15px; margin-bottom: 20px;">
-        <div class="section-header" style="display:flex; align-items:center; margin-bottom:15px; padding-bottom:10px; border-bottom:2px solid #667eea;">
-            <span style="font-size:20px; margin-right:8px;">📋</span>
-            <span style="font-size:16px; font-weight:bold; color:#667eea;">一、競拍條件輸入</span>
-            <span style="font-size:11px; color:#666; margin-left:auto;">填寫標的資料</span>
-        </div>
         
-    <form id="evaluationForm">
-        <!-- ⚡ 閃電帶入 -->
-        <div class="form-section" style="background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border: 2px solid #ffc107; border-radius: 10px; padding: 15px; margin-bottom: 15px;">
-            <h3 style="color: #f57c00; border-left-color: #ff9800;">⚡ 閃電帶入（承銷中案件）</h3>
-            <div class="form-group" style="margin-bottom: 10px;">
-                <label style="color: #e65100;">選擇承銷案件，自動帶入所有條件</label>
-                <select id="quickSelect" style="border: 2px solid #ffc107; font-weight: bold;">
-                    <option value="">-- 請選擇承銷中案件 --</option>
-                    <optgroup label="📊 已開標未掛牌（可驗證模型）" id="openedGroup"></optgroup>
-                    <optgroup label="🔥 尚未開標（競拍）" id="pendingAuctionGroup"></optgroup>
-                    <optgroup label="📋 尚未開標（詢圈）" id="pendingInquiryGroup"></optgroup>
-                    <optgroup label="✅ 已掛牌（參考用）" id="listedGroup"></optgroup>
-                </select>
+        <!-- ========== 第一區塊：競拍條件輸入 ========== -->
+        <div class="panel-section" style="background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%); border: 2px solid #667eea; border-radius: 12px; padding: 15px; margin-bottom: 20px;">
+            <div class="section-header" style="display:flex; align-items:center; margin-bottom:15px; padding-bottom:10px; border-bottom:2px solid #667eea;">
+                <span style="font-size:20px; margin-right:8px;">📋</span>
+                <span style="font-size:16px; font-weight:bold; color:#667eea;">一、競拍條件輸入</span>
+                <span style="font-size:11px; color:#666; margin-left:auto;">填寫標的資料</span>
             </div>
-            <div id="quickSelectInfo" style="display:none; background:#fff; padding:10px; border-radius:6px; margin-top:8px; font-size:12px; border-left:4px solid #ff9800;"></div>
-            <div id="modelCompareResult" style="display:none; background:#e8f5e9; padding:10px; border-radius:6px; margin-top:8px; font-size:12px; border-left:4px solid #4caf50;"></div>
-            <div style="font-size:11px; color:#795548; margin-top:8px;">
-                💡 選擇後自動帶入所有條件，「截標日收盤價」可自行調整
-            </div>
-        </div>
-
-        <!-- 📌 基本資料 -->
-        <div class="form-section">
-            <h3>📌 基本資料</h3>
-            <div class="form-group">
-                <label>CB名稱 / 代號 *</label>
-                <input type="text" id="cbName" placeholder="輸入代號(如2383)或名稱搜尋歷史">
-                <div id="historyResults" class="history-results"></div>
-                <div id="cbNameInfo" class="info-box"></div>
-            </div>
-            <div class="form-group"><label>股本區間 *</label><select id="capital"><option value="">請選擇...</option><option value="小於3億">小於3億</option><option value="3~6億">3~6億</option><option value="6~10億">6~10億</option><option value="10~15億">10~15億</option><option value="15~20億">15~20億</option><option value="大於20億">大於20億</option></select><div id="capitalInfo" class="info-box"></div></div>
-            <div class="form-group"><label>產業分類 *</label><select id="industry"><option value="">載入中...</option></select><div id="industryInfo" class="info-box"></div><div id="industryTip300" class="tip-300" style="display:none;"></div></div>
-            <div class="form-group"><label>發行券商</label><select id="broker"><option value="">載入中...</option></select><div id="brokerInfo" class="info-box"></div><div id="brokerTip300" class="tip-300" style="display:none;"></div></div>
-        </div>
-        
-        <!-- 💰 發行條件 -->
-        <div class="form-section">
-            <h3>💰 發行條件</h3>
-            <div class="form-group"><label>發行規模區間 *</label><select id="issueSize"><option value="">請選擇...</option><option value="小於2億">小於2億</option><option value="2~5億">2~5億</option><option value="5~10億">5~10億</option><option value="10~15億">10~15億</option><option value="15~20億">15~20億</option><option value="大於20億">大於20億</option></select><div id="issueSizeInfo" class="info-box"></div><div id="issueSizeTip300" class="tip-300" style="display:none;"></div></div>
-            <div class="form-group">
-                <label>理論價區間 * <span id="theoRangeMode" style="font-size:11px; color:#1976d2; font-weight:normal;">（輸入股價/轉換價後自動計算）</span></label>
-                <select id="theoRange"><option value="">請選擇或由下方自動計算...</option><option value="小於90元">小於90元</option><option value="90~95元">90~95元</option><option value="95~100元">95~100元</option><option value="100~105元">100~105元</option><option value="105~110元">105~110元</option><option value="110~115元">110~115元</option><option value="大於115元">大於115元</option></select>
-                <div id="theoRangeInfo" class="info-box"></div>
-                <div id="theoRangeTip300" class="tip-300" style="display:none;"></div>
-                <div id="theoAutoCalcInfo" style="display:none; background:#e3f2fd; padding:8px 12px; border-radius:6px; margin-top:5px; font-size:12px;">
-                    <span style="color:#1565c0;">✅ 已自動計算：理論價 <b id="theoAutoValue">0</b> 元 → 區間 <b id="theoAutoRange">-</b></span>
+            
+        <form id="evaluationForm">
+            <!-- ⚡ 閃電帶入 -->
+            <div class="form-section" style="background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border: 2px solid #ffc107; border-radius: 10px; padding: 15px; margin-bottom: 15px;">
+                <h3 style="color: #f57c00; border-left-color: #ff9800;">⚡ 閃電帶入（承銷中案件）</h3>
+                <div class="form-group" style="margin-bottom: 10px;">
+                    <label style="color: #e65100;">選擇承銷案件，自動帶入所有條件</label>
+                    <select id="quickSelect" style="border: 2px solid #ffc107; font-weight: bold;">
+                        <option value="">-- 請選擇承銷中案件 --</option>
+                        <optgroup label="📊 已開標未掛牌（可驗證模型）" id="openedGroup"></optgroup>
+                        <optgroup label="🔥 尚未開標（競拍）" id="pendingAuctionGroup"></optgroup>
+                        <optgroup label="📋 尚未開標（詢圈）" id="pendingInquiryGroup"></optgroup>
+                        <optgroup label="✅ 已掛牌（參考用）" id="listedGroup"></optgroup>
+                    </select>
+                </div>
+                <div id="quickSelectInfo" style="display:none; background:#fff; padding:10px; border-radius:6px; margin-top:8px; font-size:12px; border-left:4px solid #ff9800;"></div>
+                <div id="modelCompareResult" style="display:none; background:#e8f5e9; padding:10px; border-radius:6px; margin-top:8px; font-size:12px; border-left:4px solid #4caf50;"></div>
+                <div style="font-size:11px; color:#795548; margin-top:8px;">
+                    💡 選擇後自動帶入所有條件，「截標日收盤價」可自行調整
                 </div>
             </div>
-            <div class="form-group"><label>發行年期 *</label><select id="years"><option value="">請選擇...</option><option value="3">3年期</option><option value="5">5年期</option><option value="7">7年期</option></select><div id="yearsInfo" class="info-box"></div><div id="yearsTip300" class="tip-300" style="display:none;"></div></div>
-            <div class="form-group"><label>擔保情況 *</label><select id="guarantee" onchange="updateAtmospherePanel(); updateMarketSentiment();"><option value="">請選擇...</option><option value="有擔保">有擔保</option><option value="無擔保">無擔保</option></select><div id="guaranteeInfo" class="info-box"></div><div id="guaranteeTip300" class="tip-300" style="display:none;"></div></div>
-            <div class="form-group"><label>信用評等 (TCRI) *</label><select id="rating"><option value="">請選擇...</option><option value="1">TCRI 1</option><option value="2">TCRI 2</option><option value="3">TCRI 3</option><option value="4">TCRI 4</option><option value="5">TCRI 5</option><option value="6">TCRI 6</option><option value="7">TCRI 7</option><option value="8">TCRI 8</option></select><div id="ratingInfo" class="info-box"></div><div id="ratingTip300" class="tip-300" style="display:none;"></div></div>
-        </div>
-        
-        <!-- 🎯 競拍資料 -->
-        <div class="form-section">
-            <h3>🎯 競拍資料</h3>
-            <div class="form-group">
-                <label>競拍截止日1:30收盤價格 (元) *</label>
-                <input type="number" id="stockPrice" step="0.01" placeholder="例如：461.5">
-            </div>
-            <div class="form-group">
-                <label>實際轉換價格 (元) *</label>
-                <input type="number" id="actualConversionPrice" step="0.01" placeholder="例如：450">
-            </div>
-            <div class="form-group">
-                <label>底標價格 (元)</label>
-                <input type="number" id="floorPrice" step="0.1" value="100" placeholder="預設：100">
-                <div class="warning-box">⚠️ 理論價格隨股價變動，建議於 13:30 截標前再進行最終試算</div>
-            </div>
-        </div>
-        
-        <!-- ⚖️ 主觀權重 -->
-        <details style="margin-top:10px;">
-            <summary style="cursor:pointer; font-size:13px; color:#e65100; font-weight:bold; padding:8px; background:#fff9e6; border-radius:6px;">
-                ⚖️ 主觀權重（選填，點擊展開）
-            </summary>
-            <div class="form-section" style="background: linear-gradient(135deg, #fff9e6 0%, #ffe6cc 100%); border: 1px solid #ff9800; border-radius: 8px; padding: 12px; margin-top:8px;">
-                <div class="subjective-note" style="font-size:11px; color:#666; margin-bottom:10px;">
-                    💡 預設為 0 表示完全依據歷史數據；若您有獨到見解，可調整此處注入主觀判斷。
+
+            <!-- 📌 基本資料 -->
+            <div class="form-section">
+                <h3>📌 基本資料</h3>
+                <div class="form-group">
+                    <label>CB名稱 / 代號 *</label>
+                    <input type="text" id="cbName" placeholder="輸入代號(如2383)或名稱搜尋歷史">
+                    <div id="historyResults" class="history-results"></div>
+                    <div id="cbNameInfo" class="info-box"></div>
                 </div>
-                <div class="form-group"><label>主觀權重 (%)</label><input type="number" id="subjectiveWeight" min="0" max="100" step="1" value="0"></div>
-                <div class="form-group"><label>主觀最低溢價 (%)</label><input type="number" id="subjectiveLowPremium" step="0.1" value="0"></div>
-                <div class="form-group"><label>主觀平均溢價 (%)</label><input type="number" id="subjectiveAvgPremium" step="0.1" value="0"></div>
+                <div class="form-group"><label>股本區間 *</label><select id="capital"><option value="">請選擇...</option><option value="小於3億">小於3億</option><option value="3~6億">3~6億</option><option value="6~10億">6~10億</option><option value="10~15億">10~15億</option><option value="15~20億">15~20億</option><option value="大於20億">大於20億</option></select><div id="capitalInfo" class="info-box"></div></div>
+                <div class="form-group"><label>產業分類 *</label><select id="industry"><option value="">載入中...</option></select><div id="industryInfo" class="info-box"></div><div id="industryTip300" class="tip-300" style="display:none;"></div></div>
+                <div class="form-group"><label>發行券商</label><select id="broker"><option value="">載入中...</option></select><div id="brokerInfo" class="info-box"></div><div id="brokerTip300" class="tip-300" style="display:none;"></div></div>
             </div>
-        </details>
-        
-    </div><!-- 第一區塊結束 -->
-    
-    <!-- ========== 第二區塊：AI智能評估 ========== -->
-    <div class="panel-section" style="background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%); border: 2px solid #9c27b0; border-radius: 12px; padding: 15px; margin-bottom: 20px;">
-        <div class="section-header" style="display:flex; align-items:center; margin-bottom:15px; padding-bottom:10px; border-bottom:2px solid #9c27b0;">
-            <span style="font-size:20px; margin-right:8px;">🤖</span>
-            <span style="font-size:16px; font-weight:bold; color:#7b1fa2;">二、AI智能評估</span>
-            <span style="font-size:11px; color:#666; margin-left:auto;">即時計算建議出價</span>
-        </div>
-        
-        <!-- 🎯 主力模擬出價 -->
-        <div class="form-section" style="background: white; border: 1px solid #ce93d8; border-radius: 10px; padding: 12px; margin-bottom: 12px;">
-            <div style="font-size:13px; font-weight:bold; color:#6a1b9a; margin-bottom:8px;">🎯 主力模擬出價</div>
-            <div style="font-size:11px; color:#666; margin-bottom:8px;">
-                💡 基於75檔CB得標明細，根據您的條件動態調整<br>
-                📊 核心發現：94%情況下，主力最低出價與最低得標差距 <0.5元
+            
+            <!-- 💰 發行條件 -->
+            <div class="form-section">
+                <h3>💰 發行條件</h3>
+                <div class="form-group"><label>發行規模區間 *</label><select id="issueSize"><option value="">請選擇...</option><option value="小於2億">小於2億</option><option value="2~5億">2~5億</option><option value="5~10億">5~10億</option><option value="10~15億">10~15億</option><option value="15~20億">15~20億</option><option value="大於20億">大於20億</option></select><div id="issueSizeInfo" class="info-box"></div><div id="issueSizeTip300" class="tip-300" style="display:none;"></div></div>
+                <div class="form-group">
+                    <label>理論價區間 * <span id="theoRangeMode" style="font-size:11px; color:#1976d2; font-weight:normal;">（輸入股價/轉換價後自動計算）</span></label>
+                    <select id="theoRange"><option value="">請選擇或由下方自動計算...</option><option value="小於90元">小於90元</option><option value="90~95元">90~95元</option><option value="95~100元">95~100元</option><option value="100~105元">100~105元</option><option value="105~110元">105~110元</option><option value="110~115元">110~115元</option><option value="大於115元">大於115元</option></select>
+                    <div id="theoRangeInfo" class="info-box"></div>
+                    <div id="theoRangeTip300" class="tip-300" style="display:none;"></div>
+                    <div id="theoAutoCalcInfo" style="display:none; background:#e3f2fd; padding:8px 12px; border-radius:6px; margin-top:5px; font-size:12px;">
+                        <span style="color:#1565c0;">✅ 已自動計算：理論價 <b id="theoAutoValue">0</b> 元 → 區間 <b id="theoAutoRange">-</b></span>
+                    </div>
+                </div>
+                <div class="form-group"><label>發行年期 *</label><select id="years"><option value="">請選擇...</option><option value="3">3年期</option><option value="5">5年期</option><option value="7">7年期</option></select><div id="yearsInfo" class="info-box"></div><div id="yearsTip300" class="tip-300" style="display:none;"></div></div>
+                <div class="form-group"><label>擔保情況 *</label><select id="guarantee" onchange="updateAtmospherePanel(); updateMarketSentiment();"><option value="">請選擇...</option><option value="有擔保">有擔保</option><option value="無擔保">無擔保</option></select><div id="guaranteeInfo" class="info-box"></div><div id="guaranteeTip300" class="tip-300" style="display:none;"></div></div>
+                <div class="form-group"><label>信用評等 (TCRI) *</label><select id="rating"><option value="">請選擇...</option><option value="1">TCRI 1</option><option value="2">TCRI 2</option><option value="3">TCRI 3</option><option value="4">TCRI 4</option><option value="5">TCRI 5</option><option value="6">TCRI 6</option><option value="7">TCRI 7</option><option value="8">TCRI 8</option></select><div id="ratingInfo" class="info-box"></div><div id="ratingTip300" class="tip-300" style="display:none;"></div></div>
             </div>
-            <div id="majorPlayerSimulation">
-                <div style="color:#666; padding:10px; text-align:center; font-size:12px;">請先輸入理論價區間或股價/轉換價</div>
+            
+            <!-- 🎯 競拍資料 -->
+            <div class="form-section">
+                <h3>🎯 競拍資料</h3>
+                <div class="form-group">
+                    <label>競拍截止日1:30收盤價格 (元) *</label>
+                    <input type="number" id="stockPrice" step="0.01" placeholder="例如：461.5">
+                </div>
+                <div class="form-group">
+                    <label>實際轉換價格 (元) *</label>
+                    <input type="number" id="actualConversionPrice" step="0.01" placeholder="例如：450">
+                </div>
+                <div class="form-group">
+                    <label>底標價格 (元)</label>
+                    <input type="number" id="floorPrice" step="0.1" value="100" placeholder="預設：100">
+                    <div class="warning-box">⚠️ 理論價格隨股價變動，建議於 13:30 截標前再進行最終試算</div>
+                </div>
             </div>
-        </div>
-        
-        <!-- 🎯 AI智能預測 -->
-        <div class="form-section" style="background: white; border: 1px solid #ce93d8; border-radius: 10px; padding: 12px; margin-bottom: 12px;">
-            <div style="font-size:13px; font-weight:bold; color:#667eea; margin-bottom:8px;">📊 AI預測結果</div>
-            <div style="font-size:11px; color:#666; margin-bottom:8px;">
-                💡 基於<span id="auctionCountLabel">--</span>檔競拍統計，即時預估投標倍數與建議出價
-            </div>
-            <div id="liveAIPrediction">
-                <div style="color:#666; padding:10px; text-align:center; font-size:12px;">請填寫條件後即時顯示預測結果</div>
-            </div>
-        </div>
-        
-        <!-- 📋 競拍前綜合評估 -->
-        <div class="form-section" style="background: white; border: 1px solid #ce93d8; border-radius: 10px; padding: 12px;">
-            <div style="font-size:13px; font-weight:bold; color:#0d47a1; margin-bottom:8px;">📋 競拍前綜合評估</div>
-            <div style="font-size:11px; color:#666; margin-bottom:8px;">
-                💡 基於歷史競拍數據，綜合評估是否值得參與
-            </div>
-            <div id="auctionEvaluation">
-                <div style="color:#666; padding:10px; text-align:center; font-size:12px;">請輸入股價和轉換價後查看評估結果</div>
-            </div>
-        </div>
-    </div><!-- 第二區塊結束 -->
-    
-    <!-- ========== 第三區塊：市場溫度計 ========== -->
-    <div class="panel-section" style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border: 2px solid #4caf50; border-radius: 12px; padding: 15px; margin-bottom: 20px;">
-        <div class="section-header" style="display:flex; align-items:center; margin-bottom:15px; padding-bottom:10px; border-bottom:2px solid #4caf50;">
-            <span style="font-size:20px; margin-right:8px;">🌡️</span>
-            <span style="font-size:16px; font-weight:bold; color:#2e7d32;">三、市場溫度計</span>
-            <span style="font-size:11px; color:#666; margin-left:auto;">近期市場熱度參考</span>
-        </div>
-        
-        <!-- 📡 即時市場動能 -->
-        <div class="form-section" style="background: white; border: 1px solid #81c784; border-radius: 10px; padding: 12px; margin-bottom: 12px;">
-            <div style="font-size:13px; font-weight:bold; color:#c2185b; margin-bottom:8px;">📡 即時市場動能（近10檔開標）</div>
-            <div id="marketMomentumResult">
-                <div style="color:#666; padding:10px; text-align:center; font-size:12px;">⏳ 載入中...</div>
-            </div>
-            <details style="margin-top:8px;">
-                <summary style="cursor:pointer; font-size:11px; color:#2e7d32; font-weight:bold;">📋 查看近期開標明細</summary>
-                <div id="recentAuctionDetails" style="margin-top:8px; max-height:200px; overflow-y:auto; font-size:11px;"></div>
+            
+            <!-- ⚖️ 主觀權重 -->
+            <details style="margin-top:10px;">
+                <summary style="cursor:pointer; font-size:13px; color:#e65100; font-weight:bold; padding:8px; background:#fff9e6; border-radius:6px;">
+                    ⚖️ 主觀權重（選填，點擊展開）
+                </summary>
+                <div class="form-section" style="background: linear-gradient(135deg, #fff9e6 0%, #ffe6cc 100%); border: 1px solid #ff9800; border-radius: 8px; padding: 12px; margin-top:8px;">
+                    <div class="subjective-note" style="font-size:11px; color:#666; margin-bottom:10px;">
+                        💡 預設為 0 表示完全依據歷史數據；若您有獨到見解，可調整此處注入主觀判斷。
+                    </div>
+                    <div class="form-group"><label>主觀權重 (%)</label><input type="number" id="subjectiveWeight" min="0" max="100" step="1" value="0"></div>
+                    <div class="form-group"><label>主觀最低溢價 (%)</label><input type="number" id="subjectiveLowPremium" step="0.1" value="0"></div>
+                    <div class="form-group"><label>主觀平均溢價 (%)</label><input type="number" id="subjectiveAvgPremium" step="0.1" value="0"></div>
+                </div>
             </details>
+            
+        </div><!-- 第一區塊結束 -->
+        
+        <!-- ========== 第二區塊：AI智能評估 ========== -->
+        <div class="panel-section" style="background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%); border: 2px solid #9c27b0; border-radius: 12px; padding: 15px; margin-bottom: 20px;">
+            <div class="section-header" style="display:flex; align-items:center; margin-bottom:15px; padding-bottom:10px; border-bottom:2px solid #9c27b0;">
+                <span style="font-size:20px; margin-right:8px;">🤖</span>
+                <span style="font-size:16px; font-weight:bold; color:#7b1fa2;">二、AI智能評估</span>
+                <span style="font-size:11px; color:#666; margin-left:auto;">即時計算建議出價</span>
+            </div>
+            
+            <!-- 🎯 主力模擬出價 -->
+            <div class="form-section" style="background: white; border: 1px solid #ce93d8; border-radius: 10px; padding: 12px; margin-bottom: 12px;">
+                <div style="font-size:13px; font-weight:bold; color:#6a1b9a; margin-bottom:8px;">🎯 主力模擬出價</div>
+                <div style="font-size:11px; color:#666; margin-bottom:8px;">
+                    💡 基於75檔CB得標明細，根據您的條件動態調整<br>
+                    📊 核心發現：94%情況下，主力最低出價與最低得標差距 <0.5元
+                </div>
+                <div id="majorPlayerSimulation">
+                    <div style="color:#666; padding:10px; text-align:center; font-size:12px;">請先輸入理論價區間或股價/轉換價</div>
+                </div>
+            </div>
+            
+            <!-- 🎯 AI智能預測 -->
+            <div class="form-section" style="background: white; border: 1px solid #ce93d8; border-radius: 10px; padding: 12px; margin-bottom: 12px;">
+                <div style="font-size:13px; font-weight:bold; color:#667eea; margin-bottom:8px;">📊 AI預測結果</div>
+                <div style="font-size:11px; color:#666; margin-bottom:8px;">
+                    💡 基於<span id="auctionCountLabel">--</span>檔競拍統計，即時預估投標倍數與建議出價
+                </div>
+                <div id="liveAIPrediction">
+                    <div style="color:#666; padding:10px; text-align:center; font-size:12px;">請填寫條件後即時顯示預測結果</div>
+                </div>
+            </div>
+            
+            <!-- 📋 競拍前綜合評估 -->
+            <div class="form-section" style="background: white; border: 1px solid #ce93d8; border-radius: 10px; padding: 12px;">
+                <div style="font-size:13px; font-weight:bold; color:#0d47a1; margin-bottom:8px;">📋 競拍前綜合評估</div>
+                <div style="font-size:11px; color:#666; margin-bottom:8px;">
+                    💡 基於歷史競拍數據，綜合評估是否值得參與
+                </div>
+                <div id="auctionEvaluation">
+                    <div style="color:#666; padding:10px; text-align:center; font-size:12px;">請輸入股價和轉換價後查看評估結果</div>
+                </div>
+            </div>
+        </div><!-- 第二區塊結束 -->
+        
+        <!-- ========== 第三區塊：市場溫度計 ========== -->
+        <div class="panel-section" style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border: 2px solid #4caf50; border-radius: 12px; padding: 15px; margin-bottom: 20px;">
+            <div class="section-header" style="display:flex; align-items:center; margin-bottom:15px; padding-bottom:10px; border-bottom:2px solid #4caf50;">
+                <span style="font-size:20px; margin-right:8px;">🌡️</span>
+                <span style="font-size:16px; font-weight:bold; color:#2e7d32;">三、市場溫度計</span>
+                <span style="font-size:11px; color:#666; margin-left:auto;">近期市場熱度參考</span>
+            </div>
+            
+            <!-- 📡 即時市場動能 -->
+            <div class="form-section" style="background: white; border: 1px solid #81c784; border-radius: 10px; padding: 12px; margin-bottom: 12px;">
+                <div style="font-size:13px; font-weight:bold; color:#c2185b; margin-bottom:8px;">📡 即時市場動能（近10檔開標）</div>
+                <div id="marketMomentumResult">
+                    <div style="color:#666; padding:10px; text-align:center; font-size:12px;">⏳ 載入中...</div>
+                </div>
+                <details style="margin-top:8px;">
+                    <summary style="cursor:pointer; font-size:11px; color:#2e7d32; font-weight:bold;">📋 查看近期開標明細</summary>
+                    <div id="recentAuctionDetails" style="margin-top:8px; max-height:200px; overflow-y:auto; font-size:11px;"></div>
+                </details>
+            </div>
+            
+            <!-- 🌡️ 市場氛圍儀表板 -->
+            <div id="atmospherePanel" class="form-section" style="display:none; background: white; border: 1px solid #81c784; border-radius: 10px; padding: 12px; margin-bottom: 12px;">
+                <div style="font-size:13px; font-weight:bold; color:#2e7d32; margin-bottom:8px;">🌡️ 市場氛圍儀表板</div>
+                <div id="atmosphereContent" style="font-size: 12px;">載入中...</div>
+            </div>
+            
+            <!-- 📊 近期市場氛圍 -->
+            <div class="form-section" style="background: white; border: 1px solid #81c784; border-radius: 10px; padding: 12px;">
+                <div style="font-size:13px; font-weight:bold; color:#1565c0; margin-bottom:8px;">📊 同條件歷史統計</div>
+                <div style="font-size:10px; color:#666; margin-bottom:8px;">
+                    ⚠️ 需填寫<b style="color:#e65100;">產業、規模、信評</b>三個條件才能計算<br>
+                    根據產業(35%)、規模(25%)、信評(40%)三維度加權
+                </div>
+                <div id="marketSentiment" class="info-box" style="display: block; background:#f5f5f5; border-left: 4px solid #2196F3; padding:10px; font-size:12px;">
+                    <div class="stat-row" style="color:#e65100;">⚠️ 請先填寫：產業、發行規模、信評</div>
+                </div>
+            </div>
+        </div><!-- 第三區塊結束 -->
+        
+        <!-- Rex大叔提醒 -->
+        <div id="smartReminders" style="display:none; margin: 15px 0; padding: 12px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 8px;">
+            <div style="font-weight: bold; color: #856404; font-size: 13px;">💡 Rex大叔提醒</div>
+            <div id="reminderContent" style="font-size: 12px; line-height: 1.7; color: #856404; margin-top:5px;"></div>
         </div>
         
-        <!-- 🌡️ 市場氛圍儀表板 -->
-        <div id="atmospherePanel" class="form-section" style="display:none; background: white; border: 1px solid #81c784; border-radius: 10px; padding: 12px; margin-bottom: 12px;">
-            <div style="font-size:13px; font-weight:bold; color:#2e7d32; margin-bottom:8px;">🌡️ 市場氛圍儀表板</div>
-            <div id="atmosphereContent" style="font-size: 12px;">載入中...</div>
-        </div>
-        
-        <!-- 📊 近期市場氛圍 -->
-        <div class="form-section" style="background: white; border: 1px solid #81c784; border-radius: 10px; padding: 12px;">
-            <div style="font-size:13px; font-weight:bold; color:#1565c0; margin-bottom:8px;">📊 同條件歷史統計</div>
-            <div style="font-size:10px; color:#666; margin-bottom:8px;">
-                ⚠️ 需填寫<b style="color:#e65100;">產業、規模、信評</b>三個條件才能計算<br>
-                根據產業(25%)、信評(20%)、理論價(20%)、規模(15%)、券商(10%)、年期(5%)、股本(5%)七維度加權
-            </div>
-            <div id="marketSentiment" class="info-box" style="display: block; background:#f5f5f5; border-left: 4px solid #2196F3; padding:10px; font-size:12px;">
-                <div class="stat-row" style="color:#e65100;">⚠️ 請先填寫：產業、發行規模、信評</div>
-            </div>
-        </div>
-    </div><!-- 第三區塊結束 -->
-    
-    <!-- Rex大叔提醒 -->
-    <div id="smartReminders" style="display:none; margin: 15px 0; padding: 12px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 8px;">
-        <div style="font-weight: bold; color: #856404; font-size: 13px;">💡 Rex大叔提醒</div>
-        <div id="reminderContent" style="font-size: 12px; line-height: 1.7; color: #856404; margin-top:5px;"></div>
-    </div>
-    
-    <!-- 開始評估按鈕 -->
-    <button type="submit" class="calculate-btn">🎯 開始AI評估</button>
-    </form>
-</div><!-- input-panel結束 -->
-```
+        <!-- 開始評估按鈕 -->
+        <button type="submit" class="calculate-btn">🎯 開始AI評估</button>
+        </form>
+    </div><!-- input-panel結束 -->
 
 <div class="resizer" id="resizer"></div>
 
@@ -1809,132 +1807,131 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     <div id="welcomeMsg" class="welcome-message">
         <h2>歡迎使用AI智能競拍評估系統</h2>
         <p style="margin-top:10px; color:#666; font-size: 14px;">
-            v3.82 權重優化版<br>
+            v3.83 2203檔CB完整實證版<br>
+            根據2203檔CB實證研究重新配置評分權重<br>
+            產業30%、信評22%、理論價15%、券商13%、規模10%、股本5%、年期5%
             ✅ 左側三大區塊：條件輸入 → AI評估 → 市場溫度<br>
             ✅ 右側三大區塊：趨勢分析 → 維度統計 → 績效分析<br>
             ✅ 統計數據改用中位數，更穩健抵抗極端值
         </p>
         <div class="stats-summary" id="statsSummary"></div>
-
-```
-    <!-- ========== 右側第一區塊：市場趨勢分析 ========== -->
-    <div class="right-section section-trend" style="margin-top:20px;">
-        <div class="right-section-header" onclick="toggleRightSection('trendSection', this)">
-            <span style="font-size:18px;">📈</span>
-            <span>一、市場趨勢分析</span>
-            <span style="font-size:11px; font-weight:normal; opacity:0.9;">（宏觀歷史數據）</span>
-            <span class="toggle-icon">▼</span>
+        
+        <!-- ========== 右側第一區塊：市場趨勢分析 ========== -->
+        <div class="right-section section-trend" style="margin-top:20px;">
+            <div class="right-section-header" onclick="toggleRightSection('trendSection', this)">
+                <span style="font-size:18px;">📈</span>
+                <span>一、市場趨勢分析</span>
+                <span style="font-size:11px; font-weight:normal; opacity:0.9;">（宏觀歷史數據）</span>
+                <span class="toggle-icon">▼</span>
+            </div>
+            <div class="right-section-content" id="trendSection">
+        
+        <!-- 市場趨勢分析 -->
+        <div class="market-trend-section" id="marketTrendSection" style="text-align:left;">
+            <div class="market-trend-tabs">
+                <button class="market-trend-tab active" onclick="showMarketTrendTab('yearly', event)">年度趨勢</button>
+                <button class="market-trend-tab" onclick="showMarketTrendTab('guarantee', event)">擔保比較</button>
+                <button class="market-trend-tab" onclick="showMarketTrendTab('size', event)">發行規模</button>
+                <button class="market-trend-tab" onclick="showMarketTrendTab('capital', event)">股本大小</button>
+                <button class="market-trend-tab" onclick="showMarketTrendTab('conversion', event)">轉換價</button>
+                <button class="market-trend-tab" onclick="showMarketTrendTab('rating', event)">信評</button>
+                <button class="market-trend-tab" onclick="showMarketTrendTab('yearPeriod', event)">發行年期</button>
+                <button class="market-trend-tab" onclick="showMarketTrendTab('type', event)">競拍vs詢圈</button>
+                <button class="market-trend-tab" onclick="showMarketTrendTab('issueNum', event)">發行次數</button>
+                <button class="market-trend-tab" onclick="showMarketTrendTab('ky', event)">KY股分析</button>
+            </div>
+            <div class="market-trend-content" id="marketTrendContent">
+                載入中...
+            </div>
         </div>
-        <div class="right-section-content" id="trendSection">
-    
-    <!-- 市場趨勢分析 -->
-    <div class="market-trend-section" id="marketTrendSection" style="text-align:left;">
-        <div class="market-trend-tabs">
-            <button class="market-trend-tab active" onclick="showMarketTrendTab('yearly', event)">年度趨勢</button>
-            <button class="market-trend-tab" onclick="showMarketTrendTab('guarantee', event)">擔保比較</button>
-            <button class="market-trend-tab" onclick="showMarketTrendTab('size', event)">發行規模</button>
-            <button class="market-trend-tab" onclick="showMarketTrendTab('capital', event)">股本大小</button>
-            <button class="market-trend-tab" onclick="showMarketTrendTab('conversion', event)">轉換價</button>
-            <button class="market-trend-tab" onclick="showMarketTrendTab('rating', event)">信評</button>
-            <button class="market-trend-tab" onclick="showMarketTrendTab('yearPeriod', event)">發行年期</button>
-            <button class="market-trend-tab" onclick="showMarketTrendTab('type', event)">競拍vs詢圈</button>
-            <button class="market-trend-tab" onclick="showMarketTrendTab('issueNum', event)">發行次數</button>
-            <button class="market-trend-tab" onclick="showMarketTrendTab('ky', event)">KY股分析</button>
+        
+        <!-- 市場供給量分析 -->
+        <div id="supplyAnalysis" class="supply-analysis" style="margin-top:15px; text-align:left;">
+            <div class="supply-header">📊 市場供給量分析</div>
+            <div id="supplyTable">載入中...</div>
         </div>
-        <div class="market-trend-content" id="marketTrendContent">
-            載入中...
+        
+            </div><!-- trendSection結束 -->
+        </div><!-- 右側第一區塊結束 -->
+        
+        <!-- ========== 右側第二區塊：維度統計分析 ========== -->
+        <div class="right-section section-dimension" style="margin-top:15px;">
+            <div class="right-section-header" onclick="toggleRightSection('dimensionSectionContent', this)">
+                <span style="font-size:18px;">📊</span>
+                <span>二、維度統計分析</span>
+                <span style="font-size:11px; font-weight:normal; opacity:0.9;">（各條件歷史表現）</span>
+                <span class="toggle-icon">▼</span>
+            </div>
+            <div class="right-section-content" id="dimensionSectionContent">
+        
+        <!-- 維度分析總覽 -->
+        <div id="dimensionSection" class="dimension-section" style="text-align:left;">
+            <div class="dimension-main-tabs">
+                <button type="button" class="dimension-main-tab active" onclick="showDimensionTab('capital', event)">股本</button>
+                <button type="button" class="dimension-main-tab" onclick="showDimensionTab('size', event)">規模</button>
+                <button type="button" class="dimension-main-tab" onclick="showDimensionTab('conversion', event)">轉換價</button>
+                <button type="button" class="dimension-main-tab" onclick="showDimensionTab('rating', event)">信評</button>
+                <button type="button" class="dimension-main-tab" onclick="showDimensionTab('years', event)">年期</button>
+                <button type="button" class="dimension-main-tab" onclick="showDimensionTab('guarantee', event)">擔保</button>
+            </div>
+            <div id="dimensionContent" class="dimension-content">載入中...</div>
         </div>
+        
+            </div><!-- dimensionSectionContent結束 -->
+        </div><!-- 右側第二區塊結束 -->
+        
+        <!-- ========== 右側第三區塊：績效分析 ========== -->
+        <div class="right-section section-performance" style="margin-top:15px;">
+            <div class="right-section-header" onclick="toggleRightSection('performanceSection', this)">
+                <span style="font-size:18px;">💰</span>
+                <span>三、績效分析</span>
+                <span style="font-size:11px; font-weight:normal; opacity:0.9;">（歷史盈虧驗證）</span>
+                <span class="toggle-icon">▼</span>
+            </div>
+            <div class="right-section-content" id="performanceSection">
+        
+        <!-- 年度績效排行榜 -->
+        <div id="rankingSection" class="ranking-section" style="text-align:left;">
+            <div class="ranking-header">🏆 年度績效排行榜（TOP10 / BOTTOM10）</div>
+            <div class="ranking-tabs">
+                <button type="button" class="ranking-tab active" onclick="showRankingYear(2022, event)">2022</button>
+                <button type="button" class="ranking-tab" onclick="showRankingYear(2023, event)">2023</button>
+                <button type="button" class="ranking-tab" onclick="showRankingYear(2024, event)">2024</button>
+                <button type="button" class="ranking-tab" onclick="showRankingYear(2025, event)">2025</button>
+            </div>
+            <div id="rankingContent">載入中...</div>
+        </div>
+        
+        <!-- 月均成交真實績效 -->
+        <div id="realperfSection" class="realperf-section" style="margin-top:15px; text-align:left;">
+            <div class="realperf-header">📈 月均成交真實績效</div>
+            <div class="realperf-tabs">
+                <button type="button" class="realperf-tab active" onclick="showRealPerfYear(2022, event)">2022</button>
+                <button type="button" class="realperf-tab" onclick="showRealPerfYear(2023, event)">2023</button>
+                <button type="button" class="realperf-tab" onclick="showRealPerfYear(2024, event)">2024</button>
+                <button type="button" class="realperf-tab" onclick="showRealPerfYear(2025, event)">2025</button>
+            </div>
+            <div id="realperfContent">載入中...</div>
+        </div>
+        
+        <!-- 競拍盈虧勝率分析 -->
+        <div id="profitlossSection" class="profitloss-section" style="margin-top:15px; text-align:left;">
+            <div class="profitloss-header">💰 競拍盈虧勝率分析</div>
+            <div class="profitloss-tabs">
+                <button type="button" class="profitloss-tab active" onclick="showProfitLossYear(2022, event)">2022</button>
+                <button type="button" class="profitloss-tab" onclick="showProfitLossYear(2023, event)">2023</button>
+                <button type="button" class="profitloss-tab" onclick="showProfitLossYear(2024, event)">2024</button>
+                <button type="button" class="profitloss-tab" onclick="showProfitLossYear(2025, event)">2025</button>
+                <button type="button" class="profitloss-tab" onclick="showProfitLossYear('all', event)">全部</button>
+            </div>
+            <div id="profitlossContent">載入中...</div>
+        </div>
+        
+            </div><!-- performanceSection結束 -->
+        </div><!-- 右側第三區塊結束 -->
+        
     </div>
-    
-    <!-- 市場供給量分析 -->
-    <div id="supplyAnalysis" class="supply-analysis" style="margin-top:15px; text-align:left;">
-        <div class="supply-header">📊 市場供給量分析</div>
-        <div id="supplyTable">載入中...</div>
-    </div>
-    
-        </div><!-- trendSection結束 -->
-    </div><!-- 右側第一區塊結束 -->
-    
-    <!-- ========== 右側第二區塊：維度統計分析 ========== -->
-    <div class="right-section section-dimension" style="margin-top:15px;">
-        <div class="right-section-header" onclick="toggleRightSection('dimensionSectionContent', this)">
-            <span style="font-size:18px;">📊</span>
-            <span>二、維度統計分析</span>
-            <span style="font-size:11px; font-weight:normal; opacity:0.9;">（各條件歷史表現）</span>
-            <span class="toggle-icon">▼</span>
-        </div>
-        <div class="right-section-content" id="dimensionSectionContent">
-    
-    <!-- 維度分析總覽 -->
-    <div id="dimensionSection" class="dimension-section" style="text-align:left;">
-        <div class="dimension-main-tabs">
-            <button type="button" class="dimension-main-tab active" onclick="showDimensionTab('capital', event)">股本</button>
-            <button type="button" class="dimension-main-tab" onclick="showDimensionTab('size', event)">規模</button>
-            <button type="button" class="dimension-main-tab" onclick="showDimensionTab('conversion', event)">轉換價</button>
-            <button type="button" class="dimension-main-tab" onclick="showDimensionTab('rating', event)">信評</button>
-            <button type="button" class="dimension-main-tab" onclick="showDimensionTab('years', event)">年期</button>
-            <button type="button" class="dimension-main-tab" onclick="showDimensionTab('guarantee', event)">擔保</button>
-        </div>
-        <div id="dimensionContent" class="dimension-content">載入中...</div>
-    </div>
-    
-        </div><!-- dimensionSectionContent結束 -->
-    </div><!-- 右側第二區塊結束 -->
-    
-    <!-- ========== 右側第三區塊：績效分析 ========== -->
-    <div class="right-section section-performance" style="margin-top:15px;">
-        <div class="right-section-header" onclick="toggleRightSection('performanceSection', this)">
-            <span style="font-size:18px;">💰</span>
-            <span>三、績效分析</span>
-            <span style="font-size:11px; font-weight:normal; opacity:0.9;">（歷史盈虧驗證）</span>
-            <span class="toggle-icon">▼</span>
-        </div>
-        <div class="right-section-content" id="performanceSection">
-    
-    <!-- 年度績效排行榜 -->
-    <div id="rankingSection" class="ranking-section" style="text-align:left;">
-        <div class="ranking-header">🏆 年度績效排行榜（TOP10 / BOTTOM10）</div>
-        <div class="ranking-tabs">
-            <button type="button" class="ranking-tab active" onclick="showRankingYear(2022, event)">2022</button>
-            <button type="button" class="ranking-tab" onclick="showRankingYear(2023, event)">2023</button>
-            <button type="button" class="ranking-tab" onclick="showRankingYear(2024, event)">2024</button>
-            <button type="button" class="ranking-tab" onclick="showRankingYear(2025, event)">2025</button>
-        </div>
-        <div id="rankingContent">載入中...</div>
-    </div>
-    
-    <!-- 月均成交真實績效 -->
-    <div id="realperfSection" class="realperf-section" style="margin-top:15px; text-align:left;">
-        <div class="realperf-header">📈 月均成交真實績效</div>
-        <div class="realperf-tabs">
-            <button type="button" class="realperf-tab active" onclick="showRealPerfYear(2022, event)">2022</button>
-            <button type="button" class="realperf-tab" onclick="showRealPerfYear(2023, event)">2023</button>
-            <button type="button" class="realperf-tab" onclick="showRealPerfYear(2024, event)">2024</button>
-            <button type="button" class="realperf-tab" onclick="showRealPerfYear(2025, event)">2025</button>
-        </div>
-        <div id="realperfContent">載入中...</div>
-    </div>
-    
-    <!-- 競拍盈虧勝率分析 -->
-    <div id="profitlossSection" class="profitloss-section" style="margin-top:15px; text-align:left;">
-        <div class="profitloss-header">💰 競拍盈虧勝率分析</div>
-        <div class="profitloss-tabs">
-            <button type="button" class="profitloss-tab active" onclick="showProfitLossYear(2022, event)">2022</button>
-            <button type="button" class="profitloss-tab" onclick="showProfitLossYear(2023, event)">2023</button>
-            <button type="button" class="profitloss-tab" onclick="showProfitLossYear(2024, event)">2024</button>
-            <button type="button" class="profitloss-tab" onclick="showProfitLossYear(2025, event)">2025</button>
-            <button type="button" class="profitloss-tab" onclick="showProfitLossYear('all', event)">全部</button>
-        </div>
-        <div id="profitlossContent">載入中...</div>
-    </div>
-    
-        </div><!-- performanceSection結束 -->
-    </div><!-- 右側第三區塊結束 -->
-    
-</div>
-<div id="evaluationResult" class="evaluation-result"></div>
-```
-
+    <div id="evaluationResult" class="evaluation-result"></div>
 </div>
 
 </div>
@@ -1963,88 +1960,18 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 // ==========================================
 // 0. 初始化權重係數（防止 embedded_data.js 未載入）
 // ==========================================
-// v3.82 新增：完整的評分係數配置
-// 根據290+檔CB實證分析結論建立
-// ==========================================
 if (typeof window.WEIGHT_COEFFICIENTS === 'undefined') {
     window.WEIGHT_COEFFICIENTS = {
-        // 產業別評分係數（權重25%）
-        'industry': {
-            '電子零組件業': { coefficient: 1.0, note: '基準產業，樣本最多' },
-            '電子零組件': { coefficient: 1.0, note: '基準產業' },
-            '半導體業': { coefficient: 1.1, note: '景氣循環明確，高波動高報酬' },
-            '半導體': { coefficient: 1.1, note: '高波動高報酬' },
-            '建材營造業': { coefficient: 0.9, note: '傳產穩定但爆發力較低' },
-            '建材營造': { coefficient: 0.9, note: '穩定但爆發力低' },
-            '光電業': { coefficient: 0.7, note: '產業長期衰退，風險較高' },
-            '光電': { coefficient: 0.7, note: '衰退產業' },
-            '生技醫療業': { coefficient: 0.6, note: '題材炒作劇烈，坐電梯風險極高' },
-            '生技醫療': { coefficient: 0.6, note: '坐電梯風險高' },
-            '航運業': { coefficient: 0.5, note: '極端波動，2021案例為鑑' },
-            '航運': { coefficient: 0.5, note: '極端波動' },
-            '其他': { coefficient: 0.85, note: '穩定但成長性有限' },
-            '其他業': { coefficient: 0.85, note: '穩定但成長性有限' },
-            '化學工業': { coefficient: 0.9, note: '傳產穩定' },
-            '鋼鐵工業': { coefficient: 0.85, note: '景氣循環' },
-            '塑膠工業': { coefficient: 0.9, note: '傳產穩定' },
-            '通信網路業': { coefficient: 1.0, note: '中性' },
-            '電腦及週邊設備業': { coefficient: 1.0, note: '基準' },
-            '資訊服務業': { coefficient: 1.0, note: '基準' },
-            '電子通路業': { coefficient: 0.95, note: '略低於基準' }
-        },
-        // 承銷券商評分係數（權重10%）- 避免過度擬合
-        'broker': {},  // 由歷史數據動態計算
-        // 股本評分係數（權重5%）
-        'capital': {
-            '< 5億': { coefficient: 0.8, note: '小型股波動大' },
-            '5~10億': { coefficient: 0.95, note: '中小型' },
-            '10~30億': { coefficient: 1.05, note: '最佳區間' },
-            '30~50億': { coefficient: 1.0, note: '中大型' },
-            '> 50億': { coefficient: 0.95, note: '大型股爆發力有限' }
-        },
-        // 發行規模評分係數（權重15%）
-        'size': {
-            '< 3億': { coefficient: 0.7, note: '流動性風險' },
-            '3~5億': { coefficient: 0.9, note: '略小但可接受' },
-            '5~10億': { coefficient: 1.0, note: '基準區間' },
-            '10~20億': { coefficient: 1.1, note: '最佳區間' },
-            '20~30億': { coefficient: 1.0, note: '規模適中' },
-            '> 30億': { coefficient: 0.9, note: '籌碼較分散' }
-        },
-        // 信用評等評分係數（權重20%）
-        'rating': {
-            '1': { coefficient: 1.2, note: '極低風險' },
-            '2': { coefficient: 1.2, note: '極低風險' },
-            '3': { coefficient: 1.1, note: '低風險，優質標的' },
-            '4': { coefficient: 1.0, note: '基準，可接受風險' },
-            '5': { coefficient: 0.8, note: '需搭配有擔保條件' },
-            '6': { coefficient: 0.6, note: '高風險，需嚴格控制部位' },
-            '7': { coefficient: 0.3, note: '極高風險，建議迴避' },
-            '8': { coefficient: 0.3, note: '極高風險，建議迴避' }
-        },
-        // 擔保評分係數（額外調整）
-        'guarantee': {
-            '有擔保': { coefficient: 1.1, note: '有擔保加0.1' },
-            '無擔保': { coefficient: 1.0, note: '基準' }
-        },
-        // 年期評分係數（權重5%）
-        'years': {
-            '3': { coefficient: 1.05, note: '時間價值衰減較快，風險暴露期較短' },
-            '5': { coefficient: 1.0, note: '基準' },
-            '7': { coefficient: 0.95, note: '較長期' }
-        },
-        // 理論價評分係數（權重20%）
-        'theoRange': {
-            '< 95元': { coefficient: 1.2, note: '極佳安全邊際' },
-            '95~100元': { coefficient: 1.1, note: '良好安全邊際' },
-            '100~105元': { coefficient: 1.0, note: '基準區間' },
-            '105~110元': { coefficient: 0.9, note: '安全邊際收窄' },
-            '110~115元': { coefficient: 0.7, note: '追價風險提高' },
-            '> 115元': { coefficient: 0.5, note: '高風險，需謹慎評估' }
-        },
+        'industry': {}, 
+        'broker': {}, 
+        'capital': {}, 
+        'size': {}, 
+        'rating': {}, 
+        'guarantee': {}, 
+        'years': {}, 
         'conversion': {}
     };
-    console.log('✅ v3.82 評分係數已載入（根據實證研究配置）');
+    console.warn('WEIGHT_COEFFICIENTS 未定義，使用預設值');
 }
 
 // ==========================================
@@ -7309,14 +7236,14 @@ function updateMarketSentiment() {
         };
     }
     
-    // 1. 產業維度 (42%) - v3.82 調整（原35%）
+    // 1. 產業維度 (35%)
     let industryResult = { lowPremium: null, avgPremium: null, lowBidPrice: null, avgBidPrice: null, count: 0 };
     if (industry) {
         const industryCases = sortedData.filter(d => industryMatches(d.industry, industry));
         industryResult = calcWeightedData(industryCases);
     }
     
-    // 2. 規模維度 (25%) - v3.82 維持（原25%）
+    // 2. 規模維度 (25%) - v3.69 修正篩選條件，匹配選項值
     let sizeResult = { lowPremium: null, avgPremium: null, lowBidPrice: null, avgBidPrice: null, count: 0 };
     if (issueSize) {
         const sizeCases = sortedData.filter(d => {
@@ -7332,25 +7259,24 @@ function updateMarketSentiment() {
         sizeResult = calcWeightedData(sizeCases);
     }
     
-    // 3. 信評維度 (33%) - v3.82 調整（原40%）
+    // 3. 信評維度 (40%)
     let ratingResult = { lowPremium: null, avgPremium: null, lowBidPrice: null, avgBidPrice: null, count: 0 };
     if (rating) {
         const ratingCases = sortedData.filter(d => d.rating === rating);
         ratingResult = calcWeightedData(ratingCases);
     }
     
-    // v3.82 修改：計算總加權（產業42%、規模25%、信評33%）
-    // 權重比例根據新配置正規化：25:15:20 ≈ 42:25:33
+    // 計算總加權（產業35%、規模25%、信評40%）
     let totalLowP = 0, totalAvgP = 0;
     let totalLowB = 0, totalAvgB = 0;
     let totalWeight = 0;
     
     if (industryResult.lowPremium !== null) {
-        totalLowP += industryResult.lowPremium * 0.42;
-        totalAvgP += industryResult.avgPremium * 0.42;
-        totalLowB += industryResult.lowBidPrice * 0.42;
-        totalAvgB += industryResult.avgBidPrice * 0.42;
-        totalWeight += 0.42;
+        totalLowP += industryResult.lowPremium * 0.35;
+        totalAvgP += industryResult.avgPremium * 0.35;
+        totalLowB += industryResult.lowBidPrice * 0.35;
+        totalAvgB += industryResult.avgBidPrice * 0.35;
+        totalWeight += 0.35;
     }
     if (sizeResult.lowPremium !== null) {
         totalLowP += sizeResult.lowPremium * 0.25;
@@ -7360,11 +7286,11 @@ function updateMarketSentiment() {
         totalWeight += 0.25;
     }
     if (ratingResult.lowPremium !== null) {
-        totalLowP += ratingResult.lowPremium * 0.33;
-        totalAvgP += ratingResult.avgPremium * 0.33;
-        totalLowB += ratingResult.lowBidPrice * 0.33;
-        totalAvgB += ratingResult.avgBidPrice * 0.33;
-        totalWeight += 0.33;
+        totalLowP += ratingResult.lowPremium * 0.40;
+        totalAvgP += ratingResult.avgPremium * 0.40;
+        totalLowB += ratingResult.lowBidPrice * 0.40;
+        totalAvgB += ratingResult.avgBidPrice * 0.40;
+        totalWeight += 0.40;
     }
     
     // 重新正規化（如果只有部分維度有資料）
@@ -7376,10 +7302,10 @@ function updateMarketSentiment() {
     // 顯示結果
     const guarLabel = guarantee ? `【${guarantee}】` : '';
     
-    // v3.82 修改：根據是否有信評決定維度說明
+    // v3.72 修改：根據是否有信評決定維度說明
     const dimensionDesc = hasRating ? 
-        '產業(42%)+規模(25%)+信評(33%)' : 
-        '產業(63%)+規模(37%)';
+        '產業(35%)+規模(25%)+信評(40%)' : 
+        '產業(58%)+規模(42%)';
     
     let html = `<div class="stats-header">🌡️ 近期市場氛圍${guarLabel}（${dimensionDesc}）</div>`;
     
@@ -7402,9 +7328,9 @@ function updateMarketSentiment() {
     </div>`;
     
     // 各維度明細
-    // v3.82 修改：沒有信評時權重重新分配（產業63%、規模37%）
-    const industryWeight = hasRating ? '42' : '63';
-    const sizeWeight = hasRating ? '25' : '37';
+    // v3.72 修改：沒有信評時權重重新分配（產業58%、規模42%）
+    const industryWeight = hasRating ? '35' : '58';
+    const sizeWeight = hasRating ? '25' : '42';
     
     html += `<div style="font-size:12px; line-height:1.8;">`;
     
@@ -7422,13 +7348,13 @@ function updateMarketSentiment() {
         html += `<div>📌 規模[${issueSize}] ${sizeWeight}%：${status}</div>`;
     }
     
-    // v3.82 修改：只有有信評時才顯示信評維度
+    // v3.72 修改：只有有信評時才顯示信評維度
     if (hasRating) {
         const ratingName = rating === 'BBB' ? 'BBB' : `TCRI ${rating}`;
         const status = ratingResult.count > 0 ? 
             `溢價 <span style="color:#2e7d32;">${ratingResult.lowPremium?.toFixed(2) || '-'}%</span>~<span style="color:#d32f2f;">${ratingResult.avgPremium?.toFixed(2) || '-'}%</span>｜得標價 ${ratingResult.lowBidPrice?.toFixed(2) || '-'}~${ratingResult.avgBidPrice?.toFixed(2) || '-'}元 (${Math.min(ratingResult.count, 9)}筆)` : 
             `<span style="color:#999;">無案例</span>`;
-        html += `<div>📌 信評[${ratingName}] 33%：${status}</div>`;
+        html += `<div>📌 信評[${ratingName}] 40%：${status}</div>`;
     } else {
         html += `<div style="color:#9e9e9e;">📌 信評：尚無資料，僅用產業+規模計算</div>`;
     }
@@ -7796,19 +7722,17 @@ function calculateEvaluation(d) {
     const floorPrice = d.floorPrice || 100; // 底標價格，預設100元
     const brokerName = d.broker || ""; 
     
-    // v3.82 修改：根據290+檔CB實證分析結論，重新優化維度權重
-    // 新權重配置：產業(25%)>信評(20%)>理論價(20%)>規模(15%)>券商(10%)>年期(5%)>股本(5%)
-    // 重要調整：信評從3%大幅提升至20%（原權重嚴重低估信用風險）
-    // 產業從12%提升至25%（產業景氣循環對CB報酬影響極大）
+    // v3.72 修改：根據75檔CB分析結論，重新優化維度權重
+    // 按顯著性排序：理論價(30%)>承銷商(18%)>規模(12%)>產業(12%)>年期(8%)>股本(5%)>信評(3%)
     // 擔保作為調整因素（不進維度表）
     const allDims = [
-        {k:'industry',c:'產業',baseW:0.25,v:d.industry},            // ★★★★★ 產業景氣循環影響極大
-        {k:'rating',c:'信評',baseW:0.20,v:d.rating},                // ★★★★★ 決定違約風險與能否拆解
-        {k:'theoRange',c:'理論價',baseW:0.20,v:d.theoRange},        // ★★★★☆ 決定進場安全邊際
-        {k:'size',c:'發行規模',baseW:0.15,v:d.issueSize},           // ★★★☆☆ 影響流動性與籌碼穩定度
-        {k:'broker',c:'發行券商',baseW:0.10,v:brokerName},          // ★★☆☆☆ 承銷品質有差異但避免過度擬合
-        {k:'years',c:'年期',baseW:0.05,v:d.years},                  // ★☆☆☆☆ 時間價值與風險暴露期間
-        {k:'capital',c:'股本',baseW:0.05,v:d.capital}               // ★☆☆☆☆ 波動性與流動性平衡
+        {k:'theoRange',c:'理論價',baseW:0.30,v:d.theoRange},        // ★★★★★ 最重要
+        {k:'broker',c:'發行券商',baseW:0.18,v:brokerName},          // ★★★★☆ 5%價差
+        {k:'size',c:'發行規模',baseW:0.12,v:d.issueSize},           // ★★★☆☆ 
+        {k:'industry',c:'產業',baseW:0.12,v:d.industry},            // ★★☆☆☆ 部分被倍數吸收
+        {k:'years',c:'年期',baseW:0.08,v:d.years},                  // ★★☆☆☆ 5年-0.5%
+        {k:'capital',c:'股本',baseW:0.05,v:d.capital},              // ★☆☆☆☆ 輕微影響
+        {k:'rating',c:'信評',baseW:0.03,v:d.rating}                 // ★☆☆☆☆ r=0.02
     ];
     
     // 篩選有填寫的維度
@@ -7919,10 +7843,26 @@ function calculateEvaluation(d) {
         theoreticalPrice: theo,
         industry: d.industry,
         years: d.years || 3,
-        atmosphereIndex: atmosphereIndex
+        atmosphereIndex: atmosphereIndex,
+        rating: d.rating || '5',           // v3.82 新增
+        broker: d.broker || '',            // v3.82 新增
+        stockCap: getRangeMidValue(d.capital, 'capital') || 10  // v3.82 新增
     });
 
-    const similarCases = findSimilarCases({
+    // v3.82 KNN相似案例（用於AI智能預測）
+    const knnResult = findSimilarCases({
+        theoPrice: theo,        // 注意：KNN版本使用 theoPrice
+        issueSize: sizeMid,
+        industry: d.industry,
+        guarantee: d.guarantee || '無擔保',
+        years: parseInt(d.years) || 3,
+        rating: d.rating || '5',
+        broker: d.broker || '',
+        stockCap: getRangeMidValue(d.capital, 'capital') || 10
+    });
+    
+    // v3.82 同類案件統計（用於統計顯示，保持向後兼容）
+    const similarCasesStats = findSimilarCasesForStats({
         theoreticalPrice: theo,
         issueSize: sizeMid,
         industry: d.industry
@@ -7983,7 +7923,8 @@ function calculateEvaluation(d) {
         
         // === v3.70 新增：熱度分析結果 ===
         heatAnalysis: heatResult,
-        similarCases: similarCases,
+        similarCases: similarCasesStats,  // v3.82 保持向後兼容，使用統計版本
+        knnResult: knnResult,             // v3.82 新增：KNN預測結果
         marketAtmosphere: atmosphere,
         
         // === v3.72 新增：主力模擬出價結果 ===
@@ -9039,68 +8980,140 @@ function calcConcurrentIssue(targetDate, daysBefore = 14, daysAfter = 14, exclud
  * @returns {Object} 熱度分析結果
  */
 function calcHeatIndex(params) {
-    const { issueSize, theoreticalPrice, industry, years, atmosphereIndex } = params;
+    const { issueSize, theoreticalPrice, industry, years, atmosphereIndex, rating, stockCap, broker } = params;
     
     let totalScore = 0;
     const breakdown = [];
     
-    // 1. 發行規模評分 (滿分25)
-    let sizeScore = 8;
-    if (issueSize < 5) sizeScore = 25;
-    else if (issueSize < 10) sizeScore = 18;
-    else if (issueSize < 15) sizeScore = 15;
-    else sizeScore = 8;
-    totalScore += sizeScore;
-    breakdown.push({ dim: '發行規模', value: `${issueSize}億`, score: sizeScore, max: 25 });
+    // v3.83 權重優化：根據2203檔CB完整實證分析
+    // 產業30% + 信評22% + 理論價15% + 券商13% + 規模10% + 股本5% + 年期5% = 100分
     
-    // 2. 理論價位評分 (滿分22)
-    let theoScore = 10;
-    if (theoreticalPrice >= 105) theoScore = 22;      // 價內
-    else if (theoreticalPrice >= 95) theoScore = 18;  // 平價
-    else if (theoreticalPrice >= 85) theoScore = 14;  // 價外
-    else theoScore = 10;                               // 深價外
-    totalScore += theoScore;
-    
-    let theoLabel = '深價外';
-    if (theoreticalPrice >= 105) theoLabel = '價內';
-    else if (theoreticalPrice >= 95) theoLabel = '平價';
-    else if (theoreticalPrice >= 85) theoLabel = '價外';
-    breakdown.push({ dim: '理論價位', value: `${theoreticalPrice}元(${theoLabel})`, score: theoScore, max: 22 });
-    
-    // 3. 產業評分 (滿分17)
-    let industryScore = 12;
-    const industryStr = String(industry || '').toLowerCase();
-    if (industryStr.includes('電子') || industryStr.includes('資訊') || industryStr.includes('通信')) {
-        industryScore = 17;
-    } else if (industryStr.includes('半導體') || industryStr.includes('光電')) {
-        industryScore = 15;
+    // 1. 產業評分 (滿分30) - 實證影響最大
+    let industryScore = 18;  // 基準分
+    const industryStr = String(industry || '');
+    // 根據2203檔實證的產業係數
+    if (industryStr.includes('電子通路')) {
+        industryScore = 30;  // 係數1.14，優良率72%
+    } else if (industryStr.includes('電子零組件')) {
+        industryScore = 30;  // 係數1.14，優良率72%
+    } else if (industryStr.includes('其他') && industryStr.includes('電子')) {
+        industryScore = 29;  // 係數1.13，優良率71%
+    } else if (industryStr.includes('化學')) {
+        industryScore = 29;  // 係數1.13，優良率71%
+    } else if (industryStr.includes('電腦') || industryStr.includes('週邊')) {
+        industryScore = 29;  // 係數1.13，優良率71%
     } else if (industryStr.includes('生技') || industryStr.includes('醫療')) {
-        industryScore = 14;
-    } else if (industryStr.includes('建材') || industryStr.includes('營建') || industryStr.includes('塑膠') || industryStr.includes('鋼鐵')) {
-        industryScore = 8;
+        industryScore = 28;  // 係數1.11，優良率70%（實證翻轉！）
+    } else if (industryStr.includes('半導體')) {
+        industryScore = 27;  // 係數1.10，優良率69%
+    } else if (industryStr.includes('通信') || industryStr.includes('網路')) {
+        industryScore = 24;  // 係數1.05，優良率66%
+    } else if (industryStr.includes('運動') || industryStr.includes('休閒')) {
+        industryScore = 22;  // 係數1.02，優良率64%
+    } else if (industryStr.includes('鋼鐵')) {
+        industryScore = 21;  // 係數1.00，優良率63%（基準）
+    } else if (industryStr.includes('觀光') || industryStr.includes('餐旅')) {
+        industryScore = 19;  // 係數0.95，優良率60%
+    } else if (industryStr.includes('航運')) {
+        industryScore = 18;  // 係數0.94，優良率59%
+    } else if (industryStr.includes('光電')) {
+        industryScore = 17;  // 係數0.92，優良率58%
+    } else if (industryStr.includes('電機') || industryStr.includes('機械')) {
+        industryScore = 17;  // 係數0.92，優良率58%
+    } else if (industryStr.includes('建材') || industryStr.includes('營造')) {
+        industryScore = 16;  // 係數0.89，優良率56%
+    } else if (industryStr.includes('汽車')) {
+        industryScore = 14;  // 係數0.83，優良率52%
+    } else if (industryStr.includes('綠能') || industryStr.includes('環保')) {
+        industryScore = 13;  // 係數0.79，優良率50%
+    } else if (industryStr.includes('紡織') || industryStr.includes('纖維')) {
+        industryScore = 11;  // 係數0.75，優良率47%
     } else {
-        industryScore = 12; // 傳產/其他
+        industryScore = 18;  // 其他產業給基準分
     }
     totalScore += industryScore;
-    breakdown.push({ dim: '產業類別', value: industry || '未指定', score: industryScore, max: 17 });
+    breakdown.push({ dim: '產業類別', value: industry || '未指定', score: industryScore, max: 30 });
     
-    // 4. 年期評分 (滿分15)
-    let yearScore = 10;
-    if (years == 3) yearScore = 15;
-    else if (years == 5) yearScore = 10;
-    else if (years == 7) yearScore = 8;
+    // 2. 信用評等評分 (滿分22) - 重要發現：TCRI 4-5最佳，不是越低越好！
+    let ratingScore = 14;
+    const ratingNum = parseInt(rating) || 5;
+    if (ratingNum === 5) ratingScore = 22;        // ★最佳：TCRI 5，係數1.05，優良率66%
+    else if (ratingNum === 4) ratingScore = 21;   // 優良：TCRI 4，係數1.03，優良率65%
+    else if (ratingNum === 6) ratingScore = 15;   // 中性：TCRI 6，係數0.87，優良率55%
+    else if (ratingNum === 3) ratingScore = 14;   // 中性：TCRI 3，係數0.86，優良率54%
+    else if (ratingNum === 8) ratingScore = 13;   // 警戒：TCRI 8，係數0.83，優良率52%
+    else if (ratingNum === 7) ratingScore = 9;    // ★最差：TCRI 7，係數0.70，優良率44%
+    else if (ratingNum <= 2) ratingScore = 14;    // TCRI 1-2：樣本少，給中性分
+    totalScore += ratingScore;
+    breakdown.push({ dim: '信用評等', value: `TCRI ${ratingNum}`, score: ratingScore, max: 22 });
+    
+    // 3. 理論價位評分 (滿分15) - 競拍專用維度
+    let theoScore = 10;
+    if (theoreticalPrice < 95) theoScore = 15;          // 係數1.15，極佳安全邊際
+    else if (theoreticalPrice < 100) theoScore = 14;    // 係數1.10，良好安全邊際
+    else if (theoreticalPrice < 105) theoScore = 12;    // 係數1.00，基準區間
+    else if (theoreticalPrice < 110) theoScore = 10;    // 係數0.90，安全邊際收窄
+    else if (theoreticalPrice < 115) theoScore = 8;     // 係數0.75，追價風險提高
+    else theoScore = 5;                                  // 係數0.60，高風險區間
+    totalScore += theoScore;
+    
+    let theoLabel = '高風險';
+    if (theoreticalPrice < 95) theoLabel = '極佳安全邊際';
+    else if (theoreticalPrice < 100) theoLabel = '良好安全邊際';
+    else if (theoreticalPrice < 105) theoLabel = '基準區間';
+    else if (theoreticalPrice < 110) theoLabel = '安全邊際收窄';
+    else if (theoreticalPrice < 115) theoLabel = '追價風險';
+    breakdown.push({ dim: '理論價位', value: `${theoreticalPrice}元(${theoLabel})`, score: theoScore, max: 15 });
+    
+    // 4. 券商評分 (滿分13) - 根據2203檔實證
+    let brokerScore = 8;  // 預設基準分
+    const brokerStr = String(broker || '');
+    // 實證發現：統一、台新最佳；兆豐、國票較差
+    if (brokerStr.includes('統一')) brokerScore = 13;         // 係數1.15，優良率72.4%（★最佳）
+    else if (brokerStr.includes('台新')) brokerScore = 12;    // 係數1.04，優良率65.6%
+    else if (brokerStr.includes('富邦')) brokerScore = 10;    // 係數0.98，優良率61.7%
+    else if (brokerStr.includes('凱基')) brokerScore = 10;    // 係數0.98，優良率61.6%
+    else if (brokerStr.includes('中信')) brokerScore = 10;    // 係數0.96，優良率60.7%
+    else if (brokerStr.includes('群益')) brokerScore = 9;     // 係數0.95，優良率60.0%
+    else if (brokerStr.includes('福邦')) brokerScore = 9;     // 係數0.93，優良率58.7%
+    else if (brokerStr.includes('永豐')) brokerScore = 8;     // 係數0.92，優良率57.8%
+    else if (brokerStr.includes('元富')) brokerScore = 7;     // 係數0.87，優良率54.5%
+    else if (brokerStr.includes('元大')) brokerScore = 6;     // 係數0.83，優良率52.5%
+    else if (brokerStr.includes('兆豐')) brokerScore = 5;     // 係數0.79，優良率50.0%
+    else if (brokerStr.includes('合庫')) brokerScore = 5;     // 係數0.77，優良率48.8%
+    else if (brokerStr.includes('國票')) brokerScore = 4;     // 係數0.73，優良率46.0%
+    else if (brokerStr.includes('國泰')) brokerScore = 3;     // 係數0.67，優良率42.2%（★最差）
+    totalScore += brokerScore;
+    breakdown.push({ dim: '承銷券商', value: broker || '未指定', score: brokerScore, max: 13 });
+    
+    // 5. 發行規模評分 (滿分10) - 小型最佳，大型最差
+    let sizeScore = 6;
+    if (issueSize < 3) sizeScore = 10;            // 係數1.00，優良率62.8%（★最佳）
+    else if (issueSize < 5) sizeScore = 8;        // 係數0.95，優良率59.7%
+    else if (issueSize < 10) sizeScore = 9;       // 係數0.99，優良率62.4%
+    else if (issueSize < 20) sizeScore = 8;       // 係數0.97，優良率61.3%
+    else sizeScore = 5;                            // 係數0.79，優良率49.7%（★最差）
+    totalScore += sizeScore;
+    breakdown.push({ dim: '發行規模', value: `${issueSize}億`, score: sizeScore, max: 10 });
+    
+    // 6. 股本評分 (滿分5)
+    let stockCapScore = 3;
+    const capNum = parseFloat(stockCap) || 10;
+    if (capNum < 10) stockCapScore = 3;           // 係數0.92，優良率58.2%
+    else if (capNum < 20) stockCapScore = 5;      // 係數0.99，優良率62.1%（★最佳）
+    else if (capNum < 50) stockCapScore = 4;      // 係數0.97，優良率61.4%
+    else if (capNum < 100) stockCapScore = 3;     // 係數0.88，優良率55.4%
+    else stockCapScore = 2;                        // 係數0.81，優良率51.1%
+    totalScore += stockCapScore;
+    breakdown.push({ dim: '母公司股本', value: `${capNum}億`, score: stockCapScore, max: 5 });
+    
+    // 7. 年期評分 (滿分5) - 實證發現：5年期優於3年期（顛覆傳統認知！）
+    let yearScore = 3;
+    if (years == 5) yearScore = 5;    // 係數1.05，優良率66.1%（★最佳）
+    else if (years == 3) yearScore = 3;   // 係數0.91，優良率57.6%
+    else if (years == 7) yearScore = 3;
     totalScore += yearScore;
-    breakdown.push({ dim: '發行年期', value: `${years}年`, score: yearScore, max: 15 });
-    
-    // 5. 市場氛圍評分 (滿分15)
-    let atmScore = 8;
-    if (atmosphereIndex >= 75) atmScore = 15;
-    else if (atmosphereIndex >= 60) atmScore = 12;
-    else if (atmosphereIndex >= 45) atmScore = 8;
-    else if (atmosphereIndex >= 30) atmScore = 5;
-    else atmScore = 3;
-    totalScore += atmScore;
-    breakdown.push({ dim: '市場氛圍', value: `指數${atmosphereIndex}`, score: atmScore, max: 15 });
+    breakdown.push({ dim: '發行年期', value: `${years}年`, score: yearScore, max: 5 });
     
     // 計算熱度等級和建議調整
     let heatLevel, heatColor, premiumAdjust;
@@ -9136,7 +9149,7 @@ function calcHeatIndex(params) {
     
     return {
         totalScore: totalScore,
-        maxScore: 94,
+        maxScore: 100,  // 100分制
         heatLevel: heatLevel,
         heatColor: heatColor,
         premiumAdjust: premiumAdjust,
@@ -9989,11 +10002,11 @@ function calculateMarketMomentum() {
 }
 
 /**
- * v3.82 投標倍數預估函數
- * 核心設計：
+ * v3.73 投標倍數預估函數（重新設計）
+ * 核心改進：
  * 1. 以「年期+擔保」組合為基準（區分有擔保/無擔保）
- * 2. 參考市場氛圍加權調整
- * 3. 此函數權重針對倍數預估特別設計，與主評估模型權重不同
+ * 2. 參考市場氛圍三條件加權（產業35%、規模25%、信評15%）
+ * 3. 加入理論價區間調整（15%）和券商調整（10%）
  */
 function estimateBidMultiple(params) {
     const { issueSize, guarantee, years, theoreticalPrice, industry, broker, rating } = params;
@@ -11007,10 +11020,10 @@ function updateAuctionEvaluation() {
 }
 
 /**
- * v3.82 即時更新AI智能預測區塊
- * 核心設計：
+ * v3.73 即時更新AI智能預測區塊（重新設計）
+ * 核心改進：
  * 1. 以「年期+擔保」組合為基準
- * 2. 權重配置：產業25%、信評20%、理論價20%、規模15%、券商10%
+ * 2. 參考市場氛圍三條件加權（產業35%、規模25%、信評15%）
  * 3. 智能判別：理論價<100時改用「價格法」，>=100時用「溢價率法」
  * 4. 確保建議出價與預期最低得標一致
  */
@@ -11861,11 +11874,12 @@ function updateBidRiskAssessment(userPremium, theoPrice, guarantee) {
 }
 
 /**
- * 查找同類案件
+ * 查找同類案件（用於統計顯示）
+ * 注意：這是舊版函數，用於生成同類案件統計HTML
  * @param {Object} params - 查詢參數
  * @returns {Object} 同類案件統計
  */
-function findSimilarCases(params) {
+function findSimilarCasesForStats(params) {
     const { theoreticalPrice, issueSize, industry } = params;
     
     if (!auctionRawData || auctionRawData.length === 0) {
@@ -12177,17 +12191,21 @@ function findSimilarCases(target, k = 10) {
         guarantee = '無擔保',
         years = 3,
         industry = '',
-        rating = '6'
+        rating = '6',
+        broker = '',        // v3.82 新增：承銷券商
+        stockCap = 10       // v3.82 新增：母公司股本（億）
     } = target;
     
-    // 特徵權重配置
+    // v3.83 權重優化：根據2203檔CB完整實證分析
+    // 產業30%、信評22%、理論價15%、券商13%、規模10%、股本5%、年期5%
     const weights = {
-        theoPrice: 0.30,    // 理論價（最重要）
-        issueSize: 0.25,    // 發行規模
-        guarantee: 0.15,    // 擔保類型
-        industry: 0.15,     // 產業
-        rating: 0.10,       // 信評
-        years: 0.05         // 年期
+        industry: 0.30,     // 產業（實證影響最大，綜合影響力356.7分）
+        rating: 0.22,       // 信評（原本嚴重低估，綜合影響力193.1分）
+        theoPrice: 0.15,    // 理論價（競拍專用，決定安全邊際）
+        broker: 0.13,       // 券商（綜合影響力149.2分）
+        issueSize: 0.10,    // 發行規模（中等影響）
+        stockCap: 0.05,     // 股本（影響較小）
+        years: 0.05         // 年期（影響最小）
     };
     
     // 標準化參數（用於計算距離）
@@ -12195,7 +12213,8 @@ function findSimilarCases(target, k = 10) {
         theoPrice: { min: 70, max: 150, range: 80 },
         issueSize: { min: 0.5, max: 30, range: 29.5 },
         rating: { min: 1, max: 9, range: 8 },
-        years: { min: 1, max: 7, range: 6 }
+        years: { min: 1, max: 7, range: 6 },
+        stockCap: { min: 1, max: 100, range: 99 }  // v3.82 新增：股本標準化
     };
     
     // 計算每個歷史案例的相似度距離
@@ -12212,35 +12231,43 @@ function findSimilarCases(target, k = 10) {
             const caseYears = parseInt(row['年期']) || 3;
             const caseIndustry = row['產業分類'] || '';
             const caseRating = row['TCRI'] || row['信評'] || '6';
+            const caseBroker = row['承銷商'] || row['主辦券商'] || '';
+            const caseStockCap = safeFloat(row['股本'] || row['母公司股本']) || 10;
             
-            // 計算各維度的標準化距離
+            // v3.82 計算各維度的標準化距離（新權重配置）
             let distance = 0;
             
-            // 1. 理論價距離（連續型）
-            const theoDiff = Math.abs(theoPrice - caseTheo) / normalize.theoPrice.range;
-            distance += weights.theoPrice * Math.pow(theoDiff, 2);
-            
-            // 2. 發行規模距離（連續型）
-            const sizeDiff = Math.abs(issueSize - caseSize) / normalize.issueSize.range;
-            distance += weights.issueSize * Math.pow(sizeDiff, 2);
-            
-            // 3. 擔保類型距離（類別型：相同=0，不同=1）
-            const guarDiff = guarantee === caseGuar ? 0 : 1;
-            distance += weights.guarantee * Math.pow(guarDiff, 2);
-            
-            // 4. 產業距離（類別型：相同=0，不同=1）
+            // 1. 產業距離（權重25%，類別型：相同=0，不同=1）
             const indDiff = industry && caseIndustry && industry.includes(caseIndustry.split(' ')[0]) ? 0 : 1;
             distance += weights.industry * Math.pow(indDiff, 2);
             
-            // 5. 信評距離（順序型）
+            // 2. 信評距離（權重20%，順序型）
+            // v3.82：有擔保加分相當於信評提升0.5級
             const ratingNum = parseInt(rating) || 6;
             const caseRatingNum = parseInt(caseRating) || 6;
-            const ratingDiff = Math.abs(ratingNum - caseRatingNum) / normalize.rating.range;
+            const guarBonus = (guarantee === caseGuar) ? 0 : (caseGuar === '有擔保' ? -0.5 : 0.5);
+            const ratingDiff = Math.abs((ratingNum + guarBonus) - caseRatingNum) / normalize.rating.range;
             distance += weights.rating * Math.pow(ratingDiff, 2);
             
-            // 6. 年期距離
+            // 3. 理論價距離（權重20%，連續型）
+            const theoDiff = Math.abs(theoPrice - caseTheo) / normalize.theoPrice.range;
+            distance += weights.theoPrice * Math.pow(theoDiff, 2);
+            
+            // 4. 發行規模距離（權重15%，連續型）
+            const sizeDiff = Math.abs(issueSize - caseSize) / normalize.issueSize.range;
+            distance += weights.issueSize * Math.pow(sizeDiff, 2);
+            
+            // 5. 券商距離（權重10%，類別型：相同=0，不同=1）
+            const brokerDiff = broker && caseBroker && broker.includes(caseBroker.split(' ')[0]) ? 0 : 1;
+            distance += weights.broker * Math.pow(brokerDiff, 2);
+            
+            // 6. 年期距離（權重5%）
             const yearsDiff = Math.abs(years - caseYears) / normalize.years.range;
             distance += weights.years * Math.pow(yearsDiff, 2);
+            
+            // 7. 股本距離（權重5%，連續型）
+            const stockCapDiff = Math.abs(stockCap - caseStockCap) / normalize.stockCap.range;
+            distance += weights.stockCap * Math.pow(stockCapDiff, 2);
             
             // 歐氏距離
             const euclideanDist = Math.sqrt(distance);
@@ -12257,6 +12284,8 @@ function findSimilarCases(target, k = 10) {
                 industry: caseIndustry,
                 years: caseYears,
                 rating: caseRating,
+                broker: caseBroker,       // v3.82 新增
+                stockCap: caseStockCap,   // v3.82 新增
                 bidMultiple: safeFloat(row['投標倍數']),
                 minBid: safeFloat(row['最低得標'] || row['最低得標價格']),
                 avgBid: safeFloat(row['平均得標'] || row['平均得標價格']),
@@ -12337,53 +12366,30 @@ function findSimilarCases(target, k = 10) {
         targetConditions: target
     };
 }
+
 /**
- * v3.82 整合式預測系統（7維度評分版）
+ * v3.83 整合式預測系統（2203檔實證版）
  * 整合市場氛圍、產業氛圍、信用評等、同期發行，提供最低和平均溢價預測
- * 新權重：產業25%、信評20%、理論價20%、規模15%、券商10%、年期5%、股本5%
- * 參考：CB競拍評分模型權重配置說明 (2025年12月)
+ * v3.83 權重優化：產業30%、信評22%、理論價15%、券商13%、規模10%、股本5%、年期5%
  */
 function calculateIntegratedPrediction(target, knnResult) {
     if (!knnResult || !knnResult.prediction) {
         return null;
     }
     
-    const { theoPrice = 100, issueSize = 5, guarantee = '無擔保', industry = '', rating = 5, openDate = '', cbName = '' } = target;
+    const { 
+        theoPrice = 100, 
+        issueSize = 5, 
+        guarantee = '無擔保', 
+        industry = '', 
+        rating = 5, 
+        openDate = '', 
+        cbName = '',
+        broker = '',
+        years = 3,
+        stockCap = 10
+    } = target;
     const knnPred = knnResult.prediction;
-    
-    // 從輸入欄位讀取額外參數
-    const brokerEl = document.getElementById('broker');
-    const yearsEl = document.getElementById('years');
-    const capitalEl = document.getElementById('capital');
-    const broker = brokerEl ? brokerEl.value : '';
-    const yearsRaw = yearsEl ? yearsEl.value : '5';
-    const capitalRaw = capitalEl ? capitalEl.value : '';
-    
-    // 解析年期
-    const yearsNum = parseInt(yearsRaw) || 5;
-    
-    // 解析股本（從選項值轉換為數字）
-    let capitalNum = 10; // 預設值
-    if (capitalRaw.includes('小於3億')) capitalNum = 2;
-    else if (capitalRaw.includes('3~6億')) capitalNum = 4.5;
-    else if (capitalRaw.includes('6~10億')) capitalNum = 8;
-    else if (capitalRaw.includes('10~15億')) capitalNum = 12.5;
-    else if (capitalRaw.includes('15~20億')) capitalNum = 17.5;
-    else if (capitalRaw.includes('大於20億')) capitalNum = 25;
-    
-    // ═══════════════════════════════════════════════════════════
-    // v3.82 新權重配置（基於2025年12月研究報告）
-    // 產業25% + 信評20% + 理論價20% + 規模15% + 券商10% + 年期5% + 股本5%
-    // ═══════════════════════════════════════════════════════════
-    const WEIGHTS = {
-        industry: 0.25,   // 產業（原35%→25%）
-        rating: 0.20,     // 信評（原40%→20%）
-        theoPrice: 0.20,  // 理論價（新增）
-        size: 0.15,       // 規模（原25%→15%）
-        broker: 0.10,     // 券商（新增）
-        years: 0.05,      // 年期（新增）
-        capital: 0.05     // 股本（新增）
-    };
     
     // ═══════════════════════════════════════════════════════════
     // 模組1: 市場氛圍（3、6、9檔加權）
@@ -12401,247 +12407,266 @@ function calculateIntegratedPrediction(target, knnResult) {
     const industryCount = industryAtm ? industryAtm.caseCount : 0;
     
     // ═══════════════════════════════════════════════════════════
-    // 模組3: 信用評等評分（權重20%，原40%）
-    // v3.82 調整：根據實證研究，信評係數重新校準
-    // TCRI 1-2: 係數1.2 | TCRI 3: 1.1 | TCRI 4: 1.0 | TCRI 5: 0.8 | TCRI 6: 0.6 | TCRI 7+: 0.3
+    // 模組3: 信用評等評分（v3.83 權重22%）
+    // 重要發現：TCRI 4-5最佳，不是越低越好！TCRI 7最差
     // ═══════════════════════════════════════════════════════════
     let ratingScore = 50;
-    let ratingCoef = 1.0;
     const ratingNum = parseInt(rating) || 5;
     let canSplit = true;
     let splitNote = '';
     
-    if (ratingNum <= 2) {
-        ratingScore = 90;
-        ratingCoef = 1.2;
+    // v3.83 根據2203檔實證調整評分
+    if (ratingNum === 5) {
+        ratingScore = 90;       // ★最佳：TCRI 5，係數1.05，優良率66%
         canSplit = true;
-        splitNote = '✅ 可拆解（TCRI優良）';
-    } else if (ratingNum === 3) {
-        ratingScore = 80;
-        ratingCoef = 1.1;
-        canSplit = true;
-        splitNote = '✅ 可拆解（TCRI良好）';
+        splitNote = '✅ 可拆解（TCRI 5 ★最佳區間）';
     } else if (ratingNum === 4) {
-        ratingScore = 60;
-        ratingCoef = 1.0;
+        ratingScore = 85;       // 優良：TCRI 4，係數1.03，優良率65%
         canSplit = true;
-        splitNote = '✅ 可拆解（TCRI普通）';
-    } else if (ratingNum === 5) {
-        ratingScore = 45;
-        ratingCoef = 0.8;
-        canSplit = true;
-        splitNote = '✅ 可拆解（TCRI 5）';
+        splitNote = '✅ 可拆解（TCRI 4 優良區間）';
     } else if (ratingNum === 6) {
-        ratingScore = 30;
-        ratingCoef = 0.6;
+        ratingScore = 55;       // 中性：TCRI 6，係數0.87，優良率55%
         canSplit = null;
         splitNote = '⚠️ 不一定（TCRI 6，看券商風控）';
-    } else {
-        ratingScore = 15;
-        ratingCoef = 0.3;
+    } else if (ratingNum === 3) {
+        ratingScore = 50;       // 中性：TCRI 3，係數0.86，優良率54%
+        canSplit = true;
+        splitNote = '✅ 可拆解（TCRI 3）';
+    } else if (ratingNum === 8) {
+        ratingScore = 40;       // 警戒：TCRI 8，係數0.83，優良率52%
         canSplit = false;
-        splitNote = '❌ 不能拆解（TCRI 7-8，需有擔保）';
+        splitNote = '❌ 不能拆解（TCRI 8，需有擔保）';
+    } else if (ratingNum === 7) {
+        ratingScore = 25;       // ★最差：TCRI 7，係數0.70，優良率44%
+        canSplit = false;
+        splitNote = '❌ 不能拆解（TCRI 7 ★高風險）';
+    } else if (ratingNum <= 2) {
+        ratingScore = 50;       // TCRI 1-2：樣本少，給中性分
+        canSplit = true;
+        splitNote = '✅ 可拆解（TCRI 1-2，樣本少）';
     }
     
-    // 有擔保者，評分係數額外+0.1
-    if (guarantee === '有擔保') {
-        ratingCoef += 0.1;
-        ratingScore = Math.min(100, ratingScore + 5);
-    }
-    
-    // 信用評等調整
+    // v3.83 信用評等調整（根據實證係數）
     let ratingAdjust = 0;
-    if (ratingNum <= 2) ratingAdjust = 2.0;
-    else if (ratingNum === 3) ratingAdjust = 1.2;
-    else if (ratingNum === 4) ratingAdjust = 0.5;
-    else if (ratingNum === 5) ratingAdjust = -0.3;
-    else if (ratingNum === 6) ratingAdjust = -1.5;
-    else ratingAdjust = -3;
+    if (ratingNum === 5) ratingAdjust = 1.5;        // 係數1.05
+    else if (ratingNum === 4) ratingAdjust = 1.0;   // 係數1.03
+    else if (ratingNum === 6) ratingAdjust = -0.5;  // 係數0.87
+    else if (ratingNum === 3) ratingAdjust = -0.5;  // 係數0.86
+    else if (ratingNum === 8) ratingAdjust = -1.0;  // 係數0.83
+    else if (ratingNum === 7) ratingAdjust = -2.5;  // 係數0.70 ★最差
+    else ratingAdjust = 0;
     
     // ═══════════════════════════════════════════════════════════
-    // 模組4: 理論價評分（權重20%，新增）
-    // v3.82: 理論價是最強預測因子（r=-0.762）
-    // ═══════════════════════════════════════════════════════════
-    let theoScore = 50;
-    let theoCoef = 1.0;
-    let theoAdjust = 0;
-    
-    if (theoPrice < 95) {
-        theoScore = 90;
-        theoCoef = 1.2;
-        theoAdjust = 1.5;
-    } else if (theoPrice < 100) {
-        theoScore = 75;
-        theoCoef = 1.1;
-        theoAdjust = 0.8;
-    } else if (theoPrice < 105) {
-        theoScore = 60;
-        theoCoef = 1.0;
-        theoAdjust = 0;
-    } else if (theoPrice < 110) {
-        theoScore = 45;
-        theoCoef = 0.9;
-        theoAdjust = -0.5;
-    } else if (theoPrice < 115) {
-        theoScore = 30;
-        theoCoef = 0.7;
-        theoAdjust = -1.0;
-    } else {
-        theoScore = 15;
-        theoCoef = 0.5;
-        theoAdjust = -2.0;
-    }
-    
-    // ═══════════════════════════════════════════════════════════
-    // 模組5: 規模評分（權重15%，原25%）
-    // v3.82 調整：10-20億為最佳區間
-    // ═══════════════════════════════════════════════════════════
-    let sizeScore = 50;
-    let sizeCoef = 1.0;
-    let sizeAdjust = 0;
-    
-    if (issueSize < 3) {
-        sizeScore = 70;
-        sizeCoef = 0.7;
-        sizeAdjust = 1.5;
-    } else if (issueSize < 5) {
-        sizeScore = 60;
-        sizeCoef = 0.9;
-        sizeAdjust = 0.8;
-    } else if (issueSize < 10) {
-        sizeScore = 55;
-        sizeCoef = 1.0;
-        sizeAdjust = 0;
-    } else if (issueSize < 20) {
-        sizeScore = 65;
-        sizeCoef = 1.1;
-        sizeAdjust = 0.3;
-    } else if (issueSize < 30) {
-        sizeScore = 50;
-        sizeCoef = 1.0;
-        sizeAdjust = -0.5;
-    } else {
-        sizeScore = 40;
-        sizeCoef = 0.9;
-        sizeAdjust = -1.5;
-    }
-    
-    // ═══════════════════════════════════════════════════════════
-    // 模組6: 產業評分（權重25%，原35%）
-    // v3.82: 產業景氣循環對CB報酬影響極大
+    // 模組4: 產業評分（v3.83 權重30%）- 實證影響最大
     // ═══════════════════════════════════════════════════════════
     let industryScore = 50;
-    let industryCoef = 1.0;
-    
-    // 根據產業別設定基礎係數
-    const industryCoefMap = {
-        '半導體': 1.1,
-        '電子零組件': 1.0,
-        '建材營造': 0.9,
-        '光電': 0.7,
-        '生技醫療': 0.6,
-        '航運': 0.5
-    };
-    
-    for (const [ind, coef] of Object.entries(industryCoefMap)) {
-        if (industry && industry.includes(ind)) {
-            industryCoef = coef;
-            break;
-        }
+    const industryStr = String(industry || '');
+    // v3.83 根據2203檔實證的產業係數
+    if (industryStr.includes('電子通路')) {
+        industryScore = 95;   // 係數1.14，優良率72%
+    } else if (industryStr.includes('電子零組件')) {
+        industryScore = 95;   // 係數1.14，優良率72%
+    } else if (industryStr.includes('其他') && industryStr.includes('電子')) {
+        industryScore = 90;   // 係數1.13，優良率71%
+    } else if (industryStr.includes('化學')) {
+        industryScore = 90;   // 係數1.13，優良率71%
+    } else if (industryStr.includes('電腦') || industryStr.includes('週邊')) {
+        industryScore = 90;   // 係數1.13，優良率71%
+    } else if (industryStr.includes('生技') || industryStr.includes('醫療')) {
+        industryScore = 85;   // 係數1.11，優良率70%（實證翻轉！）
+    } else if (industryStr.includes('半導體')) {
+        industryScore = 80;   // 係數1.10，優良率69%
+    } else if (industryStr.includes('通信') || industryStr.includes('網路')) {
+        industryScore = 70;   // 係數1.05，優良率66%
+    } else if (industryStr.includes('運動') || industryStr.includes('休閒')) {
+        industryScore = 65;   // 係數1.02，優良率64%
+    } else if (industryStr.includes('鋼鐵')) {
+        industryScore = 60;   // 係數1.00，優良率63%（基準）
+    } else if (industryStr.includes('觀光') || industryStr.includes('餐旅')) {
+        industryScore = 55;   // 係數0.95，優良率60%
+    } else if (industryStr.includes('航運')) {
+        industryScore = 52;   // 係數0.94，優良率59%
+    } else if (industryStr.includes('光電')) {
+        industryScore = 48;   // 係數0.92，優良率58%
+    } else if (industryStr.includes('電機') || industryStr.includes('機械')) {
+        industryScore = 48;   // 係數0.92，優良率58%
+    } else if (industryStr.includes('建材') || industryStr.includes('營造')) {
+        industryScore = 45;   // 係數0.89，優良率56%
+    } else if (industryStr.includes('汽車')) {
+        industryScore = 38;   // 係數0.83，優良率52%
+    } else if (industryStr.includes('綠能') || industryStr.includes('環保')) {
+        industryScore = 35;   // 係數0.79，優良率50%
+    } else if (industryStr.includes('紡織') || industryStr.includes('纖維')) {
+        industryScore = 30;   // 係數0.75，優良率47%
+    } else {
+        industryScore = 50;   // 其他產業給基準分
     }
-    
-    if (industryAvgPremium >= 12) industryScore = 90;
-    else if (industryAvgPremium >= 9) industryScore = 75;
-    else if (industryAvgPremium >= 6) industryScore = 60;
-    else if (industryAvgPremium >= 3) industryScore = 45;
-    else if (industryAvgPremium >= 0) industryScore = 30;
-    else industryScore = 20;
-    
-    const industryAdjust = (industryAvgPremium - marketAvgPremium) * 0.25;
+    // 產業調整（相對於市場平均）
+    const industryAdjust = (industryAvgPremium - marketAvgPremium) * 0.30;
     
     // ═══════════════════════════════════════════════════════════
-    // 模組7: 券商評分（權重10%，新增）
+    // 模組5: 理論價評分（v3.83 權重15%）- 競拍專用維度
+    // ═══════════════════════════════════════════════════════════
+    let theoPriceScore = 50;
+    let theoPriceAdjust = 0;
+    // v3.83 根據實證的理論價係數
+    if (theoPrice < 95) {
+        theoPriceScore = 85;     // 係數1.15，極佳安全邊際
+        theoPriceAdjust = 1.5;
+    } else if (theoPrice < 100) {
+        theoPriceScore = 75;     // 係數1.10，良好安全邊際
+        theoPriceAdjust = 1.0;
+    } else if (theoPrice < 105) {
+        theoPriceScore = 60;     // 係數1.00，基準區間
+        theoPriceAdjust = 0;
+    } else if (theoPrice < 110) {
+        theoPriceScore = 50;     // 係數0.90，安全邊際收窄
+        theoPriceAdjust = -0.5;
+    } else if (theoPrice < 115) {
+        theoPriceScore = 35;     // 係數0.75，追價風險提高
+        theoPriceAdjust = -1.0;
+    } else {
+        theoPriceScore = 20;     // 係數0.60，高風險區間
+        theoPriceAdjust = -1.5;
+    }
+    
+    // ═══════════════════════════════════════════════════════════
+    // 模組6: 規模評分（v3.83 權重10%）
+    // 重要發現：小型最佳，大型(>=20億)表現明顯較差
+    // ═══════════════════════════════════════════════════════════
+    let sizeScore = 50;
+    // v3.83 根據2203檔實證的規模係數
+    if (issueSize < 3) sizeScore = 75;        // 係數1.00，優良率62.8%（★最佳）
+    else if (issueSize < 5) sizeScore = 60;   // 係數0.95，優良率59.7%
+    else if (issueSize < 10) sizeScore = 70;  // 係數0.99，優良率62.4%
+    else if (issueSize < 20) sizeScore = 65;  // 係數0.97，優良率61.3%
+    else sizeScore = 35;                       // 係數0.79，優良率49.7%（★最差）
+    
+    // 規模調整（影響溢價率）
+    let sizeAdjust = 0;
+    if (issueSize < 3) sizeAdjust = 0.5;       // 小規模最佳
+    else if (issueSize < 5) sizeAdjust = 0;
+    else if (issueSize < 10) sizeAdjust = 0.3;
+    else if (issueSize < 20) sizeAdjust = 0;
+    else sizeAdjust = -1.0;                    // 大規模較差
+    
+    // ═══════════════════════════════════════════════════════════
+    // 模組7: 券商評分（v3.83 權重13%）
+    // 實證發現：統一最佳(1.15)，國泰最差(0.67)
     // ═══════════════════════════════════════════════════════════
     let brokerScore = 50;
-    let brokerCoef = 1.0;
     let brokerAdjust = 0;
-    
-    if (broker && window.BROKER_STATS && window.BROKER_STATS[broker]) {
-        const bStats = window.BROKER_STATS[broker];
-        brokerScore = Math.min(90, Math.max(30, 50 + (bStats.avgPremium - 7) * 5));
-        brokerCoef = bStats.coef || 1.0;
-        brokerAdjust = (bStats.avgPremium - 7) * 0.15;
+    const brokerStr = String(broker || '');
+    // v3.83 根據2203檔實證的券商係數
+    if (brokerStr.includes('統一')) {
+        brokerScore = 90;         // 係數1.15，優良率72.4%（★最佳）
+        brokerAdjust = 1.0;
+    } else if (brokerStr.includes('台新')) {
+        brokerScore = 75;         // 係數1.04，優良率65.6%
+        brokerAdjust = 0.5;
+    } else if (brokerStr.includes('富邦')) {
+        brokerScore = 60;         // 係數0.98，優良率61.7%
+        brokerAdjust = 0;
+    } else if (brokerStr.includes('凱基')) {
+        brokerScore = 60;         // 係數0.98，優良率61.6%
+        brokerAdjust = 0;
+    } else if (brokerStr.includes('中信')) {
+        brokerScore = 58;         // 係數0.96，優良率60.7%
+        brokerAdjust = 0;
+    } else if (brokerStr.includes('群益')) {
+        brokerScore = 55;         // 係數0.95，優良率60.0%
+        brokerAdjust = 0;
+    } else if (brokerStr.includes('福邦')) {
+        brokerScore = 52;         // 係數0.93，優良率58.7%
+        brokerAdjust = -0.2;
+    } else if (brokerStr.includes('永豐')) {
+        brokerScore = 50;         // 係數0.92，優良率57.8%
+        brokerAdjust = -0.3;
+    } else if (brokerStr.includes('元富')) {
+        brokerScore = 42;         // 係數0.87，優良率54.5%
+        brokerAdjust = -0.5;
+    } else if (brokerStr.includes('元大')) {
+        brokerScore = 38;         // 係數0.83，優良率52.5%
+        brokerAdjust = -0.7;
+    } else if (brokerStr.includes('兆豐')) {
+        brokerScore = 35;         // 係數0.79，優良率50.0%
+        brokerAdjust = -0.8;
+    } else if (brokerStr.includes('合庫')) {
+        brokerScore = 32;         // 係數0.77，優良率48.8%
+        brokerAdjust = -0.9;
+    } else if (brokerStr.includes('國票')) {
+        brokerScore = 28;         // 係數0.73，優良率46.0%
+        brokerAdjust = -1.0;
+    } else if (brokerStr.includes('國泰')) {
+        brokerScore = 20;         // 係數0.67，優良率42.2%（★最差）
+        brokerAdjust = -1.2;
+    } else {
+        brokerScore = 50;         // 未知券商給基準分
+        brokerAdjust = 0;
     }
     
     // ═══════════════════════════════════════════════════════════
-    // 模組8: 年期評分（權重5%，新增）
+    // 模組8: 年期評分（v3.83 權重5%）
+    // 重要發現：5年期優於3年期（與傳統認知相反）
     // ═══════════════════════════════════════════════════════════
     let yearsScore = 50;
-    let yearsCoef = 1.0;
     let yearsAdjust = 0;
-    
-    if (yearsNum === 3) {
-        yearsScore = 60;
-        yearsCoef = 1.05;
-        yearsAdjust = 0.2;
-    } else if (yearsNum === 5) {
+    const yearsNum = parseInt(years) || 3;
+    // v3.83 根據2203檔實證的年期係數
+    if (yearsNum === 5) {
+        yearsScore = 75;          // 係數1.05，優良率66.1%（★最佳）
+        yearsAdjust = 0.5;
+    } else if (yearsNum === 3) {
+        yearsScore = 45;          // 係數0.91，優良率57.6%
+        yearsAdjust = -0.3;
+    } else {
         yearsScore = 50;
-        yearsCoef = 1.0;
         yearsAdjust = 0;
-    } else {
-        yearsScore = 45;
-        yearsCoef = 0.95;
-        yearsAdjust = -0.2;
     }
     
     // ═══════════════════════════════════════════════════════════
-    // 模組9: 股本評分（權重5%，新增）
+    // 模組9: 股本評分（v3.83 權重5%）
     // ═══════════════════════════════════════════════════════════
-    let capitalScore = 50;
-    let capitalCoef = 1.0;
-    let capitalAdjust = 0;
-    
-    if (capitalNum < 5) {
-        capitalScore = 40;
-        capitalCoef = 0.8;
-        capitalAdjust = -0.3;
-    } else if (capitalNum < 10) {
-        capitalScore = 50;
-        capitalCoef = 0.95;
-        capitalAdjust = 0;
-    } else if (capitalNum < 30) {
-        capitalScore = 65;
-        capitalCoef = 1.05;
-        capitalAdjust = 0.2;
-    } else if (capitalNum < 50) {
-        capitalScore = 55;
-        capitalCoef = 1.0;
-        capitalAdjust = 0;
+    let stockCapScore = 50;
+    let stockCapAdjust = 0;
+    const stockCapNum = parseFloat(stockCap) || 10;
+    // v3.83 根據2203檔實證的股本係數
+    if (stockCapNum < 10) {
+        stockCapScore = 48;       // 係數0.92，優良率58.2%
+        stockCapAdjust = -0.2;
+    } else if (stockCapNum < 20) {
+        stockCapScore = 70;       // 係數0.99，優良率62.1%（★最佳）
+        stockCapAdjust = 0.3;
+    } else if (stockCapNum < 50) {
+        stockCapScore = 65;       // 係數0.97，優良率61.4%
+        stockCapAdjust = 0;
+    } else if (stockCapNum < 100) {
+        stockCapScore = 45;       // 係數0.88，優良率55.4%
+        stockCapAdjust = -0.3;
     } else {
-        capitalScore = 45;
-        capitalCoef = 0.95;
-        capitalAdjust = -0.2;
+        stockCapScore = 35;       // 係數0.81，優良率51.1%
+        stockCapAdjust = -0.5;
     }
     
     // ═══════════════════════════════════════════════════════════
-    // 模組10: 同期發行量
+    // 模組10: 同期發行量（詢圈+競拍都算，影響資金分散）
     // ═══════════════════════════════════════════════════════════
     const concurrentIssue = calcConcurrentIssue(openDate, 14, 14, cbName);
     const concurrentAdjust = concurrentIssue ? concurrentIssue.adjustment : 0;
     const concurrentNote = concurrentIssue ? concurrentIssue.note : '';
     
     // ═══════════════════════════════════════════════════════════
-    // v3.82 熱度指數計算（7維度加權）
-    // 產業25% + 信評20% + 理論價20% + 規模15% + 券商10% + 年期5% + 股本5%
+    // v3.83 熱度指數計算（2203檔實證權重配置）
+    // 產業30% + 信評22% + 理論價15% + 券商13% + 規模10% + 股本5% + 年期5%
     // ═══════════════════════════════════════════════════════════
     const heatScore = 
-        industryScore * WEIGHTS.industry +
-        ratingScore * WEIGHTS.rating +
-        theoScore * WEIGHTS.theoPrice +
-        sizeScore * WEIGHTS.size +
-        brokerScore * WEIGHTS.broker +
-        yearsScore * WEIGHTS.years +
-        capitalScore * WEIGHTS.capital;
+        industryScore * 0.30 + 
+        ratingScore * 0.22 + 
+        theoPriceScore * 0.15 + 
+        brokerScore * 0.13 + 
+        sizeScore * 0.10 + 
+        stockCapScore * 0.05 + 
+        yearsScore * 0.05;
     
     let heatLevel = '';
     if (heatScore >= 70) heatLevel = '🔥 熱門';
@@ -12650,25 +12675,27 @@ function calculateIntegratedPrediction(target, knnResult) {
     else heatLevel = '🧊 冷門';
     
     // ═══════════════════════════════════════════════════════════
-    // v3.82 總調整幅度計算（7維度加權）
+    // v3.83 總調整幅度計算（2203檔實證權重配置 + 同期發行）
     // ═══════════════════════════════════════════════════════════
     const baseAdjust = 
-        industryAdjust * WEIGHTS.industry +
-        ratingAdjust * WEIGHTS.rating +
-        theoAdjust * WEIGHTS.theoPrice +
-        sizeAdjust * WEIGHTS.size +
-        brokerAdjust * WEIGHTS.broker +
-        yearsAdjust * WEIGHTS.years +
-        capitalAdjust * WEIGHTS.capital;
-    
+        industryAdjust * 0.30 + 
+        ratingAdjust * 0.22 + 
+        theoPriceAdjust * 0.15 + 
+        brokerAdjust * 0.13 + 
+        sizeAdjust * 0.10 + 
+        stockCapAdjust * 0.05 + 
+        yearsAdjust * 0.05;
+    // 總調整 = 基本調整 + 同期發行調整
     const totalAdjust = baseAdjust + concurrentAdjust;
     
     // ═══════════════════════════════════════════════════════════
-    // 最終預測
+    // 最終預測（分開計算最低和平均）
     // ═══════════════════════════════════════════════════════════
+    // 使用產業氛圍的加權溢價率來預測
     const baseMinPremium = industryMinPremium + totalAdjust;
     const baseAvgPremium = industryAvgPremium + totalAdjust;
     
+    // 如果理論價>=100，用溢價率法；否則用得標價法
     let predictedMinBid, predictedAvgBid;
     const usePremiumMethod = theoPrice >= 100;
     
@@ -12676,22 +12703,24 @@ function calculateIntegratedPrediction(target, knnResult) {
         predictedMinBid = theoPrice * (1 + baseMinPremium / 100);
         predictedAvgBid = theoPrice * (1 + baseAvgPremium / 100);
     } else {
+        // 得標價法：用KNN基準並調整
         predictedMinBid = Math.max(100, knnPred.minBid * (1 + totalAdjust / 100));
         predictedAvgBid = Math.max(100, knnPred.avgBid * (1 + totalAdjust / 100));
     }
     
+    // 確保最低不超過平均
     if (predictedMinBid > predictedAvgBid) {
         predictedAvgBid = predictedMinBid + 1;
     }
     
     console.log('═══════════════════════════════════════════════════════');
-    console.log('🔗 v3.82 整合預測系統（7維度版）');
-    console.log('  權重: 產業25% + 信評20% + 理論價20% + 規模15% + 券商10% + 年期5% + 股本5%');
+    console.log('🔗 v3.83 整合預測系統（2203檔實證版）');
+    console.log('  權重: 產業30% + 信評22% + 理論價15% + 券商13% + 規模10% + 股本5% + 年期5%');
     console.log('  市場氛圍: 最低', marketMinPremium.toFixed(2) + '%', '平均', marketAvgPremium.toFixed(2) + '%');
     console.log('  產業氛圍: 最低', industryMinPremium.toFixed(2) + '%', '平均', industryAvgPremium.toFixed(2) + '%', '(' + industryCount + '檔)');
     console.log('  熱度指數:', heatScore.toFixed(1), heatLevel);
-    console.log('  7維度調整: 產業', industryAdjust.toFixed(2) + '%', '信評', ratingAdjust.toFixed(2) + '%', '理論價', theoAdjust.toFixed(2) + '%');
-    console.log('             規模', sizeAdjust.toFixed(2) + '%', '券商', brokerAdjust.toFixed(2) + '%', '年期', yearsAdjust.toFixed(2) + '%', '股本', capitalAdjust.toFixed(2) + '%');
+    console.log('  調整: 產業', industryAdjust.toFixed(2) + '%', '信評', ratingAdjust.toFixed(2) + '%', '理論價', theoPriceAdjust.toFixed(2) + '%');
+    console.log('        券商', brokerAdjust.toFixed(2) + '%', '規模', sizeAdjust.toFixed(2) + '%', '股本', stockCapAdjust.toFixed(2) + '%', '年期', yearsAdjust.toFixed(2) + '%');
     if (concurrentIssue) {
         console.log('  同期發行:', concurrentIssue.summary.totalCount + '檔', concurrentIssue.summary.totalSize.toFixed(1) + '億', '調整', concurrentAdjust + '%');
     }
@@ -12702,47 +12731,42 @@ function calculateIntegratedPrediction(target, knnResult) {
     
     return {
         knnBasePred: knnPred.minBid,
-        finalPred: predictedMinBid,
+        finalPred: predictedMinBid,  // 向後兼容
+        // v3.81 新增：分開的最低和平均預測
         predictedMinBid: predictedMinBid,
         predictedAvgBid: predictedAvgBid,
+        // 理想得標區間
         idealRange: {
             min: predictedMinBid,
             max: predictedAvgBid
         },
+        // v3.82 更新：七維度調整
         adjustments: {
             industry: industryAdjust,
             rating: ratingAdjust,
-            theoPrice: theoAdjust,
+            theoPrice: theoPriceAdjust,
             size: sizeAdjust,
             broker: brokerAdjust,
             years: yearsAdjust,
-            capital: capitalAdjust,
+            stockCap: stockCapAdjust,
             concurrent: concurrentAdjust,
             total: totalAdjust
         },
+        // v3.82 更新：七維度熱度指數
         heatIndex: {
             score: heatScore,
             level: heatLevel,
             details: {
                 industry: industryScore,
                 rating: ratingScore,
-                theoPrice: theoScore,
+                theoPrice: theoPriceScore,
                 size: sizeScore,
                 broker: brokerScore,
                 years: yearsScore,
-                capital: capitalScore
-            },
-            coefficients: {
-                industry: industryCoef,
-                rating: ratingCoef,
-                theoPrice: theoCoef,
-                size: sizeCoef,
-                broker: brokerCoef,
-                years: yearsCoef,
-                capital: capitalCoef
+                stockCap: stockCapScore
             }
         },
-        weights: WEIGHTS,
+        // 市場和產業氛圍數據
         marketAtmosphere: {
             minPremium: marketMinPremium,
             avgPremium: marketAvgPremium,
@@ -12754,6 +12778,7 @@ function calculateIntegratedPrediction(target, knnResult) {
             count: industryCount,
             breakdown: industryAtm?.breakdown
         },
+        // v3.81 新增：同期發行資訊
         concurrentIssue: concurrentIssue ? {
             totalCount: concurrentIssue.summary.totalCount,
             totalSize: concurrentIssue.summary.totalSize,
@@ -12765,11 +12790,11 @@ function calculateIntegratedPrediction(target, knnResult) {
             note: concurrentNote,
             cases: concurrentIssue.cases
         } : null,
+        // 拆解選擇權相關（由TCRI決定）
         canSplit: canSplit,
         splitNote: splitNote,
         method: usePremiumMethod ? '溢價率法' : '得標價法'
     };
-}
 }
 
 /**
@@ -13020,39 +13045,35 @@ function runSuperPredictionEngine(target, expectedListingPrice = null) {
         timestamp: new Date().toISOString(),
         target: target,
         knn: knnResult,
-        integrated: integratedPred,  // v3.82 整合預測
+        integrated: integratedPred,  // v3.81 整合預測
         monteCarlo: mcResult,
         optimalBid: optimalBid,
         summary: {
             similarCases: knnResult.cases.length,
             predictedMult: knnResult.prediction.bidMultiple.toFixed(2),
             knnBasePred: knnResult.prediction.minBid.toFixed(2),
-            // v3.82 分開的最低和平均預測
+            // v3.81 新增：分開的最低和平均預測
             predictedMinBid: integratedPred ? integratedPred.predictedMinBid.toFixed(2) : knnResult.prediction.minBid.toFixed(2),
             predictedAvgBid: integratedPred ? integratedPred.predictedAvgBid.toFixed(2) : knnResult.prediction.avgBid.toFixed(2),
-            // v3.82 理想得標區間
+            // v3.81 理想得標區間
             idealMin: integratedPred ? integratedPred.predictedMinBid.toFixed(2) : '-',
             idealMax: integratedPred ? integratedPred.predictedAvgBid.toFixed(2) : '-',
             // 熱度相關
             heatScore: integratedPred ? integratedPred.heatIndex.score.toFixed(1) : '-',
             heatLevel: integratedPred ? integratedPred.heatIndex.level : '-',
-            // v3.82 7維度調整值
-            industryAdjust: integratedPred ? integratedPred.adjustments.industry.toFixed(2) + '%' : '-',
+            // v3.81 各項調整
             ratingAdjust: integratedPred ? integratedPred.adjustments.rating.toFixed(2) + '%' : '-',
-            theoAdjust: integratedPred?.adjustments?.theoPrice ? integratedPred.adjustments.theoPrice.toFixed(2) + '%' : '0%',
+            industryAdjust: integratedPred ? integratedPred.adjustments.industry.toFixed(2) + '%' : '-',
             sizeAdjust: integratedPred ? integratedPred.adjustments.size.toFixed(2) + '%' : '-',
-            brokerAdjust: integratedPred?.adjustments?.broker ? integratedPred.adjustments.broker.toFixed(2) + '%' : '0%',
-            yearsAdjust: integratedPred?.adjustments?.years ? integratedPred.adjustments.years.toFixed(2) + '%' : '0%',
-            capitalAdjust: integratedPred?.adjustments?.capital ? integratedPred.adjustments.capital.toFixed(2) + '%' : '0%',
-            concurrentAdjust: integratedPred?.adjustments?.concurrent ? integratedPred.adjustments.concurrent.toFixed(2) + '%' : '0%',
+            concurrentAdjust: integratedPred?.adjustments?.concurrent ? integratedPred.adjustments.concurrent.toFixed(2) + '%' : '0%',  // v3.81 新增
             totalAdjust: integratedPred ? integratedPred.adjustments.total.toFixed(2) + '%' : '-',
-            // v3.82 同期發行資訊
+            // v3.81 同期發行資訊
             concurrentInfo: integratedPred?.concurrentIssue ? {
                 count: integratedPred.concurrentIssue.totalCount,
                 size: integratedPred.concurrentIssue.totalSize.toFixed(1),
                 note: integratedPred.concurrentIssue.note
             } : null,
-            // v3.82 能否拆解（由TCRI決定）
+            // v3.81 能否拆解（由TCRI決定）
             canSplit: integratedPred ? integratedPred.canSplit : true,
             splitNote: integratedPred ? integratedPred.splitNote : '',
             method: integratedPred ? integratedPred.method : '-',
@@ -13064,8 +13085,8 @@ function runSuperPredictionEngine(target, expectedListingPrice = null) {
     };
     
     console.log('═══════════════════════════════════════════════════════');
-    console.log('✅ v3.82 整合式超級預測引擎執行完成');
-    console.log('  權重: 產業25% + 信評20% + 理論價20% + 規模15% + 券商10% + 年期5% + 股本5%');
+    console.log('✅ v3.81 整合式超級預測引擎執行完成');
+    console.log('  權重: 信評40% + 產業35% + 規模25% + 同期發行');
     console.log('  熱度:', integratedPred?.heatIndex.level, '(' + integratedPred?.heatIndex.score.toFixed(1) + '分)');
     console.log('  理想區間:', integratedPred?.predictedMinBid.toFixed(2), '~', integratedPred?.predictedAvgBid.toFixed(2));
     if (integratedPred?.concurrentIssue) {
@@ -13150,53 +13171,33 @@ function generateSuperPredictionHTML() {
             </div>
         </div>
         
-        <!-- v3.82 熱度指數與調整明細（7維度版） -->
+        <!-- v3.81 熱度指數與調整明細 -->
         <div style="background:white; padding:12px; border-radius:8px; margin-bottom:12px;">
             <div style="font-size:12px; font-weight:bold; color:#333; margin-bottom:8px;">
-                🔗 熱度指數分析（產業25% + 信評20% + 理論價20% + 規模15% + 券商10% + 年期5% + 股本5%）
+                🔗 熱度指數分析（信評40% + 產業35% + 規模25%）
             </div>
-            <!-- 第一行：熱度指數 + 4個主要維度 -->
-            <div style="display:grid; grid-template-columns:repeat(5, 1fr); gap:6px; text-align:center; margin-bottom:6px;">
-                <div style="background:#f0f9ff; padding:8px; border-radius:8px;">
-                    <div style="font-size:9px; color:#666;">熱度指數</div>
-                    <div style="font-size:16px; font-weight:bold; color:#0369a1;">${summary.heatScore || '-'}分</div>
-                    <div style="font-size:10px;">${summary.heatLevel || ''}</div>
+            <div style="display:grid; grid-template-columns:repeat(5, 1fr); gap:8px; text-align:center;">
+                <div style="background:#f0f9ff; padding:10px; border-radius:8px;">
+                    <div style="font-size:10px; color:#666;">熱度指數</div>
+                    <div style="font-size:18px; font-weight:bold; color:#0369a1;">${summary.heatScore || '-'}分</div>
+                    <div style="font-size:11px;">${summary.heatLevel || ''}</div>
                 </div>
-                <div style="background:#e0e7ff; padding:8px; border-radius:8px;">
-                    <div style="font-size:9px; color:#666;">產業(25%)</div>
-                    <div style="font-size:13px; font-weight:bold; color:#4f46e5;">${summary.industryAdjust || '-'}</div>
+                <div style="background:#fef3c7; padding:10px; border-radius:8px;">
+                    <div style="font-size:10px; color:#666;">信評調整</div>
+                    <div style="font-size:14px; font-weight:bold; color:#d97706;">${summary.ratingAdjust || '-'}</div>
                 </div>
-                <div style="background:#fef3c7; padding:8px; border-radius:8px;">
-                    <div style="font-size:9px; color:#666;">信評(20%)</div>
-                    <div style="font-size:13px; font-weight:bold; color:#d97706;">${summary.ratingAdjust || '-'}</div>
+                <div style="background:#e0e7ff; padding:10px; border-radius:8px;">
+                    <div style="font-size:10px; color:#666;">產業調整</div>
+                    <div style="font-size:14px; font-weight:bold; color:#4f46e5;">${summary.industryAdjust || '-'}</div>
                 </div>
-                <div style="background:#dcfce7; padding:8px; border-radius:8px;">
-                    <div style="font-size:9px; color:#666;">理論價(20%)</div>
-                    <div style="font-size:13px; font-weight:bold; color:#16a34a;">${summary.theoAdjust || '0%'}</div>
+                <div style="background:#fce7f3; padding:10px; border-radius:8px;">
+                    <div style="font-size:10px; color:#666;">規模調整</div>
+                    <div style="font-size:14px; font-weight:bold; color:#be185d;">${summary.sizeAdjust || '-'}</div>
                 </div>
-                <div style="background:#fce7f3; padding:8px; border-radius:8px;">
-                    <div style="font-size:9px; color:#666;">規模(15%)</div>
-                    <div style="font-size:13px; font-weight:bold; color:#be185d;">${summary.sizeAdjust || '-'}</div>
-                </div>
-            </div>
-            <!-- 第二行：3個次要維度 + 同期發行 -->
-            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; text-align:center;">
-                <div style="background:#f3e8ff; padding:6px; border-radius:6px;">
-                    <div style="font-size:9px; color:#666;">券商(10%)</div>
-                    <div style="font-size:12px; font-weight:bold; color:#7c3aed;">${summary.brokerAdjust || '0%'}</div>
-                </div>
-                <div style="background:#e0f2fe; padding:6px; border-radius:6px;">
-                    <div style="font-size:9px; color:#666;">年期(5%)</div>
-                    <div style="font-size:12px; font-weight:bold; color:#0284c7;">${summary.yearsAdjust || '0%'}</div>
-                </div>
-                <div style="background:#fef9c3; padding:6px; border-radius:6px;">
-                    <div style="font-size:9px; color:#666;">股本(5%)</div>
-                    <div style="font-size:12px; font-weight:bold; color:#ca8a04;">${summary.capitalAdjust || '0%'}</div>
-                </div>
-                <div style="background:#fed7aa; padding:6px; border-radius:6px;">
-                    <div style="font-size:9px; color:#666;">同期發行</div>
-                    <div style="font-size:12px; font-weight:bold; color:#ea580c;">${summary.concurrentAdjust || '0%'}</div>
-                    ${summary.concurrentInfo ? `<div style="font-size:8px; color:#666;">${summary.concurrentInfo.count}檔/${summary.concurrentInfo.size}億</div>` : ''}
+                <div style="background:#fef9c3; padding:10px; border-radius:8px;">
+                    <div style="font-size:10px; color:#666;">同期發行</div>
+                    <div style="font-size:14px; font-weight:bold; color:#ca8a04;">${summary.concurrentAdjust || '0%'}</div>
+                    ${summary.concurrentInfo ? `<div style="font-size:9px; color:#666;">${summary.concurrentInfo.count}檔/${summary.concurrentInfo.size}億</div>` : ''}
                 </div>
             </div>
             <div style="text-align:center; margin-top:8px; padding:6px; background:#f3f4f6; border-radius:6px;">

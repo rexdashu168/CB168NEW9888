@@ -4319,7 +4319,7 @@ async function loadStatistics() {
                 'id': id, 
                 'stockId': getSmartValue(row, 'stockId'),
                 'name': getSmartValue(row, 'name'), 
-                'openDate': getSmartValue(row, 'openDate'),
+                'openDate': formatDate(getSmartValue(row, 'openDate')),  // v3.90 修正：統一用formatDate處理日期
                 'industry': getSmartValue(row, 'industry'), 
                 'broker': getSmartValue(row, 'broker'),
                 'guarantee': getSmartValue(row, 'guarantee'), 
@@ -9261,9 +9261,23 @@ function calcMarketAtmosphere(n = 5, guarantee = null) {
     }
     
     const sortedData = filteredData.sort((a, b) => {
-            const dateA = new Date(a.openDate);
-            const dateB = new Date(b.openDate);
-            return dateB - dateA;
+            // v3.90 修正：正確解析日期字串（格式：YYYY/MM/DD）
+            const parseDate = (dateStr) => {
+                if (!dateStr || dateStr === '-') return new Date(0);
+                if (typeof dateStr === 'number') {
+                    // Excel serial number
+                    return new Date((dateStr - 25569) * 86400 * 1000);
+                }
+                // 字串格式：YYYY/MM/DD 或 YYYY-MM-DD
+                const parts = String(dateStr).split(/[\/\-]/);
+                if (parts.length >= 3) {
+                    return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+                }
+                return new Date(dateStr);
+            };
+            const dateA = parseDate(a.openDate);
+            const dateB = parseDate(b.openDate);
+            return dateB - dateA;  // 降序：最新的在前
         });
     
     if (sortedData.length === 0) return null;
@@ -14065,10 +14079,10 @@ function generateAdaptiveLearningHTML(r) {
     // v3.90 核心修正：使用溢價率而非固定價格
     // 建議價格 = max(理論價, 底標) × (1 + 歷史溢價率)
     
-    // 取得用戶當前條件
+    // 取得用戶當前條件（確保都是數字）
     const userIssueSize = r?.issueSize || '';
-    const userTheo = r?.theoreticalPrice || 0;
-    const userFloor = r?.floorPrice || 100;
+    const userTheo = parseFloat(r?.theoreticalPrice) || 0;
+    const userFloor = parseFloat(r?.floorPrice) || 100;
     const userIndustry = r?.industry ? r.industry.split(' ')[0] : '';
     const userGuarantee = r?.guarantee || '無擔保';
     

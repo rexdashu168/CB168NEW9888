@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97m (四階段分析版)</title>
+<title>AI智能可轉債競拍系統 v3.97o (Step1/Step3修正版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="embedded_data.js" onerror="console.warn('embedded_data.js not found, using defaults.')"></script>
 
@@ -1725,7 +1725,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 <div class="container" style="display: none;">
     <div class="header">
         <h1>🤖 AI智能可轉債競拍系統</h1>
-        <span class="version-badge">v3.97m 四階段分析版</span>
+        <span class="version-badge">v3.97o Step1/Step3修正版</span>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -3232,21 +3232,40 @@ async function loadStatistics() {
             // ===== 動態計算 OVERALL_STATS =====
             const allBidMults = auctionData.map(d => d.bidMultiple).filter(v => v > 0);
             const allMinBids = sheetAuction.map(row => safeFloat(row['最低得標'] || row['最低得標價格'])).filter(v => v > 0);
+            const allAvgBids = sheetAuction.map(row => safeFloat(row['加權均價'] || row['平均得標'] || row['平均得標價格'])).filter(v => v > 0);
             const allTheoPrices = auctionData.map(d => d.theoPrice).filter(v => v > 0);
-            const allPremiums = auctionData.map(d => d.minPremium).filter(v => !isNaN(v));
+            const allMinPremiums = auctionData.map(d => d.minPremium).filter(v => !isNaN(v));
+            
+            // v3.97o 新增：計算平均溢價率（從原始數據）
+            const allAvgPremiums = sheetAuction.map(row => {
+                const avgPrem = safeFloat(row['平均溢價'] || row['得標加權平均價格_溢價率'] || row['平均得標溢價']);
+                // 如果是小數形式（如0.08），轉為百分比
+                return avgPrem > 0 && avgPrem < 1 ? avgPrem * 100 : avgPrem;
+            }).filter(v => v > 0 && v < 50); // 過濾異常值
             
             if (allBidMults.length > 0) {
                 const sortedMults = [...allBidMults].sort((a, b) => a - b);
                 const sortedBids = [...allMinBids].sort((a, b) => a - b);
                 
+                // v3.97o 計算整體無加權的溢價率平均值
+                const avgLowPremium = allMinPremiums.length > 0 
+                    ? allMinPremiums.reduce((s, v) => s + v, 0) / allMinPremiums.length 
+                    : 6.5;
+                const avgAvgPremium = allAvgPremiums.length > 0 
+                    ? allAvgPremiums.reduce((s, v) => s + v, 0) / allAvgPremiums.length 
+                    : 8.0;
+                
                 window.OVERALL_STATS = {
                     avgBidMult: allBidMults.reduce((s, v) => s + v, 0) / allBidMults.length,
                     medianBidMult: sortedMults[Math.floor(sortedMults.length / 2)],
                     avgMinBid: allMinBids.reduce((s, v) => s + v, 0) / allMinBids.length,
+                    avgAvgBid: allAvgBids.length > 0 ? allAvgBids.reduce((s, v) => s + v, 0) / allAvgBids.length : 0,
                     medianMinBid: sortedBids[Math.floor(sortedBids.length / 2)],
                     avgTheoretical: allTheoPrices.reduce((s, v) => s + v, 0) / allTheoPrices.length,
-                    avgPremium: allPremiums.reduce((s, v) => s + v, 0) / allPremiums.length,
-                    avgQualified: 474, // 這個需要從原始資料計算
+                    avgPremium: avgLowPremium,  // 保持向後兼容（這是最低溢價率）
+                    avgLowPremium: avgLowPremium,   // v3.97o 明確命名：整體最低溢價率平均
+                    avgAvgPremium: avgAvgPremium,   // v3.97o 新增：整體平均溢價率平均
+                    avgQualified: 474,
                     avgBidShares: 34.5,
                     totalSamples: auctionData.length
                 };
@@ -9354,7 +9373,13 @@ function calculateEvaluation(d) {
         
         // === v3.72 新增：主力模擬出價結果 ===
         majorPlayerResult: majorPlayerResult,
-        estBidMultiple: estBidMultiple
+        estBidMultiple: estBidMultiple,
+        
+        // === v3.97o 新增：整體歷史無加權數據（用於Step 1對比） ===
+        overallLowPremium: window.OVERALL_STATS?.avgLowPremium || 6.5,
+        overallAvgPremium: window.OVERALL_STATS?.avgAvgPremium || 8.0,
+        overallLowBidPrice: window.OVERALL_STATS?.avgMinBid || 106.5,
+        overallAvgBidPrice: window.OVERALL_STATS?.avgAvgBid || 108.0
     };
 }
 
@@ -9478,7 +9503,22 @@ function displayResult(r) {
         (heatLow > 0 && heatHigh > 0) ? `${heatLow.toFixed(2)}~${heatHigh.toFixed(2)}元` : '--';
     
     // ========== Step 3: AI智能競拍預測（完整v3.73區塊） ==========
-    // 從 liveAIPrediction 複製完整內容到 Step 3
+    // v3.97o 修正：主動調用 updateLiveAIPrediction 確保 Step 3 有完整內容
+    // 從 r.inputData 中取得所需參數
+    const inputData = r.inputData || {};
+    const aiTheoPrice = theoPrice > 0 ? theoPrice : 0;
+    const aiIssueSize = parseFloat(inputData.issueSize) || 0;
+    const aiGuarantee = inputData.guarantee || '無擔保';
+    const aiBroker = inputData.broker || '';
+    const aiIndustry = inputData.industry || '';
+    const aiRating = inputData.rating || '';
+    
+    // 先調用 updateLiveAIPrediction 確保 liveAIPrediction 有內容
+    if (typeof updateLiveAIPrediction === 'function' && aiTheoPrice > 0) {
+        updateLiveAIPrediction(aiTheoPrice, aiIssueSize, aiGuarantee, aiBroker, aiIndustry, aiRating);
+    }
+    
+    // 然後從 liveAIPrediction 複製完整內容到 Step 3
     const liveAIPredictionEl = document.getElementById('liveAIPrediction');
     const step3AIBlock = document.getElementById('step3AIBlock');
     if (liveAIPredictionEl && step3AIBlock && liveAIPredictionEl.innerHTML.trim()) {

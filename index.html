@@ -3991,15 +3991,35 @@ async function loadStatistics() {
                 // 處理投標期間
                 const bidPeriodRaw = row['詢圈/投標期間'] || '';
                 let bidPeriod = '', bidEndDate = '', openDate = '';
-                if (bidPeriodRaw) {
+                if (bidPeriodRaw && bidPeriodRaw !== '未定') {
                     bidPeriod = bidPeriodRaw;
-                    // 解析結束日期，格式如 "11/10-11/12"
+                    // 解析結束日期，格式如 "11/10-11/12" 或 "12/17-12/19"
                     const parts = bidPeriodRaw.split('-');
                     if (parts.length >= 2) {
                         const endPart = parts[1].trim();
                         const [endMonth, endDay] = endPart.split('/').map(Number);
                         if (endMonth && endDay) {
-                            const year = (endMonth < today.getMonth() + 1) ? today.getFullYear() + 1 : today.getFullYear();
+                            // v3.95 修正：更準確的年份判斷
+                            // 如果結束月份 > 今天月份，則為今年
+                            // 如果結束月份 < 今天月份，需要判斷是過去還是未來
+                            // 如果結束月份 == 今天月份，比較日期
+                            const currentMonth = today.getMonth() + 1;
+                            const currentDay = today.getDate();
+                            const currentYear = today.getFullYear();
+                            
+                            let year;
+                            if (endMonth > currentMonth) {
+                                // 月份比今天大，是今年的未來日期
+                                year = currentYear;
+                            } else if (endMonth < currentMonth) {
+                                // 月份比今天小，是今年已過去的日期（不是明年）
+                                // 承銷中案件的時程不會跨年太遠，所以視為今年已過
+                                year = currentYear;
+                            } else {
+                                // 同月份，比較日期
+                                year = currentYear;
+                            }
+                            
                             bidEndDate = `${year}-${String(endMonth).padStart(2, '0')}-${String(endDay).padStart(2, '0')}`;
                             // 開標日通常是截標後2個工作日
                             const endDateObj = new Date(bidEndDate);
@@ -9384,6 +9404,37 @@ function initQuickSelect() {
     
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth() + 1;
+    const currentDay = today.getDate();
+    
+    // v3.95 修正：輔助函數 - 解析投標期間並判斷是否已完成
+    function parseBidPeriodAndCheck(bidPeriodStr) {
+        if (!bidPeriodStr || bidPeriodStr === '未定' || bidPeriodStr.includes('未定')) {
+            return { hasSchedule: false, isCompleted: false };
+        }
+        
+        // 解析結束日期，格式如 "11/25-11/27" 或 "12/17-12/19"
+        const parts = bidPeriodStr.split('-');
+        if (parts.length >= 2) {
+            const endPart = parts[1].trim();
+            const match = endPart.match(/(\d+)\/(\d+)/);
+            if (match) {
+                const endMonth = parseInt(match[1]);
+                const endDay = parseInt(match[2]);
+                
+                // 判斷年份：承銷中案件時程不會跨年太遠，視為當年度
+                const endDateObj = new Date(currentYear, endMonth - 1, endDay);
+                endDateObj.setHours(0, 0, 0, 0);
+                
+                const isCompleted = endDateObj < today;
+                return { hasSchedule: true, isCompleted: isCompleted, endDate: endDateObj };
+            }
+        }
+        
+        // 有時程字串但無法解析，視為有時程但未完成
+        return { hasSchedule: true, isCompleted: false };
+    }
     
     // 1. 處理06工作表案例（pendingCases）- 分為即將進行和承銷中
     pendingCases.forEach((c, idx) => {
@@ -9393,22 +9444,10 @@ function initQuickSelect() {
         const option = document.createElement('option');
         option.value = 'pending_' + idx;
         
-        // 判斷是否有時程
-        let hasSchedule = false;
-        let isCompleted = false;
-        
-        if (c.bidEndDate) {
-            const bidEndDateObj = new Date(c.bidEndDate);
-            bidEndDateObj.setHours(0, 0, 0, 0);
-            hasSchedule = true;
-            // 如果截標日已過，視為已完成（不在這裡顯示，會從01工作表取）
-            if (bidEndDateObj < today) {
-                isCompleted = true;
-            }
-        } else if (c.bidPeriod) {
-            // 有投標期間字串但沒解析出日期
-            hasSchedule = true;
-        }
+        // v3.95 修正：使用輔助函數判斷時程狀態
+        const scheduleStatus = parseBidPeriodAndCheck(c.bidPeriod);
+        const hasSchedule = scheduleStatus.hasSchedule;
+        const isCompleted = scheduleStatus.isCompleted;
         
         // 已完成的案件跳過（會從01工作表取近期完成）
         if (isCompleted) return;
@@ -9433,7 +9472,11 @@ function initQuickSelect() {
         const convInfo = c.convPrice > 0 ? ` | 轉${c.convPrice}` : '';
         const scheduleInfo = c.bidPeriod ? ` | ${c.bidPeriod}` : '';
         
-        if (c.auctionType === '競拍') {
+        // v3.95 修正：使用includes判斷競拍/詢圈
+        const isAuction = c.auctionType && (c.auctionType.includes('競拍') || c.auctionType === '競拍');
+        const isInquiry = c.auctionType && (c.auctionType.includes('詢圈') || c.auctionType === '詢圈');
+        
+        if (isAuction) {
             if (hasSchedule) {
                 // 即將競拍
                 option.textContent = `🔥 ${c.cbName} | ${c.industry} | ${priceLabel}${convInfo}${scheduleInfo}`;
@@ -9443,7 +9486,7 @@ function initQuickSelect() {
                 option.textContent = `⏳ ${c.cbName} | ${c.industry} | ${priceLabel}${convInfo}`;
                 if (pendingAuctionGroup) pendingAuctionGroup.appendChild(option);
             }
-        } else {
+        } else if (isInquiry) {
             // 詢圈
             if (hasSchedule) {
                 // 即將詢圈
@@ -9454,6 +9497,10 @@ function initQuickSelect() {
                 option.textContent = `⏳ ${c.cbName} | ${c.industry} | ${c.guarantee || '-'}`;
                 if (pendingInquiryGroup) pendingInquiryGroup.appendChild(option);
             }
+        } else {
+            // 未設定類型的，預設放到競拍承銷中
+            option.textContent = `⏳ ${c.cbName} | ${c.industry} | ${priceLabel}${convInfo}`;
+            if (pendingAuctionGroup) pendingAuctionGroup.appendChild(option);
         }
     });
     

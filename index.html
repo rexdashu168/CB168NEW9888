@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97w (規模連動修正)</title>
+<title>AI智能可轉債競拍系統 v3.97x (名稱日期修正)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 
 <style>
@@ -1724,7 +1724,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 <div class="container" style="display: none;">
     <div class="header">
         <h1>🤖 AI智能可轉債競拍系統</h1>
-        <span class="version-badge">v3.97w 規模連動修正</span>
+        <span class="version-badge">v3.97x 名稱日期修正</span>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -9683,7 +9683,7 @@ function displayResult(r) {
             .sort((a, b) => b.prem - a.prem)
             .slice(0, 3)
             .map(x => ({
-                name: x.item['可轉債名稱'] || x.item['CB名稱'] || '-',
+                name: x.item['名稱'] || x.item['可轉債名稱'] || x.item['CB名稱'] || '-',
                 prem: x.prem
             }));
         
@@ -9903,9 +9903,29 @@ function displayResult(r) {
                     const weight = idx < 3 ? '50%' : (idx < 6 ? '30%' : '20%');
                     const minBid = parseFloat(item['最低得標'] || item['最低得標價格']) || 0;
                     const itemTheo = parseFloat(item['理論價']) || 0;
+                    
+                    // v3.97x: 修正標的名稱欄位
+                    const cbName = item['名稱'] || item['可轉債名稱'] || item['CB名稱'] || '-';
+                    
+                    // v3.97x: 修正日期格式（Excel序號轉日期）
+                    let dateStr = '-';
+                    const rawDate = item['截標日'];
+                    if (rawDate) {
+                        if (typeof rawDate === 'number') {
+                            // Excel序號轉日期
+                            const excelEpoch = new Date(1899, 11, 30);
+                            const jsDate = new Date(excelEpoch.getTime() + rawDate * 86400000);
+                            dateStr = jsDate.toISOString().split('T')[0];
+                        } else if (rawDate instanceof Date) {
+                            dateStr = rawDate.toISOString().split('T')[0];
+                        } else {
+                            dateStr = String(rawDate).split('T')[0];
+                        }
+                    }
+                    
                     detailHTML += `<tr style="background:${bgColor};">
-                        <td style="padding:3px; border:1px solid #ddd;">${item['可轉債名稱'] || item['CB名稱'] || '-'}</td>
-                        <td style="padding:3px; border:1px solid #ddd;">${item['截標日'] || '-'}</td>
+                        <td style="padding:3px; border:1px solid #ddd;">${cbName}</td>
+                        <td style="padding:3px; border:1px solid #ddd;">${dateStr}</td>
                         <td style="padding:3px; border:1px solid #ddd;">${itemTheo > 0 ? itemTheo.toFixed(1) : '-'}</td>
                         <td style="padding:3px; border:1px solid #ddd;">${minBid > 0 ? minBid.toFixed(2) : '-'}</td>
                         <td style="padding:3px; border:1px solid #ddd;">${weight}</td>

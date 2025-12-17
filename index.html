@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.94 (詢圈優化版)</title>
+<title>AI智能可轉債競拍系統 v3.95 (閃電帶入優化版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="embedded_data.js" onerror="console.warn('embedded_data.js not found, using defaults.')"></script>
 
@@ -1662,14 +1662,14 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.94)...</div>
+    <div>🔄 系統啟動中 (v3.95)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
 <div class="container" style="display: none;">
     <div class="header">
         <h1>🤖 AI智能可轉債競拍系統</h1>
-        <span class="version-badge">v3.94 詢圈優化版</span>
+        <span class="version-badge">v3.95 閃電帶入優化版</span>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -9870,109 +9870,351 @@ function handleQuickSelect() {
     }
     infoDiv.style.display = 'block';
     
-    // v3.90 重寫：對已開標案件，顯示實際競拍結果與模型預估比較
-    if (compareDiv && (c.status === 'opened' || c.status === 'listed' || c.status === 'completed')) {
-        const theoVal = c.convPrice > 0 && c.stockPrice > 0 ? (c.stockPrice / c.convPrice) * 100 : 0;
-        
-        // 檢查是否有實際競拍結果
-        const actualMinBid = c.actualMinBid || c.minBidPrice || 0;
-        const actualAvgBid = c.actualAvgBid || c.avgBidPrice || 0;
-        const hasActualResult = actualMinBid > 0 || actualAvgBid > 0;
-        
-        if (hasActualResult && c.auctionType === '競拍') {
-            // v3.90 修正：使用動態計算的模型預估值
-            const ds = window.DYNAMIC_STATS || {};
-            const modelEstMinBid = ds.avgMinBid || 106.10;
-            const modelEstAvgBid = ds.avgBid || 107.92;
-            const modelEstMult = ds.avgMult || 2.78;
+    // v3.94 重寫：根據競拍/詢圈分別處理
+    if (c.auctionType === '詢圈') {
+        // === 詢圈案例：顯示歷史發行條件分析（掛牌表現統計）===
+        if (compareDiv) {
+            // 計算各條件的詢圈掛牌統計
+            const inquiryStats = calculateInquiryConditionStats(c);
             
-            // 計算誤差
-            const minBidError = actualMinBid > 0 ? (actualMinBid - modelEstMinBid).toFixed(2) : '-';
-            const avgBidError = actualAvgBid > 0 ? (actualAvgBid - modelEstAvgBid).toFixed(2) : '-';
-            
-            compareDiv.innerHTML = `
-                <div style="font-weight:bold; color:#2e7d32; margin-bottom:8px;">📊 競拍結果 vs 模型預估比對</div>
-                <table style="width:100%; border-collapse:collapse; font-size:13px;">
-                    <tr style="background:#e8f5e9;">
-                        <th style="padding:6px; border:1px solid #c8e6c9; text-align:left;">指標</th>
-                        <th style="padding:6px; border:1px solid #c8e6c9; text-align:center;">實際結果</th>
-                        <th style="padding:6px; border:1px solid #c8e6c9; text-align:center;">模型預估</th>
-                        <th style="padding:6px; border:1px solid #c8e6c9; text-align:center;">誤差</th>
-                    </tr>
-                    ${actualMinBid > 0 ? `
-                    <tr>
-                        <td style="padding:5px; border:1px solid #e0e0e0;">最低得標價</td>
-                        <td style="padding:5px; border:1px solid #e0e0e0; text-align:center; font-weight:bold; color:#1565c0;">${actualMinBid.toFixed(2)}元</td>
-                        <td style="padding:5px; border:1px solid #e0e0e0; text-align:center;">${modelEstMinBid.toFixed(2)}元</td>
-                        <td style="padding:5px; border:1px solid #e0e0e0; text-align:center; color:${parseFloat(minBidError) > 0 ? '#e65100' : '#2e7d32'};">${minBidError}元</td>
-                    </tr>` : ''}
-                    ${actualAvgBid > 0 ? `
-                    <tr>
-                        <td style="padding:5px; border:1px solid #e0e0e0;">加權均價</td>
-                        <td style="padding:5px; border:1px solid #e0e0e0; text-align:center; font-weight:bold; color:#1565c0;">${actualAvgBid.toFixed(2)}元</td>
-                        <td style="padding:5px; border:1px solid #e0e0e0; text-align:center;">${modelEstAvgBid.toFixed(2)}元</td>
-                        <td style="padding:5px; border:1px solid #e0e0e0; text-align:center; color:${parseFloat(avgBidError) > 0 ? '#e65100' : '#2e7d32'};">${avgBidError}元</td>
-                    </tr>` : ''}
-                    ${theoVal > 0 ? `
-                    <tr>
-                        <td style="padding:5px; border:1px solid #e0e0e0;">理論價</td>
-                        <td style="padding:5px; border:1px solid #e0e0e0; text-align:center;">${theoVal.toFixed(2)}元</td>
-                        <td style="padding:5px; border:1px solid #e0e0e0; text-align:center;">-</td>
-                        <td style="padding:5px; border:1px solid #e0e0e0; text-align:center;">-</td>
-                    </tr>
-                    <tr>
-                        <td style="padding:5px; border:1px solid #e0e0e0;">實際溢價率</td>
-                        <td style="padding:5px; border:1px solid #e0e0e0; text-align:center; font-weight:bold; color:#e65100;">${actualMinBid > 0 ? ((actualMinBid/theoVal - 1) * 100).toFixed(2) : '-'}%</td>
-                        <td style="padding:5px; border:1px solid #e0e0e0; text-align:center;">-</td>
-                        <td style="padding:5px; border:1px solid #e0e0e0; text-align:center;">-</td>
-                    </tr>` : ''}
-                </table>
-                <div style="margin-top:8px; font-size:12px; color:#666;">
-                    💡 模型預估基於${ds.count || '--'}檔歷史平均值，選擇條件後可獲得專屬預估
-                </div>
-            `;
-            compareDiv.style.display = 'block';
-        } else if (c.auctionType === '詢圈' && (c.marketHigh > 0 || c.marketLow > 0)) {
-            // 詢圈案例顯示掛牌表現
-            compareDiv.innerHTML = `
-                <div style="font-weight:bold; color:#1976d2; margin-bottom:8px;">📊 詢圈掛牌表現</div>
-                <div style="display:flex; gap:20px; font-size:14px;">
-                    <span>掛牌最高: <b style="color:#2e7d32;">${safeFixed(c.marketHigh, 1)}</b></span>
-                    <span>掛牌最低: <b style="color:#c62828;">${safeFixed(c.marketLow, 1)}</b></span>
-                    ${c.marketHigh > 0 && c.marketLow > 0 ? `<span>振幅: <b style="color:#E91E63;">${(((c.marketHigh - c.marketLow) / c.marketLow) * 100).toFixed(1)}%</b></span>` : ''}
-                </div>
-            `;
-            compareDiv.style.display = 'block';
-        } else {
-            compareDiv.style.display = 'none';
+            if (inquiryStats) {
+                let statsHtml = `
+                    <div style="font-weight:bold; color:#1976d2; margin-bottom:10px; font-size:14px;">📊 歷史發行條件分析（詢圈掛牌表現）</div>
+                    <table style="width:100%; border-collapse:collapse; font-size:13px;">
+                        <tr style="background:#e3f2fd;">
+                            <th style="padding:6px; border:1px solid #bbdefb; text-align:left;">條件</th>
+                            <th style="padding:6px; border:1px solid #bbdefb; text-align:center;">篩選值</th>
+                            <th style="padding:6px; border:1px solid #bbdefb; text-align:center;">樣本數</th>
+                            <th style="padding:6px; border:1px solid #bbdefb; text-align:center;">平均高</th>
+                            <th style="padding:6px; border:1px solid #bbdefb; text-align:center;">平均低</th>
+                            <th style="padding:6px; border:1px solid #bbdefb; text-align:center;">平均振幅</th>
+                        </tr>`;
+                
+                inquiryStats.conditions.forEach(cond => {
+                    if (cond.count > 0) {
+                        statsHtml += `
+                        <tr>
+                            <td style="padding:5px; border:1px solid #e0e0e0;">${cond.name}</td>
+                            <td style="padding:5px; border:1px solid #e0e0e0; text-align:center; color:#1565c0;">${cond.value}</td>
+                            <td style="padding:5px; border:1px solid #e0e0e0; text-align:center;">${cond.count}檔</td>
+                            <td style="padding:5px; border:1px solid #e0e0e0; text-align:center; color:#2e7d32; font-weight:bold;">${safeFixed(cond.avgHigh, 1)}</td>
+                            <td style="padding:5px; border:1px solid #e0e0e0; text-align:center; color:#c62828; font-weight:bold;">${safeFixed(cond.avgLow, 1)}</td>
+                            <td style="padding:5px; border:1px solid #e0e0e0; text-align:center; color:#E91E63; font-weight:bold;">${safeFixed(cond.avgAmp, 1)}%</td>
+                        </tr>`;
+                    }
+                });
+                
+                // 綜合統計
+                if (inquiryStats.overall.count > 0) {
+                    statsHtml += `
+                        <tr style="background:#fff3e0;">
+                            <td style="padding:6px; border:1px solid #e0e0e0; font-weight:bold;" colspan="2">全部詢圈平均</td>
+                            <td style="padding:6px; border:1px solid #e0e0e0; text-align:center; font-weight:bold;">${inquiryStats.overall.count}檔</td>
+                            <td style="padding:6px; border:1px solid #e0e0e0; text-align:center; color:#2e7d32; font-weight:bold;">${safeFixed(inquiryStats.overall.avgHigh, 1)}</td>
+                            <td style="padding:6px; border:1px solid #e0e0e0; text-align:center; color:#c62828; font-weight:bold;">${safeFixed(inquiryStats.overall.avgLow, 1)}</td>
+                            <td style="padding:6px; border:1px solid #e0e0e0; text-align:center; color:#E91E63; font-weight:bold;">${safeFixed(inquiryStats.overall.avgAmp, 1)}%</td>
+                        </tr>`;
+                }
+                
+                statsHtml += `</table>`;
+                
+                // 如果有當前案例的掛牌表現，也顯示
+                if (c.marketHigh > 0 && c.marketLow > 0) {
+                    const caseAmp = ((c.marketHigh - c.marketLow) / c.marketLow * 100);
+                    statsHtml += `
+                        <div style="margin-top:10px; padding:10px; background:#e8f5e9; border-radius:6px;">
+                            <div style="font-weight:bold; color:#2e7d32; margin-bottom:5px;">📌 此案例實際表現</div>
+                            <div style="display:flex; gap:20px; font-size:14px;">
+                                <span>掛牌最高: <b style="color:#2e7d32;">${safeFixed(c.marketHigh, 1)}</b></span>
+                                <span>掛牌最低: <b style="color:#c62828;">${safeFixed(c.marketLow, 1)}</b></span>
+                                <span>振幅: <b style="color:#E91E63;">${safeFixed(caseAmp, 1)}%</b></span>
+                            </div>
+                        </div>`;
+                }
+                
+                statsHtml += `
+                    <div style="margin-top:8px; font-size:12px; color:#666;">
+                        💡 詢圈案例以掛牌表現為參考依據，各條件篩選可幫助評估類似案例表現
+                    </div>`;
+                
+                compareDiv.innerHTML = statsHtml;
+                compareDiv.style.display = 'block';
+            } else {
+                compareDiv.innerHTML = `
+                    <div style="padding:10px; background:#fff3e0; border-radius:6px;">
+                        <div style="color:#e65100;">⚠️ 尚無足夠詢圈歷史數據進行分析</div>
+                    </div>`;
+                compareDiv.style.display = 'block';
+            }
         }
+        
+        // 詢圈案例只觸發條件欄位的change事件（不觸發競拍相關）
+        ['capital', 'industry', 'issueSize', 'years', 'guarantee', 'rating', 'broker'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.dispatchEvent(new Event('change'));
+        });
+        
+        // 詢圈案例：清空AI評估區域，顯示詢圈專用提示
+        setTimeout(() => {
+            const evalContainer = document.getElementById('auctionEvaluation');
+            if (evalContainer) {
+                evalContainer.innerHTML = `
+                    <div style="padding:15px; background:linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-radius:10px; border:2px solid #1976d2;">
+                        <div style="font-weight:bold; color:#1565c0; margin-bottom:10px; font-size:15px;">📋 詢圈案例說明</div>
+                        <div style="font-size:13px; color:#444; line-height:1.7;">
+                            此為<b>詢圈</b>發行案例，與競拍機制不同：<br>
+                            • 詢圈無底標價格，由承銷商向法人詢價<br>
+                            • 詢圈完成後1-4日內決定轉換價格<br>
+                            • 參考指標以<b>掛牌表現</b>（高/低/振幅）為主<br><br>
+                            上方「歷史發行條件分析」已依據選取條件，<br>
+                            統計相似詢圈案例的掛牌表現供參考。
+                        </div>
+                    </div>`;
+            }
+            
+            // 清空即時預測區
+            const liveContainer = document.getElementById('liveAIPrediction');
+            if (liveContainer) {
+                liveContainer.innerHTML = `
+                    <div style="padding:10px; text-align:center; color:#1976d2;">
+                        📋 詢圈案例請參考上方「歷史發行條件分析」
+                    </div>`;
+            }
+        }, 100);
+        
     } else {
-        if (compareDiv) compareDiv.style.display = 'none';
+        // === 競拍案例：原有邏輯 ===
+        if (compareDiv && (c.status === 'opened' || c.status === 'listed' || c.status === 'completed')) {
+            const theoVal = c.convPrice > 0 && c.stockPrice > 0 ? (c.stockPrice / c.convPrice) * 100 : 0;
+            
+            // 檢查是否有實際競拍結果
+            const actualMinBid = c.actualMinBid || c.minBidPrice || 0;
+            const actualAvgBid = c.actualAvgBid || c.avgBidPrice || 0;
+            const hasActualResult = actualMinBid > 0 || actualAvgBid > 0;
+            
+            if (hasActualResult) {
+                const ds = window.DYNAMIC_STATS || {};
+                const modelEstMinBid = ds.avgMinBid || 106.10;
+                const modelEstAvgBid = ds.avgBid || 107.92;
+                
+                const minBidError = actualMinBid > 0 ? (actualMinBid - modelEstMinBid).toFixed(2) : '-';
+                const avgBidError = actualAvgBid > 0 ? (actualAvgBid - modelEstAvgBid).toFixed(2) : '-';
+                
+                compareDiv.innerHTML = `
+                    <div style="font-weight:bold; color:#2e7d32; margin-bottom:8px;">📊 競拍結果 vs 模型預估比對</div>
+                    <table style="width:100%; border-collapse:collapse; font-size:13px;">
+                        <tr style="background:#e8f5e9;">
+                            <th style="padding:6px; border:1px solid #c8e6c9; text-align:left;">指標</th>
+                            <th style="padding:6px; border:1px solid #c8e6c9; text-align:center;">實際結果</th>
+                            <th style="padding:6px; border:1px solid #c8e6c9; text-align:center;">模型預估</th>
+                            <th style="padding:6px; border:1px solid #c8e6c9; text-align:center;">誤差</th>
+                        </tr>
+                        ${actualMinBid > 0 ? `
+                        <tr>
+                            <td style="padding:5px; border:1px solid #e0e0e0;">最低得標價</td>
+                            <td style="padding:5px; border:1px solid #e0e0e0; text-align:center; font-weight:bold; color:#1565c0;">${actualMinBid.toFixed(2)}元</td>
+                            <td style="padding:5px; border:1px solid #e0e0e0; text-align:center;">${modelEstMinBid.toFixed(2)}元</td>
+                            <td style="padding:5px; border:1px solid #e0e0e0; text-align:center; color:${parseFloat(minBidError) > 0 ? '#e65100' : '#2e7d32'};">${minBidError}元</td>
+                        </tr>` : ''}
+                        ${actualAvgBid > 0 ? `
+                        <tr>
+                            <td style="padding:5px; border:1px solid #e0e0e0;">加權均價</td>
+                            <td style="padding:5px; border:1px solid #e0e0e0; text-align:center; font-weight:bold; color:#1565c0;">${actualAvgBid.toFixed(2)}元</td>
+                            <td style="padding:5px; border:1px solid #e0e0e0; text-align:center;">${modelEstAvgBid.toFixed(2)}元</td>
+                            <td style="padding:5px; border:1px solid #e0e0e0; text-align:center; color:${parseFloat(avgBidError) > 0 ? '#e65100' : '#2e7d32'};">${avgBidError}元</td>
+                        </tr>` : ''}
+                        ${theoVal > 0 ? `
+                        <tr>
+                            <td style="padding:5px; border:1px solid #e0e0e0;">理論價</td>
+                            <td style="padding:5px; border:1px solid #e0e0e0; text-align:center;">${theoVal.toFixed(2)}元</td>
+                            <td style="padding:5px; border:1px solid #e0e0e0; text-align:center;">-</td>
+                            <td style="padding:5px; border:1px solid #e0e0e0; text-align:center;">-</td>
+                        </tr>
+                        <tr>
+                            <td style="padding:5px; border:1px solid #e0e0e0;">實際溢價率</td>
+                            <td style="padding:5px; border:1px solid #e0e0e0; text-align:center; font-weight:bold; color:#e65100;">${actualMinBid > 0 ? ((actualMinBid/theoVal - 1) * 100).toFixed(2) : '-'}%</td>
+                            <td style="padding:5px; border:1px solid #e0e0e0; text-align:center;">-</td>
+                            <td style="padding:5px; border:1px solid #e0e0e0; text-align:center;">-</td>
+                        </tr>` : ''}
+                    </table>
+                    <div style="margin-top:8px; font-size:12px; color:#666;">
+                        💡 模型預估基於${ds.count || '--'}檔歷史平均值，選擇條件後可獲得專屬預估
+                    </div>
+                `;
+                compareDiv.style.display = 'block';
+            } else {
+                compareDiv.style.display = 'none';
+            }
+        } else {
+            if (compareDiv) compareDiv.style.display = 'none';
+        }
+        
+        // 競拍案例：觸發所有欄位事件
+        ['capital', 'industry', 'issueSize', 'theoRange', 'years', 'guarantee', 'rating', 'broker'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.dispatchEvent(new Event('change'));
+        });
+        
+        ['stockPrice', 'actualConversionPrice', 'floorPrice'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.dispatchEvent(new Event('input'));
+        });
+        
+        // 競拍案例：觸發AI評估
+        setTimeout(() => {
+            if (typeof updateAuctionEvaluation === 'function') {
+                updateAuctionEvaluation();
+            }
+        }, 100);
     }
     
-    // 觸發各欄位的 change 事件
-    ['capital', 'industry', 'issueSize', 'theoRange', 'years', 'guarantee', 'rating', 'broker'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.dispatchEvent(new Event('change'));
-    });
-    
-    ['stockPrice', 'actualConversionPrice', 'floorPrice'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.dispatchEvent(new Event('input'));
-    });
-    
-    // v3.90 修正：觸發 cbName 的 input 事件，顯示歷史競拍/詢圈資料卡
+    // 觸發 cbName 的 input 事件，顯示歷史資料卡
     const cbNameEl = document.getElementById('cbName');
     if (cbNameEl) {
         cbNameEl.dispatchEvent(new Event('input'));
     }
+}
+
+// v3.94 新增：計算詢圈條件統計
+function calculateInquiryConditionStats(caseData) {
+    if (!window.inquiryRawData || inquiryRawData.length === 0) {
+        return null;
+    }
     
-    // v3.73 新增：直接調用更新函數確保即時AI預測更新
-    setTimeout(() => {
-        if (typeof updateAuctionEvaluation === 'function') {
-            updateAuctionEvaluation();
+    const conditions = [];
+    
+    // 篩選有掛牌數據的詢圈案例
+    const validInquiries = inquiryRawData.filter(d => d.marketHigh > 0 && d.marketLow > 0);
+    if (validInquiries.length === 0) return null;
+    
+    // 計算全部平均
+    const overallStats = calculateInquiryAvg(validInquiries);
+    
+    // 1. 產業篩選
+    if (caseData.industry) {
+        const industryFiltered = validInquiries.filter(d => d.industry === caseData.industry);
+        if (industryFiltered.length > 0) {
+            const stats = calculateInquiryAvg(industryFiltered);
+            conditions.push({
+                name: '產業',
+                value: caseData.industry,
+                count: industryFiltered.length,
+                avgHigh: stats.avgHigh,
+                avgLow: stats.avgLow,
+                avgAmp: stats.avgAmp
+            });
         }
-    }, 100);
+    }
+    
+    // 2. 擔保篩選
+    if (caseData.guarantee) {
+        const guaranteeVal = caseData.guarantee.includes('有') ? '有擔保' : '無擔保';
+        const guaranteeFiltered = validInquiries.filter(d => {
+            const g = d.guarantee || '';
+            return guaranteeVal === '有擔保' ? g.includes('有') : g.includes('無');
+        });
+        if (guaranteeFiltered.length > 0) {
+            const stats = calculateInquiryAvg(guaranteeFiltered);
+            conditions.push({
+                name: '擔保',
+                value: guaranteeVal,
+                count: guaranteeFiltered.length,
+                avgHigh: stats.avgHigh,
+                avgLow: stats.avgLow,
+                avgAmp: stats.avgAmp
+            });
+        }
+    }
+    
+    // 3. 發行規模篩選
+    if (caseData.issueSize > 0) {
+        const size = caseData.issueSize;
+        let sizeRange = '';
+        let filterFn = null;
+        if (size < 2) { sizeRange = '小於2億'; filterFn = d => d.issueSize < 2; }
+        else if (size < 5) { sizeRange = '2~5億'; filterFn = d => d.issueSize >= 2 && d.issueSize < 5; }
+        else if (size < 10) { sizeRange = '5~10億'; filterFn = d => d.issueSize >= 5 && d.issueSize < 10; }
+        else if (size < 15) { sizeRange = '10~15億'; filterFn = d => d.issueSize >= 10 && d.issueSize < 15; }
+        else if (size < 20) { sizeRange = '15~20億'; filterFn = d => d.issueSize >= 15 && d.issueSize < 20; }
+        else { sizeRange = '大於20億'; filterFn = d => d.issueSize >= 20; }
+        
+        if (filterFn) {
+            const sizeFiltered = validInquiries.filter(filterFn);
+            if (sizeFiltered.length > 0) {
+                const stats = calculateInquiryAvg(sizeFiltered);
+                conditions.push({
+                    name: '發行規模',
+                    value: sizeRange,
+                    count: sizeFiltered.length,
+                    avgHigh: stats.avgHigh,
+                    avgLow: stats.avgLow,
+                    avgAmp: stats.avgAmp
+                });
+            }
+        }
+    }
+    
+    // 4. 年期篩選
+    if (caseData.years) {
+        const yearsFiltered = validInquiries.filter(d => d.years == caseData.years);
+        if (yearsFiltered.length > 0) {
+            const stats = calculateInquiryAvg(yearsFiltered);
+            conditions.push({
+                name: '年期',
+                value: caseData.years + '年',
+                count: yearsFiltered.length,
+                avgHigh: stats.avgHigh,
+                avgLow: stats.avgLow,
+                avgAmp: stats.avgAmp
+            });
+        }
+    }
+    
+    // 5. 券商篩選
+    if (caseData.broker) {
+        const brokerFiltered = validInquiries.filter(d => d.broker === caseData.broker);
+        if (brokerFiltered.length > 0) {
+            const stats = calculateInquiryAvg(brokerFiltered);
+            conditions.push({
+                name: '承銷商',
+                value: caseData.broker,
+                count: brokerFiltered.length,
+                avgHigh: stats.avgHigh,
+                avgLow: stats.avgLow,
+                avgAmp: stats.avgAmp
+            });
+        }
+    }
+    
+    return {
+        conditions: conditions,
+        overall: overallStats
+    };
+}
+
+// v3.94 新增：計算詢圈掛牌平均值
+function calculateInquiryAvg(dataArray) {
+    if (!dataArray || dataArray.length === 0) {
+        return { count: 0, avgHigh: 0, avgLow: 0, avgAmp: 0 };
+    }
+    
+    let sumHigh = 0, sumLow = 0, sumAmp = 0, count = 0;
+    
+    dataArray.forEach(d => {
+        if (d.marketHigh > 0 && d.marketLow > 0) {
+            sumHigh += d.marketHigh;
+            sumLow += d.marketLow;
+            sumAmp += ((d.marketHigh - d.marketLow) / d.marketLow * 100);
+            count++;
+        }
+    });
+    
+    return {
+        count: count,
+        avgHigh: count > 0 ? sumHigh / count : 0,
+        avgLow: count > 0 ? sumLow / count : 0,
+        avgAmp: count > 0 ? sumAmp / count : 0
+    };
 }
 
 // ==========================================

@@ -2077,13 +2077,16 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
                     <span style="margin-left:auto; font-size:11px; color:#666; font-weight:normal;">點擊展開</span>
                 </summary>
                 <div style="padding:12px; font-size:12px;">
-                    <!-- v3.97z 新增：標籤切換 -->
+                    <!-- v3.97z 新增：標籤切換（三個標籤） -->
                     <div id="step1TabContainer" style="display:flex; gap:0; margin-bottom:12px; border-radius:6px; overflow:hidden; border:1px solid #1565c0;">
-                        <button id="step1TabPremium" onclick="switchStep1Tab('premium')" style="flex:1; padding:8px 12px; border:none; background:#1565c0; color:white; font-weight:bold; font-size:11px; cursor:pointer; transition:all 0.2s;">
-                            ✅ 溢價率分析法
+                        <button id="step1TabPremium" onclick="switchStep1Tab('premium')" style="flex:1; padding:8px 6px; border:none; background:#1565c0; color:white; font-weight:bold; font-size:10px; cursor:pointer; transition:all 0.2s;">
+                            ✅ 溢價率法
                         </button>
-                        <button id="step1TabPrice" onclick="switchStep1Tab('price')" style="flex:1; padding:8px 12px; border:none; background:#e3f2fd; color:#1565c0; font-weight:bold; font-size:11px; cursor:pointer; transition:all 0.2s;">
-                            📈 平均得標價法
+                        <button id="step1TabPrice" onclick="switchStep1Tab('price')" style="flex:1; padding:8px 6px; border:none; background:#e3f2fd; color:#1565c0; font-weight:bold; font-size:10px; cursor:pointer; transition:all 0.2s;">
+                            📈 得標價法
+                        </button>
+                        <button id="step1TabTheo" onclick="switchStep1Tab('theo')" style="flex:1; padding:8px 6px; border:none; background:#e3f2fd; color:#1565c0; font-weight:bold; font-size:10px; cursor:pointer; transition:all 0.2s;">
+                            🎯 理論價值法
                         </button>
                     </div>
                     <div id="step1DetailContent">載入中...</div>
@@ -7446,28 +7449,30 @@ function generateMarketTrendAnalysis() {
 function switchStep1Tab(tabType) {
     const tabPremium = document.getElementById('step1TabPremium');
     const tabPrice = document.getElementById('step1TabPrice');
+    const tabTheo = document.getElementById('step1TabTheo');
     const contentDiv = document.getElementById('step1DetailContent');
     
-    if (!tabPremium || !tabPrice || !contentDiv) return;
+    if (!tabPremium || !tabPrice || !tabTheo || !contentDiv) return;
     
-    // 切換標籤樣式
+    // 重置所有標籤樣式
+    [tabPremium, tabPrice, tabTheo].forEach(tab => {
+        tab.style.background = '#e3f2fd';
+        tab.style.color = '#1565c0';
+    });
+    
+    // 設定選中的標籤樣式
     if (tabType === 'premium') {
         tabPremium.style.background = '#1565c0';
         tabPremium.style.color = 'white';
-        tabPrice.style.background = '#e3f2fd';
-        tabPrice.style.color = '#1565c0';
-    } else {
+        contentDiv.innerHTML = window.step1PremiumContent || '<div style="color:#999; text-align:center;">溢價率法數據載入中...</div>';
+    } else if (tabType === 'price') {
         tabPrice.style.background = '#1565c0';
         tabPrice.style.color = 'white';
-        tabPremium.style.background = '#e3f2fd';
-        tabPremium.style.color = '#1565c0';
-    }
-    
-    // 顯示對應內容
-    if (tabType === 'premium') {
-        contentDiv.innerHTML = window.step1PremiumContent || '<div style="color:#999; text-align:center;">溢價率法數據載入中...</div>';
-    } else {
         contentDiv.innerHTML = window.step1PriceContent || '<div style="color:#999; text-align:center;">平均得標價法數據載入中...</div>';
+    } else if (tabType === 'theo') {
+        tabTheo.style.background = '#7b1fa2';
+        tabTheo.style.color = 'white';
+        contentDiv.innerHTML = window.step1TheoContent || '<div style="color:#999; text-align:center;">理論價值法數據載入中...</div>';
     }
 }
 
@@ -10248,6 +10253,210 @@ function displayResult(r) {
                 <div style="font-size:18px; font-weight:bold; color:#bf360c;">${r.priceBidPrices.ultimate}</div>
                 <div style="font-size:9px; color:#666;"></div>
             </div>
+        </div>
+    `;
+    
+    // v3.97z 新增：理論價值分析法表格（按理論價區間 + 擔保類型細分）
+    // 定義理論價區間
+    const theoRanges = [
+        { label: '小於90元', min: 0, max: 90 },
+        { label: '90~95元', min: 90, max: 95 },
+        { label: '95~100元', min: 95, max: 100 },
+        { label: '100~105元', min: 100, max: 105 },
+        { label: '105~110元', min: 105, max: 110 },
+        { label: '110~115元', min: 110, max: 115 },
+        { label: '大於115元', min: 115, max: 999 }
+    ];
+    
+    // 取得當前理論價以便高亮
+    const currentTheo = parseFloat(r.theoreticalPrice) || 0;
+    let currentTheoRange = '';
+    for (const range of theoRanges) {
+        if (currentTheo >= range.min && currentTheo < range.max) {
+            currentTheoRange = range.label;
+            break;
+        }
+    }
+    if (currentTheo >= 115) currentTheoRange = '大於115元';
+    
+    // 計算各區間統計數據（區分擔保類型）
+    let theoTableRows = '';
+    theoRanges.forEach((range, idx) => {
+        // 篩選該區間的案例
+        const rangeFilter = d => {
+            const theo = d.theoreticalPrice || 0;
+            if (range.label === '大於115元') return theo >= 115;
+            return theo >= range.min && theo < range.max;
+        };
+        
+        // 有擔保案例
+        const guaranteedCases = auctionRawData.filter(d => rangeFilter(d) && (d.guarantee || '').includes('有'));
+        let gLowPrem = '-', gAvgPrem = '-', gLowBid = '-', gAvgBid = '-', gCount = 0;
+        if (guaranteedCases.length > 0) {
+            let sumLowP = 0, sumAvgP = 0, sumLowB = 0, sumAvgB = 0, cnt = 0;
+            guaranteedCases.forEach(d => {
+                if (d.minBidPrice > 0) {
+                    sumLowP += d.lowPremium || 0;
+                    sumAvgP += d.avgPremium || 0;
+                    sumLowB += d.minBidPrice || 0;
+                    sumAvgB += d.avgBidPrice || 0;
+                    cnt++;
+                }
+            });
+            if (cnt > 0) {
+                gLowPrem = (sumLowP / cnt).toFixed(2);
+                gAvgPrem = (sumAvgP / cnt).toFixed(2);
+                gLowBid = (sumLowB / cnt).toFixed(2);
+                gAvgBid = (sumAvgB / cnt).toFixed(2);
+                gCount = cnt;
+            }
+        }
+        
+        // 無擔保案例
+        const unguaranteedCases = auctionRawData.filter(d => rangeFilter(d) && (!(d.guarantee || '').includes('有')));
+        let uLowPrem = '-', uAvgPrem = '-', uLowBid = '-', uAvgBid = '-', uCount = 0;
+        if (unguaranteedCases.length > 0) {
+            let sumLowP = 0, sumAvgP = 0, sumLowB = 0, sumAvgB = 0, cnt = 0;
+            unguaranteedCases.forEach(d => {
+                if (d.minBidPrice > 0) {
+                    sumLowP += d.lowPremium || 0;
+                    sumAvgP += d.avgPremium || 0;
+                    sumLowB += d.minBidPrice || 0;
+                    sumAvgB += d.avgBidPrice || 0;
+                    cnt++;
+                }
+            });
+            if (cnt > 0) {
+                uLowPrem = (sumLowP / cnt).toFixed(2);
+                uAvgPrem = (sumAvgP / cnt).toFixed(2);
+                uLowBid = (sumLowB / cnt).toFixed(2);
+                uAvgBid = (sumAvgB / cnt).toFixed(2);
+                uCount = cnt;
+            }
+        }
+        
+        // 判斷是否為當前區間
+        const isCurrentRange = range.label === currentTheoRange;
+        const rowBg = isCurrentRange ? '#fff3e0' : (idx % 2 === 0 ? '#faf4fc' : '#ffffff');
+        const rowStyle = isCurrentRange ? 'border-left:4px solid #ff9800; font-weight:bold;' : '';
+        
+        theoTableRows += `
+            <tr style="background:${rowBg}; ${rowStyle}">
+                <td style="padding:6px 4px; text-align:center; font-weight:bold; color:#7b1fa2;" rowspan="2">
+                    ${range.label}
+                    ${isCurrentRange ? '<br><span style="font-size:9px; color:#ff9800;">← 當前</span>' : ''}
+                </td>
+                <td style="padding:6px 4px; text-align:center; background:#e8f5e9; color:#2e7d32; font-weight:bold;">有擔保</td>
+                <td style="padding:6px 4px; text-align:center;">${gLowPrem}%</td>
+                <td style="padding:6px 4px; text-align:center;">${gAvgPrem}%</td>
+                <td style="padding:6px 4px; text-align:center;">${gLowBid}</td>
+                <td style="padding:6px 4px; text-align:center;">${gAvgBid}</td>
+                <td style="padding:6px 4px; text-align:center; color:#666;">${gCount}</td>
+            </tr>
+            <tr style="background:${rowBg}; ${rowStyle} border-bottom:1px solid #e0e0e0;">
+                <td style="padding:6px 4px; text-align:center; background:#ffebee; color:#c62828; font-weight:bold;">無擔保</td>
+                <td style="padding:6px 4px; text-align:center;">${uLowPrem}%</td>
+                <td style="padding:6px 4px; text-align:center;">${uAvgPrem}%</td>
+                <td style="padding:6px 4px; text-align:center;">${uLowBid}</td>
+                <td style="padding:6px 4px; text-align:center;">${uAvgBid}</td>
+                <td style="padding:6px 4px; text-align:center; color:#666;">${uCount}</td>
+            </tr>
+        `;
+    });
+    
+    // 計算當前條件的建議價格
+    let theoRecommend = '';
+    if (currentTheoRange && r.inputData.guarantee) {
+        const isGuaranteed = r.inputData.guarantee === '有擔保';
+        const rangeFilter = d => {
+            const theo = d.theoreticalPrice || 0;
+            if (currentTheoRange === '大於115元') return theo >= 115;
+            const range = theoRanges.find(r => r.label === currentTheoRange);
+            return range && theo >= range.min && theo < range.max;
+        };
+        
+        const targetCases = auctionRawData.filter(d => {
+            if (!rangeFilter(d)) return false;
+            if (isGuaranteed) return (d.guarantee || '').includes('有');
+            return !(d.guarantee || '').includes('有');
+        });
+        
+        if (targetCases.length > 0) {
+            let sumLowB = 0, sumAvgB = 0, cnt = 0;
+            targetCases.forEach(d => {
+                if (d.minBidPrice > 0) {
+                    sumLowB += d.minBidPrice;
+                    sumAvgB += d.avgBidPrice;
+                    cnt++;
+                }
+            });
+            if (cnt > 0) {
+                const avgLowBid = sumLowB / cnt;
+                const avgAvgBid = sumAvgB / cnt;
+                theoRecommend = `
+                    <div style="margin-top:12px; padding:12px; background:linear-gradient(135deg, #7b1fa2 0%, #9c27b0 100%); border-radius:8px; color:white;">
+                        <div style="font-size:12px; margin-bottom:8px;">
+                            🎯 <b>理論價值法建議</b>（${currentTheoRange} + ${r.inputData.guarantee}，樣本數 ${cnt}）
+                        </div>
+                        <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px;">
+                            <div style="text-align:center; padding:8px; background:rgba(255,255,255,0.2); border-radius:6px;">
+                                <div style="font-size:10px; opacity:0.9;">保守投標價</div>
+                                <div style="font-size:20px; font-weight:bold;">${avgLowBid.toFixed(2)}</div>
+                                <div style="font-size:9px; opacity:0.8;">≈ 歷史最低得標均價</div>
+                            </div>
+                            <div style="text-align:center; padding:8px; background:rgba(255,255,255,0.2); border-radius:6px;">
+                                <div style="font-size:10px; opacity:0.9;">平衡投標價</div>
+                                <div style="font-size:20px; font-weight:bold;">${avgAvgBid.toFixed(2)}</div>
+                                <div style="font-size:9px; opacity:0.8;">≈ 歷史平均得標均價</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+    }
+    
+    window.step1TheoContent = `
+        <div style="font-size:11px; color:#666; margin-bottom:8px;">
+            <b>🎯 理論價值分析法</b>：根據理論價區間，直接參考同區間歷史案例的得標數據，區分有擔保/無擔保
+        </div>
+        <div style="background:#f3e5f5; padding:10px; border-radius:8px; margin-bottom:12px;">
+            <div style="display:flex; gap:15px; flex-wrap:wrap; align-items:center;">
+                <div style="flex:1; min-width:120px;">
+                    <div style="color:#7b1fa2; font-size:11px;">當前理論價</div>
+                    <div style="font-size:18px; font-weight:bold; color:#7b1fa2;">${currentTheo.toFixed(2)} 元</div>
+                </div>
+                <div style="flex:1; min-width:120px;">
+                    <div style="color:#7b1fa2; font-size:11px;">所屬區間</div>
+                    <div style="font-size:16px; font-weight:bold; color:#7b1fa2;">${currentTheoRange || '未知'}</div>
+                </div>
+                <div style="flex:1; min-width:120px;">
+                    <div style="color:#7b1fa2; font-size:11px;">擔保類型</div>
+                    <div style="font-size:16px; font-weight:bold; color:${r.inputData.guarantee === '有擔保' ? '#2e7d32' : '#c62828'};">${r.inputData.guarantee || '未選擇'}</div>
+                </div>
+            </div>
+        </div>
+        <div style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse; font-size:10px; min-width:500px;">
+                <thead>
+                    <tr style="background:#7b1fa2; color:white;">
+                        <th style="padding:8px 4px; text-align:center;">理論價區間</th>
+                        <th style="padding:8px 4px; text-align:center;">擔保</th>
+                        <th style="padding:8px 4px; text-align:center;">最低<br>溢價</th>
+                        <th style="padding:8px 4px; text-align:center;">平均<br>溢價</th>
+                        <th style="padding:8px 4px; text-align:center;">最低<br>得標</th>
+                        <th style="padding:8px 4px; text-align:center;">平均<br>得標</th>
+                        <th style="padding:8px 4px; text-align:center;">樣本</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${theoTableRows}
+                </tbody>
+            </table>
+        </div>
+        ${theoRecommend}
+        <div style="margin-top:10px; padding:8px; background:#ede7f6; border-radius:6px; font-size:10px; color:#5e35b1;">
+            💡 <b>說明</b>：理論價是預測最低得標價的最強因子（相關係數 r=-0.762）。有擔保債因籌碼集中，通常溢價率較高。
         </div>
     `;
     

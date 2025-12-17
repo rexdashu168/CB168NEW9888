@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97t (Top3顯示版)</title>
+<title>AI智能可轉債競拍系統 v3.97u (欄位修正版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 
 <style>
@@ -1724,7 +1724,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 <div class="container" style="display: none;">
     <div class="header">
         <h1>🤖 AI智能可轉債競拍系統</h1>
-        <span class="version-badge">v3.97t 四維度+Top3版</span>
+        <span class="version-badge">v3.97u 欄位修正+Debug版</span>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -9586,7 +9586,10 @@ function displayResult(r) {
     const step4Guarantee = inputData.guarantee || '無擔保';
     const step4Size = parseFloat(inputData.issueSize) || 5;
     const step4Industry = (inputData.industry || '').split(' ')[0];  // 取主分類
-    const step4Rating = inputData.rating || '';
+    const step4Rating = String(inputData.rating || '').replace(/[^0-9]/g, '');  // 只取數字
+    
+    // v3.97u: Debug 輸出
+    console.log('🧠 Step4 篩選條件:', { step4Guarantee, step4Size, step4Industry, step4Rating });
     
     // 規模範圍 50%-150% (v3.97s 放寬條件增加樣本數)
     const sizeMin = step4Size * 0.5;
@@ -9683,18 +9686,35 @@ function displayResult(r) {
     if (typeof window.auctionDataCache !== 'undefined' && window.auctionDataCache.length > 0) {
         const allData = window.auctionDataCache;
         
-        // 共同篩選條件：同擔保 + 規模80-120%
+        // v3.97u: 擔保比對函數（支援多種格式）
+        const matchGuarantee = (itemGuar, targetGuar) => {
+            const item = String(itemGuar || '').trim();
+            const target = String(targetGuar || '').trim();
+            // 無擔保：匹配 "無"、"無擔保"、空白
+            if (target === '無擔保' || target === '無') {
+                return item === '無' || item === '無擔保' || item === '';
+            }
+            // 有擔保：匹配 "有"、"有擔保"
+            if (target === '有擔保' || target === '有') {
+                return item === '有' || item === '有擔保';
+            }
+            return item === target;
+        };
+        
+        // 共同篩選條件：同擔保 + 規模50-150%
         const baseFilter = (item) => {
-            const itemGuar = item['擔保'] || '無擔保';
+            const itemGuar = item['擔保'] || '';
             const itemSize = parseFloat(item['發行規模']) || 0;
-            return itemGuar === step4Guarantee && itemSize >= sizeMin && itemSize <= sizeMax;
+            const guarMatch = matchGuarantee(itemGuar, step4Guarantee);
+            const sizeMatch = itemSize >= sizeMin && itemSize <= sizeMax;
+            return guarMatch && sizeMatch;
         };
         
         // 四維度篩選
-        // 1. 產業維度（30%）
+        // 1. 產業維度（30%）- v3.97u: 修正欄位名稱優先順序
         const industryData = allData.filter(item => {
             if (!baseFilter(item)) return false;
-            const itemInd = (item['產業'] || item['產業分類'] || '').split(' ')[0];
+            const itemInd = (item['產業分類'] || item['產業'] || '').split(' ')[0];
             return itemInd === step4Industry && step4Industry !== '';
         });
         
@@ -9708,11 +9728,20 @@ function displayResult(r) {
             return itemTheo >= currentZone.min && itemTheo < currentZone.max;
         });
         
-        // 4. 信評維度（25%）
+        // 4. 信評維度（25%）- v3.97u: 統一用數字字串比對
         const ratingData = allData.filter(item => {
             if (!baseFilter(item)) return false;
-            const itemRating = item['信評'] || item['TCRI'] || '';
+            const itemRating = String(item['TCRI'] || item['信評'] || '').replace(/[^0-9]/g, '');
             return itemRating === step4Rating && step4Rating !== '';
+        });
+        
+        // v3.97u: Debug 輸出篩選結果
+        console.log('🧠 Step4 篩選結果:', {
+            總數據: allData.length,
+            產業: industryData.length,
+            市場氛圍: marketData.length,
+            理論價: theoData.length,
+            信評: ratingData.length
         });
         
         // 計算各維度滾動結果

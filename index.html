@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97x (名稱日期修正)</title>
+<title>AI智能可轉債競拍系統 v3.97y (標題顯示代號名稱)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 
 <style>
@@ -1724,7 +1724,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 <div class="container" style="display: none;">
     <div class="header">
         <h1>🤖 AI智能可轉債競拍系統</h1>
-        <span class="version-badge">v3.97x 名稱日期修正</span>
+        <span class="version-badge">v3.97y 標題顯示代號名稱</span>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -8457,7 +8457,13 @@ function bindInputEvents() {
     
     // CB名稱搜尋
     document.getElementById('cbName').addEventListener('input', function() {
-        const val = this.value.trim(); 
+        const val = this.value.trim();
+        
+        // v3.97y: 用戶手動輸入時清除閃電帶入的全域變數
+        window.currentCBCode = '';
+        window.currentCBName = '';
+        window.currentActualIssueSize = 0;
+        
         const histDiv = document.getElementById('historyResults');
         
         if(val.length >= 2) {
@@ -10072,8 +10078,16 @@ function displayResult(r) {
            </div>` 
         : '';
     
+    // v3.97y: 組合標題（優先用閃電帶入的CB代號+名稱）
+    let resultTitle = r.cbName || '未命名標的';
+    if (window.currentCBCode && window.currentCBName) {
+        resultTitle = `${window.currentCBCode} ${window.currentCBName}`;
+    } else if (window.currentCBName) {
+        resultTitle = window.currentCBName;
+    }
+    
     div.innerHTML = `
-    <div class="result-header"><h2>${r.cbName || '未命名標的'}</h2><div>AI 評估結果</div></div>
+    <div class="result-header"><h2>${resultTitle}</h2><div>AI 評估結果</div></div>
     
     <!-- ========== 基本資訊 ========== -->
     <div class="detail-section" style="background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);">
@@ -10537,6 +10551,11 @@ function handleQuickSelect() {
     }
     
     if (!c) return;
+    
+    // v3.97y: 保存完整標的資訊供結果標題使用
+    window.currentCBCode = c.cbCode || '';
+    window.currentCBName = c.name || '';
+    console.log('⚡ 閃電帶入標的:', window.currentCBCode, window.currentCBName);
     
     // 帶入各欄位
     // v3.74 修正：只帶入股票代號，這樣可以搜尋該公司所有歷史競拍/詢圈紀錄

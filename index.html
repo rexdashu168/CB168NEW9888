@@ -259,19 +259,67 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 /* 詢圈案例簡單卡片 - 單行緊湊版 */
 .inquiry-card {
-    background: #fff3e0;
-    border: 1px solid #ffb74d;
-    border-radius: 4px;
-    margin-bottom: 4px;
-    padding: 6px 10px;
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    border: 1px solid #64b5f6;
+    border-radius: 6px;
+    margin-bottom: 6px;
+    padding: 8px 12px;
     font-size: 12px;
+}
+.inquiry-card .hc-header {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 5px;
+    flex-wrap: wrap;
+}
+.inquiry-card .hc-badge {
+    background: #1976d2;
+    color: white;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: bold;
+}
+.inquiry-card .hc-name {
+    font-weight: 700;
+    color: #1565c0;
+    font-size: 12px;
+}
+.inquiry-card .hc-line {
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
-    gap: 3px 8px;
+    gap: 3px 10px;
+    margin-bottom: 5px;
+}
+.inquiry-card .hc-info {
+    font-size: 11px;
+    color: #555;
+    white-space: nowrap;
+}
+.inquiry-card .hc-info b {
+    color: #333;
+}
+.inquiry-card .hc-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+    margin-top: 5px;
+}
+.inquiry-card .hc-table th {
+    background: #e3f2fd;
+    color: #1565c0;
+    padding: 4px 3px;
+    font-size: 10px;
+    font-weight: 700;
+}
+.inquiry-card .hc-table td {
+    padding: 4px 3px;
+    text-align: center;
+    border-bottom: 1px solid #bbdefb;
 }
 .inquiry-badge {
-    background: #ff9800;
+    background: #1976d2;
     color: white;
     padding: 2px 6px;
     border-radius: 3px;
@@ -280,7 +328,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 }
 .inquiry-name {
     font-weight: 700;
-    color: #e65100;
+    color: #1565c0;
     font-size: 12px;
 }
 .inquiry-info {
@@ -522,12 +570,19 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     background: white;
     border-radius: 8px;
     padding: 15px;
+    max-height: 500px;
+    overflow-y: auto;
+}
+.trend-table-wrapper {
+    overflow-x: auto;
+    margin-bottom: 12px;
 }
 .trend-year-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 13px;
     margin-bottom: 12px;
+    min-width: 600px;
 }
 .trend-year-table th {
     background: #ff9800;
@@ -4861,6 +4916,65 @@ function generateHistoryCard(d) {
     `;
 }
 
+// v3.92 新增：詢圈歷史卡片生成函數（淡藍色風格）
+function generateInquiryCard(d) {
+    const h = safeFloat(d.marketHigh);
+    const l = safeFloat(d.marketLow);
+    const amp = (h > 0 && l > 0) ? ((h - l) / l * 100).toFixed(1) : '-';
+    
+    let guarantee = '-';
+    if (d.guarantee) {
+        guarantee = d.guarantee.includes('有') ? '有擔保' : (d.guarantee.includes('無') ? '無擔保' : d.guarantee);
+    }
+    
+    // v3.62 新增：取得CB收盤價
+    const cbClosePrice = window.cbClosePriceMap ? window.cbClosePriceMap[d.id] : null;
+    const cbClosePriceStr = cbClosePrice > 0 ? safeFixed(cbClosePrice, 2) : '-';
+    
+    // 取得掛牌日期
+    let listDateStr = '-';
+    if (d.listDate) {
+        listDateStr = formatDate(d.listDate);
+    }
+    
+    return `
+    <div class="inquiry-card">
+        <div class="hc-header">
+            <span class="hc-badge">詢圈</span>
+            <span class="hc-name">${d.name || '-'} (${d.id})</span>
+            <span class="hc-date" style="color:#1976d2; font-size:11px;">${listDateStr}</span>
+        </div>
+        
+        <div class="hc-line">
+            <span class="hc-info">產業:<b>${d.industry || '-'}</b></span>
+            <span class="hc-info">規模:<b>${d.issueSize > 0 ? d.issueSize + '億' : '-'}</b></span>
+            <span class="hc-info">年期:<b>${d.years > 0 ? d.years + '年' : '-'}</b></span>
+            <span class="hc-info">擔保:<b>${guarantee}</b></span>
+            <span class="hc-info">信評:<b>${d.rating || '-'}</b></span>
+            <span class="hc-info">券商:<b>${d.broker || '-'}</b></span>
+        </div>
+        
+        <div class="hc-line">
+            <span class="hc-info">轉換價:<b>${d.conversionPrice > 0 ? safeFixed(d.conversionPrice, 1) : '-'}</b></span>
+            <span class="hc-info">溢價率:<b class="pink">${d.premiumRate > 0 ? safeFixed(d.premiumRate, 2) + '%' : '-'}</b></span>
+            <span class="hc-info">股本:<b>${d.capital > 0 ? safeFixed(d.capital, 1) + '億' : '-'}</b></span>
+        </div>
+        
+        <table class="hc-table">
+            <tr>
+                <th>掛牌最高</th><th>掛牌最低</th><th>振幅</th><th>CB收盤</th>
+            </tr>
+            <tr>
+                <td style="color:#2e7d32; font-weight:700;">${h > 0 ? safeFixed(h, 1) : '-'}</td>
+                <td style="color:#c62828; font-weight:700;">${l > 0 ? safeFixed(l, 1) : '-'}</td>
+                <td style="color:#E91E63; font-weight:700;">${amp}%</td>
+                <td style="color:#1565c0; font-weight:700;">${cbClosePriceStr}</td>
+            </tr>
+        </table>
+    </div>
+    `;
+}
+
 // v3.52 修改：generateStandardCard 增加排除前三的參數，獨立成兩個表格，並加入擔保類型細分
 // v3.74 新增：rankingInfo 參數 { avgHigh, rank, total, count }
 function generateStandardCard(data, titleOverride=null, inquiryData=null, excludeTop3Data=null, excludeTop3InquiryData=null, guaranteedAuctionData=null, guaranteedInquiryData=null, unguaranteedAuctionData=null, unguaranteedInquiryData=null, rankingInfo=null) {
@@ -6557,6 +6671,8 @@ function generateMarketTrendAnalysis() {
         const inquiry = yearCB.filter(d => d.type === '詢圈');
         const withMarket = yearCB.filter(d => d.hasMarket);
         const avgAmp = withMarket.length > 0 ? withMarket.reduce((s, d) => s + d.amp, 0) / withMarket.length : 0;
+        const avgHigh = withMarket.length > 0 ? withMarket.reduce((s, d) => s + d.high, 0) / withMarket.length : 0;
+        const avgLow = withMarket.length > 0 ? withMarket.reduce((s, d) => s + d.low, 0) / withMarket.length : 0;
         
         // 擔保統計
         const gYear = yearCB.filter(d => d.guarantee && d.guarantee.includes('有'));
@@ -6577,6 +6693,8 @@ function generateMarketTrendAnalysis() {
             guaranteed: gYear.length,
             unguaranteed: uYear.length,
             issueAmount: issueAmount,
+            avgHigh: parseFloat(avgHigh.toFixed(1)),
+            avgLow: parseFloat(avgLow.toFixed(1)),
             avgAmp: parseFloat(avgAmp.toFixed(1)),
             above50: above50,
             below20: below20
@@ -6791,59 +6909,75 @@ function generateMarketTrendAnalysis() {
         yearly: kyYearlyData
     };
     
-    // 11. v3.92 新增：產業分析（動態生成）
+    // 11. v3.92 新增：產業分析（動態生成）- 排除未知資料
     const industryMap = {};
     allCBData.forEach(d => {
-        const ind = d.industry || '未分類';
+        const ind = (d.industry || '').trim();
+        // 排除空白、未分類、未知等無效資料
+        if (!ind || ind === '未分類' || ind === '未知' || ind === '-') return;
+        
         if (!industryMap[ind]) {
-            industryMap[ind] = { count: 0, auction: 0, inquiry: 0, ampSum: 0, ampCount: 0 };
+            industryMap[ind] = { count: 0, auction: 0, inquiry: 0, ampSum: 0, ampCount: 0, highSum: 0, lowSum: 0 };
         }
         industryMap[ind].count++;
         if (d.type === '競拍') industryMap[ind].auction++;
         if (d.type === '詢圈') industryMap[ind].inquiry++;
         if (d.hasMarket) {
             industryMap[ind].ampSum += d.amp;
+            industryMap[ind].highSum += d.high;
+            industryMap[ind].lowSum += d.low;
             industryMap[ind].ampCount++;
         }
     });
     
+    const validIndustryCount = Object.values(industryMap).reduce((s, d) => s + d.count, 0);
     const industryData = Object.entries(industryMap)
         .map(([name, data]) => ({
             name: name,
             count: data.count,
             auction: data.auction,
             inquiry: data.inquiry,
+            avgHigh: data.ampCount > 0 ? data.highSum / data.ampCount : 0,
+            avgLow: data.ampCount > 0 ? data.lowSum / data.ampCount : 0,
             avgAmp: data.ampCount > 0 ? data.ampSum / data.ampCount : 0,
-            ratio: (data.count / allCBData.length * 100)
+            ratio: (data.count / validIndustryCount * 100)
         }))
         .sort((a, b) => b.count - a.count);
     
     marketTrendData.industry = industryData;
     
-    // 12. v3.92 新增：券商分析（動態生成）
+    // 12. v3.92 新增：券商分析（動態生成）- 排除未知資料
     const brokerMap = {};
     allCBData.forEach(d => {
-        const broker = d.broker || '未知';
+        const broker = (d.broker || '').trim();
+        // 排除空白、未知等無效資料
+        if (!broker || broker === '未知' || broker === '-') return;
+        
         if (!brokerMap[broker]) {
-            brokerMap[broker] = { count: 0, auction: 0, inquiry: 0, ampSum: 0, ampCount: 0 };
+            brokerMap[broker] = { count: 0, auction: 0, inquiry: 0, ampSum: 0, ampCount: 0, highSum: 0, lowSum: 0 };
         }
         brokerMap[broker].count++;
         if (d.type === '競拍') brokerMap[broker].auction++;
         if (d.type === '詢圈') brokerMap[broker].inquiry++;
         if (d.hasMarket) {
             brokerMap[broker].ampSum += d.amp;
+            brokerMap[broker].highSum += d.high;
+            brokerMap[broker].lowSum += d.low;
             brokerMap[broker].ampCount++;
         }
     });
     
+    const validBrokerCount = Object.values(brokerMap).reduce((s, d) => s + d.count, 0);
     const brokerData = Object.entries(brokerMap)
         .map(([name, data]) => ({
             name: name,
             count: data.count,
             auction: data.auction,
             inquiry: data.inquiry,
+            avgHigh: data.ampCount > 0 ? data.highSum / data.ampCount : 0,
+            avgLow: data.ampCount > 0 ? data.lowSum / data.ampCount : 0,
             avgAmp: data.ampCount > 0 ? data.ampSum / data.ampCount : 0,
-            ratio: (data.count / allCBData.length * 100)
+            ratio: (data.count / validBrokerCount * 100)
         }))
         .sort((a, b) => b.count - a.count);
     
@@ -6945,6 +7079,7 @@ function renderYearlyTrend() {
     
     let html = `
     <div style="font-size:13px; font-weight:bold; color:#e65100; margin-bottom:10px;">📊 各年度發行統計與績效分析（2010-2025）</div>
+    <div class="trend-table-wrapper">
     <table class="trend-year-table">
         <tr>
             <th>年度</th>
@@ -6952,12 +7087,13 @@ function renderYearlyTrend() {
             <th>發行量(億)</th>
             <th>有擔保</th>
             <th>無擔保</th>
+            <th>掛牌均高</th>
+            <th>掛牌均低</th>
             <th>平均振幅</th>
-            <th>振幅≥50%</th>
-            <th>振幅<20%</th>
         </tr>`;
     
     let totalAll = 0, totalAmount = 0, totalGuaranteed = 0, totalUnguaranteed = 0;
+    let sumHigh = 0, sumLow = 0, countWithMarket = 0;
     data.forEach(d => {
         const ampClass = d.avgAmp >= 80 ? 'amp-high' : (d.avgAmp < 30 ? 'amp-low' : '');
         const gRatio = d.total > 0 ? (d.guaranteed / d.total * 100).toFixed(0) : 0;
@@ -6969,32 +7105,36 @@ function renderYearlyTrend() {
             <td>${d.issueAmount > 0 ? d.issueAmount.toFixed(0) : '-'}</td>
             <td style="color:#2e7d32;">${d.guaranteed}(${gRatio}%)</td>
             <td style="color:#e65100;">${d.unguaranteed}(${uRatio}%)</td>
+            <td style="color:#2e7d32;">${d.avgHigh > 0 ? d.avgHigh.toFixed(1) : '-'}</td>
+            <td style="color:#c62828;">${d.avgLow > 0 ? d.avgLow.toFixed(1) : '-'}</td>
             <td class="${ampClass}">${d.avgAmp > 0 ? d.avgAmp.toFixed(1) + '%' : '-'}</td>
-            <td style="color:#2e7d32;">${d.above50 || 0}</td>
-            <td style="color:#c62828;">${d.below20 || 0}</td>
         </tr>`;
         totalAll += d.total;
         totalAmount += d.issueAmount || 0;
         totalGuaranteed += d.guaranteed || 0;
         totalUnguaranteed += d.unguaranteed || 0;
+        if (d.avgHigh > 0) { sumHigh += d.avgHigh; countWithMarket++; }
+        if (d.avgLow > 0) { sumLow += d.avgLow; }
     });
     
     // 合計列
     const gRatioTotal = totalAll > 0 ? (totalGuaranteed / totalAll * 100).toFixed(0) : 0;
     const uRatioTotal = totalAll > 0 ? (totalUnguaranteed / totalAll * 100).toFixed(0) : 0;
+    const avgHighTotal = countWithMarket > 0 ? (sumHigh / countWithMarket).toFixed(1) : '-';
+    const avgLowTotal = countWithMarket > 0 ? (sumLow / countWithMarket).toFixed(1) : '-';
     html += `
         <tr class="total-row">
-            <td><b>合計</b></td>
+            <td><b>平均</b></td>
             <td><b>${totalAll}</b></td>
             <td><b>${totalAmount.toFixed(0)}</b></td>
             <td style="color:#2e7d32;"><b>${totalGuaranteed}(${gRatioTotal}%)</b></td>
             <td style="color:#e65100;"><b>${totalUnguaranteed}(${uRatioTotal}%)</b></td>
-            <td>-</td>
-            <td>-</td>
+            <td style="color:#2e7d32;"><b>${avgHighTotal}</b></td>
+            <td style="color:#c62828;"><b>${avgLowTotal}</b></td>
             <td>-</td>
         </tr>`;
     
-    html += `</table>`;
+    html += `</table></div>`;
     
     // 趨勢洞察
     const peak = data.reduce((max, d) => d.avgAmp > max.avgAmp ? d : max, data[0]);
@@ -7596,13 +7736,14 @@ function renderIndustryAnalysis() {
     
     let html = `
     <div style="font-size:13px; font-weight:bold; color:#e65100; margin-bottom:10px;">🏭 產業分布與績效分析</div>
+    <div class="trend-table-wrapper">
     <table class="trend-year-table">
         <tr>
             <th>產業</th>
             <th>檔數</th>
             <th>占比</th>
-            <th>競拍</th>
-            <th>詢圈</th>
+            <th>掛牌均高</th>
+            <th>掛牌均低</th>
             <th>平均振幅</th>
         </tr>`;
     
@@ -7616,13 +7757,13 @@ function renderIndustryAnalysis() {
             <td style="text-align:left; font-weight:${idx < 3 ? 'bold' : 'normal'};">${rankIcon} ${d.name}</td>
             <td><b>${d.count}</b></td>
             <td>${d.ratio.toFixed(1)}%</td>
-            <td style="color:#e65100;">${d.auction}</td>
-            <td style="color:#1565c0;">${d.inquiry}</td>
+            <td style="color:#2e7d32;">${d.avgHigh > 0 ? d.avgHigh.toFixed(1) : '-'}</td>
+            <td style="color:#c62828;">${d.avgLow > 0 ? d.avgLow.toFixed(1) : '-'}</td>
             <td class="${ampClass}">${d.avgAmp > 0 ? d.avgAmp.toFixed(1) + '%' : '-'}</td>
         </tr>`;
     });
     
-    html += `</table>`;
+    html += `</table></div>`;
     
     // 分析結論
     const best = data.filter(d => d.avgAmp > 0).sort((a, b) => b.avgAmp - a.avgAmp)[0];
@@ -7649,13 +7790,14 @@ function renderBrokerAnalysis() {
     
     let html = `
     <div style="font-size:13px; font-weight:bold; color:#e65100; margin-bottom:10px;">🏦 承銷券商分布與績效分析</div>
+    <div class="trend-table-wrapper">
     <table class="trend-year-table">
         <tr>
             <th>券商</th>
             <th>檔數</th>
             <th>占比</th>
-            <th>競拍</th>
-            <th>詢圈</th>
+            <th>掛牌均高</th>
+            <th>掛牌均低</th>
             <th>平均振幅</th>
         </tr>`;
     
@@ -7669,13 +7811,13 @@ function renderBrokerAnalysis() {
             <td style="text-align:left; font-weight:${idx < 3 ? 'bold' : 'normal'};">${rankIcon} ${d.name}</td>
             <td><b>${d.count}</b></td>
             <td>${d.ratio.toFixed(1)}%</td>
-            <td style="color:#e65100;">${d.auction}</td>
-            <td style="color:#1565c0;">${d.inquiry}</td>
+            <td style="color:#2e7d32;">${d.avgHigh > 0 ? d.avgHigh.toFixed(1) : '-'}</td>
+            <td style="color:#c62828;">${d.avgLow > 0 ? d.avgLow.toFixed(1) : '-'}</td>
             <td class="${ampClass}">${d.avgAmp > 0 ? d.avgAmp.toFixed(1) + '%' : '-'}</td>
         </tr>`;
     });
     
-    html += `</table>`;
+    html += `</table></div>`;
     
     // 分析結論
     const best = data.filter(d => d.avgAmp > 0 && d.count >= 5).sort((a, b) => b.avgAmp - a.avgAmp)[0];
@@ -7843,28 +7985,7 @@ function bindInputEvents() {
             if(inquiryMatches.length > 0) {
                 html += `<div class="history-results-title">📋 詢圈案例 (${inquiryMatches.length}筆)</div>`;
                 inquiryMatches.forEach(d => {
-                    const h = safeFloat(d.marketHigh);
-                    const l = safeFloat(d.marketLow);
-                    const amp = (h > 0 && l > 0) ? ((h - l) / l * 100).toFixed(1) : '-';
-                    let guarantee = '-';
-                    if (d.guarantee) {
-                        guarantee = d.guarantee.includes('有') ? '有' : (d.guarantee.includes('無') ? '無' : d.guarantee);
-                    }
-                    // v3.62 新增：取得CB收盤價
-                    const cbClosePrice = window.cbClosePriceMap ? window.cbClosePriceMap[d.id] : null;
-                    const cbClosePriceStr = cbClosePrice > 0 ? safeFixed(cbClosePrice, 2) : '-';
-                    
-                    html += `<div class="inquiry-card">
-                        <span class="inquiry-badge">詢</span>
-                        <span class="inquiry-name">${d.name || '-'}(${d.id})</span>
-                        <span class="inquiry-info">${d.issueSize > 0 ? d.issueSize + '億' : '-'}</span>
-                        <span class="inquiry-info">${d.years > 0 ? d.years + 'Y' : '-'}</span>
-                        <span class="inquiry-info">${guarantee}</span>
-                        <span class="inquiry-info">高:<b>${h > 0 ? safeFixed(h,0) : '-'}</b></span>
-                        <span class="inquiry-info">低:<b>${l > 0 ? safeFixed(l,0) : '-'}</b></span>
-                        <span class="inquiry-info">振:<b class="pink">${amp}%</b></span>
-                        <span class="inquiry-info">CB收:<b style="color:#1565c0;">${cbClosePriceStr}</b></span>
-                    </div>`;
+                    html += generateInquiryCard(d);
                 });
             }
             

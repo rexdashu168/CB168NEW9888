@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97 (手機版優化)</title>
+<title>AI智能可轉債競拍系統 v3.97b (績效排行修正版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="embedded_data.js" onerror="console.warn('embedded_data.js not found, using defaults.')"></script>
 
@@ -918,6 +918,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     width: 100%;
     border-collapse: collapse;
     font-size: 12px;
+    table-layout: fixed;
 }
 .ranking-table th {
     background: #e8f5e9;
@@ -938,16 +939,27 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     border-bottom: 1px solid #f5f5f5;
     font-weight: 500;
 }
+/* v3.97b 調整欄寬 */
+.ranking-table th:nth-child(1),
+.ranking-table td:nth-child(1) { width: 32px; } /* # */
+.ranking-table th:nth-child(2),
+.ranking-table td:nth-child(2) { width: 50px; text-align: center; } /* 代號 */
+.ranking-table th:nth-child(3),
+.ranking-table td:nth-child(3) { width: auto; text-align: left; } /* 名稱 */
+.ranking-table th:nth-child(4),
+.ranking-table td:nth-child(4) { width: 42px; } /* 類型 */
+.ranking-table th:nth-child(5),
+.ranking-table td:nth-child(5) { width: 42px; } /* 狀態 */
+.ranking-table th:nth-child(6),
+.ranking-table td:nth-child(6) { width: 50px; } /* 掛牌高 */
+.ranking-table th:nth-child(7),
+.ranking-table td:nth-child(7) { width: 50px; } /* 掛牌低 */
+.ranking-table th:nth-child(8),
+.ranking-table td:nth-child(8) { width: 55px; } /* 振幅 */
+
 .ranking-table td:first-child {
     text-align: center;
     font-weight: 700;
-}
-.ranking-table td:nth-child(2) {
-    text-align: left;
-    max-width: 70px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 .ranking-table .rank-num {
     width: 22px;
@@ -1545,6 +1557,21 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     .right-section-content {
         padding: 14px;
     }
+    
+    /* v3.97b 手機版績效表格優化 */
+    .ranking-box {
+        padding: 8px;
+        overflow-x: auto;
+    }
+    .ranking-table {
+        min-width: 500px;
+        font-size: 12px;
+    }
+    .ranking-table th,
+    .ranking-table td {
+        padding: 8px 4px;
+        white-space: nowrap;
+    }
 }
 
 /* ================= v3.72 主力模擬出價面板 ================= */
@@ -1703,7 +1730,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 <div class="container" style="display: none;">
     <div class="header">
         <h1>🤖 AI智能可轉債競拍系統</h1>
-        <span class="version-badge">v3.97 手機版優化版</span>
+        <span class="version-badge">v3.97b 績效排行修正版</span>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -5800,17 +5827,38 @@ function generateYearlyRanking() {
         }
     });
     
-    // 詢圈資料
+    // 詢圈資料 - v3.97b 修復：使用listDate判斷年度
     inquiryRawData.forEach(d => {
         if (d.marketHigh > 0 && d.marketLow > 0) {
-            // 檢查是否已在競拍中
+            // 檢查是否已在競拍中（避免重複）
             if (allData.find(a => a.id === d.id)) return;
             
-            // 詢圈資料沒有openDate，嘗試從其他欄位推測年度
-            // 這裡簡化處理，假設有掛牌數據的詢圈都是較早年份
-            const amp = ((d.marketHigh - d.marketLow) / d.marketLow * 100);
-            // 由於詢圈沒有日期，這裡先跳過年度分組
-            // 未來可根據實際需求調整
+            // 使用listDate判斷年度
+            let year = null;
+            if (d.listDate) {
+                if (typeof d.listDate === 'number') {
+                    const date = new Date((d.listDate - 25569) * 86400 * 1000);
+                    year = date.getFullYear();
+                } else if (typeof d.listDate === 'string') {
+                    const parts = d.listDate.split(/[\/\-]/);
+                    year = parseInt(parts[0]);
+                    if (year < 100) year += 2000;
+                }
+            }
+            
+            if (year && year >= 2022 && year <= 2025) {
+                const amp = ((d.marketHigh - d.marketLow) / d.marketLow * 100);
+                allData.push({
+                    id: d.id,
+                    name: d.name,
+                    type: '詢圈',
+                    high: d.marketHigh,
+                    low: d.marketLow,
+                    amp: amp,
+                    year: year,
+                    status: listedSet.has(d.id) ? '掛牌中' : '已下市'
+                });
+            }
         }
     });
     

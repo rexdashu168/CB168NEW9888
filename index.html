@@ -9508,25 +9508,44 @@ function initQuickSelect() {
     const threeMonthsAgo = new Date(today);
     threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
     
+    // v3.95 修正：輔助函數 - 解析各種日期格式
+    function parseDateValue(dateVal) {
+        if (!dateVal || dateVal === '-') return null;
+        
+        // 數字格式（Excel序列值）
+        if (typeof dateVal === 'number') {
+            return new Date((dateVal - 25569) * 86400 * 1000);
+        }
+        
+        // Date 對象
+        if (dateVal instanceof Date) {
+            return dateVal;
+        }
+        
+        // 字串格式（如 "2024/12/15" 或 "2024-12-15"）
+        if (typeof dateVal === 'string') {
+            const normalized = dateVal.replace(/\//g, '-');
+            const parsed = new Date(normalized);
+            if (!isNaN(parsed.getTime())) {
+                return parsed;
+            }
+        }
+        
+        return null;
+    }
+    
     if (window.auctionRawData && auctionRawData.length > 0) {
         // 篩選近3個月的競拍案例，按日期排序（新到舊）
         const recentAuctions = auctionRawData
             .filter(d => {
-                if (!d.openDate) return false;
-                let dateObj;
-                if (typeof d.openDate === 'number') {
-                    dateObj = new Date((d.openDate - 25569) * 86400 * 1000);
-                } else if (d.openDate instanceof Date) {
-                    dateObj = d.openDate;
-                } else {
-                    return false;
-                }
+                const dateObj = parseDateValue(d.openDate);
+                if (!dateObj) return false;
                 return dateObj >= threeMonthsAgo && dateObj <= today;
             })
             .sort((a, b) => {
-                const dateA = typeof a.openDate === 'number' ? a.openDate : 0;
-                const dateB = typeof b.openDate === 'number' ? b.openDate : 0;
-                return dateB - dateA;
+                const dateA = parseDateValue(a.openDate);
+                const dateB = parseDateValue(b.openDate);
+                return (dateB || 0) - (dateA || 0);
             })
             .slice(0, 20); // 最多顯示20筆
         
@@ -9536,7 +9555,7 @@ function initQuickSelect() {
                 originalData: d,
                 cbName: d.name || d.id,
                 cbCode: d.id,
-                stockCode: d.stockCode || '',
+                stockCode: d.stockCode || d.stockId || '',
                 industry: d.industry || '-',
                 issueSize: d.issueSize || 0,
                 convPrice: d.conversionPrice || 0,
@@ -9562,10 +9581,8 @@ function initQuickSelect() {
             
             // 格式化日期
             let dateStr = '';
-            if (d.openDate) {
-                const dateObj = typeof d.openDate === 'number' 
-                    ? new Date((d.openDate - 25569) * 86400 * 1000) 
-                    : d.openDate;
+            const dateObj = parseDateValue(d.openDate);
+            if (dateObj) {
                 dateStr = `${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
             }
             
@@ -9582,23 +9599,14 @@ function initQuickSelect() {
         const recentInquiries = inquiryRawData
             .filter(d => {
                 const dateField = d.listDate || d.openDate;
-                if (!dateField) return false;
-                let dateObj;
-                if (typeof dateField === 'number') {
-                    dateObj = new Date((dateField - 25569) * 86400 * 1000);
-                } else if (dateField instanceof Date) {
-                    dateObj = dateField;
-                } else {
-                    return false;
-                }
+                const dateObj = parseDateValue(dateField);
+                if (!dateObj) return false;
                 return dateObj >= threeMonthsAgo && dateObj <= today;
             })
             .sort((a, b) => {
-                const dateFieldA = a.listDate || a.openDate;
-                const dateFieldB = b.listDate || b.openDate;
-                const dateA = typeof dateFieldA === 'number' ? dateFieldA : 0;
-                const dateB = typeof dateFieldB === 'number' ? dateFieldB : 0;
-                return dateB - dateA;
+                const dateA = parseDateValue(a.listDate || a.openDate);
+                const dateB = parseDateValue(b.listDate || b.openDate);
+                return (dateB || 0) - (dateA || 0);
             })
             .slice(0, 20); // 最多顯示20筆
         
@@ -9632,11 +9640,8 @@ function initQuickSelect() {
             
             // 格式化日期
             let dateStr = '';
-            const dateField = d.listDate || d.openDate;
-            if (dateField) {
-                const dateObj = typeof dateField === 'number' 
-                    ? new Date((dateField - 25569) * 86400 * 1000) 
-                    : dateField;
+            const dateObj = parseDateValue(d.listDate || d.openDate);
+            if (dateObj) {
                 dateStr = `${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
             }
             
@@ -9649,7 +9654,7 @@ function initQuickSelect() {
         });
     }
     
-    // 監聯選擇事件
+    // 監聽選擇事件
     select.addEventListener('change', handleQuickSelect);
 }
 

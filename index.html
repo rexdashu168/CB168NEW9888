@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97v (產業信評不綁規模)</title>
+<title>AI智能可轉債競拍系統 v3.97w (規模連動修正)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 
 <style>
@@ -1724,7 +1724,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 <div class="container" style="display: none;">
     <div class="header">
         <h1>🤖 AI智能可轉債競拍系統</h1>
-        <span class="version-badge">v3.97v 產業信評不綁規模</span>
+        <span class="version-badge">v3.97w 規模連動修正</span>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -9584,11 +9584,25 @@ function displayResult(r) {
     
     // 取得當前標的條件
     const step4Guarantee = inputData.guarantee || '無擔保';
-    const step4Size = parseFloat(inputData.issueSize) || 5;
+    
+    // v3.97w: 優先使用閃電帶入的實際規模數字
+    let step4Size = window.currentActualIssueSize || 0;
+    if (step4Size <= 0) {
+        // 從下拉選單區間推算中間值
+        const sizeRange = inputData.issueSize || '';
+        if (sizeRange === '小於2億') step4Size = 1;
+        else if (sizeRange === '2~5億') step4Size = 3.5;
+        else if (sizeRange === '5~10億') step4Size = 7.5;
+        else if (sizeRange === '10~15億') step4Size = 12.5;
+        else if (sizeRange === '15~20億') step4Size = 17.5;
+        else if (sizeRange === '大於20億') step4Size = 25;
+        else step4Size = 5; // 預設
+    }
+    
     const step4Industry = (inputData.industry || '').split(' ')[0];  // 取主分類
     const step4Rating = String(inputData.rating || '').replace(/[^0-9]/g, '');  // 只取數字
     
-    // v3.97u: Debug 輸出
+    // v3.97w: Debug 輸出
     console.log('🧠 Step4 篩選條件:', { step4Guarantee, step4Size, step4Industry, step4Rating });
     
     // 規模範圍 50%-150% (v3.97s 放寬條件增加樣本數)
@@ -10565,6 +10579,11 @@ function handleQuickSelect() {
     }
     
     // 發行規模區間
+    // v3.97w: 同時存實際數字供 Step 4 使用
+    if (c.issueSize > 0) {
+        window.currentActualIssueSize = c.issueSize;
+        console.log('⚡ 閃電帶入實際規模:', c.issueSize, '億');
+    }
     if (c.sizeRange) {
         document.getElementById('issueSize').value = c.sizeRange;
     } else if (c.issueSize > 0) {

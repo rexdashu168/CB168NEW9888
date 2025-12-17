@@ -1793,7 +1793,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
             <div class="form-group"><label>發行規模區間 *</label><select id="issueSize"><option value="">請選擇...</option><option value="小於2億">小於2億</option><option value="2~5億">2~5億</option><option value="5~10億">5~10億</option><option value="10~15億">10~15億</option><option value="15~20億">15~20億</option><option value="大於20億">大於20億</option></select><div id="issueSizeInfo" class="info-box"></div><div id="issueSizeTip300" class="tip-300" style="display:none;"></div></div>
             <div class="form-group">
                 <label>理論價區間 * <span id="theoRangeMode" style="font-size:11px; color:#1976d2; font-weight:normal;">（輸入股價/轉換價後自動計算）</span></label>
-                <select id="theoRange"><option value="">請選擇或由下方自動計算...</option><option value="小於90元">小於90元</option><option value="90~95元">90~95元</option><option value="95~100元">95~100元</option><option value="100~105元">100~105元</option><option value="105~110元">105~110元</option><option value="110~115元">110~115元</option><option value="大於115元">大於115元</option></select>
+                <select id="theoRange"><option value="">請選擇或由下方自動計算...</option><option value="小於90元">小於90元</option><option value="90~95元">90~95元</option><option value="95~100元">95~100元</option><option value="100~105元">100~105元</option><option value="105~110元">105~110元</option><option value="110~115元">110~115元</option><option value="115~120元">115~120元</option><option value="大於120元">大於120元</option></select>
                 <div id="theoRangeInfo" class="info-box"></div>
                 <div id="theoRangeTip300" class="tip-300" style="display:none;"></div>
                 <div id="theoAutoCalcInfo" style="display:none; background:#e3f2fd; padding:8px 12px; border-radius:6px; margin-top:5px; font-size:12px;">
@@ -4099,7 +4099,7 @@ async function loadStatistics() {
                 window.dimensionRankings['股本'][s.key] = { avgHigh: s.avgHigh, rank: idx + 1, total: capitalStats.length, count: s.count };
             });
             
-            // 計算理論價區間排名
+            // 計算理論價區間排名（v3.97z: 8區間版本）
             const theoRanges = [
                 { key: '小於90元', filter: d => d.theoreticalPrice > 0 && d.theoreticalPrice < 90 },
                 { key: '90~95元', filter: d => d.theoreticalPrice >= 90 && d.theoreticalPrice < 95 },
@@ -4107,7 +4107,8 @@ async function loadStatistics() {
                 { key: '100~105元', filter: d => d.theoreticalPrice >= 100 && d.theoreticalPrice < 105 },
                 { key: '105~110元', filter: d => d.theoreticalPrice >= 105 && d.theoreticalPrice < 110 },
                 { key: '110~115元', filter: d => d.theoreticalPrice >= 110 && d.theoreticalPrice < 115 },
-                { key: '大於115元', filter: d => d.theoreticalPrice >= 115 }
+                { key: '115~120元', filter: d => d.theoreticalPrice >= 115 && d.theoreticalPrice < 120 },
+                { key: '大於120元', filter: d => d.theoreticalPrice >= 120 }
             ];
             const theoStats = theoRanges.map(r => {
                 const filtered = rankData.filter(r.filter);
@@ -4501,7 +4502,8 @@ async function loadStatistics() {
                     if (theo < 105) return '100~105元';
                     if (theo < 110) return '105~110元';
                     if (theo < 115) return '110~115元';
-                    return '大於115元';
+                    if (theo < 120) return '115~120元';
+                    return '大於120元';
                 };
                 
                 // 從產業對照表獲取產業
@@ -5014,6 +5016,7 @@ function getStatsSmart(category, val, guaranteeType = null) {
         }
     }
     // v3.72 新增：理論價區間（最重要的維度）
+    // v3.97z 修改：8區間版本
     else if (category === '理論價') {
         rangeLabel = val;
         if (val === '小於90元') { filterFn = d => d.theoreticalPrice > 0 && d.theoreticalPrice < 90; }
@@ -5022,18 +5025,22 @@ function getStatsSmart(category, val, guaranteeType = null) {
         else if (val === '100~105元') { filterFn = d => d.theoreticalPrice >= 100 && d.theoreticalPrice < 105; }
         else if (val === '105~110元') { filterFn = d => d.theoreticalPrice >= 105 && d.theoreticalPrice < 110; }
         else if (val === '110~115元') { filterFn = d => d.theoreticalPrice >= 110 && d.theoreticalPrice < 115; }
+        else if (val === '115~120元') { filterFn = d => d.theoreticalPrice >= 115 && d.theoreticalPrice < 120; }
+        else if (val === '大於120元') { filterFn = d => d.theoreticalPrice >= 120; }
+        // 向下相容舊的「大於115元」
         else if (val === '大於115元') { filterFn = d => d.theoreticalPrice >= 115; }
         // 向下相容：如果是數值則用舊邏輯
         else {
             const v = parseFloat(val);
             if (!isNaN(v)) {
-                if (v < 90) { rangeLabel = "< 90 元"; filterFn = d => d.theoreticalPrice > 0 && d.theoreticalPrice < 90; }
-                else if (v < 95) { rangeLabel = "90~95 元"; filterFn = d => d.theoreticalPrice >= 90 && d.theoreticalPrice < 95; }
-                else if (v < 100) { rangeLabel = "95~100 元"; filterFn = d => d.theoreticalPrice >= 95 && d.theoreticalPrice < 100; }
-                else if (v < 105) { rangeLabel = "100~105 元"; filterFn = d => d.theoreticalPrice >= 100 && d.theoreticalPrice < 105; }
-                else if (v < 110) { rangeLabel = "105~110 元"; filterFn = d => d.theoreticalPrice >= 105 && d.theoreticalPrice < 110; }
-                else if (v < 115) { rangeLabel = "110~115 元"; filterFn = d => d.theoreticalPrice >= 110 && d.theoreticalPrice < 115; }
-                else { rangeLabel = "> 115 元"; filterFn = d => d.theoreticalPrice >= 115; }
+                if (v < 90) { rangeLabel = "小於90元"; filterFn = d => d.theoreticalPrice > 0 && d.theoreticalPrice < 90; }
+                else if (v < 95) { rangeLabel = "90~95元"; filterFn = d => d.theoreticalPrice >= 90 && d.theoreticalPrice < 95; }
+                else if (v < 100) { rangeLabel = "95~100元"; filterFn = d => d.theoreticalPrice >= 95 && d.theoreticalPrice < 100; }
+                else if (v < 105) { rangeLabel = "100~105元"; filterFn = d => d.theoreticalPrice >= 100 && d.theoreticalPrice < 105; }
+                else if (v < 110) { rangeLabel = "105~110元"; filterFn = d => d.theoreticalPrice >= 105 && d.theoreticalPrice < 110; }
+                else if (v < 115) { rangeLabel = "110~115元"; filterFn = d => d.theoreticalPrice >= 110 && d.theoreticalPrice < 115; }
+                else if (v < 120) { rangeLabel = "115~120元"; filterFn = d => d.theoreticalPrice >= 115 && d.theoreticalPrice < 120; }
+                else { rangeLabel = "大於120元"; filterFn = d => d.theoreticalPrice >= 120; }
             }
         }
     }
@@ -8963,13 +8970,15 @@ function updateSmartReminders() {
         t = (s/actualC)*100;
         
         // v3.72 新增：自動判斷理論價區間並更新下拉選單
+        // v3.97z 修改：8區間版本
         if (t < 90) autoCalcRange = '小於90元';
         else if (t < 95) autoCalcRange = '90~95元';
         else if (t < 100) autoCalcRange = '95~100元';
         else if (t < 105) autoCalcRange = '100~105元';
         else if (t < 110) autoCalcRange = '105~110元';
         else if (t < 115) autoCalcRange = '110~115元';
-        else autoCalcRange = '大於115元';
+        else if (t < 120) autoCalcRange = '115~120元';
+        else autoCalcRange = '大於120元';
         
         // 自動更新理論價區間選項
         document.getElementById('theoRange').value = autoCalcRange;
@@ -10257,7 +10266,7 @@ function displayResult(r) {
     `;
     
     // v3.97z 新增：理論價值分析法表格（按理論價區間 + 擔保類型細分）
-    // 定義理論價區間
+    // 定義理論價區間（8個區間，確保每區間有足夠樣本）
     const theoRanges = [
         { label: '小於90元', min: 0, max: 90 },
         { label: '90~95元', min: 90, max: 95 },
@@ -10265,7 +10274,8 @@ function displayResult(r) {
         { label: '100~105元', min: 100, max: 105 },
         { label: '105~110元', min: 105, max: 110 },
         { label: '110~115元', min: 110, max: 115 },
-        { label: '大於115元', min: 115, max: 999 }
+        { label: '115~120元', min: 115, max: 120 },
+        { label: '大於120元', min: 120, max: 999 }
     ];
     
     // 取得當前理論價以便高亮
@@ -10277,7 +10287,7 @@ function displayResult(r) {
             break;
         }
     }
-    if (currentTheo >= 115) currentTheoRange = '大於115元';
+    if (currentTheo >= 120) currentTheoRange = '大於120元';
     
     // 計算各區間統計數據（區分擔保類型）
     let theoTableRows = '';
@@ -10285,7 +10295,7 @@ function displayResult(r) {
         // 篩選該區間的案例
         const rangeFilter = d => {
             const theo = d.theoreticalPrice || 0;
-            if (range.label === '大於115元') return theo >= 115;
+            if (range.label === '大於120元') return theo >= 120;
             return theo >= range.min && theo < range.max;
         };
         
@@ -10370,7 +10380,7 @@ function displayResult(r) {
         const isGuaranteed = r.inputData.guarantee === '有擔保';
         const rangeFilter = d => {
             const theo = d.theoreticalPrice || 0;
-            if (currentTheoRange === '大於115元') return theo >= 115;
+            if (currentTheoRange === '大於120元') return theo >= 120;
             const range = theoRanges.find(r => r.label === currentTheoRange);
             return range && theo >= range.min && theo < range.max;
         };
@@ -11062,7 +11072,8 @@ function handleQuickSelect() {
         else if (theoPrice < 105) theoRange = '100~105元';
         else if (theoPrice < 110) theoRange = '105~110元';
         else if (theoPrice < 115) theoRange = '110~115元';
-        else theoRange = '大於115元';
+        else if (theoPrice < 120) theoRange = '115~120元';
+        else theoRange = '大於120元';
         document.getElementById('theoRange').value = theoRange;
     }
     // 詢圈案例不自動帶入理論價區間
@@ -12468,7 +12479,7 @@ function showTheoPriceTip(theoRange) {
     const tipBox = document.getElementById('theoRangeTip300');
     if (!tipBox) return;
     
-    // 映射選項值到統計表key
+    // 映射選項值到統計表key（v3.97z: 8區間版本）
     const theoMap = {
         '小於90元': 'deep_out',
         '90~95元': 'out',
@@ -12476,7 +12487,8 @@ function showTheoPriceTip(theoRange) {
         '100~105元': 'par',
         '105~110元': 'par',
         '110~115元': 'in',
-        '大於115元': 'deep_in'
+        '115~120元': 'in',
+        '大於120元': 'deep_in'
     };
     
     const key = theoMap[theoRange];
@@ -12674,11 +12686,12 @@ function generateConditionSummaryHTML(r) {
         }
     }
     
-    // 3. 理論價區間
+    // 3. 理論價區間（v3.97z: 8區間版本）
     if (r.theoRange || r.theoreticalPrice) {
         const theoMap = {
             '小於90元': 'deep_out', '90~95元': 'out', '95~100元': 'out',
-            '100~105元': 'par', '105~110元': 'par', '110~115元': 'in', '大於115元': 'deep_in'
+            '100~105元': 'par', '105~110元': 'par', '110~115元': 'in', 
+            '115~120元': 'in', '大於120元': 'deep_in'
         };
         let key = theoMap[r.theoRange];
         if (!key && r.theoreticalPrice) {
@@ -12686,7 +12699,7 @@ function generateConditionSummaryHTML(r) {
             if (tp < 90) key = 'deep_out';
             else if (tp < 100) key = 'out';
             else if (tp < 110) key = 'par';
-            else if (tp < 130) key = 'in';
+            else if (tp < 120) key = 'in';
             else key = 'deep_in';
         }
         const data = key ? window.CONV_VALUE_TABLE[key] : null;
@@ -14559,7 +14572,7 @@ function updateMajorPlayerSimulation(params) {
 }
 
 /**
- * 取得理論價區間key
+ * 取得理論價區間key（v3.97z: 8區間版本）
  */
 function getTheoPriceKey(theoPrice) {
     if (theoPrice < 90) return '小於90元';
@@ -14568,7 +14581,8 @@ function getTheoPriceKey(theoPrice) {
     if (theoPrice < 105) return '100~105元';
     if (theoPrice < 110) return '105~110元';
     if (theoPrice < 115) return '110~115元';
-    return '大於115元';
+    if (theoPrice < 120) return '115~120元';
+    return '大於120元';
 }
 
 /**

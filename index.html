@@ -4419,7 +4419,8 @@ async function loadStatistics() {
                 'id': id, 
                 'stockId': getSmartValue(row, 'stockId'),
                 'name': getSmartValue(row, 'name'), 
-                'openDate': formatDate(getSmartValue(row, 'openDate')),  // v3.90 修正：統一用formatDate處理日期
+                'openDate': getSmartValue(row, 'openDate'),  // v3.95 修正：保留原始日期格式供後續解析
+                'openDateStr': formatDate(getSmartValue(row, 'openDate')),  // 格式化字串用於顯示
                 'industry': getSmartValue(row, 'industry'), 
                 'broker': getSmartValue(row, 'broker'),
                 'guarantee': getSmartValue(row, 'guarantee'), 
@@ -9524,6 +9525,17 @@ function initQuickSelect() {
         
         // 字串格式（如 "2024/12/15" 或 "2024-12-15"）
         if (typeof dateVal === 'string') {
+            // 處理 "2024/12/15" 格式
+            if (dateVal.includes('/')) {
+                const parts = dateVal.split('/');
+                if (parts.length === 3) {
+                    const year = parseInt(parts[0]);
+                    const month = parseInt(parts[1]) - 1;
+                    const day = parseInt(parts[2]);
+                    return new Date(year, month, day);
+                }
+            }
+            // 處理 "2024-12-15" 格式
             const normalized = dateVal.replace(/\//g, '-');
             const parsed = new Date(normalized);
             if (!isNaN(parsed.getTime())) {
@@ -9534,9 +9546,21 @@ function initQuickSelect() {
         return null;
     }
     
+    // 除錯輸出
+    console.log('[閃電帶入] auctionRawData 筆數:', window.auctionRawData ? auctionRawData.length : 0);
+    console.log('[閃電帶入] inquiryRawData 筆數:', window.inquiryRawData ? inquiryRawData.length : 0);
+    console.log('[閃電帶入] 篩選日期範圍:', threeMonthsAgo.toISOString(), '~', today.toISOString());
+    
     if (window.auctionRawData && auctionRawData.length > 0) {
-        // 篩選近3個月的競拍案例，按日期排序（新到舊）
-        const recentAuctions = auctionRawData
+        // 除錯：檢查前幾筆的日期
+        console.log('[閃電帶入] auctionRawData 前3筆日期:', auctionRawData.slice(0, 3).map(d => ({
+            name: d.name,
+            openDate: d.openDate,
+            parsed: parseDateValue(d.openDate)
+        })));
+        
+        // v3.95 修正：先嘗試篩選近3個月，如果沒有則取最新的有效資料
+        let recentAuctions = auctionRawData
             .filter(d => {
                 const dateObj = parseDateValue(d.openDate);
                 if (!dateObj) return false;
@@ -9547,7 +9571,30 @@ function initQuickSelect() {
                 const dateB = parseDateValue(b.openDate);
                 return (dateB || 0) - (dateA || 0);
             })
-            .slice(0, 20); // 最多顯示20筆
+            .slice(0, 20);
+        
+        // 如果3個月內沒有資料，則取有開標日期的最新20筆
+        if (recentAuctions.length === 0) {
+            console.log('[閃電帶入] 3個月內無競拍資料，改取最新20筆有日期的資料');
+            recentAuctions = auctionRawData
+                .filter(d => parseDateValue(d.openDate) !== null)
+                .sort((a, b) => {
+                    const dateA = parseDateValue(a.openDate);
+                    const dateB = parseDateValue(b.openDate);
+                    return (dateB || 0) - (dateA || 0);
+                })
+                .slice(0, 20);
+        }
+        
+        // 如果還是沒有（沒有日期欄位），則取有最低得標價的最新20筆
+        if (recentAuctions.length === 0) {
+            console.log('[閃電帶入] 無有效日期資料，改取有成交價的20筆');
+            recentAuctions = auctionRawData
+                .filter(d => d.minBidPrice > 0)
+                .slice(0, 20);
+        }
+        
+        console.log('[閃電帶入] 最終近期競拍筆數:', recentAuctions.length);
         
         recentAuctions.forEach((d, idx) => {
             const caseData = {
@@ -9579,11 +9626,21 @@ function initQuickSelect() {
             const option = document.createElement('option');
             option.value = 'recent_' + (recentCompletedCases.length - 1);
             
-            // 格式化日期
+            // 格式化日期 - 優先使用已格式化的字串，否則解析原始日期
             let dateStr = '';
-            const dateObj = parseDateValue(d.openDate);
-            if (dateObj) {
-                dateStr = `${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
+            if (d.openDateStr && d.openDateStr !== '-') {
+                // 從 "2024/12/15" 提取月/日
+                const parts = d.openDateStr.split('/');
+                if (parts.length >= 3) {
+                    dateStr = `${parseInt(parts[1])}/${parseInt(parts[2])}`;
+                } else {
+                    dateStr = d.openDateStr;
+                }
+            } else {
+                const dateObj = parseDateValue(d.openDate);
+                if (dateObj) {
+                    dateStr = `${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
+                }
             }
             
             const priceInfo = d.minBidPrice > 0 ? `成交${safeFixed(d.minBidPrice, 0)}` : '-';
@@ -9595,8 +9652,15 @@ function initQuickSelect() {
     
     // 3. 處理近1-3個月已完成詢圈案例（從inquiryRawData / 01工作表）
     if (window.inquiryRawData && inquiryRawData.length > 0) {
-        // 篩選近3個月的詢圈案例
-        const recentInquiries = inquiryRawData
+        // 除錯：檢查前幾筆的日期
+        console.log('[閃電帶入] inquiryRawData 前3筆日期:', inquiryRawData.slice(0, 3).map(d => ({
+            name: d.name,
+            listDate: d.listDate,
+            parsed: parseDateValue(d.listDate)
+        })));
+        
+        // v3.95 修正：先嘗試篩選近3個月，如果沒有則取最新的有效資料
+        let recentInquiries = inquiryRawData
             .filter(d => {
                 const dateField = d.listDate || d.openDate;
                 const dateObj = parseDateValue(dateField);
@@ -9608,7 +9672,30 @@ function initQuickSelect() {
                 const dateB = parseDateValue(b.listDate || b.openDate);
                 return (dateB || 0) - (dateA || 0);
             })
-            .slice(0, 20); // 最多顯示20筆
+            .slice(0, 20);
+        
+        // 如果3個月內沒有資料，則取有掛牌日期的最新20筆
+        if (recentInquiries.length === 0) {
+            console.log('[閃電帶入] 3個月內無詢圈資料，改取最新20筆有日期的資料');
+            recentInquiries = inquiryRawData
+                .filter(d => parseDateValue(d.listDate) !== null)
+                .sort((a, b) => {
+                    const dateA = parseDateValue(a.listDate);
+                    const dateB = parseDateValue(b.listDate);
+                    return (dateB || 0) - (dateA || 0);
+                })
+                .slice(0, 20);
+        }
+        
+        // 如果還是沒有，則取有掛牌表現的20筆
+        if (recentInquiries.length === 0) {
+            console.log('[閃電帶入] 無有效日期資料，改取有掛牌表現的20筆');
+            recentInquiries = inquiryRawData
+                .filter(d => d.marketHigh > 0 || d.marketLow > 0)
+                .slice(0, 20);
+        }
+        
+        console.log('[閃電帶入] 最終近期詢圈筆數:', recentInquiries.length);
         
         recentInquiries.forEach((d, idx) => {
             const caseData = {

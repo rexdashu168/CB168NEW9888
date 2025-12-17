@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97y (標題顯示代號名稱)</title>
+<title>AI智能可轉債競拍系統 v3.97z (標題顯示代號名稱)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 
 <style>
@@ -1724,7 +1724,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 <div class="container" style="display: none;">
     <div class="header">
         <h1>🤖 AI智能可轉債競拍系統</h1>
-        <span class="version-badge">v3.97y 標題顯示代號名稱</span>
+        <span class="version-badge">v3.97z 標題顯示代號名稱</span>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -3979,6 +3979,9 @@ async function loadStatistics() {
                 
                 if (name && mult > 0 && price > 0 && dateRaw) {
                     const d = parseExcelDate(dateRaw);
+                    // v3.97z 新增：取得溢價率
+                    const premium = safeFloat(row['最低溢價'] || row['最低得標溢價']) * 100; // 轉為百分比
+                    const avgPrem = safeFloat(row['平均溢價'] || row['得標加權平均價格_溢價率']) * 100;
                     if (d) {
                         allAuctions.push({
                             name: name,
@@ -3987,6 +3990,7 @@ async function loadStatistics() {
                             mult: mult,
                             price: price,
                             theo: theo,
+                            premium: premium || avgPrem || (price - theo),  // v3.97z：優先使用最低溢價，否則用平均溢價，再否則計算
                             guarantee: guarantee,
                             rowIndex: index
                         });
@@ -8459,7 +8463,7 @@ function bindInputEvents() {
     document.getElementById('cbName').addEventListener('input', function() {
         const val = this.value.trim();
         
-        // v3.97y: 用戶手動輸入時清除閃電帶入的全域變數
+        // v3.97z: 用戶手動輸入時清除閃電帶入的全域變數
         window.currentCBCode = '';
         window.currentCBName = '';
         window.currentActualIssueSize = 0;
@@ -10078,7 +10082,7 @@ function displayResult(r) {
            </div>` 
         : '';
     
-    // v3.97y: 組合標題（優先用閃電帶入的CB代號+名稱）
+    // v3.97z: 組合標題（優先用閃電帶入的CB代號+名稱）
     let resultTitle = r.cbName || '未命名標的';
     if (window.currentCBCode && window.currentCBName) {
         resultTitle = `${window.currentCBCode} ${window.currentCBName}`;
@@ -10552,7 +10556,7 @@ function handleQuickSelect() {
     
     if (!c) return;
     
-    // v3.97y: 保存完整標的資訊供結果標題使用
+    // v3.97z: 保存完整標的資訊供結果標題使用
     window.currentCBCode = c.cbCode || '';
     window.currentCBName = c.cbName || '';
     console.log('⚡ 閃電帶入標的:', window.currentCBCode, window.currentCBName);
@@ -12466,6 +12470,8 @@ function calculateMarketMomentum() {
             date: d.date,
             mult: d.mult,
             price: d.price,
+            premium: d.premium || 0,  // v3.97z 新增：溢價率
+            guarantee: d.guarantee || '-',  // v3.97z 新增：擔保類型
             multDiff: multDiff,
             multDiffPct: (multDiff * 100).toFixed(1)
         });
@@ -12530,28 +12536,44 @@ function calculateMarketMomentum() {
         </div>
     `;
     
-    // 生成近期開標明細HTML
+    // v3.97z 改進：生成近期開標明細HTML（增加擔保類型和溢價率）
     if (detailsDiv) {
+        // v3.97z 新增：統計有擔保/無擔保數量
+        const securedCount = details.filter(d => d.guarantee === '有擔保').length;
+        const unsecuredCount = details.filter(d => d.guarantee === '無擔保').length;
+        
         let detailsHTML = details.map((d, idx) => {
             const diffColor = parseFloat(d.multDiffPct) > 0 ? '#dc2626' : (parseFloat(d.multDiffPct) < 0 ? '#0891b2' : '#666');
             const diffSign = parseFloat(d.multDiffPct) >= 0 ? '+' : '';
+            // v3.97z 新增：擔保類型標籤顏色
+            const guarColor = d.guarantee === '有擔保' ? '#2e7d32' : '#e65100';
+            const guarText = d.guarantee === '有擔保' ? '有' : (d.guarantee === '無擔保' ? '無' : '-');
+            const premiumDisplay = d.premium ? d.premium.toFixed(1) + '%' : '-';
             return `
-                <div style="display:flex; justify-content:space-between; padding:6px 8px; background:${idx % 2 === 0 ? '#fff' : '#fafafa'}; border-radius:4px; margin-bottom:2px; font-size:11px;">
-                    <span style="flex:1;">${d.name}</span>
-                    <span style="width:80px; text-align:center; color:#666;">${d.date || '-'}</span>
-                    <span style="width:50px; text-align:right;"><b>${d.mult.toFixed(2)}x</b></span>
-                    <span style="width:55px; text-align:right;"><b>${d.price.toFixed(1)}</b></span>
-                    <span style="width:50px; text-align:right; color:${diffColor};">${diffSign}${d.multDiffPct}%</span>
+                <div style="display:flex; align-items:center; padding:6px 8px; background:${idx % 2 === 0 ? '#fff' : '#fafafa'}; border-radius:4px; margin-bottom:2px; font-size:11px;">
+                    <span style="width:28px; text-align:center; font-size:9px; color:#fff; background:${guarColor}; padding:1px 3px; border-radius:3px; margin-right:4px;">${guarText}</span>
+                    <span style="flex:1; font-weight:500;">${d.name}</span>
+                    <span style="width:65px; text-align:center; color:#666; font-size:10px;">${d.date || '-'}</span>
+                    <span style="width:40px; text-align:right; color:#1565c0;"><b>${d.mult.toFixed(2)}x</b></span>
+                    <span style="width:45px; text-align:right; color:#2e7d32;"><b>${premiumDisplay}</b></span>
+                    <span style="width:45px; text-align:right;"><b>${d.price.toFixed(1)}</b></span>
+                    <span style="width:45px; text-align:right; color:${diffColor}; font-size:10px;">${diffSign}${d.multDiffPct}%</span>
                 </div>`;
         }).join('');
         
         detailsDiv.innerHTML = `
-            <div style="display:flex; justify-content:space-between; padding:4px 8px; background:#e2e8f0; border-radius:4px; margin-bottom:4px; font-size:10px; font-weight:bold; color:#64748b;">
+            <div style="display:flex; gap:8px; margin-bottom:8px; font-size:10px;">
+                <span style="background:#2e7d32; color:#fff; padding:2px 6px; border-radius:4px;">🛡️ 有擔保 ${securedCount}檔</span>
+                <span style="background:#e65100; color:#fff; padding:2px 6px; border-radius:4px;">📋 無擔保 ${unsecuredCount}檔</span>
+            </div>
+            <div style="display:flex; align-items:center; padding:4px 8px; background:#e2e8f0; border-radius:4px; margin-bottom:4px; font-size:10px; font-weight:bold; color:#64748b;">
+                <span style="width:28px; text-align:center;">擔</span>
                 <span style="flex:1;">名稱</span>
-                <span style="width:80px; text-align:center;">開標日</span>
-                <span style="width:50px; text-align:right;">倍數</span>
-                <span style="width:55px; text-align:right;">最低得標</span>
-                <span style="width:50px; text-align:right;">vs歷史</span>
+                <span style="width:65px; text-align:center;">開標日</span>
+                <span style="width:40px; text-align:right;">倍數</span>
+                <span style="width:45px; text-align:right;">溢價</span>
+                <span style="width:45px; text-align:right;">最低標</span>
+                <span style="width:45px; text-align:right;">vs歷史</span>
             </div>
             ${detailsHTML}
         `;

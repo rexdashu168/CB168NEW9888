@@ -16434,99 +16434,28 @@ function generateCrowdingHTML() {
     const priceDiff = cs.priceDiff;
     const hasCrowdingEffect = multDiff < -0.2 || priceDiff < -0.5;
     
-    // 按順序的統計
-    let orderRows = '';
-    const orderLabels = { '1': '第1檔', '2': '第2檔', '3': '第3檔', '4+': '第4檔+' };
-    ['1', '2', '3', '4+'].forEach(key => {
-        const data = cs.byOrder[key];
-        if (data && data.count > 0) {
-            const multVsSingle = (data.avgMult - cs.singleWeeks.avgMult).toFixed(2);
-            const priceVsSingle = (data.avgPrice - cs.singleWeeks.avgPrice).toFixed(2);
-            const multColor = parseFloat(multVsSingle) < 0 ? '#dc2626' : '#22c55e';
-            const priceColor = parseFloat(priceVsSingle) < 0 ? '#dc2626' : '#22c55e';
-            
-            orderRows += `<tr>
-                <td style="padding:4px 8px; border:1px solid #ddd;">${orderLabels[key]}</td>
-                <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${data.count}</td>
-                <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${data.avgMult.toFixed(2)}x</td>
-                <td style="padding:4px 8px; border:1px solid #ddd; text-align:center; color:${multColor};">${parseFloat(multVsSingle) >= 0 ? '+' : ''}${multVsSingle}</td>
-                <td style="padding:4px 8px; border:1px solid #ddd; text-align:center;">${data.avgPrice.toFixed(2)}</td>
-                <td style="padding:4px 8px; border:1px solid #ddd; text-align:center; color:${priceColor};">${parseFloat(priceVsSingle) >= 0 ? '+' : ''}${priceVsSingle}</td>
-            </tr>`;
-        }
-    });
-    
     const effectColor = hasCrowdingEffect ? '#dc2626' : '#22c55e';
-    const effectText = hasCrowdingEffect ? '⚠️ 存在排擠效應' : '✅ 無明顯排擠效應';
+    const effectIcon = hasCrowdingEffect ? '⚠️' : '✅';
+    const effectText = hasCrowdingEffect ? '密集週競爭較弱' : '無明顯排擠';
     
+    // 簡化版：一行式摘要
     return `
-    <div style="border:2px solid #f97316; border-radius:12px; padding:15px; margin-top:15px; background:linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);">
-        <h3 style="color:#ea580c; margin:0 0 15px 0;">📅 資金排擠效應分析</h3>
-        
-        <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:15px; margin-bottom:15px;">
-            <div style="background:white; padding:12px; border-radius:8px; border-left:4px solid #22c55e;">
-                <div style="font-size:11px; color:#666;">單獨週（週內僅1檔）</div>
-                <div style="font-size:10px; color:#999;">${cs.singleWeeks.count} 檔</div>
-                <div style="display:flex; gap:15px; margin-top:6px;">
-                    <div>
-                        <span style="font-size:10px; color:#666;">平均倍數</span>
-                        <div style="font-size:18px; font-weight:bold; color:#22c55e;">${cs.singleWeeks.avgMult.toFixed(2)}x</div>
-                    </div>
-                    <div>
-                        <span style="font-size:10px; color:#666;">平均得標價</span>
-                        <div style="font-size:18px; font-weight:bold; color:#22c55e;">${cs.singleWeeks.avgPrice.toFixed(2)}元</div>
-                    </div>
-                </div>
-            </div>
-            <div style="background:white; padding:12px; border-radius:8px; border-left:4px solid #f97316;">
-                <div style="font-size:11px; color:#666;">密集週（週內2檔以上）</div>
-                <div style="font-size:10px; color:#999;">${cs.crowdedWeeks.count} 檔（${cs.crowdedWeekCount}週）</div>
-                <div style="display:flex; gap:15px; margin-top:6px;">
-                    <div>
-                        <span style="font-size:10px; color:#666;">平均倍數</span>
-                        <div style="font-size:18px; font-weight:bold; color:#f97316;">${cs.crowdedWeeks.avgMult.toFixed(2)}x</div>
-                    </div>
-                    <div>
-                        <span style="font-size:10px; color:#666;">平均得標價</span>
-                        <div style="font-size:18px; font-weight:bold; color:#f97316;">${cs.crowdedWeeks.avgPrice.toFixed(2)}元</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div style="background:white; padding:10px; border-radius:8px; margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
-            <div>
-                <span style="font-size:12px; color:#666;">差異：</span>
-                <span style="font-size:14px; font-weight:bold; color:${cs.multDiff < 0 ? '#dc2626' : '#22c55e'};">
-                    倍數 ${cs.multDiff >= 0 ? '+' : ''}${cs.multDiff.toFixed(2)}x
-                </span>
-                <span style="margin:0 8px; color:#ddd;">|</span>
-                <span style="font-size:14px; font-weight:bold; color:${cs.priceDiff < 0 ? '#dc2626' : '#22c55e'};">
-                    價格 ${cs.priceDiff >= 0 ? '+' : ''}${cs.priceDiff.toFixed(2)}元
+    <div style="background:linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%); border-radius:8px; padding:12px; margin-top:12px; border-left:4px solid ${effectColor};">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+                <span style="font-size:14px;">📅</span>
+                <span style="font-size:12px; font-weight:bold; color:#333;">資金排擠效應</span>
+                <span style="padding:2px 8px; border-radius:10px; background:${effectColor}20; color:${effectColor}; font-size:11px; font-weight:bold;">
+                    ${effectIcon} ${effectText}
                 </span>
             </div>
-            <div style="padding:4px 12px; border-radius:15px; background:${effectColor}20; color:${effectColor}; font-weight:bold; font-size:12px;">
-                ${effectText}
+            <div style="display:flex; gap:15px; font-size:11px; color:#666;">
+                <span>單獨週 <b style="color:#22c55e;">${cs.singleWeeks.avgMult.toFixed(2)}x</b></span>
+                <span>密集週 <b style="color:#f97316;">${cs.crowdedWeeks.avgMult.toFixed(2)}x</b></span>
+                <span>差異 <b style="color:${multDiff < 0 ? '#dc2626' : '#22c55e'};">${multDiff >= 0 ? '+' : ''}${multDiff.toFixed(2)}x</b></span>
             </div>
         </div>
-        
-        <div style="font-size:12px; font-weight:bold; color:#333; margin-bottom:6px;">📊 密集週內按順序分析</div>
-        <table style="width:100%; border-collapse:collapse; font-size:11px; margin-bottom:10px;">
-            <tr style="background:#f3f4f6;">
-                <th style="padding:4px 8px; border:1px solid #ddd;">順序</th>
-                <th style="padding:4px 8px; border:1px solid #ddd;">樣本</th>
-                <th style="padding:4px 8px; border:1px solid #ddd;">平均倍數</th>
-                <th style="padding:4px 8px; border:1px solid #ddd;">vs單獨</th>
-                <th style="padding:4px 8px; border:1px solid #ddd;">平均價</th>
-                <th style="padding:4px 8px; border:1px solid #ddd;">vs單獨</th>
-            </tr>
-            ${orderRows}
-        </table>
-        
-        <div style="font-size:10px; color:#666; padding:8px; background:#f8fafc; border-radius:6px;">
-            💡 <b>應用提示：</b>若同一週有多檔競拍，後面開標的標的可能因資金被前面標的卡住而表現較弱。
-            ${hasCrowdingEffect ? '建議對密集週的後序標的採用較保守的出價策略。' : '目前數據未顯示明顯排擠效應。'}
-        </div>
+        ${hasCrowdingEffect ? `<div style="font-size:10px; color:#666; margin-top:8px;">💡 本週若有多檔競拍，後序標的建議採保守策略</div>` : ''}
     </div>`;
 }
 

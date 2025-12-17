@@ -4915,7 +4915,7 @@ function calculateGlobalMarketStats() {
 }
 
 // v3.52 修改：增加排除前三高的統計 + 擔保類型細分統計
-function getStatsSmart(category, val) {
+function getStatsSmart(category, val, guaranteeType = null) {
     let stats = { 
         low: 0, 
         avg: 0, 
@@ -4932,6 +4932,19 @@ function getStatsSmart(category, val) {
     };
     let filterFn = null;
     let rangeLabel = "";
+
+    // v3.97z 新增：先按擔保類型篩選基礎數據
+    let baseAuctionData = auctionRawData;
+    let baseInquiryData = inquiryRawData;
+    
+    if (guaranteeType === '有擔保') {
+        baseAuctionData = auctionRawData.filter(d => (d.guarantee || '').includes('有'));
+        baseInquiryData = inquiryRawData.filter(d => (d.guarantee || '').includes('有'));
+    } else if (guaranteeType === '無擔保') {
+        baseAuctionData = auctionRawData.filter(d => (d.guarantee || '').includes('無') || !(d.guarantee || '').includes('有'));
+        baseInquiryData = inquiryRawData.filter(d => (d.guarantee || '').includes('無') || !(d.guarantee || '').includes('有'));
+    }
+    // 如果 guaranteeType 為 null，則使用全部數據（向後兼容）
 
     // v3.69 修改：支援區間選擇（字串格式）
     if (category === '股本') {
@@ -5047,7 +5060,8 @@ function getStatsSmart(category, val) {
 
     if (filterFn) {
         // === 競拍數據統計（全部）===
-        const auctionFiltered = auctionRawData.filter(filterFn);
+        // v3.97z 修改：使用已按擔保類型篩選的基礎數據
+        const auctionFiltered = baseAuctionData.filter(filterFn);
         let sumLowP = 0, sumAvgP = 0, sumLowPr = 0, sumAvgPr = 0, sumH = 0, sumL = 0, countM = 0, count = 0;
         
         auctionFiltered.forEach(d => {
@@ -5097,8 +5111,9 @@ function getStatsSmart(category, val) {
         }
         
         // === 詢圈數據統計（全部）===
-        const inquiryFiltered = inquiryRawData.filter(filterFn);
-        console.log(`[${category}=${val}] 詢圈篩選結果: ${inquiryFiltered.length} 筆 (原始: ${inquiryRawData.length} 筆)`);
+        // v3.97z 修改：使用已按擔保類型篩選的基礎數據
+        const inquiryFiltered = baseInquiryData.filter(filterFn);
+        console.log(`[${category}=${val}${guaranteeType ? ' ('+guaranteeType+')' : ''}] 詢圈篩選結果: ${inquiryFiltered.length} 筆 (原始: ${baseInquiryData.length} 筆)`);
         
         let iSumH = 0, iSumL = 0, iCountM = 0;
         
@@ -8576,6 +8591,7 @@ function bindInputEvents() {
 
     // v3.52 修改：其他欄位綁定，傳入排除前三 + 擔保類型細分
     // v3.74 新增：傳入排名資訊
+    // v3.97z 新增：傳入擔保類型，讓即時統計卡片也按擔保類型篩選
     const bind = (id, cat) => {
         const handler = function() {
             const rawVal = this.value;
@@ -8584,7 +8600,9 @@ function bindInputEvents() {
                 let displayTitle = val;
                 if(['股本','發行規模','轉換價'].includes(cat)) displayTitle = getRangeLabel(cat, val);
                 
-                const smartResult = getStatsSmart(cat, val);
+                // v3.97z: 取得當前選擇的擔保類型
+                const currentGuarantee = document.getElementById('guarantee')?.value || null;
+                const smartResult = getStatsSmart(cat, val, currentGuarantee);
                 
                 // v3.74 新增：取得排名資訊
                 let rankingInfo = null;
@@ -8594,9 +8612,11 @@ function bindInputEvents() {
                 }
                 
                 // v3.52: 傳入排除前三 + 擔保類型細分數據 + v3.74排名
+                // v3.97z: 標題加入擔保類型提示
+                const guaranteeLabel = currentGuarantee ? ` [${currentGuarantee}]` : '';
                 show(id+'Info', generateStandardCard(
                     smartResult.rawData, 
-                    `區間統計: ${displayTitle}`, 
+                    `區間統計: ${displayTitle}${guaranteeLabel}`, 
                     smartResult.inquiryData,
                     smartResult.excludeTop3Data,
                     smartResult.excludeTop3InquiryData,
@@ -8919,203 +8939,6 @@ function updateMarketSentiment() {
     
     div.innerHTML = html;
     div.style.display = 'block';
-    
-    // v3.97z 新增：生成Step 1標籤切換用的兩種表格內容
-    // === 溢價率分析法表格 ===
-    let premiumTableHTML = `
-        <div style="font-size:11px; color:#666; margin-bottom:8px;">
-            適用情境：理論價 ≥ 95元時，在理論價基礎上加上歷史平均溢價率計算投標價
-        </div>
-        <div style="overflow-x:auto;">
-        <table style="width:100%; border-collapse:collapse; font-size:11px; min-width:400px;">
-            <tr style="background:#1565c0; color:white;">
-                <th style="padding:8px 4px; text-align:center; font-weight:bold;">維度</th>
-                <th style="padding:8px 4px; text-align:center; font-weight:bold;">條件</th>
-                <th style="padding:8px 4px; text-align:center; font-weight:bold;">最低<br>溢價</th>
-                <th style="padding:8px 4px; text-align:center; font-weight:bold;">平均<br>溢價</th>
-                <th style="padding:8px 4px; text-align:center; font-weight:bold;">權重</th>
-                <th style="padding:8px 4px; text-align:center; font-weight:bold;">加權<br>最低</th>
-                <th style="padding:8px 4px; text-align:center; font-weight:bold;">加權<br>平均</th>
-            </tr>`;
-    
-    let rowIdx = 0;
-    if (industry && industryResult.count > 0) {
-        const normWeight = totalWeight > 0 ? Math.round(WEIGHTS.industry / totalWeight * 100) : 35;
-        const bgColor = rowIdx % 2 === 0 ? '#f8f9fa' : '#ffffff';
-        premiumTableHTML += `<tr style="background:${bgColor};">
-            <td style="padding:8px 4px; text-align:center; font-weight:bold;">產業</td>
-            <td style="padding:8px 4px; text-align:center; font-weight:bold; color:#1565c0;">${industry}</td>
-            <td style="padding:8px 4px; text-align:center; color:#2e7d32;">${industryResult.lowPremium?.toFixed(2) || '-'}%</td>
-            <td style="padding:8px 4px; text-align:center; color:#d32f2f;">${industryResult.avgPremium?.toFixed(2) || '-'}%</td>
-            <td style="padding:8px 4px; text-align:center;">${normWeight}%</td>
-            <td style="padding:8px 4px; text-align:center; color:#2e7d32;">${(industryResult.lowPremium * normWeight / 100).toFixed(2)}</td>
-            <td style="padding:8px 4px; text-align:center; color:#d32f2f;">${(industryResult.avgPremium * normWeight / 100).toFixed(2)}</td>
-        </tr>`;
-        rowIdx++;
-    }
-    
-    if (rating && ratingResult.count > 0) {
-        const normWeight = totalWeight > 0 ? Math.round(WEIGHTS.rating / totalWeight * 100) : 40;
-        const ratingName = rating === 'BBB' ? 'BBB' : rating;
-        const bgColor = rowIdx % 2 === 0 ? '#f8f9fa' : '#ffffff';
-        premiumTableHTML += `<tr style="background:${bgColor};">
-            <td style="padding:8px 4px; text-align:center; font-weight:bold;">信評</td>
-            <td style="padding:8px 4px; text-align:center; font-weight:bold; color:#1565c0;">${ratingName}</td>
-            <td style="padding:8px 4px; text-align:center; color:#2e7d32;">${ratingResult.lowPremium?.toFixed(2) || '-'}%</td>
-            <td style="padding:8px 4px; text-align:center; color:#d32f2f;">${ratingResult.avgPremium?.toFixed(2) || '-'}%</td>
-            <td style="padding:8px 4px; text-align:center;">${normWeight}%</td>
-            <td style="padding:8px 4px; text-align:center; color:#2e7d32;">${(ratingResult.lowPremium * normWeight / 100).toFixed(2)}</td>
-            <td style="padding:8px 4px; text-align:center; color:#d32f2f;">${(ratingResult.avgPremium * normWeight / 100).toFixed(2)}</td>
-        </tr>`;
-        rowIdx++;
-    }
-    
-    if (issueSize && sizeResult.count > 0) {
-        const normWeight = totalWeight > 0 ? Math.round(WEIGHTS.size / totalWeight * 100) : 25;
-        const bgColor = rowIdx % 2 === 0 ? '#f8f9fa' : '#ffffff';
-        premiumTableHTML += `<tr style="background:${bgColor};">
-            <td style="padding:8px 4px; text-align:center; font-weight:bold;">規模</td>
-            <td style="padding:8px 4px; text-align:center; font-weight:bold; color:#1565c0;">${issueSize}</td>
-            <td style="padding:8px 4px; text-align:center; color:#2e7d32;">${sizeResult.lowPremium?.toFixed(2) || '-'}%</td>
-            <td style="padding:8px 4px; text-align:center; color:#d32f2f;">${sizeResult.avgPremium?.toFixed(2) || '-'}%</td>
-            <td style="padding:8px 4px; text-align:center;">${normWeight}%</td>
-            <td style="padding:8px 4px; text-align:center; color:#2e7d32;">${(sizeResult.lowPremium * normWeight / 100).toFixed(2)}</td>
-            <td style="padding:8px 4px; text-align:center; color:#d32f2f;">${(sizeResult.avgPremium * normWeight / 100).toFixed(2)}</td>
-        </tr>`;
-        rowIdx++;
-    }
-    
-    // 加入券商和理論價維度（如果有選擇）
-    if (broker) {
-        const brokerCases = sortedData.filter(d => d.broker === broker);
-        const brokerResult = calcWeightedData(brokerCases);
-        if (brokerResult.count > 0) {
-            const bgColor = rowIdx % 2 === 0 ? '#f8f9fa' : '#ffffff';
-            premiumTableHTML += `<tr style="background:${bgColor};">
-                <td style="padding:8px 4px; text-align:center; font-weight:bold;">券商</td>
-                <td style="padding:8px 4px; text-align:center; font-weight:bold; color:#1565c0;">${broker}</td>
-                <td style="padding:8px 4px; text-align:center; color:#2e7d32;">${brokerResult.lowPremium?.toFixed(2) || '-'}%</td>
-                <td style="padding:8px 4px; text-align:center; color:#d32f2f;">${brokerResult.avgPremium?.toFixed(2) || '-'}%</td>
-                <td style="padding:8px 4px; text-align:center; color:#999;">參考</td>
-                <td style="padding:8px 4px; text-align:center; color:#999;">-</td>
-                <td style="padding:8px 4px; text-align:center; color:#999;">-</td>
-            </tr>`;
-            rowIdx++;
-        }
-    }
-    
-    if (theoRange) {
-        const theoCases = sortedData.filter(d => {
-            const theo = d.theoPrice || 0;
-            if (theoRange === '小於90元') return theo > 0 && theo < 90;
-            if (theoRange === '90~95元') return theo >= 90 && theo < 95;
-            if (theoRange === '95~100元') return theo >= 95 && theo < 100;
-            if (theoRange === '100~105元') return theo >= 100 && theo < 105;
-            if (theoRange === '105~110元') return theo >= 105 && theo < 110;
-            if (theoRange === '110~115元') return theo >= 110 && theo < 115;
-            if (theoRange === '大於115元') return theo >= 115;
-            return false;
-        });
-        const theoResult = calcWeightedData(theoCases);
-        if (theoResult.count > 0) {
-            const bgColor = rowIdx % 2 === 0 ? '#f8f9fa' : '#ffffff';
-            premiumTableHTML += `<tr style="background:${bgColor};">
-                <td style="padding:8px 4px; text-align:center; font-weight:bold;">理論價</td>
-                <td style="padding:8px 4px; text-align:center; font-weight:bold; color:#1565c0;">${theoRange}</td>
-                <td style="padding:8px 4px; text-align:center; color:#2e7d32;">${theoResult.lowPremium?.toFixed(2) || '-'}%</td>
-                <td style="padding:8px 4px; text-align:center; color:#d32f2f;">${theoResult.avgPremium?.toFixed(2) || '-'}%</td>
-                <td style="padding:8px 4px; text-align:center; color:#999;">參考</td>
-                <td style="padding:8px 4px; text-align:center; color:#999;">-</td>
-                <td style="padding:8px 4px; text-align:center; color:#999;">-</td>
-            </tr>`;
-        }
-    }
-    
-    premiumTableHTML += `</table></div>
-        <div style="margin-top:10px; padding:10px; background:#e8f5e9; border-radius:6px;">
-            <div style="font-size:11px; color:#2e7d32; font-weight:bold;">📊 合成結果</div>
-            <div style="display:flex; gap:20px; margin-top:6px;">
-                <div><span style="color:#666;">合成最低溢價：</span><span style="font-weight:bold; color:#2e7d32;">${finalLowP.toFixed(2)}%</span></div>
-                <div><span style="color:#666;">合成平均溢價：</span><span style="font-weight:bold; color:#d32f2f;">${finalAvgP.toFixed(2)}%</span></div>
-            </div>
-        </div>`;
-    
-    // === 平均得標價法表格 ===
-    let priceTableHTML = `
-        <div style="font-size:11px; color:#666; margin-bottom:8px;">
-            適用情境：理論價 < 95元時，直接參考歷史平均得標價格作為投標依據
-        </div>
-        <div style="overflow-x:auto;">
-        <table style="width:100%; border-collapse:collapse; font-size:11px; min-width:400px;">
-            <tr style="background:#7b1fa2; color:white;">
-                <th style="padding:8px 4px; text-align:center; font-weight:bold;">維度</th>
-                <th style="padding:8px 4px; text-align:center; font-weight:bold;">條件</th>
-                <th style="padding:8px 4px; text-align:center; font-weight:bold;">最低<br>得標</th>
-                <th style="padding:8px 4px; text-align:center; font-weight:bold;">平均<br>得標</th>
-                <th style="padding:8px 4px; text-align:center; font-weight:bold;">權重</th>
-                <th style="padding:8px 4px; text-align:center; font-weight:bold;">加權<br>最低</th>
-                <th style="padding:8px 4px; text-align:center; font-weight:bold;">加權<br>平均</th>
-            </tr>`;
-    
-    rowIdx = 0;
-    if (industry && industryResult.count > 0) {
-        const normWeight = totalWeight > 0 ? Math.round(WEIGHTS.industry / totalWeight * 100) : 35;
-        const bgColor = rowIdx % 2 === 0 ? '#faf4fc' : '#ffffff';
-        priceTableHTML += `<tr style="background:${bgColor};">
-            <td style="padding:8px 4px; text-align:center; font-weight:bold;">產業</td>
-            <td style="padding:8px 4px; text-align:center; font-weight:bold; color:#7b1fa2;">${industry}</td>
-            <td style="padding:8px 4px; text-align:center; color:#2e7d32;">${industryResult.lowBidPrice?.toFixed(2) || '-'}</td>
-            <td style="padding:8px 4px; text-align:center; color:#d32f2f;">${industryResult.avgBidPrice?.toFixed(2) || '-'}</td>
-            <td style="padding:8px 4px; text-align:center;">${normWeight}%</td>
-            <td style="padding:8px 4px; text-align:center; color:#2e7d32;">${(industryResult.lowBidPrice * normWeight / 100).toFixed(2)}</td>
-            <td style="padding:8px 4px; text-align:center; color:#d32f2f;">${(industryResult.avgBidPrice * normWeight / 100).toFixed(2)}</td>
-        </tr>`;
-        rowIdx++;
-    }
-    
-    if (rating && ratingResult.count > 0) {
-        const normWeight = totalWeight > 0 ? Math.round(WEIGHTS.rating / totalWeight * 100) : 40;
-        const ratingName = rating === 'BBB' ? 'BBB' : rating;
-        const bgColor = rowIdx % 2 === 0 ? '#faf4fc' : '#ffffff';
-        priceTableHTML += `<tr style="background:${bgColor};">
-            <td style="padding:8px 4px; text-align:center; font-weight:bold;">信評</td>
-            <td style="padding:8px 4px; text-align:center; font-weight:bold; color:#7b1fa2;">${ratingName}</td>
-            <td style="padding:8px 4px; text-align:center; color:#2e7d32;">${ratingResult.lowBidPrice?.toFixed(2) || '-'}</td>
-            <td style="padding:8px 4px; text-align:center; color:#d32f2f;">${ratingResult.avgBidPrice?.toFixed(2) || '-'}</td>
-            <td style="padding:8px 4px; text-align:center;">${normWeight}%</td>
-            <td style="padding:8px 4px; text-align:center; color:#2e7d32;">${(ratingResult.lowBidPrice * normWeight / 100).toFixed(2)}</td>
-            <td style="padding:8px 4px; text-align:center; color:#d32f2f;">${(ratingResult.avgBidPrice * normWeight / 100).toFixed(2)}</td>
-        </tr>`;
-        rowIdx++;
-    }
-    
-    if (issueSize && sizeResult.count > 0) {
-        const normWeight = totalWeight > 0 ? Math.round(WEIGHTS.size / totalWeight * 100) : 25;
-        const bgColor = rowIdx % 2 === 0 ? '#faf4fc' : '#ffffff';
-        priceTableHTML += `<tr style="background:${bgColor};">
-            <td style="padding:8px 4px; text-align:center; font-weight:bold;">規模</td>
-            <td style="padding:8px 4px; text-align:center; font-weight:bold; color:#7b1fa2;">${issueSize}</td>
-            <td style="padding:8px 4px; text-align:center; color:#2e7d32;">${sizeResult.lowBidPrice?.toFixed(2) || '-'}</td>
-            <td style="padding:8px 4px; text-align:center; color:#d32f2f;">${sizeResult.avgBidPrice?.toFixed(2) || '-'}</td>
-            <td style="padding:8px 4px; text-align:center;">${normWeight}%</td>
-            <td style="padding:8px 4px; text-align:center; color:#2e7d32;">${(sizeResult.lowBidPrice * normWeight / 100).toFixed(2)}</td>
-            <td style="padding:8px 4px; text-align:center; color:#d32f2f;">${(sizeResult.avgBidPrice * normWeight / 100).toFixed(2)}</td>
-        </tr>`;
-        rowIdx++;
-    }
-    
-    priceTableHTML += `</table></div>
-        <div style="margin-top:10px; padding:10px; background:#f3e5f5; border-radius:6px;">
-            <div style="font-size:11px; color:#7b1fa2; font-weight:bold;">📊 合成結果</div>
-            <div style="display:flex; gap:20px; margin-top:6px;">
-                <div><span style="color:#666;">合成最低得標：</span><span style="font-weight:bold; color:#2e7d32;">${finalLowB.toFixed(2)}元</span></div>
-                <div><span style="color:#666;">合成平均得標：</span><span style="font-weight:bold; color:#d32f2f;">${finalAvgB.toFixed(2)}元</span></div>
-            </div>
-        </div>`;
-    
-    // 存儲到全局變數供標籤切換使用
-    window.step1PremiumContent = premiumTableHTML;
-    window.step1PriceContent = priceTableHTML;
 }
 
 function updateSmartReminders() {
@@ -9496,11 +9319,14 @@ function calculateEvaluation(d) {
     }));
     
     // === 計算各維度數據（兩種方法都要）===
+    // v3.97z 修改：傳入擔保類型，讓各維度統計只計算同類型擔保的案例
+    const guaranteeType = d.guarantee || null;
     let wL=0, wA=0, resDims={};
     let wLowBid=0, wAvgBid=0; // 得標價格分析法用
     
     dims.forEach(x=>{
-        const s = getStatsSmart(x.c, x.v), coef = getWeightCoefficient(x.k, x.v);
+        // v3.97z: 傳入擔保類型，確保各維度統計數據來自同類型擔保案例
+        const s = getStatsSmart(x.c, x.v, guaranteeType), coef = getWeightCoefficient(x.k, x.v);
         
         // 溢價率數據
         resDims[x.k] = { 
@@ -9534,6 +9360,8 @@ function calculateEvaluation(d) {
     let tA = (wA*objR)+((d.subjectiveAvgPremium||0)*subR);
     
     // v3.72 新增：擔保調整因素（不作為維度，而是最終調整）
+    // v3.97z 說明：各維度數據已按擔保類型篩選，此處 +1% 為籌碼集中效應的額外微調
+    // 如果測試後發現過高或過低，可調整此值
     const guaranteeAdj = (d.guarantee === '有擔保') ? 1.0 : 0;
     tL += guaranteeAdj;
     tA += guaranteeAdj;
@@ -10303,6 +10131,131 @@ function displayResult(r) {
         <td><b>${r.weightedLowBidPrice}</b></td>
         <td><b>${r.weightedAvgBidPrice}</b></td>
     </tr></tfoot>`;
+    
+    // v3.97z: 存儲完整的分析法表格到全局變數供 Step 1 標籤切換使用
+    window.step1PremiumContent = `
+        <div style="font-size:11px; color:#666; margin-bottom:8px;">
+            適用情境：理論價 ≥ 95元時，在理論價基礎上加上歷史平均溢價率計算投標價
+        </div>
+        <div style="background:#e3f2fd; padding:10px; border-radius:8px; margin-bottom:12px;">
+            <div style="display:flex; gap:15px; flex-wrap:wrap;">
+                <div style="flex:1; min-width:120px;">
+                    <div style="color:#1565c0; font-size:11px;">預估溢價區間</div>
+                    <div style="font-size:16px; font-weight:bold; color:#0d47a1;">${r.totalLowPremium}% ~ ${r.totalAvgPremium}%</div>
+                </div>
+                <div style="flex:1; min-width:120px;">
+                    <div style="color:#1565c0; font-size:11px;">保守投標價</div>
+                    <div style="font-size:16px; font-weight:bold; color:#2e7d32;">${r.premiumBidPrices.conservative} 元</div>
+                </div>
+                <div style="flex:1; min-width:120px;">
+                    <div style="color:#1565c0; font-size:11px;">平衡投標價</div>
+                    <div style="font-size:16px; font-weight:bold; color:#1565c0;">${r.premiumBidPrices.balanced} 元</div>
+                </div>
+            </div>
+        </div>
+        <div style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse; font-size:11px; min-width:450px;">
+                <thead><tr style="background:#1565c0; color:white;">
+                    <th style="padding:8px 4px; text-align:center;">維度</th>
+                    <th style="padding:8px 4px; text-align:center;">條件</th>
+                    <th style="padding:8px 4px; text-align:center;">最低<br>溢價</th>
+                    <th style="padding:8px 4px; text-align:center;">平均<br>溢價</th>
+                    <th style="padding:8px 4px; text-align:center;">權重</th>
+                    <th style="padding:8px 4px; text-align:center;">加權<br>最低</th>
+                    <th style="padding:8px 4px; text-align:center;">加權<br>平均</th>
+                </tr></thead>
+                <tbody>${premiumRows}</tbody>
+            </table>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-top:12px;">
+            <div style="text-align:center; padding:10px 6px; background:#e3f2fd; border:2px solid #1565c0; border-radius:8px;">
+                <div style="font-size:10px; color:#1565c0;">🛡️ 保守</div>
+                <div style="font-size:18px; font-weight:bold; color:#1565c0;">${r.premiumBidPrices.conservative}</div>
+                <div style="font-size:9px; color:#666;">理論價×(1+${r.totalLowPremium}%)</div>
+            </div>
+            <div style="text-align:center; padding:10px 6px; background:#fff8e1; border:2px solid #ffc107; border-radius:8px;">
+                <div style="font-size:10px; color:#f57f17;">⚖️ 平衡</div>
+                <div style="font-size:18px; font-weight:bold; color:#f57f17;">${r.premiumBidPrices.balanced}</div>
+                <div style="font-size:9px; color:#666;">理論價×(1+${r.totalAvgPremium}%)</div>
+            </div>
+            <div style="text-align:center; padding:10px 6px; background:#ffebee; border:2px solid #e91e63; border-radius:8px;">
+                <div style="font-size:10px; color:#c2185b;">🚀 積極</div>
+                <div style="font-size:18px; font-weight:bold; color:#c2185b;">${r.premiumBidPrices.aggressive}</div>
+                <div style="font-size:9px; color:#666;"></div>
+            </div>
+            <div style="text-align:center; padding:10px 6px; background:#f3e5f5; border:2px solid #9c27b0; border-radius:8px;">
+                <div style="font-size:10px; color:#7b1fa2;">🔥 極致</div>
+                <div style="font-size:18px; font-weight:bold; color:#7b1fa2;">${r.premiumBidPrices.ultimate}</div>
+                <div style="font-size:9px; color:#666;"></div>
+            </div>
+        </div>
+    `;
+    
+    window.step1PriceContent = `
+        <div style="font-size:11px; color:#666; margin-bottom:8px;">
+            適用情境：理論價 < 95元 或 溢價率法低於底標時，直接用歷史平均得標價格加權計算
+        </div>
+        <div style="background:#fff3e0; padding:10px; border-radius:8px; margin-bottom:12px;">
+            <div style="display:flex; gap:15px; flex-wrap:wrap;">
+                <div style="flex:1; min-width:120px;">
+                    <div style="color:#e65100; font-size:11px;">加權最低得標價</div>
+                    <div style="font-size:16px; font-weight:bold; color:#2e7d32;">${r.weightedLowBidPrice} 元</div>
+                    <div style="font-size:10px; color:#666;">≈ 溢價率 ${r.impliedLowPremium}%</div>
+                </div>
+                <div style="flex:1; min-width:120px;">
+                    <div style="color:#e65100; font-size:11px;">加權平均得標價</div>
+                    <div style="font-size:16px; font-weight:bold; color:#bf360c;">${r.weightedAvgBidPrice} 元</div>
+                    <div style="font-size:10px; color:#666;">≈ 溢價率 ${r.impliedAvgPremium}%</div>
+                </div>
+                <div style="flex:1; min-width:120px;">
+                    <div style="color:#e65100; font-size:11px;">底標價格</div>
+                    <div style="font-size:16px; font-weight:bold; color:#333;">${r.floorPrice} 元</div>
+                </div>
+            </div>
+        </div>
+        <div style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse; font-size:11px; min-width:450px;">
+                <thead><tr style="background:#e65100; color:white;">
+                    <th style="padding:8px 4px; text-align:center;">維度</th>
+                    <th style="padding:8px 4px; text-align:center;">條件</th>
+                    <th style="padding:8px 4px; text-align:center;">最低<br>得標價</th>
+                    <th style="padding:8px 4px; text-align:center;">平均<br>得標價</th>
+                    <th style="padding:8px 4px; text-align:center;">權重</th>
+                    <th style="padding:8px 4px; text-align:center;">加權<br>最低</th>
+                    <th style="padding:8px 4px; text-align:center;">加權<br>平均</th>
+                </tr></thead>
+                <tbody>${priceRows}</tbody>
+            </table>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-top:12px;">
+            <div style="text-align:center; padding:10px 6px; background:#fff3e0; border:2px solid #e65100; border-radius:8px;">
+                <div style="font-size:10px; color:#e65100;">🛡️ 保守</div>
+                <div style="font-size:18px; font-weight:bold; color:#e65100;">${r.priceBidPrices.conservative}</div>
+                <div style="font-size:9px; color:#666;">加權最低得標價</div>
+            </div>
+            <div style="text-align:center; padding:10px 6px; background:#ffe0b2; border:2px solid #ff9800; border-radius:8px;">
+                <div style="font-size:10px; color:#ef6c00;">⚖️ 平衡</div>
+                <div style="font-size:18px; font-weight:bold; color:#ef6c00;">${r.priceBidPrices.balanced}</div>
+                <div style="font-size:9px; color:#666;">加權平均得標價</div>
+            </div>
+            <div style="text-align:center; padding:10px 6px; background:#ffccbc; border:2px solid #ff5722; border-radius:8px;">
+                <div style="font-size:10px; color:#d84315;">🚀 積極</div>
+                <div style="font-size:18px; font-weight:bold; color:#d84315;">${r.priceBidPrices.aggressive}</div>
+                <div style="font-size:9px; color:#666;"></div>
+            </div>
+            <div style="text-align:center; padding:10px 6px; background:#ffab91; border:2px solid #bf360c; border-radius:8px;">
+                <div style="font-size:10px; color:#bf360c;">🔥 極致</div>
+                <div style="font-size:18px; font-weight:bold; color:#bf360c;">${r.priceBidPrices.ultimate}</div>
+                <div style="font-size:9px; color:#666;"></div>
+            </div>
+        </div>
+    `;
+    
+    // 同步更新 Step 1 展開內容（預設顯示溢價率法）
+    const step1Content = document.getElementById('step1DetailContent');
+    if (step1Content) {
+        step1Content.innerHTML = window.step1PremiumContent;
+    }
     
     // 檢查溢價率法是否低於底標，並生成對應的說明
     const premiumWarning = r.premiumBelowFloor 

@@ -1700,8 +1700,6 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
                         <optgroup label="📋 即將詢圈（有時程且未完成）" id="upcomingInquiryGroup"></optgroup>
                         <optgroup label="⏳ 承銷中-競拍（尚未確定時程）" id="pendingAuctionGroup"></optgroup>
                         <optgroup label="⏳ 承銷中-詢圈（尚未確定時程）" id="pendingInquiryGroup"></optgroup>
-                        <optgroup label="✅ 近期完成競拍（1-3個月參考）" id="recentAuctionGroup"></optgroup>
-                        <optgroup label="✅ 近期完成詢圈（1-3個月參考）" id="recentInquiryGroup"></optgroup>
                     </select>
                 </div>
                 <div id="quickSelectInfo" style="display:none; background:#fff; padding:10px; border-radius:6px; margin-top:8px; font-size:13px; border-left:4px solid #ff9800;"></div>
@@ -9375,7 +9373,10 @@ function initResizer() {
 // v3.94 修改：重新分組邏輯
 //   - 即將競拍/詢圈：有時程且時程 >= 今天（尚未完成）
 //   - 承銷中：尚未確定時程
-//   - 近期完成：從01工作表，近1-3個月
+// v3.93 優化閃電帶入功能
+// 分組：
+//   - 即將競拍/詢圈：有時程且未完成
+//   - 承銷中：尚未確定時程
 // ==========================================
 let pendingCases = [];
 let recentCompletedCases = []; // v3.93 新增：近期完成案例
@@ -9387,8 +9388,6 @@ function initQuickSelect() {
     const upcomingInquiryGroup = document.getElementById('upcomingInquiryGroup');
     const pendingAuctionGroup = document.getElementById('pendingAuctionGroup');
     const pendingInquiryGroup = document.getElementById('pendingInquiryGroup');
-    const recentAuctionGroup = document.getElementById('recentAuctionGroup');
-    const recentInquiryGroup = document.getElementById('recentInquiryGroup');
     
     if (!select) return;
     
@@ -9397,17 +9396,10 @@ function initQuickSelect() {
     if (upcomingInquiryGroup) upcomingInquiryGroup.innerHTML = '';
     if (pendingAuctionGroup) pendingAuctionGroup.innerHTML = '';
     if (pendingInquiryGroup) pendingInquiryGroup.innerHTML = '';
-    if (recentAuctionGroup) recentAuctionGroup.innerHTML = '';
-    if (recentInquiryGroup) recentInquiryGroup.innerHTML = '';
-    
-    // 清空並重建案例陣列
-    recentCompletedCases = [];
     
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const currentYear = today.getFullYear();
-    const currentMonth = today.getMonth() + 1;
-    const currentDay = today.getDate();
     
     // v3.95 修正：輔助函數 - 解析投標期間並判斷是否已完成
     function parseBidPeriodAndCheck(bidPeriodStr) {
@@ -9450,9 +9442,6 @@ function initQuickSelect() {
         const hasSchedule = scheduleStatus.hasSchedule;
         const isCompleted = scheduleStatus.isCompleted;
         
-        // 已完成的案件跳過（會從01工作表取近期完成）
-        if (isCompleted) return;
-        
         // 準備顯示內容
         let priceLabel = '';
         if (c.auctionType === '競拍') {
@@ -9478,7 +9467,11 @@ function initQuickSelect() {
         const isInquiry = c.auctionType && (c.auctionType.includes('詢圈') || c.auctionType === '詢圈');
         
         if (isAuction) {
-            if (hasSchedule) {
+            if (isCompleted) {
+                // 已完成競拍
+                option.textContent = `✅ ${c.cbName} | ${c.industry} | ${priceLabel}${convInfo}${scheduleInfo}`;
+                if (pendingAuctionGroup) pendingAuctionGroup.appendChild(option);
+            } else if (hasSchedule) {
                 // 即將競拍
                 option.textContent = `🔥 ${c.cbName} | ${c.industry} | ${priceLabel}${convInfo}${scheduleInfo}`;
                 if (upcomingAuctionGroup) upcomingAuctionGroup.appendChild(option);
@@ -9489,7 +9482,11 @@ function initQuickSelect() {
             }
         } else if (isInquiry) {
             // 詢圈
-            if (hasSchedule) {
+            if (isCompleted) {
+                // 已完成詢圈
+                option.textContent = `✅ ${c.cbName} | ${c.industry} | ${c.guarantee || '-'}${scheduleInfo}`;
+                if (pendingInquiryGroup) pendingInquiryGroup.appendChild(option);
+            } else if (hasSchedule) {
                 // 即將詢圈
                 option.textContent = `📋 ${c.cbName} | ${c.industry} | ${c.guarantee || '-'}${scheduleInfo}`;
                 if (upcomingInquiryGroup) upcomingInquiryGroup.appendChild(option);
@@ -9504,215 +9501,6 @@ function initQuickSelect() {
             if (pendingAuctionGroup) pendingAuctionGroup.appendChild(option);
         }
     });
-    
-    // 2. 處理近1-3個月已完成競拍案例（從auctionRawData / 01工作表）
-    const threeMonthsAgo = new Date(today);
-    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-    
-    // v3.95 修正：輔助函數 - 解析各種日期格式
-    function parseDateValue(dateVal) {
-        if (!dateVal || dateVal === '-') return null;
-        
-        // 數字格式（Excel序列值）
-        if (typeof dateVal === 'number') {
-            return new Date((dateVal - 25569) * 86400 * 1000);
-        }
-        
-        // Date 對象
-        if (dateVal instanceof Date) {
-            return dateVal;
-        }
-        
-        // 字串格式（如 "2024/12/15" 或 "2024-12-15"）
-        if (typeof dateVal === 'string') {
-            // 處理 "2024/12/15" 格式
-            if (dateVal.includes('/')) {
-                const parts = dateVal.split('/');
-                if (parts.length === 3) {
-                    const year = parseInt(parts[0]);
-                    const month = parseInt(parts[1]) - 1;
-                    const day = parseInt(parts[2]);
-                    return new Date(year, month, day);
-                }
-            }
-            // 處理 "2024-12-15" 格式
-            const normalized = dateVal.replace(/\//g, '-');
-            const parsed = new Date(normalized);
-            if (!isNaN(parsed.getTime())) {
-                return parsed;
-            }
-        }
-        
-        return null;
-    }
-    
-    if (window.auctionRawData && auctionRawData.length > 0) {
-        // v3.95 修正：先嘗試篩選近3個月，如果沒有則取最新的有效資料
-        let recentAuctions = auctionRawData
-            .filter(d => {
-                const dateObj = parseDateValue(d.openDate);
-                if (!dateObj) return false;
-                return dateObj >= threeMonthsAgo && dateObj <= today;
-            })
-            .sort((a, b) => {
-                const dateA = parseDateValue(a.openDate);
-                const dateB = parseDateValue(b.openDate);
-                return (dateB || 0) - (dateA || 0);
-            })
-            .slice(0, 20);
-        
-        // 如果3個月內沒有資料，則取有開標日期的最新20筆
-        if (recentAuctions.length === 0) {
-            recentAuctions = auctionRawData
-                .filter(d => parseDateValue(d.openDate) !== null)
-                .sort((a, b) => {
-                    const dateA = parseDateValue(a.openDate);
-                    const dateB = parseDateValue(b.openDate);
-                    return (dateB || 0) - (dateA || 0);
-                })
-                .slice(0, 20);
-        }
-        
-        // 如果還是沒有（沒有日期欄位），則取有最低得標價的最新20筆
-        if (recentAuctions.length === 0) {
-            recentAuctions = auctionRawData
-                .filter(d => d.minBidPrice > 0)
-                .slice(0, 20);
-        }
-        
-        recentAuctions.forEach((d, idx) => {
-            const caseData = {
-                type: 'auction',
-                originalData: d,
-                cbName: d.name || d.id,
-                cbCode: d.id,
-                stockCode: d.stockCode || d.stockId || '',
-                industry: d.industry || '-',
-                issueSize: d.issueSize || 0,
-                convPrice: d.conversionPrice || 0,
-                guarantee: d.guarantee || '無擔保',
-                rating: d.rating || '',
-                years: d.years || 3,
-                broker: d.broker || '',
-                floorPrice: d.minBidPrice || 100,
-                stockPrice: d.closePrice || 0,
-                capital: d.capital || 0,
-                status: 'completed',
-                auctionType: '競拍',
-                minBidPrice: d.minBidPrice,
-                avgBidPrice: d.avgBidPrice,
-                marketHigh: d.marketHigh,
-                marketLow: d.marketLow
-            };
-            
-            recentCompletedCases.push(caseData);
-            
-            const option = document.createElement('option');
-            option.value = 'recent_' + (recentCompletedCases.length - 1);
-            
-            // 格式化日期 - 優先使用已格式化的字串，否則解析原始日期
-            let dateStr = '';
-            if (d.openDateStr && d.openDateStr !== '-') {
-                // 從 "2024/12/15" 提取月/日
-                const parts = d.openDateStr.split('/');
-                if (parts.length >= 3) {
-                    dateStr = `${parseInt(parts[1])}/${parseInt(parts[2])}`;
-                } else {
-                    dateStr = d.openDateStr;
-                }
-            } else {
-                const dateObj = parseDateValue(d.openDate);
-                if (dateObj) {
-                    dateStr = `${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
-                }
-            }
-            
-            const priceInfo = d.minBidPrice > 0 ? `成交${safeFixed(d.minBidPrice, 0)}` : '-';
-            option.textContent = `✅ ${d.name || d.id} | ${dateStr} | ${d.industry || '-'} | ${priceInfo}`;
-            
-            if (recentAuctionGroup) recentAuctionGroup.appendChild(option);
-        });
-    }
-    
-    // 3. 處理近1-3個月已完成詢圈案例（從inquiryRawData / 01工作表）
-    if (window.inquiryRawData && inquiryRawData.length > 0) {
-        // v3.95 修正：先嘗試篩選近3個月，如果沒有則取最新的有效資料
-        let recentInquiries = inquiryRawData
-            .filter(d => {
-                const dateField = d.listDate || d.openDate;
-                const dateObj = parseDateValue(dateField);
-                if (!dateObj) return false;
-                return dateObj >= threeMonthsAgo && dateObj <= today;
-            })
-            .sort((a, b) => {
-                const dateA = parseDateValue(a.listDate || a.openDate);
-                const dateB = parseDateValue(b.listDate || b.openDate);
-                return (dateB || 0) - (dateA || 0);
-            })
-            .slice(0, 20);
-        
-        // 如果3個月內沒有資料，則取有掛牌日期的最新20筆
-        if (recentInquiries.length === 0) {
-            recentInquiries = inquiryRawData
-                .filter(d => parseDateValue(d.listDate) !== null)
-                .sort((a, b) => {
-                    const dateA = parseDateValue(a.listDate);
-                    const dateB = parseDateValue(b.listDate);
-                    return (dateB || 0) - (dateA || 0);
-                })
-                .slice(0, 20);
-        }
-        
-        // 如果還是沒有，則取有掛牌表現的20筆
-        if (recentInquiries.length === 0) {
-            recentInquiries = inquiryRawData
-                .filter(d => d.marketHigh > 0 || d.marketLow > 0)
-                .slice(0, 20);
-        }
-        
-        recentInquiries.forEach((d, idx) => {
-            const caseData = {
-                type: 'inquiry',
-                originalData: d,
-                cbName: d.name || d.id,
-                cbCode: d.id,
-                stockCode: d.stockCode || '',
-                industry: d.industry || '-',
-                issueSize: d.issueSize || 0,
-                convPrice: d.conversionPrice || 0,
-                guarantee: d.guarantee || '無擔保',
-                rating: d.rating || '',
-                years: d.years || 3,
-                broker: d.broker || '',
-                floorPrice: 100,
-                stockPrice: 0,
-                capital: d.capital || 0,
-                status: 'completed',
-                auctionType: '詢圈',
-                marketHigh: d.marketHigh,
-                marketLow: d.marketLow
-            };
-            
-            recentCompletedCases.push(caseData);
-            
-            const option = document.createElement('option');
-            option.value = 'recent_' + (recentCompletedCases.length - 1);
-            
-            // 格式化日期
-            let dateStr = '';
-            const dateObj = parseDateValue(d.listDate || d.openDate);
-            if (dateObj) {
-                dateStr = `${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
-            }
-            
-            const highLow = (d.marketHigh > 0 && d.marketLow > 0) 
-                ? `高${safeFixed(d.marketHigh, 0)}/低${safeFixed(d.marketLow, 0)}` 
-                : '-';
-            option.textContent = `✅ ${d.name || d.id} | ${dateStr} | ${d.industry || '-'} | ${highLow}`;
-            
-            if (recentInquiryGroup) recentInquiryGroup.appendChild(option);
-        });
-    }
     
     // 監聽選擇事件
     select.addEventListener('change', handleQuickSelect);

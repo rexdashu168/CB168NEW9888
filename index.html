@@ -1886,7 +1886,8 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
         <!-- 市場趨勢分析 -->
         <div class="market-trend-section" id="marketTrendSection" style="text-align:left;">
             <div class="market-trend-tabs">
-                <button class="market-trend-tab active" onclick="showMarketTrendTab('yearly', event)">年度趨勢</button>
+                <button class="market-trend-tab active" onclick="showMarketTrendTab('supply', event)">供給分析</button>
+                <button class="market-trend-tab" onclick="showMarketTrendTab('yearly', event)">年度趨勢</button>
                 <button class="market-trend-tab" onclick="showMarketTrendTab('guarantee', event)">擔保比較</button>
                 <button class="market-trend-tab" onclick="showMarketTrendTab('size', event)">發行規模</button>
                 <button class="market-trend-tab" onclick="showMarketTrendTab('capital', event)">股本大小</button>
@@ -1900,12 +1901,6 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
             <div class="market-trend-content" id="marketTrendContent">
                 載入中...
             </div>
-        </div>
-        
-        <!-- 市場供給量分析 -->
-        <div id="supplyAnalysis" class="supply-analysis" style="margin-top:15px; text-align:left;">
-            <div class="supply-header">📊 市場供給量分析</div>
-            <div id="supplyTable">載入中...</div>
         </div>
         
             </div><!-- trendSection結束 -->
@@ -1926,7 +1921,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
             <div class="dimension-main-tabs">
                 <button type="button" class="dimension-main-tab active" onclick="showDimensionTab('capital', event)">股本</button>
                 <button type="button" class="dimension-main-tab" onclick="showDimensionTab('size', event)">規模</button>
-                <button type="button" class="dimension-main-tab" onclick="showDimensionTab('conversion', event)">轉換價</button>
+                <button type="button" class="dimension-main-tab" onclick="showDimensionTab('conversionPrice', event)">轉換價</button>
                 <button type="button" class="dimension-main-tab" onclick="showDimensionTab('rating', event)">信評</button>
                 <button type="button" class="dimension-main-tab" onclick="showDimensionTab('years', event)">年期</button>
                 <button type="button" class="dimension-main-tab" onclick="showDimensionTab('guarantee', event)">擔保</button>
@@ -4220,9 +4215,27 @@ async function loadStatistics() {
                 const id = String(rawId).replace('.0','').trim();
                 const hlRow = highLowMap[id] || {};
                 
-                // 處理信評格式：優先從00工作表(hlRow)讀取，統一轉為數字
-                let rawRating = hlRow['信用評等'] || hlRow['信評'] || row['信評'] || row['信用擔保'] || '';
+                // v3.92 修正：處理信評格式，考慮 TCRI/擔保 欄位
                 let normalizedRating = '';
+                
+                // 優先從00工作表(hlRow)讀取
+                let rawRating = hlRow['信用評等'] || hlRow['信評'] || '';
+                
+                // 如果00工作表沒有，嘗試從01工作表讀取
+                if (!rawRating) {
+                    rawRating = row['信評'] || row['信用擔保'] || '';
+                }
+                
+                // 如果還沒有，嘗試從 TCRI/擔保 欄位解析
+                if (!rawRating) {
+                    const tcriRaw = String(row['TCRI/擔保'] || '').trim();
+                    if (tcriRaw.toUpperCase().startsWith('TCRI')) {
+                        const match = tcriRaw.match(/TCRI\s*(\d+)/i);
+                        if (match) rawRating = match[1];
+                    }
+                }
+                
+                // 正規化信評值
                 if (rawRating) {
                     rawRating = String(rawRating).trim();
                     // 如果已經是1-8的純數字，直接使用
@@ -4234,11 +4247,6 @@ async function loadStatistics() {
                             normalizedRating = match[1]; // 提取數字部分
                         } else if (rawRating.match(/^\d+$/)) {
                             normalizedRating = rawRating; // 已經是純數字
-                        } else if (rawRating.toUpperCase().includes('BBB')) {
-                            normalizedRating = 'BBB';
-                        } else {
-                            // 有擔保的情況，信評欄位可能是銀行名稱
-                            normalizedRating = rawRating;
                         }
                     }
                 }
@@ -5544,7 +5552,12 @@ function generateSupplyAnalysis() {
         承銷進行中案件通常1-2個月內掛牌，董事會公告案件則需3-6個月完成發行程序。
     </div>`;
     
-    document.getElementById('supplyTable').innerHTML = html;
+    return html;
+}
+
+// v3.92 新增：供給分析渲染函數（供標籤切換使用）
+function renderSupplyAnalysis() {
+    return generateSupplyAnalysis();
 }
 
 // 切換供給明細顯示
@@ -6278,6 +6291,14 @@ function generateDimensionAnalysis() {
         }
     });
     
+    // v3.92 除錯：檢查信評分布
+    const auctionWithRating = allCBData.filter(d => d.type === '競拍' && d.rating && ['3','4','5','6','7','8'].includes(String(d.rating)));
+    const inquiryWithRating = allCBData.filter(d => d.type === '詢圈' && d.rating && ['3','4','5','6','7','8'].includes(String(d.rating)));
+    console.log(`維度分析信評統計: 競拍有信評${auctionWithRating.length}筆, 詢圈有信評${inquiryWithRating.length}筆`);
+    const inquiryRatings = allCBData.filter(d => d.type === '詢圈').map(d => d.rating);
+    const uniqueRatings = [...new Set(inquiryRatings)].slice(0, 10);
+    console.log(`詢圈信評值範例:`, uniqueRatings);
+    
     // 輔助函數：計算區間統計
     function calcRangeStats(data, label) {
         if (data.length === 0) return null;
@@ -6727,7 +6748,7 @@ function generateMarketTrendAnalysis() {
     };
     
     // 顯示預設Tab
-    showMarketTrendTab('yearly');
+    showMarketTrendTab('supply');
 }
 
 // v3.81 新增：右側區塊展開/收合功能
@@ -6763,6 +6784,7 @@ function showMarketTrendTab(tab, event) {
     document.querySelectorAll('.market-trend-tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.market-trend-tab').forEach(t => {
         const tabMap = {
+            'supply': '供給分析',
             'yearly': '年度趨勢',
             'guarantee': '擔保比較',
             'size': '發行規模',
@@ -6782,7 +6804,9 @@ function showMarketTrendTab(tab, event) {
     const content = document.getElementById('marketTrendContent');
     let html = '';
     
-    if (tab === 'yearly') {
+    if (tab === 'supply') {
+        html = renderSupplyAnalysis();
+    } else if (tab === 'yearly') {
         html = renderYearlyTrend();
     } else if (tab === 'guarantee') {
         html = renderGuaranteeCompare();
@@ -7451,6 +7475,10 @@ function showDimensionTab(dimension, event) {
         event.stopPropagation();
     }
     
+    // v3.92 修正：立即清空內容，避免切換延遲
+    const contentDiv = document.getElementById('dimensionContent');
+    contentDiv.innerHTML = '<div style="text-align:center; padding:20px; color:#666;">載入中...</div>';
+    
     // 更新tab狀態
     document.querySelectorAll('.dimension-main-tab').forEach(tab => {
         tab.classList.remove('active');
@@ -7458,11 +7486,16 @@ function showDimensionTab(dimension, event) {
     if (event && event.target) {
         event.target.classList.add('active');
     } else {
-        document.querySelector(`.dimension-main-tab[onclick*="${dimension}"]`).classList.add('active');
+        const targetTab = document.querySelector(`.dimension-main-tab[onclick*="${dimension}"]`);
+        if (targetTab) targetTab.classList.add('active');
     }
     
     const data = dimensionData[dimension];
-    if (!data) return;
+    if (!data) {
+        contentDiv.innerHTML = '<div style="text-align:center; padding:20px; color:#999;">暫無資料</div>';
+        console.log(`維度統計: ${dimension} 無資料`);
+        return;
+    }
     
     let html = '';
     

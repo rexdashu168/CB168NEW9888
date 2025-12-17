@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.93 (字體優化版)</title>
+<title>AI智能可轉債競拍系統 v3.94 (詢圈優化版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="embedded_data.js" onerror="console.warn('embedded_data.js not found, using defaults.')"></script>
 
@@ -1662,14 +1662,14 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.93)...</div>
+    <div>🔄 系統啟動中 (v3.94)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
 <div class="container" style="display: none;">
     <div class="header">
         <h1>🤖 AI智能可轉債競拍系統</h1>
-        <span class="version-badge">v3.93 字體優化版</span>
+        <span class="version-badge">v3.94 詢圈優化版</span>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -1696,16 +1696,18 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
                     <label style="color: #e65100;">選擇案件，自動帶入所有條件</label>
                     <select id="quickSelect" style="border: 2px solid #ffc107; font-weight: bold;">
                         <option value="">-- 請選擇案件 --</option>
-                        <optgroup label="🔥 即將競拍（有競拍時程）" id="pendingAuctionGroup"></optgroup>
-                        <optgroup label="📋 即將詢圈（有詢圈時程）" id="pendingInquiryGroup"></optgroup>
-                        <optgroup label="✅ 已完成競拍（近1-3個月）" id="recentAuctionGroup"></optgroup>
-                        <optgroup label="📊 已完成詢圈（近1-3個月）" id="recentInquiryGroup"></optgroup>
+                        <optgroup label="🔥 即將競拍（有時程且未完成）" id="upcomingAuctionGroup"></optgroup>
+                        <optgroup label="📋 即將詢圈（有時程且未完成）" id="upcomingInquiryGroup"></optgroup>
+                        <optgroup label="⏳ 承銷中-競拍（尚未確定時程）" id="pendingAuctionGroup"></optgroup>
+                        <optgroup label="⏳ 承銷中-詢圈（尚未確定時程）" id="pendingInquiryGroup"></optgroup>
+                        <optgroup label="✅ 近期完成競拍（1-3個月參考）" id="recentAuctionGroup"></optgroup>
+                        <optgroup label="✅ 近期完成詢圈（1-3個月參考）" id="recentInquiryGroup"></optgroup>
                     </select>
                 </div>
                 <div id="quickSelectInfo" style="display:none; background:#fff; padding:10px; border-radius:6px; margin-top:8px; font-size:13px; border-left:4px solid #ff9800;"></div>
                 <div id="modelCompareResult" style="display:none; background:#e8f5e9; padding:10px; border-radius:6px; margin-top:8px; font-size:13px; border-left:4px solid #4caf50;"></div>
                 <div style="font-size:12px; color:#795548; margin-top:8px;">
-                    💡 選擇後自動帶入所有條件，「截標日收盤價」可自行調整
+                    💡 選擇後自動帶入條件，競拍案件請於截標日13:30前確認收盤價
                 </div>
             </div>
 
@@ -9348,9 +9350,11 @@ function initResizer() {
 
 // ==========================================
 // v3.69 閃電帶入功能 - 承銷中案件資料（含狀態判斷）
-// 狀態: pending=尚未公告, bidding=投標中, closed=截標待開標, opened=已開標未掛牌, listed=已掛牌
 // v3.72 修改：改為從06工作表動態載入
-// v3.93 修改：重新分組為即將競拍、即將詢圈、已完成競拍、已完成詢圈
+// v3.94 修改：重新分組邏輯
+//   - 即將競拍/詢圈：有時程且時程 >= 今天（尚未完成）
+//   - 承銷中：尚未確定時程
+//   - 近期完成：從01工作表，近1-3個月
 // ==========================================
 let pendingCases = [];
 let recentCompletedCases = []; // v3.93 新增：近期完成案例
@@ -9358,6 +9362,8 @@ let recentCompletedCases = []; // v3.93 新增：近期完成案例
 // 初始化閃電帶入選單（按狀態分組）
 function initQuickSelect() {
     const select = document.getElementById('quickSelect');
+    const upcomingAuctionGroup = document.getElementById('upcomingAuctionGroup');
+    const upcomingInquiryGroup = document.getElementById('upcomingInquiryGroup');
     const pendingAuctionGroup = document.getElementById('pendingAuctionGroup');
     const pendingInquiryGroup = document.getElementById('pendingInquiryGroup');
     const recentAuctionGroup = document.getElementById('recentAuctionGroup');
@@ -9366,6 +9372,8 @@ function initQuickSelect() {
     if (!select) return;
     
     // 清空各分組
+    if (upcomingAuctionGroup) upcomingAuctionGroup.innerHTML = '';
+    if (upcomingInquiryGroup) upcomingInquiryGroup.innerHTML = '';
     if (pendingAuctionGroup) pendingAuctionGroup.innerHTML = '';
     if (pendingInquiryGroup) pendingInquiryGroup.innerHTML = '';
     if (recentAuctionGroup) recentAuctionGroup.innerHTML = '';
@@ -9374,44 +9382,82 @@ function initQuickSelect() {
     // 清空並重建案例陣列
     recentCompletedCases = [];
     
-    // 狀態標籤
-    const statusLabels = {
-        'pending': '⏳',
-        'bidding': '🔥',
-        'closed': '⏱️',
-        'opened': '📊',
-        'listed': '✅',
-        'completed': '✅'
-    };
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
     
-    // 1. 處理即將競拍/詢圈案例（從pendingCases）
+    // 1. 處理06工作表案例（pendingCases）- 分為即將進行和承銷中
     pendingCases.forEach((c, idx) => {
-        // 只顯示尚未完成的案例（pending, bidding, closed, opened但未掛牌）
+        // 跳過已掛牌的
         if (c.status === 'listed') return;
         
         const option = document.createElement('option');
         option.value = 'pending_' + idx;
         
-        let priceLabel = '';
-        if (c.status === 'opened' || c.status === 'closed') {
-            priceLabel = `成交${Math.round(c.floorPrice)}`;
-        } else if (c.isPriceRange) {
-            priceLabel = `底標${Math.round(c.floorPrice)}~${Math.round(c.highPrice)}`;
-        } else {
-            priceLabel = `底標${Math.round(c.floorPrice)}`;
+        // 判斷是否有時程
+        let hasSchedule = false;
+        let isCompleted = false;
+        
+        if (c.bidEndDate) {
+            const bidEndDateObj = new Date(c.bidEndDate);
+            bidEndDateObj.setHours(0, 0, 0, 0);
+            hasSchedule = true;
+            // 如果截標日已過，視為已完成（不在這裡顯示，會從01工作表取）
+            if (bidEndDateObj < today) {
+                isCompleted = true;
+            }
+        } else if (c.bidPeriod) {
+            // 有投標期間字串但沒解析出日期
+            hasSchedule = true;
         }
+        
+        // 已完成的案件跳過（會從01工作表取近期完成）
+        if (isCompleted) return;
+        
+        // 準備顯示內容
+        let priceLabel = '';
+        if (c.auctionType === '競拍') {
+            if (c.isPriceRange) {
+                priceLabel = `底標${Math.round(c.floorPrice)}~${Math.round(c.highPrice)}`;
+            } else {
+                priceLabel = `底標${Math.round(c.floorPrice)}`;
+            }
+        } else {
+            // 詢圈顯示承銷價
+            if (c.floorPrice && c.floorPrice !== 100) {
+                priceLabel = `承銷${Math.round(c.floorPrice)}`;
+            } else {
+                priceLabel = '承銷價待定';
+            }
+        }
+        
         const convInfo = c.convPrice > 0 ? ` | 轉${c.convPrice}` : '';
-        option.textContent = `${statusLabels[c.status] || ''} ${c.cbName} | ${c.industry} | ${priceLabel}${convInfo}`;
+        const scheduleInfo = c.bidPeriod ? ` | ${c.bidPeriod}` : '';
         
         if (c.auctionType === '競拍') {
-            if (pendingAuctionGroup) pendingAuctionGroup.appendChild(option);
+            if (hasSchedule) {
+                // 即將競拍
+                option.textContent = `🔥 ${c.cbName} | ${c.industry} | ${priceLabel}${convInfo}${scheduleInfo}`;
+                if (upcomingAuctionGroup) upcomingAuctionGroup.appendChild(option);
+            } else {
+                // 承銷中-競拍（尚未確定時程）
+                option.textContent = `⏳ ${c.cbName} | ${c.industry} | ${priceLabel}${convInfo}`;
+                if (pendingAuctionGroup) pendingAuctionGroup.appendChild(option);
+            }
         } else {
-            if (pendingInquiryGroup) pendingInquiryGroup.appendChild(option);
+            // 詢圈
+            if (hasSchedule) {
+                // 即將詢圈
+                option.textContent = `📋 ${c.cbName} | ${c.industry} | ${c.guarantee || '-'}${scheduleInfo}`;
+                if (upcomingInquiryGroup) upcomingInquiryGroup.appendChild(option);
+            } else {
+                // 承銷中-詢圈（尚未確定時程）
+                option.textContent = `⏳ ${c.cbName} | ${c.industry} | ${c.guarantee || '-'}`;
+                if (pendingInquiryGroup) pendingInquiryGroup.appendChild(option);
+            }
         }
     });
     
-    // 2. 處理近1-3個月已完成競拍案例（從auctionRawData）
-    const today = new Date();
+    // 2. 處理近1-3個月已完成競拍案例（從auctionRawData / 01工作表）
     const threeMonthsAgo = new Date(today);
     threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
     
@@ -9443,6 +9489,7 @@ function initQuickSelect() {
                 originalData: d,
                 cbName: d.name || d.id,
                 cbCode: d.id,
+                stockCode: d.stockCode || '',
                 industry: d.industry || '-',
                 issueSize: d.issueSize || 0,
                 convPrice: d.conversionPrice || 0,
@@ -9482,7 +9529,7 @@ function initQuickSelect() {
         });
     }
     
-    // 3. 處理近1-3個月已完成詢圈案例（從inquiryRawData）
+    // 3. 處理近1-3個月已完成詢圈案例（從inquiryRawData / 01工作表）
     if (window.inquiryRawData && inquiryRawData.length > 0) {
         // 篩選近3個月的詢圈案例
         const recentInquiries = inquiryRawData
@@ -9514,6 +9561,7 @@ function initQuickSelect() {
                 originalData: d,
                 cbName: d.name || d.id,
                 cbCode: d.id,
+                stockCode: d.stockCode || '',
                 industry: d.industry || '-',
                 issueSize: d.issueSize || 0,
                 convPrice: d.conversionPrice || 0,
@@ -9548,13 +9596,13 @@ function initQuickSelect() {
             const highLow = (d.marketHigh > 0 && d.marketLow > 0) 
                 ? `高${safeFixed(d.marketHigh, 0)}/低${safeFixed(d.marketLow, 0)}` 
                 : '-';
-            option.textContent = `📊 ${d.name || d.id} | ${dateStr} | ${d.industry || '-'} | ${highLow}`;
+            option.textContent = `✅ ${d.name || d.id} | ${dateStr} | ${d.industry || '-'} | ${highLow}`;
             
             if (recentInquiryGroup) recentInquiryGroup.appendChild(option);
         });
     }
     
-    // 監聽選擇事件
+    // 監聯選擇事件
     select.addEventListener('change', handleQuickSelect);
 }
 
@@ -9669,8 +9717,8 @@ function handleQuickSelect() {
     if (c.theoRange) {
         // 如果caseObj已有theoRange，直接使用
         document.getElementById('theoRange').value = c.theoRange;
-    } else if (c.stockPrice > 0 && c.convPrice > 0) {
-        // 從股價和轉換價計算
+    } else if (c.auctionType !== '詢圈' && c.stockPrice > 0 && c.convPrice > 0) {
+        // 只有競拍案例才從股價和轉換價計算理論價
         const theoPrice = (c.stockPrice / c.convPrice) * 100;
         let theoRange = '';
         if (theoPrice < 90) theoRange = '小於90元';
@@ -9682,7 +9730,7 @@ function handleQuickSelect() {
         else theoRange = '大於115元';
         document.getElementById('theoRange').value = theoRange;
     }
-    // 如果沒有股價/轉換價，就不設定理論價區間，讓用戶自行輸入
+    // 詢圈案例不自動帶入理論價區間
     
     // 發行年期
     if (c.years) document.getElementById('years').value = c.years;
@@ -9693,17 +9741,23 @@ function handleQuickSelect() {
     // 信用評等
     if (c.rating) document.getElementById('rating').value = c.rating;
     
-    // 底標價格
-    if (c.floorPrice) document.getElementById('floorPrice').value = Math.round(c.floorPrice);
+    // 底標價格 - 只有競拍案例才帶入
+    if (c.auctionType !== '詢圈' && c.floorPrice) {
+        document.getElementById('floorPrice').value = Math.round(c.floorPrice);
+    }
     
-    // 股價
-    if (c.stockPrice > 0) document.getElementById('stockPrice').value = c.stockPrice;
+    // 股價 - 只有競拍案例才帶入
+    if (c.auctionType !== '詢圈' && c.stockPrice > 0) {
+        document.getElementById('stockPrice').value = c.stockPrice;
+    }
     
-    // 實際轉換價格
-    if (c.convPrice > 0) document.getElementById('actualConversionPrice').value = c.convPrice;
+    // 實際轉換價格 - 只有競拍案例才帶入
+    if (c.auctionType !== '詢圈' && c.convPrice > 0) {
+        document.getElementById('actualConversionPrice').value = c.convPrice;
+    }
     
-    // 狀態標籤
-    const statusInfo = {
+    // 狀態標籤 - 區分競拍和詢圈
+    const auctionStatusInfo = {
         'pending': {label: '⏳ 尚未公告投標日期', color: '#9e9e9e'},
         'bidding': {label: '🔥 投標進行中', color: '#ff5722'},
         'closed': {label: '⏱️ 已截標待開標', color: '#ff9800'},
@@ -9712,6 +9766,16 @@ function handleQuickSelect() {
         'completed': {label: '✅ 已完成', color: '#4caf50'}
     };
     
+    const inquiryStatusInfo = {
+        'pending': {label: '⏳ 尚未公告詢圈日期', color: '#9e9e9e'},
+        'bidding': {label: '📋 詢圈進行中', color: '#1976d2'},
+        'closed': {label: '⏱️ 詢圈結束待定價', color: '#ff9800'},
+        'opened': {label: '📊 已定價未掛牌', color: '#4caf50'},
+        'listed': {label: '✅ 已掛牌', color: '#2196f3'},
+        'completed': {label: '✅ 已完成', color: '#4caf50'}
+    };
+    
+    const statusInfo = c.auctionType === '詢圈' ? inquiryStatusInfo : auctionStatusInfo;
     const status = statusInfo[c.status] || {label: '未知', color: '#666'};
     const theoPrice = c.convPrice > 0 && c.stockPrice > 0 ? ((c.stockPrice / c.convPrice) * 100).toFixed(2) : '待計算';
     const priceDisplay = c.isPriceRange ? `${Math.round(c.floorPrice)}~${Math.round(c.highPrice)}` : Math.round(c.floorPrice);
@@ -9720,49 +9784,89 @@ function handleQuickSelect() {
     if (isRecentCase) {
         // 已完成案例的顯示
         const marketInfo = (c.marketHigh > 0 && c.marketLow > 0) 
-            ? `掛牌高: <b>${safeFixed(c.marketHigh, 1)}</b> | 掛牌低: <b>${safeFixed(c.marketLow, 1)}</b>`
+            ? `掛牌高: <b style="color:#2e7d32;">${safeFixed(c.marketHigh, 1)}</b> | 掛牌低: <b style="color:#c62828;">${safeFixed(c.marketLow, 1)}</b> | 振幅: <b style="color:#E91E63;">${(((c.marketHigh - c.marketLow) / c.marketLow) * 100).toFixed(1)}%</b>`
             : '';
-        const bidInfo = c.minBidPrice > 0 
-            ? `最低得標: <b>${safeFixed(c.minBidPrice, 2)}</b> | 加權均價: <b>${safeFixed(c.avgBidPrice, 2)}</b>`
-            : '';
+        
+        if (c.auctionType === '競拍') {
+            // 競拍案例顯示得標資訊
+            const bidInfo = c.minBidPrice > 0 
+                ? `最低得標: <b>${safeFixed(c.minBidPrice, 2)}</b> | 加權均價: <b>${safeFixed(c.avgBidPrice, 2)}</b>`
+                : '';
             
-        infoDiv.innerHTML = `
-            <div style="font-weight:bold; color:#2e7d32; margin-bottom:5px;">✅ 已帶入「${c.cbName}」歷史資料</div>
-            <div style="display:inline-block; padding:2px 8px; border-radius:4px; background:${c.auctionType === '競拍' ? '#9c27b0' : '#1976d2'}; color:#fff; font-size:12px; margin-bottom:5px;">${c.auctionType}</div>
-            <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:5px; font-size:13px;">
-                <span>🏭 ${c.industry}</span>
-                <span>💰 ${c.issueSize > 0 ? c.issueSize + '億' : '-'}</span>
-                ${c.convPrice > 0 ? `<span>🎯 轉換價${c.convPrice}</span>` : ''}
-                <span>📋 ${c.guarantee || '-'}</span>
-            </div>
-            ${bidInfo ? `<div style="margin-top:5px; color:#9c27b0; font-size:13px;">🎯 ${bidInfo}</div>` : ''}
-            ${marketInfo ? `<div style="margin-top:5px; color:#1565c0; font-size:13px;">📊 ${marketInfo}</div>` : ''}
-            <div style="margin-top:5px; color:#795548; font-size:12px;">
-                💡 此為已完成案例，可作為類似案件參考
-            </div>
-        `;
+            infoDiv.innerHTML = `
+                <div style="font-weight:bold; color:#2e7d32; margin-bottom:5px;">✅ 已帶入「${c.cbName}」競拍歷史資料</div>
+                <div style="display:inline-block; padding:2px 8px; border-radius:4px; background:#9c27b0; color:#fff; font-size:12px; margin-bottom:5px;">競拍</div>
+                <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:5px; font-size:13px;">
+                    <span>🏭 ${c.industry}</span>
+                    <span>💰 ${c.issueSize > 0 ? c.issueSize + '億' : '-'}</span>
+                    ${c.convPrice > 0 ? `<span>🎯 轉換價${c.convPrice}</span>` : ''}
+                    <span>📋 ${c.guarantee || '-'}</span>
+                </div>
+                ${bidInfo ? `<div style="margin-top:5px; color:#9c27b0; font-size:13px;">🎯 ${bidInfo}</div>` : ''}
+                ${marketInfo ? `<div style="margin-top:5px; color:#1565c0; font-size:13px;">📊 ${marketInfo}</div>` : ''}
+                <div style="margin-top:5px; color:#795548; font-size:12px;">
+                    💡 此為已完成競拍案例，可作為類似案件參考
+                </div>
+            `;
+        } else {
+            // 詢圈案例只顯示掛牌表現
+            infoDiv.innerHTML = `
+                <div style="font-weight:bold; color:#1976d2; margin-bottom:5px;">✅ 已帶入「${c.cbName}」詢圈歷史資料</div>
+                <div style="display:inline-block; padding:2px 8px; border-radius:4px; background:#1976d2; color:#fff; font-size:12px; margin-bottom:5px;">詢圈</div>
+                <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:5px; font-size:13px;">
+                    <span>🏭 ${c.industry}</span>
+                    <span>💰 ${c.issueSize > 0 ? c.issueSize + '億' : '-'}</span>
+                    <span>📋 ${c.guarantee || '-'}</span>
+                    <span>📅 ${c.years || 3}年期</span>
+                </div>
+                ${marketInfo ? `<div style="margin-top:5px; color:#1565c0; font-size:13px;">📊 ${marketInfo}</div>` : ''}
+                <div style="margin-top:5px; color:#795548; font-size:12px;">
+                    💡 此為已完成詢圈案例，以掛牌表現作為參考
+                </div>
+            `;
+        }
     } else {
         // 即將進行案例的顯示
-        infoDiv.innerHTML = `
-            <div style="font-weight:bold; color:#e65100; margin-bottom:5px;">✅ 已帶入「${c.cbName}」資料</div>
-            <div style="display:inline-block; padding:2px 8px; border-radius:4px; background:${status.color}; color:#fff; font-size:12px; margin-bottom:5px;">${status.label}</div>
-            <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:5px; font-size:13px;">
-                <span>📊 ${c.auctionType}</span>
-                <span>🏭 ${c.industry}</span>
-                <span>💰 規模${c.issueSize}億</span>
-                <span>📈 股本${(c.capital || 0).toFixed(2)}億</span>
-                ${c.convPrice > 0 ? `<span>🎯 轉換價${c.convPrice}</span>` : ''}
-                <span>⭐ TCRI${c.rating || '未知'}</span>
-            </div>
-            <div style="margin-top:5px; color:#1565c0; font-size:13px;">
-                📌 參考股價：<b>${c.stockPrice}</b> 元 | 底標：<b>${priceDisplay}</b> 元 
-                ${c.convPrice > 0 ? `| 理論價約：<b>${theoPrice}</b> 元` : ''}
-            </div>
-            ${c.bidPeriod ? `<div style="margin-top:3px; color:#666; font-size:12px;">📅 投標期間：${c.bidPeriod} | 開標：${c.openDate} ${c.listingDate ? `| 掛牌：${c.listingDate}` : ''}</div>` : ''}
-            <div style="margin-top:5px; color:#795548; font-size:12px;">
-                ⚠️ 股價為參考值，請於截標日13:30前確認最新收盤價
-            </div>
-        `;
+        if (c.auctionType === '競拍') {
+            // 競拍案例顯示完整資訊
+            infoDiv.innerHTML = `
+                <div style="font-weight:bold; color:#e65100; margin-bottom:5px;">✅ 已帶入「${c.cbName}」競拍資料</div>
+                <div style="display:inline-block; padding:2px 8px; border-radius:4px; background:${status.color}; color:#fff; font-size:12px; margin-bottom:5px;">${status.label}</div>
+                <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:5px; font-size:13px;">
+                    <span>🏭 ${c.industry}</span>
+                    <span>💰 規模${c.issueSize}億</span>
+                    <span>📈 股本${(c.capital || 0).toFixed(2)}億</span>
+                    ${c.convPrice > 0 ? `<span>🎯 轉換價${c.convPrice}</span>` : ''}
+                    <span>⭐ TCRI${c.rating || '未知'}</span>
+                </div>
+                <div style="margin-top:5px; color:#1565c0; font-size:13px;">
+                    📌 參考股價：<b>${c.stockPrice}</b> 元 | 底標：<b>${priceDisplay}</b> 元 
+                    ${c.convPrice > 0 ? `| 理論價約：<b>${theoPrice}</b> 元` : ''}
+                </div>
+                ${c.bidPeriod ? `<div style="margin-top:3px; color:#666; font-size:12px;">📅 投標期間：${c.bidPeriod} | 開標：${c.openDate} ${c.listingDate ? `| 掛牌：${c.listingDate}` : ''}</div>` : ''}
+                <div style="margin-top:5px; color:#795548; font-size:12px;">
+                    ⚠️ 股價為參考值，請於截標日13:30前確認最新收盤價
+                </div>
+            `;
+        } else {
+            // 詢圈案例顯示簡化資訊
+            infoDiv.innerHTML = `
+                <div style="font-weight:bold; color:#1976d2; margin-bottom:5px;">✅ 已帶入「${c.cbName}」詢圈資料</div>
+                <div style="display:inline-block; padding:2px 8px; border-radius:4px; background:${status.color}; color:#fff; font-size:12px; margin-bottom:5px;">${status.label}</div>
+                <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:5px; font-size:13px;">
+                    <span>🏭 ${c.industry}</span>
+                    <span>💰 規模${c.issueSize}億</span>
+                    <span>📈 股本${(c.capital || 0).toFixed(2)}億</span>
+                    <span>📋 ${c.guarantee || '-'}</span>
+                    <span>📅 ${c.years || 3}年期</span>
+                </div>
+                ${c.floorPrice && c.floorPrice !== 100 ? `<div style="margin-top:5px; color:#1565c0; font-size:13px;">📌 承銷價：<b>${priceDisplay}</b> 元</div>` : ''}
+                ${c.bidPeriod ? `<div style="margin-top:3px; color:#666; font-size:12px;">📅 詢圈期間：${c.bidPeriod} ${c.listingDate ? `| 預計掛牌：${c.listingDate}` : ''}</div>` : ''}
+                <div style="margin-top:5px; color:#795548; font-size:12px;">
+                    💡 詢圈完成後1-4日內將決定轉換價格
+                </div>
+            `;
+        }
     }
     infoDiv.style.display = 'block';
     

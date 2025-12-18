@@ -8672,23 +8672,37 @@ async function loadCBKanbanData() {
         const dataDate = latestSheet.replace(/(\d{4})(\d{2})(\d{2})/, '$1/$2/$3');
         
         // 計算CV和統計
-        const processed = data.map(row => ({
-            code: row['債券代碼'],
-            name: row['債券簡稱'],
-            convPrice: parseFloat(row['轉換價格']) || 0,
-            stockPrice: parseFloat(row['轉換標的股票價格']) || 0,
-            balance: (parseFloat(row['上月底發行餘額']) || 0) / 1e8,
-            maturityDate: row['轉換迄日'],
-            cv: row['轉換價格'] > 0 ? (row['轉換標的股票價格'] / row['轉換價格']) * 100 : 0
-        })).filter(r => r.convPrice > 0);
-        
-        // 計算到期年
-        processed.forEach(r => {
-            if (r.maturityDate) {
-                const d = new Date(r.maturityDate);
-                r.maturityYear = d.getFullYear();
+        const processed = data.map(row => {
+            // 處理Excel日期序列數字轉換
+            let maturityYear = null;
+            const maturityRaw = row['轉換迄日'];
+            if (maturityRaw) {
+                if (typeof maturityRaw === 'number') {
+                    // Excel日期序列數字：從1900-01-01開始的天數
+                    const excelEpoch = new Date(1899, 11, 30); // Excel起始日
+                    const date = new Date(excelEpoch.getTime() + maturityRaw * 86400000);
+                    maturityYear = date.getFullYear();
+                } else if (typeof maturityRaw === 'string') {
+                    // 字串格式日期
+                    const date = new Date(maturityRaw);
+                    if (!isNaN(date.getTime())) {
+                        maturityYear = date.getFullYear();
+                    }
+                } else if (maturityRaw instanceof Date) {
+                    maturityYear = maturityRaw.getFullYear();
+                }
             }
-        });
+            
+            return {
+                code: row['債券代碼'],
+                name: row['債券簡稱'],
+                convPrice: parseFloat(row['轉換價格']) || 0,
+                stockPrice: parseFloat(row['轉換標的股票價格']) || 0,
+                balance: (parseFloat(row['上月底發行餘額']) || 0) / 1e8,
+                maturityYear: maturityYear,
+                cv: row['轉換價格'] > 0 ? (row['轉換標的股票價格'] / row['轉換價格']) * 100 : 0
+            };
+        }).filter(r => r.convPrice > 0 && r.maturityYear && r.maturityYear >= 2020);
         
         // 整體統計
         const totalCount = processed.length;

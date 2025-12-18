@@ -2864,7 +2864,7 @@ function getTcri6UnsecuredAdjustment(rating, guarantee, theoPrice) {
  */
 function calcUndersubscriptionIndicator(targetDate) {
     // v3.97r 修正：統一使用 auctionDataCache（從Excel載入）
-    if (!window.auctionDataCacheCache || window.auctionDataCacheCache.length === 0) {
+    if (!window.auctionDataCache || window.auctionDataCache.length === 0) {
         return null;
     }
     
@@ -2875,7 +2875,7 @@ function calcUndersubscriptionIndicator(targetDate) {
     const threeMonthsAgo = new Date(target);
     threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
     
-    const recentCases = window.auctionDataCacheCache.filter(row => {
+    const recentCases = window.auctionDataCache.filter(row => {
         const openDate = parseExcelDate(getSmartValue(row, 'openDate'));
         if (!openDate) return false;
         return openDate >= threeMonthsAgo && openDate < target;
@@ -3100,7 +3100,7 @@ async function loadStatistics() {
         if (!sheetAuction || sheetAuction.length === 0) throw new Error("找不到競拍資料分頁");
         
         // v3.81 新增：保存競拍數據供KNN超級預測引擎使用
-        window.auctionDataCacheCache = sheetAuction;
+        window.auctionDataCache = sheetAuction;
         console.log('📊 競拍數據已載入:', sheetAuction.length, '筆（供KNN使用）');
 
         // v3.72 新增：建立產業分類對照表（從16工作表）
@@ -9882,8 +9882,8 @@ function displayResult(r) {
     };
     
     // 檢查是否有歷史數據
-    if (typeof window.auctionDataCacheCache !== 'undefined' && window.auctionDataCacheCache.length > 0) {
-        const allData = window.auctionDataCacheCache;
+    if (typeof window.auctionDataCache !== 'undefined' && window.auctionDataCache.length > 0) {
+        const allData = window.auctionDataCache;
         
         // v3.97v: 擔保比對函數（支援多種格式）
         const matchGuarantee = (itemGuar, targetGuar) => {
@@ -10956,7 +10956,7 @@ function findSameCompanyHistory(currentCbName) {
     
     const results = [];
     
-    // 從 auctionData 搜尋同公司的競拍案例
+    // 從 auctionDataCache 搜尋同公司的競拍案例
     if (window.auctionDataCache && Array.isArray(window.auctionDataCache)) {
         window.auctionDataCache.forEach(row => {
             const cbName = row['CB名稱'] || row['CB簡稱'] || '';
@@ -10989,7 +10989,7 @@ function findSameIndustryHistory(currentCbName, currentIndustry, limit = 5) {
     const results = [];
     const companyName = extractCompanyName(currentCbName);
     
-    // 從 auctionData 搜尋同產業的競拍案例
+    // 從 auctionDataCache 搜尋同產業的競拍案例
     if (window.auctionDataCache && Array.isArray(window.auctionDataCache)) {
         // 先按日期排序（最近的優先）
         const sortedData = [...window.auctionDataCache].sort((a, b) => {
@@ -11034,7 +11034,7 @@ function findSameIndustryHistory(currentCbName, currentIndustry, limit = 5) {
 // 搜尋指定名稱的歷史競拍案例
 function findCaseByName(searchName) {
     if (!searchName) return null;
-    searchName = searchName.trim().replace('.0', ''); // 移除可能的 .0 後綴
+    searchName = String(searchName).trim().replace('.0', ''); // 移除可能的 .0 後綴
     const searchLower = searchName.toLowerCase();
     
     if (window.auctionDataCache && Array.isArray(window.auctionDataCache)) {
@@ -15568,7 +15568,7 @@ function runSystemBacktest(sheetAuction) {
  * @returns {object} 相似案例及加權預測結果
  */
 function findSimilarCases(target, k = 10) {
-    if (!window.auctionDataCacheCache || window.auctionDataCacheCache.length === 0) {
+    if (!window.auctionDataCache || window.auctionDataCache.length === 0) {
         console.warn('KNN: 沒有歷史數據');
         return { cases: [], prediction: null };
     }
@@ -15606,7 +15606,7 @@ function findSimilarCases(target, k = 10) {
     };
     
     // 計算每個歷史案例的相似度距離
-    const casesWithDistance = window.auctionDataCacheCache
+    const casesWithDistance = window.auctionDataCache
         .filter(row => {
             const mult = safeFloat(row['投標倍數']);
             const minBid = safeFloat(row['最低得標'] || row['最低得標價格']);

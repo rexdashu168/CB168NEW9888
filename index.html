@@ -7670,6 +7670,7 @@ function toggleRightSection(sectionId, headerElement) {
 
 // ==========================================
 // v3.96 新增：通用表格排序功能
+// v3.97z_v42 修正：排序前先收合所有展開的明細
 // ==========================================
 function enableTableSort(tableId) {
     const table = document.getElementById(tableId);
@@ -7682,8 +7683,18 @@ function enableTableSort(tableId) {
 }
 
 function sortTable(table, colIndex, th) {
+    // v3.97z_v42 新增：排序前先收合所有展開的明細行
+    collapseAllDetailRows(table);
+    
     const tbody = table.querySelector('tbody') || table;
-    const rows = Array.from(tbody.querySelectorAll('tr')).filter(row => !row.classList.contains('total-row') && row.querySelector('td'));
+    // v3.97z_v42 修正：排除明細行（detail-row）
+    const rows = Array.from(tbody.querySelectorAll('tr')).filter(row => {
+        if (row.classList.contains('total-row')) return false;
+        if (row.classList.contains('broker-detail-row')) return false;
+        if (row.classList.contains('industry-detail-row')) return false;
+        if (row.id && row.id.includes('-detail-')) return false;
+        return row.querySelector('td');
+    });
     
     // 判斷目前排序方向
     const isAsc = th.classList.contains('sort-asc');
@@ -7703,7 +7714,7 @@ function sortTable(table, colIndex, th) {
         th.classList.add('sort-desc');
     }
     
-    // 排序
+    // 排序（只排序主要行）
     rows.sort((a, b) => {
         const cellA = a.querySelectorAll('td')[colIndex];
         const cellB = b.querySelectorAll('td')[colIndex];
@@ -7712,9 +7723,9 @@ function sortTable(table, colIndex, th) {
         let valA = cellA.textContent.trim();
         let valB = cellB.textContent.trim();
         
-        // 移除百分比、元等單位
-        valA = valA.replace(/[%元億年檔次,\s]/g, '').replace(/[（(].*[）)]/g, '');
-        valB = valB.replace(/[%元億年檔次,\s]/g, '').replace(/[（(].*[）)]/g, '');
+        // 移除百分比、元等單位和圖標
+        valA = valA.replace(/[%元億年檔次,\s🥇🥈🥉▶▼]/g, '').replace(/[（(].*[）)]/g, '');
+        valB = valB.replace(/[%元億年檔次,\s🥇🥈🥉▶▼]/g, '').replace(/[（(].*[）)]/g, '');
         
         // 嘗試轉為數字
         const numA = parseFloat(valA);
@@ -7728,10 +7739,47 @@ function sortTable(table, colIndex, th) {
         return direction === 'asc' ? valA.localeCompare(valB, 'zh-TW') : valB.localeCompare(valA, 'zh-TW');
     });
     
-    // 重新排列行
+    // 重新排列行（主要行後面接對應的明細行）
     const totalRow = tbody.querySelector('tr.total-row');
-    rows.forEach(row => tbody.appendChild(row));
+    rows.forEach(row => {
+        tbody.appendChild(row);
+        // 找到對應的明細行並一起移動
+        const rowId = row.id;
+        if (rowId) {
+            const detailRowId = rowId.replace('-row-', '-detail-');
+            const detailRow = document.getElementById(detailRowId);
+            if (detailRow) {
+                tbody.appendChild(detailRow);
+            }
+        }
+    });
     if (totalRow) tbody.appendChild(totalRow); // 合計行始終在最後
+}
+
+// v3.97z_v42 新增：收合所有展開的明細行
+function collapseAllDetailRows(table) {
+    if (!table) return;
+    
+    // 收合券商明細
+    table.querySelectorAll('.broker-detail-row').forEach(row => {
+        row.style.display = 'none';
+    });
+    table.querySelectorAll('[id^="broker-icon-"]').forEach(icon => {
+        icon.textContent = '▶';
+    });
+    
+    // 收合產業明細
+    table.querySelectorAll('.industry-detail-row').forEach(row => {
+        row.style.display = 'none';
+    });
+    table.querySelectorAll('[id^="industry-icon-"]').forEach(icon => {
+        icon.textContent = '▶';
+    });
+    
+    // 通用：收合所有 id 包含 -detail- 的行
+    table.querySelectorAll('tr[id*="-detail-"]').forEach(row => {
+        row.style.display = 'none';
+    });
 }
 
 // 為動態生成的表格啟用排序

@@ -2038,36 +2038,35 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
             </div>
         </div>
         
-        <!-- 無加權 vs 有加權 並列 -->
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
-            <!-- 無加權 -->
-            <div style="background:linear-gradient(135deg, #1976d2 0%, #1565c0 100%); color:white; padding:12px; border-radius:10px;">
-                <div style="font-size:11px; opacity:0.9; margin-bottom:8px; text-align:center;">📊 無加權（純歷史平均）</div>
-                <div style="text-align:center; margin-bottom:6px;">
-                    <div style="font-size:10px; opacity:0.8;">歷史平均溢價率</div>
-                    <div style="font-size:16px; font-weight:bold;" id="step1NoWeightPremium">--</div>
-                </div>
-                <div style="text-align:center; background:rgba(255,255,255,0.2); padding:8px; border-radius:6px;">
-                    <div style="font-size:10px; opacity:0.8;">建議區間</div>
-                    <div style="font-size:14px; font-weight:bold;" id="step1NoWeightRange">--</div>
+        <!-- 三種方法建議區間 -->
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:12px;">
+            <!-- 溢價率法 -->
+            <div id="method1Card" style="background:linear-gradient(135deg, #1976d2 0%, #1565c0 100%); color:white; padding:10px; border-radius:10px; cursor:pointer; transition:all 0.2s; border:3px solid transparent;" onclick="switchStep1Tab('premium')">
+                <div style="font-size:10px; opacity:0.9; margin-bottom:6px; text-align:center;">📊 溢價率法</div>
+                <div style="text-align:center; background:rgba(255,255,255,0.2); padding:6px; border-radius:6px;">
+                    <div style="font-size:9px; opacity:0.8;">建議區間</div>
+                    <div style="font-size:13px; font-weight:bold;" id="method1Range">--</div>
                 </div>
             </div>
-            <!-- 有加權 -->
-            <div style="background:linear-gradient(135deg, #7b1fa2 0%, #6a1b9a 100%); color:white; padding:12px; border-radius:10px;">
-                <div style="font-size:11px; opacity:0.9; margin-bottom:8px; text-align:center;">⚖️ 有加權（維度加權）</div>
-                <div style="text-align:center; margin-bottom:6px;">
-                    <div style="font-size:10px; opacity:0.8;">加權平均溢價率</div>
-                    <div style="font-size:16px; font-weight:bold;" id="step1WeightPremium">--</div>
+            <!-- 得標價法 -->
+            <div id="method2Card" style="background:linear-gradient(135deg, #388e3c 0%, #2e7d32 100%); color:white; padding:10px; border-radius:10px; cursor:pointer; transition:all 0.2s; border:3px solid transparent;" onclick="switchStep1Tab('price')">
+                <div style="font-size:10px; opacity:0.9; margin-bottom:6px; text-align:center;">📈 得標價法</div>
+                <div style="text-align:center; background:rgba(255,255,255,0.2); padding:6px; border-radius:6px;">
+                    <div style="font-size:9px; opacity:0.8;">建議區間</div>
+                    <div style="font-size:13px; font-weight:bold;" id="method2Range">--</div>
                 </div>
-                <div style="text-align:center; background:rgba(255,255,255,0.2); padding:8px; border-radius:6px;">
-                    <div style="font-size:10px; opacity:0.8;">建議區間</div>
-                    <div style="font-size:14px; font-weight:bold;" id="step1WeightRange">--</div>
+            </div>
+            <!-- 理論價值法 -->
+            <div id="method3Card" style="background:linear-gradient(135deg, #7b1fa2 0%, #6a1b9a 100%); color:white; padding:10px; border-radius:10px; cursor:pointer; transition:all 0.2s; border:3px solid transparent;" onclick="switchStep1Tab('theo')">
+                <div style="font-size:10px; opacity:0.9; margin-bottom:6px; text-align:center;">🎯 理論價值法</div>
+                <div style="text-align:center; background:rgba(255,255,255,0.2); padding:6px; border-radius:6px;">
+                    <div style="font-size:9px; opacity:0.8;">建議區間</div>
+                    <div style="font-size:13px; font-weight:bold;" id="method3Range">--</div>
                 </div>
             </div>
         </div>
-        <div style="text-align:center; font-size:11px; color:#1565c0; margin-bottom:10px;">
-            💡 無加權為整體歷史平均，有加權考量產業、信評、規模、券商等維度<br>
-            <span style="color:#e65100;">⚠️ 加權目的：避免單一標的異常值影響整體判斷</span>
+        <div style="text-align:center; font-size:10px; color:#666; margin-bottom:10px;">
+            💡 點擊卡片可查看該方法詳細分析 ｜ <span style="color:#1565c0;">藍框 = 系統推薦方法</span>
         </div>
         
         <!-- 可收合的詳細分析 -->
@@ -7462,6 +7461,11 @@ function switchStep1Tab(tabType) {
     const tabTheo = document.getElementById('step1TabTheo');
     const contentDiv = document.getElementById('step1DetailContent');
     
+    // 卡片元素
+    const card1 = document.getElementById('method1Card');
+    const card2 = document.getElementById('method2Card');
+    const card3 = document.getElementById('method3Card');
+    
     if (!tabPremium || !tabPrice || !tabTheo || !contentDiv) return;
     
     // 重置所有標籤樣式
@@ -7470,20 +7474,32 @@ function switchStep1Tab(tabType) {
         tab.style.color = '#1565c0';
     });
     
-    // 設定選中的標籤樣式
+    // 重置所有卡片邊框
+    if (card1) card1.style.border = '3px solid transparent';
+    if (card2) card2.style.border = '3px solid transparent';
+    if (card3) card3.style.border = '3px solid transparent';
+    
+    // 設定選中的標籤樣式和卡片高亮
     if (tabType === 'premium') {
         tabPremium.style.background = '#1565c0';
         tabPremium.style.color = 'white';
+        if (card1) card1.style.border = '3px solid #ffd54f';
         contentDiv.innerHTML = window.step1PremiumContent || '<div style="color:#999; text-align:center;">溢價率法數據載入中...</div>';
     } else if (tabType === 'price') {
-        tabPrice.style.background = '#1565c0';
+        tabPrice.style.background = '#388e3c';
         tabPrice.style.color = 'white';
+        if (card2) card2.style.border = '3px solid #ffd54f';
         contentDiv.innerHTML = window.step1PriceContent || '<div style="color:#999; text-align:center;">平均得標價法數據載入中...</div>';
     } else if (tabType === 'theo') {
         tabTheo.style.background = '#7b1fa2';
         tabTheo.style.color = 'white';
+        if (card3) card3.style.border = '3px solid #ffd54f';
         contentDiv.innerHTML = window.step1TheoContent || '<div style="color:#999; text-align:center;">理論價值法數據載入中...</div>';
     }
+    
+    // 展開 details
+    const details = contentDiv.closest('details');
+    if (details) details.open = true;
 }
 
 // v3.81 新增：右側區塊展開/收合功能
@@ -9582,43 +9598,71 @@ function displayResult(r) {
     const noWeightAvgBid = parseFloat(r.overallAvgBidPrice) || weightedAvgBid;
     const noWeightLowBid = parseFloat(r.overallLowBidPrice) || weightedLowBid;
     
-    // 計算價格區間
-    let noWeightLow, noWeightHigh, weightLow, weightHigh;
+    // ===== 計算三種方法的建議區間 =====
+    // 方法1: 溢價率法（使用加權溢價率）
+    const method1Low = theoPrice * (1 + lowPremium / 100);
+    const method1High = theoPrice * (1 + avgPremium / 100);
     
-    if (usePremiumMethod) {
-        // 溢價率法
-        noWeightLow = theoPrice * (1 + noWeightLowPremium / 100);
-        noWeightHigh = theoPrice * (1 + noWeightAvgPremium / 100);
-        weightLow = theoPrice * (1 + lowPremium / 100);
-        weightHigh = theoPrice * (1 + avgPremium / 100);
-        
-        document.getElementById('step1NoWeightPremium').textContent = 
-            `${noWeightLowPremium.toFixed(2)}% ~ ${noWeightAvgPremium.toFixed(2)}%`;
-        document.getElementById('step1WeightPremium').textContent = 
-            `${lowPremium.toFixed(2)}% ~ ${avgPremium.toFixed(2)}%`;
-    } else {
-        // 得標均價法
-        noWeightLow = noWeightLowBid > 0 ? noWeightLowBid : theoPrice * (1 + noWeightLowPremium / 100);
-        noWeightHigh = noWeightAvgBid > 0 ? noWeightAvgBid : theoPrice * (1 + noWeightAvgPremium / 100);
-        weightLow = weightedLowBid > 0 ? weightedLowBid : theoPrice * (1 + lowPremium / 100);
-        weightHigh = weightedAvgBid > 0 ? weightedAvgBid : theoPrice * (1 + avgPremium / 100);
-        
-        document.getElementById('step1NoWeightPremium').textContent = 
-            noWeightLowBid > 0 ? `${noWeightLowBid.toFixed(2)} ~ ${noWeightAvgBid.toFixed(2)}` : '--';
-        document.getElementById('step1WeightPremium').textContent = 
-            weightedLowBid > 0 ? `${weightedLowBid.toFixed(2)} ~ ${weightedAvgBid.toFixed(2)}` : '--';
-    }
+    // 方法2: 得標價法（使用加權得標價）
+    const method2Low = weightedLowBid > 0 ? weightedLowBid : theoPrice * (1 + lowPremium / 100);
+    const method2High = weightedAvgBid > 0 ? weightedAvgBid : theoPrice * (1 + avgPremium / 100);
     
-    document.getElementById('step1NoWeightRange').textContent = 
-        (noWeightLow > 0 && noWeightHigh > 0) ? `${noWeightLow.toFixed(2)}~${noWeightHigh.toFixed(2)}元` : '--';
-    document.getElementById('step1WeightRange').textContent = 
-        (weightLow > 0 && weightHigh > 0) ? `${weightLow.toFixed(2)}~${weightHigh.toFixed(2)}元` : '--';
+    // 方法3: 理論價值法（從 window 變數取得，在 generateDetailedAnalysisHTML 中設定）
+    const method3Low = parseFloat(window.theoMethodLowPrice) || method1Low;
+    const method3High = parseFloat(window.theoMethodHighPrice) || method1High;
+    
+    // 填充三個卡片的建議區間
+    const method1RangeEl = document.getElementById('method1Range');
+    const method2RangeEl = document.getElementById('method2Range');
+    const method3RangeEl = document.getElementById('method3Range');
+    
+    if (method1RangeEl) method1RangeEl.textContent = 
+        (method1Low > 0 && method1High > 0) ? `${method1Low.toFixed(2)}~${method1High.toFixed(2)}元` : '--';
+    if (method2RangeEl) method2RangeEl.textContent = 
+        (method2Low > 0 && method2High > 0) ? `${method2Low.toFixed(2)}~${method2High.toFixed(2)}元` : '--';
+    if (method3RangeEl) method3RangeEl.textContent = 
+        (method3Low > 0 && method3High > 0) ? `${method3Low.toFixed(2)}~${method3High.toFixed(2)}元` : '--';
+    
+    // 高亮系統推薦的方法卡片
+    const card1 = document.getElementById('method1Card');
+    const card2 = document.getElementById('method2Card');
+    const card3 = document.getElementById('method3Card');
+    
+    if (card1) card1.style.border = usePremiumMethod ? '3px solid #ffd54f' : '3px solid transparent';
+    if (card2) card2.style.border = !usePremiumMethod ? '3px solid #ffd54f' : '3px solid transparent';
+    if (card3) card3.style.border = '3px solid transparent';
     
     // Step 1 詳細分析內容（各維度加權明細）- v3.97z 改為標籤切換
-    // 預設顯示溢價率法
+    // 預設顯示系統推薦的方法
     const step1Content = document.getElementById('step1DetailContent');
-    if (step1Content && window.step1PremiumContent) {
-        step1Content.innerHTML = window.step1PremiumContent;
+    if (step1Content) {
+        if (usePremiumMethod && window.step1PremiumContent) {
+            step1Content.innerHTML = window.step1PremiumContent;
+        } else if (!usePremiumMethod && window.step1PriceContent) {
+            step1Content.innerHTML = window.step1PriceContent;
+        } else if (window.step1PremiumContent) {
+            step1Content.innerHTML = window.step1PremiumContent;
+        }
+    }
+    
+    // 同步更新 Tab 按鈕的選中狀態
+    const tabPremium = document.getElementById('step1TabPremium');
+    const tabPrice = document.getElementById('step1TabPrice');
+    const tabTheo = document.getElementById('step1TabTheo');
+    if (tabPremium && tabPrice && tabTheo) {
+        if (usePremiumMethod) {
+            tabPremium.style.background = '#1565c0';
+            tabPremium.style.color = 'white';
+            tabPrice.style.background = '#e3f2fd';
+            tabPrice.style.color = '#1565c0';
+        } else {
+            tabPrice.style.background = '#388e3c';
+            tabPrice.style.color = 'white';
+            tabPremium.style.background = '#e3f2fd';
+            tabPremium.style.color = '#1565c0';
+        }
+        tabTheo.style.background = '#e3f2fd';
+        tabTheo.style.color = '#1565c0';
     }
     
     // ========== Step 2: 市場氛圍調整（近期熱度法） ==========
@@ -10406,6 +10450,11 @@ function displayResult(r) {
             if (cnt > 0) {
                 const avgLowBid = sumLowB / cnt;
                 const avgAvgBid = sumAvgB / cnt;
+                
+                // v3.97z 保存到 window 供三卡片顯示使用
+                window.theoMethodLowPrice = avgLowBid;
+                window.theoMethodHighPrice = avgAvgBid;
+                
                 theoRecommend = `
                     <div style="margin-top:12px; padding:12px; background:linear-gradient(135deg, #7b1fa2 0%, #9c27b0 100%); border-radius:8px; color:white;">
                         <div style="font-size:12px; margin-bottom:8px;">

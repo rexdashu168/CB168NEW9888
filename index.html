@@ -10213,15 +10213,15 @@ function displayResult(r) {
             </div>
         </div>
         <div style="overflow-x:auto; -webkit-overflow-scrolling:touch;">
-            <table style="width:100%; border-collapse:collapse; font-size:10px;">
+            <table style="width:100%; border-collapse:collapse; font-size:12px;">
                 <thead><tr style="background:#1565c0; color:white;">
-                    <th style="padding:6px 3px; text-align:center;">維度</th>
-                    <th style="padding:6px 3px; text-align:center;">條件</th>
-                    <th style="padding:6px 3px; text-align:center;">最低<br>溢價</th>
-                    <th style="padding:6px 3px; text-align:center;">平均<br>溢價</th>
-                    <th style="padding:6px 3px; text-align:center;">權重</th>
-                    <th style="padding:6px 3px; text-align:center;">加權<br>最低</th>
-                    <th style="padding:6px 3px; text-align:center;">加權<br>平均</th>
+                    <th style="padding:8px 4px; text-align:center;">維度</th>
+                    <th style="padding:8px 4px; text-align:center;">條件</th>
+                    <th style="padding:8px 4px; text-align:center;">最低<br>溢價</th>
+                    <th style="padding:8px 4px; text-align:center;">平均<br>溢價</th>
+                    <th style="padding:8px 4px; text-align:center;">權重</th>
+                    <th style="padding:8px 4px; text-align:center;">加權<br>最低</th>
+                    <th style="padding:8px 4px; text-align:center;">加權<br>平均</th>
                 </tr></thead>
                 <tbody>${premiumRows}</tbody>
             </table>
@@ -10273,15 +10273,15 @@ function displayResult(r) {
             </div>
         </div>
         <div style="overflow-x:auto; -webkit-overflow-scrolling:touch;">
-            <table style="width:100%; border-collapse:collapse; font-size:10px;">
+            <table style="width:100%; border-collapse:collapse; font-size:12px;">
                 <thead><tr style="background:#e65100; color:white;">
-                    <th style="padding:6px 3px; text-align:center;">維度</th>
-                    <th style="padding:6px 3px; text-align:center;">條件</th>
-                    <th style="padding:6px 3px; text-align:center;">最低<br>得標價</th>
-                    <th style="padding:6px 3px; text-align:center;">平均<br>得標價</th>
-                    <th style="padding:6px 3px; text-align:center;">權重</th>
-                    <th style="padding:6px 3px; text-align:center;">加權<br>最低</th>
-                    <th style="padding:6px 3px; text-align:center;">加權<br>平均</th>
+                    <th style="padding:8px 4px; text-align:center;">維度</th>
+                    <th style="padding:8px 4px; text-align:center;">條件</th>
+                    <th style="padding:8px 4px; text-align:center;">最低<br>得標價</th>
+                    <th style="padding:8px 4px; text-align:center;">平均<br>得標價</th>
+                    <th style="padding:8px 4px; text-align:center;">權重</th>
+                    <th style="padding:8px 4px; text-align:center;">加權<br>最低</th>
+                    <th style="padding:8px 4px; text-align:center;">加權<br>平均</th>
                 </tr></thead>
                 <tbody>${priceRows}</tbody>
             </table>
@@ -10419,7 +10419,7 @@ function displayResult(r) {
         `;
     });
     
-    // v3.97z_v18: 計算「得標價法」建議價格（同理論價區間，不分擔保類型）
+    // v3.97z_v19: 計算「得標價法」建議價格（同理論價區間，不分擔保，用溢價率計算）
     if (currentTheoRange) {
         const rangeFilterAll = d => {
             const theo = d.theoreticalPrice || 0;
@@ -10432,15 +10432,18 @@ function displayResult(r) {
         const priceMethodCases = auctionRawData.filter(d => rangeFilterAll(d) && d.minBidPrice > 0);
         
         if (priceMethodCases.length > 0) {
-            let sumLowB = 0, sumAvgB = 0, cnt = 0;
+            let sumLowP = 0, sumAvgP = 0, cnt = 0;
             priceMethodCases.forEach(d => {
-                sumLowB += d.minBidPrice;
-                sumAvgB += d.avgBidPrice;
+                sumLowP += d.lowPremium || 0;
+                sumAvgP += d.avgPremium || 0;
                 cnt++;
             });
             if (cnt > 0) {
-                window.priceMethodLowPrice = sumLowB / cnt;
-                window.priceMethodHighPrice = sumAvgB / cnt;
+                // 用溢價率 × 當前理論價計算
+                const avgLowPrem = sumLowP / cnt;
+                const avgAvgPrem = sumAvgP / cnt;
+                window.priceMethodLowPrice = currentTheo * (1 + avgLowPrem / 100);
+                window.priceMethodHighPrice = currentTheo * (1 + avgAvgPrem / 100);
             }
         }
     }
@@ -10463,39 +10466,57 @@ function displayResult(r) {
         });
         
         if (targetCases.length > 0) {
-            let sumLowB = 0, sumAvgB = 0, cnt = 0;
+            let sumLowB = 0, sumAvgB = 0, sumLowP = 0, sumAvgP = 0, cnt = 0;
             targetCases.forEach(d => {
                 if (d.minBidPrice > 0) {
                     sumLowB += d.minBidPrice;
                     sumAvgB += d.avgBidPrice;
+                    sumLowP += d.lowPremium || 0;
+                    sumAvgP += d.avgPremium || 0;
                     cnt++;
                 }
             });
             if (cnt > 0) {
-                const avgLowBid = sumLowB / cnt;
-                const avgAvgBid = sumAvgB / cnt;
+                // v3.97z_v19: 改用溢價率計算，而非歷史得標價平均
+                const avgLowPrem = sumLowP / cnt;  // 同區間平均最低溢價率
+                const avgAvgPrem = sumAvgP / cnt;  // 同區間平均溢價率
                 
-                // v3.97z 保存到 window 供三卡片顯示使用
-                window.theoMethodLowPrice = avgLowBid;
-                window.theoMethodHighPrice = avgAvgBid;
+                // 用當前理論價 × (1 + 溢價率) 計算建議價
+                const theoLowBid = currentTheo * (1 + avgLowPrem / 100);
+                const theoAvgBid = currentTheo * (1 + avgAvgPrem / 100);
+                
+                // 保存到 window 供三卡片顯示使用
+                window.theoMethodLowPrice = theoLowBid;
+                window.theoMethodHighPrice = theoAvgBid;
+                
+                // 樣本數警告
+                const sampleWarning = cnt < 5 
+                    ? `<div style="background:#fff3e0; padding:8px; border-radius:6px; margin-top:8px; font-size:12px; color:#e65100;">
+                        ⚠️ 樣本數僅 ${cnt} 筆，建議參考溢價率法結果
+                       </div>`
+                    : '';
                 
                 theoRecommend = `
                     <div style="margin-top:12px; padding:12px; background:linear-gradient(135deg, #7b1fa2 0%, #9c27b0 100%); border-radius:8px; color:white;">
-                        <div style="font-size:12px; margin-bottom:8px;">
-                            🎯 <b>理論價值法建議</b>（${currentTheoRange} + ${r.inputData.guarantee}，樣本數 ${cnt}）
+                        <div style="font-size:14px; margin-bottom:10px;">
+                            🎯 <b>理論價值法建議</b>（${currentTheoRange} + ${r.inputData.guarantee}，樣本 ${cnt}）
+                        </div>
+                        <div style="font-size:12px; opacity:0.9; margin-bottom:10px;">
+                            同區間歷史溢價率：${avgLowPrem.toFixed(2)}% ~ ${avgAvgPrem.toFixed(2)}%
                         </div>
                         <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px;">
-                            <div style="text-align:center; padding:8px; background:rgba(255,255,255,0.2); border-radius:6px;">
-                                <div style="font-size:10px; opacity:0.9;">保守投標價</div>
-                                <div style="font-size:20px; font-weight:bold;">${avgLowBid.toFixed(2)}</div>
-                                <div style="font-size:9px; opacity:0.8;">≈ 歷史最低得標均價</div>
+                            <div style="text-align:center; padding:10px; background:rgba(255,255,255,0.2); border-radius:6px;">
+                                <div style="font-size:12px; opacity:0.9;">保守投標價</div>
+                                <div style="font-size:24px; font-weight:bold;">${theoLowBid.toFixed(2)}</div>
+                                <div style="font-size:11px; opacity:0.8;">= ${currentTheo.toFixed(2)} × (1+${avgLowPrem.toFixed(2)}%)</div>
                             </div>
-                            <div style="text-align:center; padding:8px; background:rgba(255,255,255,0.2); border-radius:6px;">
-                                <div style="font-size:10px; opacity:0.9;">平衡投標價</div>
-                                <div style="font-size:20px; font-weight:bold;">${avgAvgBid.toFixed(2)}</div>
-                                <div style="font-size:9px; opacity:0.8;">≈ 歷史平均得標均價</div>
+                            <div style="text-align:center; padding:10px; background:rgba(255,255,255,0.2); border-radius:6px;">
+                                <div style="font-size:12px; opacity:0.9;">平衡投標價</div>
+                                <div style="font-size:24px; font-weight:bold;">${theoAvgBid.toFixed(2)}</div>
+                                <div style="font-size:11px; opacity:0.8;">= ${currentTheo.toFixed(2)} × (1+${avgAvgPrem.toFixed(2)}%)</div>
                             </div>
                         </div>
+                        ${sampleWarning}
                     </div>
                 `;
             }
@@ -10523,16 +10544,16 @@ function displayResult(r) {
             </div>
         </div>
         <div style="overflow-x:auto; -webkit-overflow-scrolling:touch;">
-            <table style="width:100%; border-collapse:collapse; font-size:9px;">
+            <table style="width:100%; border-collapse:collapse; font-size:12px;">
                 <thead>
                     <tr style="background:#7b1fa2; color:white;">
-                        <th style="padding:6px 2px; text-align:center;">理論價<br>區間</th>
-                        <th style="padding:6px 2px; text-align:center;">擔保</th>
-                        <th style="padding:6px 2px; text-align:center;">最低<br>溢價</th>
-                        <th style="padding:6px 2px; text-align:center;">平均<br>溢價</th>
-                        <th style="padding:6px 2px; text-align:center;">最低<br>得標</th>
-                        <th style="padding:6px 2px; text-align:center;">平均<br>得標</th>
-                        <th style="padding:6px 2px; text-align:center;">樣本</th>
+                        <th style="padding:8px 4px; text-align:center;">理論價<br>區間</th>
+                        <th style="padding:8px 4px; text-align:center;">擔保</th>
+                        <th style="padding:8px 4px; text-align:center;">最低<br>溢價</th>
+                        <th style="padding:8px 4px; text-align:center;">平均<br>溢價</th>
+                        <th style="padding:8px 4px; text-align:center;">最低<br>得標</th>
+                        <th style="padding:8px 4px; text-align:center;">平均<br>得標</th>
+                        <th style="padding:8px 4px; text-align:center;">樣本</th>
                     </tr>
                 </thead>
                 <tbody>

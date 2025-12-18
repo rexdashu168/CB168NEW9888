@@ -1777,6 +1777,33 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
             </div>
         </div>
 
+        <!-- 📊 歷史參考案例 -->
+        <div class="form-section" id="referenceSection" style="background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%); border: 2px solid #9c27b0; border-radius: 10px; padding: 15px; margin-bottom: 15px; display:none;">
+            <h3 style="color: #7b1fa2; border-left-color: #9c27b0;">📊 歷史參考案例</h3>
+            
+            <!-- 同公司歷史（系統自動） -->
+            <div id="sameCompanyRef" style="display:none; margin-bottom:12px;">
+                <div style="font-size:13px; color:#7b1fa2; font-weight:bold; margin-bottom:8px;">🏢 同公司歷史競拍</div>
+                <div id="sameCompanyTable"></div>
+            </div>
+            
+            <!-- 手動輸入參考標的 -->
+            <div style="margin-top:10px;">
+                <div style="font-size:13px; color:#7b1fa2; font-weight:bold; margin-bottom:8px;">🔍 手動添加參考標的</div>
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <input type="text" id="manualRefInput" placeholder="輸入CB代號或名稱（如：穎崴一、康普三）" style="flex:1; padding:8px 12px; border:2px solid #ce93d8; border-radius:6px; font-size:14px;">
+                    <button type="button" onclick="addManualReference()" style="padding:8px 16px; background:#9c27b0; color:white; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">加入</button>
+                </div>
+                <div style="font-size:12px; color:#666; margin-top:5px;">💡 可輸入多檔，用逗號分隔（如：穎崴一, 旺矽一）</div>
+            </div>
+            
+            <!-- 手動添加的參考標的 -->
+            <div id="manualRefTable" style="display:none; margin-top:12px;">
+                <div style="font-size:13px; color:#7b1fa2; font-weight:bold; margin-bottom:8px;">📋 自選參考標的</div>
+                <div id="manualRefContent"></div>
+            </div>
+        </div>
+
         <!-- 📌 基本資料 -->
         <div class="form-section">
             <h3>📌 基本資料</h3>
@@ -10902,6 +10929,214 @@ function initResizer() {
 // ==========================================
 let pendingCases = [];
 let recentCompletedCases = []; // v3.93 新增：近期完成案例
+let manualRefCases = []; // v3.97z_v32 新增：手動添加的參考案例
+
+// ==========================================
+// v3.97z_v32 歷史參考案例功能
+// ==========================================
+
+// 從CB名稱提取公司名稱（去除數字後綴）
+function extractCompanyName(cbName) {
+    if (!cbName) return '';
+    // 移除常見後綴：一、二、三、四、五、六、七、八、九、十、1、2、3...
+    return cbName.replace(/[一二三四五六七八九十0-9]+$/, '').trim();
+}
+
+// 搜尋同公司歷史競拍案例
+function findSameCompanyHistory(currentCbName) {
+    const companyName = extractCompanyName(currentCbName);
+    if (!companyName) return [];
+    
+    const results = [];
+    
+    // 從 auctionData 搜尋同公司的競拍案例
+    if (window.auctionData && Array.isArray(window.auctionData)) {
+        window.auctionData.forEach(row => {
+            const cbName = row['CB名稱'] || row['CB簡稱'] || '';
+            if (cbName && cbName !== currentCbName) {
+                const rowCompany = extractCompanyName(cbName);
+                if (rowCompany === companyName) {
+                    results.push({
+                        cbName: cbName,
+                        theoPrice: parseFloat(row['截標日理論價']) || 0,
+                        floorPrice: parseFloat(row['底標']) || 100,
+                        minBidPrice: parseFloat(row['最低得標價']) || 0,
+                        avgBidPrice: parseFloat(row['加權平均得標價']) || 0,
+                        bidMultiple: parseFloat(row['投標倍數']) || 0,
+                        firstDayReturn: parseFloat(row['首日報酬']) || 0,
+                        industry: row['產業'] || '',
+                        guarantee: row['擔保'] || ''
+                    });
+                }
+            }
+        });
+    }
+    
+    return results;
+}
+
+// 搜尋指定名稱的歷史競拍案例
+function findCaseByName(searchName) {
+    if (!searchName) return null;
+    searchName = searchName.trim();
+    
+    if (window.auctionData && Array.isArray(window.auctionData)) {
+        for (const row of window.auctionData) {
+            const cbName = row['CB名稱'] || row['CB簡稱'] || '';
+            const cbCode = row['CB代號'] || '';
+            // 名稱或代號匹配
+            if (cbName === searchName || cbCode === searchName || 
+                cbName.includes(searchName) || searchName.includes(cbName)) {
+                return {
+                    cbName: cbName,
+                    cbCode: cbCode,
+                    theoPrice: parseFloat(row['截標日理論價']) || 0,
+                    floorPrice: parseFloat(row['底標']) || 100,
+                    minBidPrice: parseFloat(row['最低得標價']) || 0,
+                    avgBidPrice: parseFloat(row['加權平均得標價']) || 0,
+                    bidMultiple: parseFloat(row['投標倍數']) || 0,
+                    firstDayReturn: parseFloat(row['首日報酬']) || 0,
+                    industry: row['產業'] || '',
+                    guarantee: row['擔保'] || ''
+                };
+            }
+        }
+    }
+    return null;
+}
+
+// 生成參考案例比較表格
+function generateRefTable(cases, tableId) {
+    if (!cases || cases.length === 0) return '<div style="color:#666; font-size:13px;">無相關資料</div>';
+    
+    let html = `<table style="width:100%; border-collapse:collapse; font-size:13px; background:white; border-radius:6px; overflow:hidden;">
+        <thead>
+            <tr style="background:#9c27b0; color:white;">
+                <th style="padding:8px; text-align:left;">標的</th>
+                <th style="padding:8px; text-align:right;">理論價</th>
+                <th style="padding:8px; text-align:right;">底標</th>
+                <th style="padding:8px; text-align:right;">最低得標</th>
+                <th style="padding:8px; text-align:right;">得標均價</th>
+                <th style="padding:8px; text-align:right;">溢價率</th>
+                <th style="padding:8px; text-align:right;">投標倍數</th>
+                <th style="padding:8px; text-align:right;">首日報酬</th>
+                ${tableId === 'manualRefContent' ? '<th style="padding:8px;">操作</th>' : ''}
+            </tr>
+        </thead>
+        <tbody>`;
+    
+    cases.forEach((c, idx) => {
+        const premiumRate = c.theoPrice > 0 ? ((c.minBidPrice - c.theoPrice) / c.theoPrice * 100).toFixed(2) : '-';
+        const premiumColor = parseFloat(premiumRate) >= 0 ? '#c62828' : '#2e7d32';
+        const returnColor = c.firstDayReturn >= 0 ? '#2e7d32' : '#c62828';
+        
+        html += `<tr style="border-bottom:1px solid #e0e0e0;">
+            <td style="padding:8px; font-weight:bold; color:#7b1fa2;">${c.cbName}</td>
+            <td style="padding:8px; text-align:right;">${c.theoPrice > 0 ? c.theoPrice.toFixed(2) : '-'}</td>
+            <td style="padding:8px; text-align:right;">${c.floorPrice}</td>
+            <td style="padding:8px; text-align:right; font-weight:bold; color:#1565c0;">${c.minBidPrice > 0 ? c.minBidPrice.toFixed(2) : '-'}</td>
+            <td style="padding:8px; text-align:right;">${c.avgBidPrice > 0 ? c.avgBidPrice.toFixed(2) : '-'}</td>
+            <td style="padding:8px; text-align:right; color:${premiumColor}; font-weight:bold;">${premiumRate !== '-' ? premiumRate + '%' : '-'}</td>
+            <td style="padding:8px; text-align:right;">${c.bidMultiple > 0 ? c.bidMultiple.toFixed(2) + 'x' : '-'}</td>
+            <td style="padding:8px; text-align:right; color:${returnColor}; font-weight:bold;">${c.firstDayReturn !== 0 ? c.firstDayReturn.toFixed(2) + '%' : '-'}</td>
+            ${tableId === 'manualRefContent' ? `<td style="padding:8px; text-align:center;"><button type="button" onclick="removeManualRef(${idx})" style="padding:2px 8px; background:#ef5350; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;">移除</button></td>` : ''}
+        </tr>`;
+    });
+    
+    html += '</tbody></table>';
+    return html;
+}
+
+// 更新同公司歷史參考
+function updateSameCompanyRef(cbName) {
+    const section = document.getElementById('referenceSection');
+    const sameCompanyDiv = document.getElementById('sameCompanyRef');
+    const sameCompanyTable = document.getElementById('sameCompanyTable');
+    
+    if (!section || !sameCompanyDiv || !sameCompanyTable) return;
+    
+    const sameCompanyCases = findSameCompanyHistory(cbName);
+    
+    if (sameCompanyCases.length > 0) {
+        sameCompanyTable.innerHTML = generateRefTable(sameCompanyCases, 'sameCompanyTable');
+        sameCompanyDiv.style.display = 'block';
+        section.style.display = 'block';
+    } else {
+        sameCompanyDiv.style.display = 'none';
+        // 如果沒有同公司歷史，但有手動添加的，仍然顯示區塊
+        if (manualRefCases.length === 0) {
+            section.style.display = 'none';
+        }
+    }
+}
+
+// 手動添加參考標的
+function addManualReference() {
+    const input = document.getElementById('manualRefInput');
+    const section = document.getElementById('referenceSection');
+    const manualDiv = document.getElementById('manualRefTable');
+    const manualContent = document.getElementById('manualRefContent');
+    
+    if (!input || !input.value.trim()) {
+        alert('請輸入CB代號或名稱');
+        return;
+    }
+    
+    // 支援多檔輸入（逗號分隔）
+    const names = input.value.split(/[,，、\s]+/).filter(n => n.trim());
+    let addedCount = 0;
+    let notFoundNames = [];
+    
+    names.forEach(name => {
+        name = name.trim();
+        if (!name) return;
+        
+        // 檢查是否已存在
+        if (manualRefCases.some(c => c.cbName === name || c.cbCode === name)) {
+            return;
+        }
+        
+        const found = findCaseByName(name);
+        if (found) {
+            manualRefCases.push(found);
+            addedCount++;
+        } else {
+            notFoundNames.push(name);
+        }
+    });
+    
+    if (notFoundNames.length > 0) {
+        alert('找不到以下標的：' + notFoundNames.join('、'));
+    }
+    
+    if (manualRefCases.length > 0) {
+        manualContent.innerHTML = generateRefTable(manualRefCases, 'manualRefContent');
+        manualDiv.style.display = 'block';
+        section.style.display = 'block';
+    }
+    
+    input.value = '';
+}
+
+// 移除手動添加的參考標的
+function removeManualRef(idx) {
+    manualRefCases.splice(idx, 1);
+    
+    const section = document.getElementById('referenceSection');
+    const manualDiv = document.getElementById('manualRefTable');
+    const manualContent = document.getElementById('manualRefContent');
+    const sameCompanyDiv = document.getElementById('sameCompanyRef');
+    
+    if (manualRefCases.length > 0) {
+        manualContent.innerHTML = generateRefTable(manualRefCases, 'manualRefContent');
+    } else {
+        manualDiv.style.display = 'none';
+        // 如果沒有同公司歷史也沒有手動添加，隱藏整個區塊
+        if (sameCompanyDiv.style.display === 'none') {
+            section.style.display = 'none';
+        }
+    }
+}
 
 // 初始化閃電帶入選單（按狀態分組）
 function initQuickSelect() {
@@ -11050,6 +11285,9 @@ function handleQuickSelect() {
     if (val === '' || val === null) {
         infoDiv.style.display = 'none';
         if (compareDiv) compareDiv.style.display = 'none';
+        // v3.97z_v32 隱藏歷史參考區塊
+        const refSection = document.getElementById('referenceSection');
+        if (refSection) refSection.style.display = 'none';
         return;
     }
     
@@ -11317,6 +11555,11 @@ function handleQuickSelect() {
         }
     }
     infoDiv.style.display = 'block';
+    
+    // v3.97z_v32 更新同公司歷史參考案例
+    if (c.cbName) {
+        updateSameCompanyRef(c.cbName);
+    }
     
     // v3.94 重寫：根據競拍/詢圈分別處理
     if (c.auctionType === '詢圈') {

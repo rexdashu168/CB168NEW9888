@@ -8634,8 +8634,11 @@ function generateIndustryDetailTable(cbList, industryName) {
         <table style="width:100%; border-collapse:collapse; font-size:13px; background:white;">
             <tr style="background:#4caf50; color:white;">
                 <th style="padding:6px 8px; text-align:left;">CB名稱</th>
+                <th style="padding:6px 6px; text-align:center;">年份</th>
+                <th style="padding:6px 6px; text-align:right;">規模</th>
+                <th style="padding:6px 6px; text-align:center;">類型</th>
                 <th style="padding:6px 8px; text-align:left;">券商</th>
-                <th style="padding:6px 8px; text-align:center;">擔保</th>
+                <th style="padding:6px 6px; text-align:center;">擔保</th>
                 <th style="padding:6px 8px; text-align:right;">掛牌高</th>
                 <th style="padding:6px 8px; text-align:right;">掛牌低</th>
                 <th style="padding:6px 8px; text-align:right;">振幅</th>
@@ -8648,11 +8651,33 @@ function generateIndustryDetailTable(cbList, industryName) {
         const ampColor = amp >= 80 ? '#c62828' : (amp >= 50 ? '#e65100' : (amp < 30 ? '#2e7d32' : '#333'));
         const rowBg = idx % 2 === 0 ? '#fff' : '#e8f5e9';
         
+        // v3.97z_v44 新增：取得年份
+        let year = '-';
+        if (cb.openDateStr) {
+            const match = cb.openDateStr.match(/(\d{4})/);
+            if (match) year = match[1];
+        } else if (cb.openDate) {
+            const dateStr = String(cb.openDate);
+            if (dateStr.length >= 4) year = dateStr.substring(0, 4);
+        }
+        
+        // v3.97z_v44 新增：取得規模（億元）
+        const size = cb.issueSize || 0;
+        const sizeStr = size > 0 ? size.toFixed(1) : '-';
+        
+        // v3.97z_v44 新增：類型（競拍/詢圈）
+        const cbType = cb.type || '競拍';
+        const typeColor = cbType === '詢圈' ? '#1565c0' : '#e65100';
+        const typeBg = cbType === '詢圈' ? '#e3f2fd' : '#fff3e0';
+        
         html += `
             <tr style="background:${rowBg}; border-bottom:1px solid #c8e6c9;">
                 <td style="padding:6px 8px; font-weight:bold; color:#1565c0;">${cb.name || '-'}</td>
+                <td style="padding:6px 6px; text-align:center; color:#666;">${year}</td>
+                <td style="padding:6px 6px; text-align:right; color:#555;">${sizeStr}</td>
+                <td style="padding:6px 6px; text-align:center;"><span style="background:${typeBg}; color:${typeColor}; padding:2px 6px; border-radius:3px; font-size:11px;">${cbType}</span></td>
                 <td style="padding:6px 8px; color:#666;">${cb.broker || '-'}</td>
-                <td style="padding:6px 8px; text-align:center;">${cb.guarantee === '有' || cb.guarantee === '有擔保' ? '🛡️' : '⚪'}</td>
+                <td style="padding:6px 6px; text-align:center;">${cb.guarantee === '有' || cb.guarantee === '有擔保' ? '🛡️' : '⚪'}</td>
                 <td style="padding:6px 8px; text-align:right; color:#2e7d32; font-weight:bold;">${high > 0 ? high.toFixed(1) : '-'}</td>
                 <td style="padding:6px 8px; text-align:right; color:#c62828;">${low > 0 ? low.toFixed(1) : '-'}</td>
                 <td style="padding:6px 8px; text-align:right; color:${ampColor}; font-weight:bold;">${amp > 0 ? amp.toFixed(1) + '%' : '-'}</td>
@@ -8776,8 +8801,11 @@ function generateBrokerDetailTable(cbList, brokerName) {
         <table style="width:100%; border-collapse:collapse; font-size:13px; background:white;">
             <tr style="background:#ff9800; color:white;">
                 <th style="padding:6px 8px; text-align:left;">CB名稱</th>
+                <th style="padding:6px 6px; text-align:center;">年份</th>
+                <th style="padding:6px 6px; text-align:right;">規模</th>
+                <th style="padding:6px 6px; text-align:center;">類型</th>
                 <th style="padding:6px 8px; text-align:left;">產業</th>
-                <th style="padding:6px 8px; text-align:center;">擔保</th>
+                <th style="padding:6px 6px; text-align:center;">擔保</th>
                 <th style="padding:6px 8px; text-align:right;">掛牌高</th>
                 <th style="padding:6px 8px; text-align:right;">掛牌低</th>
                 <th style="padding:6px 8px; text-align:right;">振幅</th>
@@ -8790,11 +8818,33 @@ function generateBrokerDetailTable(cbList, brokerName) {
         const ampColor = amp >= 80 ? '#c62828' : (amp >= 50 ? '#e65100' : (amp < 30 ? '#2e7d32' : '#333'));
         const rowBg = idx % 2 === 0 ? '#fff' : '#fff8e1';
         
+        // v3.97z_v44 新增：取得年份
+        let year = '-';
+        if (cb.openDateStr) {
+            const match = cb.openDateStr.match(/(\d{4})/);
+            if (match) year = match[1];
+        } else if (cb.openDate) {
+            const dateStr = String(cb.openDate);
+            if (dateStr.length >= 4) year = dateStr.substring(0, 4);
+        }
+        
+        // v3.97z_v44 新增：取得規模（億元）
+        const size = cb.issueSize || 0;
+        const sizeStr = size > 0 ? size.toFixed(1) : '-';
+        
+        // v3.97z_v44 新增：類型（競拍/詢圈）
+        const cbType = cb.type || '競拍';
+        const typeColor = cbType === '詢圈' ? '#1565c0' : '#e65100';
+        const typeBg = cbType === '詢圈' ? '#e3f2fd' : '#fff3e0';
+        
         html += `
             <tr style="background:${rowBg}; border-bottom:1px solid #ffe0b2;">
                 <td style="padding:6px 8px; font-weight:bold; color:#1565c0;">${cb.name || '-'}</td>
+                <td style="padding:6px 6px; text-align:center; color:#666;">${year}</td>
+                <td style="padding:6px 6px; text-align:right; color:#555;">${sizeStr}</td>
+                <td style="padding:6px 6px; text-align:center;"><span style="background:${typeBg}; color:${typeColor}; padding:2px 6px; border-radius:3px; font-size:11px;">${cbType}</span></td>
                 <td style="padding:6px 8px; color:#666;">${cb.industry || '-'}</td>
-                <td style="padding:6px 8px; text-align:center;">${cb.guarantee === '有' || cb.guarantee === '有擔保' ? '🛡️' : '⚪'}</td>
+                <td style="padding:6px 6px; text-align:center;">${cb.guarantee === '有' || cb.guarantee === '有擔保' ? '🛡️' : '⚪'}</td>
                 <td style="padding:6px 8px; text-align:right; color:#2e7d32; font-weight:bold;">${high > 0 ? high.toFixed(1) : '-'}</td>
                 <td style="padding:6px 8px; text-align:right; color:#c62828;">${low > 0 ? low.toFixed(1) : '-'}</td>
                 <td style="padding:6px 8px; text-align:right; color:${ampColor}; font-weight:bold;">${amp > 0 ? amp.toFixed(1) + '%' : '-'}</td>

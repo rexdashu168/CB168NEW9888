@@ -8471,10 +8471,11 @@ function renderIndustryAnalysis() {
     if (!data || data.length === 0) return '<div>暫無數據</div>';
     
     let html = `
-    <div style="font-size:14px; font-weight:bold; color:#e65100; margin-bottom:10px;">🏭 產業分布與績效分析</div>
+    <div style="font-size:14px; font-weight:bold; color:#e65100; margin-bottom:10px;">🏭 產業分布與績效分析 <span style="font-size:12px; font-weight:normal; color:#666;">（點擊▶展開明細）</span></div>
     <div class="trend-table-wrapper">
-    <table class="trend-year-table">
+    <table class="trend-year-table" id="industryAnalysisTable">
         <tr>
+            <th style="width:30px;"></th>
             <th class="sortable">產業</th>
             <th class="sortable">檔數</th>
             <th class="sortable">占比</th>
@@ -8488,14 +8489,21 @@ function renderIndustryAnalysis() {
     topData.forEach((d, idx) => {
         const ampClass = d.avgAmp >= 80 ? 'amp-high' : (d.avgAmp < 30 ? 'amp-low' : '');
         const rankIcon = idx < 3 ? ['🥇', '🥈', '🥉'][idx] : '';
+        const industryKey = d.name.replace(/['"]/g, '');
         html += `
-        <tr>
+        <tr class="industry-main-row" id="industry-row-${idx}">
+            <td style="text-align:center; cursor:pointer;" onclick="toggleIndustryDetail('${industryKey}', ${idx})">
+                <span id="industry-icon-${idx}" style="font-size:12px;">▶</span>
+            </td>
             <td style="text-align:left; font-weight:${idx < 3 ? 'bold' : 'normal'};">${rankIcon} ${d.name}</td>
             <td><b>${d.count}</b></td>
             <td>${d.ratio.toFixed(1)}%</td>
             <td style="color:#2e7d32;">${d.avgHigh > 0 ? d.avgHigh.toFixed(1) : '-'}</td>
             <td style="color:#c62828;">${d.avgLow > 0 ? d.avgLow.toFixed(1) : '-'}</td>
             <td class="${ampClass}">${d.avgAmp > 0 ? d.avgAmp.toFixed(1) + '%' : '-'}</td>
+        </tr>
+        <tr class="industry-detail-row" id="industry-detail-${idx}" style="display:none;">
+            <td colspan="7" style="padding:0; background:#e8f5e9;"></td>
         </tr>`;
     });
     
@@ -8516,6 +8524,86 @@ function renderIndustryAnalysis() {
         </div>
     </div>`;
     
+    return html;
+}
+
+// v3.97z_v41 新增：展開/收合產業明細
+function toggleIndustryDetail(industryName, rowIdx) {
+    const detailRow = document.getElementById('industry-detail-' + rowIdx);
+    const icon = document.getElementById('industry-icon-' + rowIdx);
+    
+    if (!detailRow) return;
+    
+    if (detailRow.style.display === 'none') {
+        // 展開
+        const cbList = getIndustryCBList(industryName);
+        const detailHtml = generateIndustryDetailTable(cbList, industryName);
+        detailRow.querySelector('td').innerHTML = detailHtml;
+        detailRow.style.display = 'table-row';
+        if (icon) icon.textContent = '▼';
+    } else {
+        // 收合
+        detailRow.style.display = 'none';
+        if (icon) icon.textContent = '▶';
+    }
+}
+
+// v3.97z_v41 新增：取得某產業的所有CB列表
+function getIndustryCBList(industryName) {
+    if (!auctionRawData || auctionRawData.length === 0) return [];
+    
+    // 篩選該產業的案例
+    const cases = auctionRawData.filter(d => {
+        const industry = d.industry || '';
+        return industry === industryName || industry.includes(industryName) || industryName.includes(industry);
+    });
+    
+    // 按掛牌最高價排序（由高到低）
+    cases.sort((a, b) => (b.marketHigh || 0) - (a.marketHigh || 0));
+    
+    return cases;
+}
+
+// v3.97z_v41 新增：生成產業明細表格
+function generateIndustryDetailTable(cbList, industryName) {
+    if (!cbList || cbList.length === 0) {
+        return '<div style="padding:10px; color:#999; text-align:center;">無資料</div>';
+    }
+    
+    let html = `
+    <div style="padding:10px;">
+        <div style="font-size:13px; font-weight:bold; color:#2e7d32; margin-bottom:8px;">
+            📋 ${industryName} 案例（${cbList.length}檔，按掛牌高排序）
+        </div>
+        <table style="width:100%; border-collapse:collapse; font-size:13px; background:white;">
+            <tr style="background:#4caf50; color:white;">
+                <th style="padding:6px 8px; text-align:left;">CB名稱</th>
+                <th style="padding:6px 8px; text-align:left;">券商</th>
+                <th style="padding:6px 8px; text-align:center;">擔保</th>
+                <th style="padding:6px 8px; text-align:right;">掛牌高</th>
+                <th style="padding:6px 8px; text-align:right;">掛牌低</th>
+                <th style="padding:6px 8px; text-align:right;">振幅</th>
+            </tr>`;
+    
+    cbList.forEach((cb, idx) => {
+        const high = cb.marketHigh || 0;
+        const low = cb.marketLow || 0;
+        const amp = (high > 0 && low > 0) ? ((high - low) / low * 100) : 0;
+        const ampColor = amp >= 80 ? '#c62828' : (amp >= 50 ? '#e65100' : (amp < 30 ? '#2e7d32' : '#333'));
+        const rowBg = idx % 2 === 0 ? '#fff' : '#e8f5e9';
+        
+        html += `
+            <tr style="background:${rowBg}; border-bottom:1px solid #c8e6c9;">
+                <td style="padding:6px 8px; font-weight:bold; color:#1565c0;">${cb.name || '-'}</td>
+                <td style="padding:6px 8px; color:#666;">${cb.broker || '-'}</td>
+                <td style="padding:6px 8px; text-align:center;">${cb.guarantee === '有' || cb.guarantee === '有擔保' ? '🛡️' : '⚪'}</td>
+                <td style="padding:6px 8px; text-align:right; color:#2e7d32; font-weight:bold;">${high > 0 ? high.toFixed(1) : '-'}</td>
+                <td style="padding:6px 8px; text-align:right; color:#c62828;">${low > 0 ? low.toFixed(1) : '-'}</td>
+                <td style="padding:6px 8px; text-align:right; color:${ampColor}; font-weight:bold;">${amp > 0 ? amp.toFixed(1) + '%' : '-'}</td>
+            </tr>`;
+    });
+    
+    html += '</table></div>';
     return html;
 }
 

@@ -1787,6 +1787,12 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
                 <div id="sameCompanyTable"></div>
             </div>
             
+            <!-- 同產業歷史（系統自動） v3.97z_v34 新增 -->
+            <div id="sameIndustryRef" style="display:none; margin-bottom:12px;">
+                <div style="font-size:13px; color:#1565c0; font-weight:bold; margin-bottom:8px;">🏭 同產業歷史競拍（<span id="industryRefLabel">-</span>，近5檔）</div>
+                <div id="sameIndustryTable"></div>
+            </div>
+            
             <!-- 手動輸入參考標的 -->
             <div style="margin-top:10px;">
                 <div style="font-size:13px; color:#7b1fa2; font-weight:bold; margin-bottom:8px;">🔍 手動添加參考標的</div>
@@ -10933,6 +10939,7 @@ let manualRefCases = []; // v3.97z_v32 新增：手動添加的參考案例
 
 // ==========================================
 // v3.97z_v32 歷史參考案例功能
+// v3.97z_v33 新增：同產業歷史競拍智慧提醒
 // ==========================================
 
 // 從CB名稱提取公司名稱（去除數字後綴）
@@ -10968,6 +10975,55 @@ function findSameCompanyHistory(currentCbName) {
                         guarantee: row['擔保'] || ''
                     });
                 }
+            }
+        });
+    }
+    
+    return results;
+}
+
+// v3.97z_v33 新增：搜尋同產業歷史競拍案例
+function findSameIndustryHistory(currentCbName, currentIndustry, limit = 5) {
+    if (!currentIndustry) return [];
+    
+    const results = [];
+    const companyName = extractCompanyName(currentCbName);
+    
+    // 從 auctionData 搜尋同產業的競拍案例
+    if (window.auctionData && Array.isArray(window.auctionData)) {
+        // 先按日期排序（最近的優先）
+        const sortedData = [...window.auctionData].sort((a, b) => {
+            const dateA = a['截標日'] || a['競拍日期'] || '';
+            const dateB = b['截標日'] || b['競拍日期'] || '';
+            return dateB.localeCompare(dateA);
+        });
+        
+        sortedData.forEach(row => {
+            if (results.length >= limit) return;
+            
+            const cbName = row['CB名稱'] || row['CB簡稱'] || '';
+            const rowIndustry = row['產業'] || '';
+            const rowCompany = extractCompanyName(cbName);
+            
+            // 排除同公司的（那個在另一個區塊顯示）
+            if (rowCompany === companyName) return;
+            
+            // 產業匹配（支援部分匹配）
+            if (rowIndustry && industryMatches(rowIndustry, currentIndustry)) {
+                results.push({
+                    cbName: cbName,
+                    cbCode: row['CB代號'] || '',
+                    stockCode: row['股票代號'] || '',
+                    theoPrice: parseFloat(row['截標日理論價']) || 0,
+                    floorPrice: parseFloat(row['底標']) || 100,
+                    minBidPrice: parseFloat(row['最低得標價']) || 0,
+                    avgBidPrice: parseFloat(row['加權平均得標價']) || 0,
+                    bidMultiple: parseFloat(row['投標倍數']) || 0,
+                    firstDayReturn: parseFloat(row['首日報酬']) || 0,
+                    industry: rowIndustry,
+                    guarantee: row['擔保'] || '',
+                    auctionDate: row['截標日'] || row['競拍日期'] || ''
+                });
             }
         });
     }
@@ -11048,24 +11104,39 @@ function generateRefTable(cases, tableId) {
 }
 
 // 更新同公司歷史參考
-function updateSameCompanyRef(cbName) {
+function updateSameCompanyRef(cbName, industry) {
     const section = document.getElementById('referenceSection');
     const sameCompanyDiv = document.getElementById('sameCompanyRef');
     const sameCompanyTable = document.getElementById('sameCompanyTable');
+    const sameIndustryDiv = document.getElementById('sameIndustryRef');
+    const sameIndustryTable = document.getElementById('sameIndustryTable');
+    const industryLabel = document.getElementById('industryRefLabel');
     
     if (!section || !sameCompanyDiv || !sameCompanyTable) return;
     
+    // 選擇案件後，總是顯示區塊（讓用戶可以手動輸入）
+    section.style.display = 'block';
+    
+    // 1. 同公司歷史
     const sameCompanyCases = findSameCompanyHistory(cbName);
     
     if (sameCompanyCases.length > 0) {
         sameCompanyTable.innerHTML = generateRefTable(sameCompanyCases, 'sameCompanyTable');
         sameCompanyDiv.style.display = 'block';
-        section.style.display = 'block';
     } else {
         sameCompanyDiv.style.display = 'none';
-        // 如果沒有同公司歷史，但有手動添加的，仍然顯示區塊
-        if (manualRefCases.length === 0) {
-            section.style.display = 'none';
+    }
+    
+    // 2. 同產業歷史（v3.97z_v33 新增）
+    if (sameIndustryDiv && sameIndustryTable && industry) {
+        const sameIndustryCases = findSameIndustryHistory(cbName, industry, 5);
+        
+        if (sameIndustryCases.length > 0) {
+            if (industryLabel) industryLabel.textContent = industry;
+            sameIndustryTable.innerHTML = generateRefTable(sameIndustryCases, 'sameIndustryTable');
+            sameIndustryDiv.style.display = 'block';
+        } else {
+            sameIndustryDiv.style.display = 'none';
         }
     }
 }
@@ -11557,8 +11628,9 @@ function handleQuickSelect() {
     infoDiv.style.display = 'block';
     
     // v3.97z_v32 更新同公司歷史參考案例
+    // v3.97z_v34 新增：同時傳入產業以顯示同產業案例
     if (c.cbName) {
-        updateSameCompanyRef(c.cbName);
+        updateSameCompanyRef(c.cbName, c.industry);
     }
     
     // v3.94 重寫：根據競拍/詢圈分別處理

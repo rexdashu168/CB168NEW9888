@@ -2327,7 +2327,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
             <button class="market-trend-tab" onclick="showMarketTrendTab('type', event)">競拍vs詢圈</button>
             <button class="market-trend-tab" onclick="showMarketTrendTab('issueNum', event)">發行次數</button>
             <button class="market-trend-tab" onclick="showMarketTrendTab('ky', event)">KY股分析</button>
-            <button class="market-trend-tab" onclick="showMarketTrendTab('outOfMoney', event)">價外分析</button>
+            <button class="market-trend-tab" onclick="showMarketTrendTab('maturity', event)">到期分析</button>
         </div>
         <div class="market-trend-content" id="marketTrendContent">
             載入中...
@@ -7832,7 +7832,7 @@ function showMarketTrendTab(tab, event) {
             'type': '競拍vs詢圈',
             'issueNum': '發行次數',
             'ky': 'KY股分析',
-            'outOfMoney': '價外分析'
+            'maturity': '到期分析'
         };
         if (t.textContent.includes(tabMap[tab])) {
             t.classList.add('active');
@@ -7868,8 +7868,8 @@ function showMarketTrendTab(tab, event) {
         html = renderIssueNumAnalysis();
     } else if (tab === 'ky') {
         html = renderKYAnalysis();
-    } else if (tab === 'outOfMoney') {
-        html = renderOutOfMoneyAnalysis();
+    } else if (tab === 'maturity') {
+        html = renderMaturityAnalysis();
     }
     
     content.innerHTML = html;
@@ -8648,50 +8648,141 @@ function renderKYAnalysis() {
     return html;
 }
 
-// v3.97z_v49 新增：CB市場價外分析
-// 資料來源：CB_kanban_2025.xlsx (2025/12/08)
-const cbMarketOutOfMoneyData = {
-    date: '2025/12/08',
-    total_count: 342,
-    total_balance: 2843.2,
-    in_money: { count: 110, balance: 781.8, pct: 32.2 },
-    out_money: { count: 230, balance: 2061.5, pct: 67.3 },
-    cv_stats: [
-        { key: 'deep_in', label: '深度價內(CV≥130)', count: 36, balance: 274.7, pct_count: 10.5, pct_balance: 9.7, color: '#4caf50' },
-        { key: 'in', label: '價內(100≤CV<130)', count: 74, balance: 507.1, pct_count: 21.6, pct_balance: 17.8, color: '#2196f3' },
-        { key: 'light_out', label: '輕度價外(80≤CV<100)', count: 98, balance: 751.3, pct_count: 28.7, pct_balance: 26.4, color: '#ff9800' },
-        { key: 'deep_out', label: '深度價外(CV<80)', count: 132, balance: 1310.2, pct_count: 38.6, pct_balance: 46.1, color: '#f44336' }
-    ],
-    year_stats: [
-        { year: 2025, count: 6, balance: 11.4, out_count: 3, out_balance: 9.4, out_pct: 50.0 },
-        { year: 2026, count: 70, balance: 297.4, out_count: 45, out_balance: 199.3, out_pct: 64.3 },
-        { year: 2027, count: 109, balance: 690.6, out_count: 83, out_balance: 595.9, out_pct: 76.1 },
-        { year: 2028, count: 94, balance: 831.2, out_count: 59, out_balance: 608.3, out_pct: 62.8 },
-        { year: 2029, count: 31, balance: 502.5, out_count: 24, out_balance: 406.6, out_pct: 77.4 },
-        { year: 2030, count: 30, balance: 510.0, out_count: 16, out_balance: 242.0, out_pct: 53.3 }
-    ],
-    top_out: [
-        { name: '台泥一永', convPrice: 35.20, stockPrice: 22.55, cv: 64.1, balance: 80.0 },
-        { name: '裕融二', convPrice: 179.30, stockPrice: 93.30, cv: 52.0, balance: 80.0 },
-        { name: '裕隆三', convPrice: 75.00, stockPrice: 33.70, cv: 44.9, balance: 70.0 },
-        { name: '中鼎二', convPrice: 45.50, stockPrice: 34.25, cv: 75.3, balance: 60.0 },
-        { name: '榮剛七', convPrice: 50.30, stockPrice: 31.15, cv: 61.9, balance: 50.0 }
-    ],
-    top_in: [
-        { name: '富喬六', convPrice: 13.82, stockPrice: 85.00, cv: 615.1, balance: 0.1 },
-        { name: '亞翔四', convPrice: 157.60, stockPrice: 480.00, cv: 304.6, balance: 0.3 },
-        { name: '金像電二', convPrice: 214.00, stockPrice: 588.00, cv: 274.8, balance: 3.2 },
-        { name: '旺矽五', convPrice: 913.40, stockPrice: 2255.00, cv: 246.9, balance: 3.9 },
-        { name: '健策五', convPrice: 1308.00, stockPrice: 3020.00, cv: 230.9, balance: 3.0 }
-    ]
-};
+// v3.97z_v51 新增：CB到期分析（直接讀取xlsx檔案）
+// 資料來源: data/kanban/CB_kanban_YYYY.xlsx (2017-2025)
+let cbMaturityDataCache = null;
 
-function renderOutOfMoneyAnalysis() {
-    const data = cbMarketOutOfMoneyData;
+async function loadCBKanbanData() {
+    if (cbMaturityDataCache) return cbMaturityDataCache;
+    
+    try {
+        // 讀取最新年度(2025)的看板資料
+        const currentYear = 2025;
+        const response = await fetch(`data/kanban/CB_kanban_${currentYear}.xlsx`);
+        const arrayBuffer = await response.arrayBuffer();
+        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+        
+        // 取得最後一個工作表（最新日期）
+        const sheetNames = workbook.SheetNames;
+        const latestSheet = sheetNames[sheetNames.length - 1];
+        const worksheet = workbook.Sheets[latestSheet];
+        const data = XLSX.utils.sheet_to_json(worksheet);
+        
+        // 解析資料日期
+        const dataDate = latestSheet.replace(/(\d{4})(\d{2})(\d{2})/, '$1/$2/$3');
+        
+        // 計算CV和統計
+        const processed = data.map(row => ({
+            code: row['債券代碼'],
+            name: row['債券簡稱'],
+            convPrice: parseFloat(row['轉換價格']) || 0,
+            stockPrice: parseFloat(row['轉換標的股票價格']) || 0,
+            balance: (parseFloat(row['上月底發行餘額']) || 0) / 1e8,
+            maturityDate: row['轉換迄日'],
+            cv: row['轉換價格'] > 0 ? (row['轉換標的股票價格'] / row['轉換價格']) * 100 : 0
+        })).filter(r => r.convPrice > 0);
+        
+        // 計算到期年
+        processed.forEach(r => {
+            if (r.maturityDate) {
+                const d = new Date(r.maturityDate);
+                r.maturityYear = d.getFullYear();
+            }
+        });
+        
+        // 整體統計
+        const totalCount = processed.length;
+        const totalBalance = processed.reduce((sum, r) => sum + r.balance, 0);
+        const inMoney = processed.filter(r => r.cv >= 100);
+        const outMoney = processed.filter(r => r.cv < 100);
+        
+        // CV分級
+        const cvStats = [
+            { key: 'deep_in', label: '深度價內(CV≥130)', data: processed.filter(r => r.cv >= 130), color: '#4caf50' },
+            { key: 'in', label: '價內(100≤CV<130)', data: processed.filter(r => r.cv >= 100 && r.cv < 130), color: '#2196f3' },
+            { key: 'light_out', label: '輕度價外(80≤CV<100)', data: processed.filter(r => r.cv >= 80 && r.cv < 100), color: '#ff9800' },
+            { key: 'deep_out', label: '深度價外(CV<80)', data: processed.filter(r => r.cv < 80), color: '#f44336' }
+        ].map(cv => ({
+            ...cv,
+            count: cv.data.length,
+            balance: cv.data.reduce((sum, r) => sum + r.balance, 0),
+            pct_count: (cv.data.length / totalCount * 100),
+            pct_balance: (cv.data.reduce((sum, r) => sum + r.balance, 0) / totalBalance * 100)
+        }));
+        
+        // 各年度統計
+        const years = [...new Set(processed.map(r => r.maturityYear).filter(y => y))].sort();
+        const yearStats = years.map(year => {
+            const yearData = processed.filter(r => r.maturityYear === year);
+            const yearIn = yearData.filter(r => r.cv >= 100);
+            const yearOut = yearData.filter(r => r.cv < 100);
+            const yearDeepOut = yearData.filter(r => r.cv < 80);
+            return {
+                year,
+                count: yearData.length,
+                balance: yearData.reduce((sum, r) => sum + r.balance, 0),
+                in_count: yearIn.length,
+                in_balance: yearIn.reduce((sum, r) => sum + r.balance, 0),
+                out_count: yearOut.length,
+                out_balance: yearOut.reduce((sum, r) => sum + r.balance, 0),
+                out_pct: yearData.length > 0 ? (yearOut.length / yearData.length * 100) : 0,
+                deep_out_count: yearDeepOut.length,
+                deep_out_balance: yearDeepOut.reduce((sum, r) => sum + r.balance, 0)
+            };
+        });
+        
+        // TOP10
+        const topOut = processed.filter(r => r.cv < 80).sort((a, b) => b.balance - a.balance).slice(0, 10);
+        const topIn = processed.filter(r => r.cv >= 100).sort((a, b) => b.cv - a.cv).slice(0, 10);
+        
+        cbMaturityDataCache = {
+            dataDate,
+            summary: {
+                totalCount,
+                totalBalance,
+                inMoney: { count: inMoney.length, balance: inMoney.reduce((sum, r) => sum + r.balance, 0), pct: (inMoney.length / totalCount * 100) },
+                outMoney: { count: outMoney.length, balance: outMoney.reduce((sum, r) => sum + r.balance, 0), pct: (outMoney.length / totalCount * 100) }
+            },
+            cvStats,
+            yearStats,
+            topOut,
+            topIn
+        };
+        
+        return cbMaturityDataCache;
+    } catch (error) {
+        console.error('載入CB看板資料失敗:', error);
+        return null;
+    }
+}
+
+function renderMaturityAnalysis() {
+    const content = document.getElementById('marketTrendContent');
+    content.innerHTML = `<div style="padding:20px; text-align:center; color:#666;">
+        <div style="font-size:16px;">⏳ 載入CB看板資料中...</div>
+    </div>`;
+    
+    loadCBKanbanData().then(data => {
+        if (!data) {
+            content.innerHTML = `<div style="padding:20px; text-align:center; color:#c62828;">
+                <div style="font-size:16px; margin-bottom:10px;">⚠️ 資料載入失敗</div>
+                <div style="font-size:13px; color:#666;">請確認 data/kanban/CB_kanban_2025.xlsx 檔案存在</div>
+            </div>`;
+            return;
+        }
+        
+        content.innerHTML = renderMaturityContent(data);
+    });
+    
+    return `<div style="padding:20px; text-align:center; color:#666;">⏳ 載入中...</div>`;
+}
+
+function renderMaturityContent(data) {
+    const s = data.summary;
     
     let html = `
     <div style="font-size:14px; font-weight:bold; color:#c2185b; margin-bottom:10px;">
-        📊 CB市場價內外分析 <span style="font-size:12px; font-weight:normal; color:#666;">（資料日期: ${data.date}）</span>
+        📅 CB市場到期分析 <span style="font-size:12px; font-weight:normal; color:#666;">（資料日期: ${data.dataDate}）</span>
     </div>`;
     
     // 整體統計
@@ -8699,90 +8790,93 @@ function renderOutOfMoneyAnalysis() {
     <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:8px; margin-bottom:12px;">
         <div style="background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:white; padding:10px; border-radius:8px; text-align:center;">
             <div style="font-size:12px; opacity:0.8;">市場總檔數</div>
-            <div style="font-size:20px; font-weight:bold;">${data.total_count}</div>
+            <div style="font-size:20px; font-weight:bold;">${s.totalCount}</div>
         </div>
         <div style="background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:white; padding:10px; border-radius:8px; text-align:center;">
             <div style="font-size:12px; opacity:0.8;">市場總餘額</div>
-            <div style="font-size:20px; font-weight:bold;">${data.total_balance.toLocaleString()}億</div>
+            <div style="font-size:20px; font-weight:bold;">${s.totalBalance.toFixed(1)}億</div>
         </div>
         <div style="background:linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); color:white; padding:10px; border-radius:8px; text-align:center;">
             <div style="font-size:12px; opacity:0.8;">價內(CV≥100)</div>
-            <div style="font-size:16px; font-weight:bold;">${data.in_money.count}檔/${data.in_money.balance.toLocaleString()}億</div>
-            <div style="font-size:11px; opacity:0.8;">${data.in_money.pct}%</div>
+            <div style="font-size:16px; font-weight:bold;">${s.inMoney.count}檔/${s.inMoney.balance.toFixed(1)}億</div>
+            <div style="font-size:11px; opacity:0.8;">${s.inMoney.pct.toFixed(1)}%</div>
         </div>
         <div style="background:linear-gradient(135deg, #f44336 0%, #c62828 100%); color:white; padding:10px; border-radius:8px; text-align:center;">
             <div style="font-size:12px; opacity:0.8;">價外(CV<100)</div>
-            <div style="font-size:16px; font-weight:bold;">${data.out_money.count}檔/${data.out_money.balance.toLocaleString()}億</div>
-            <div style="font-size:11px; opacity:0.8;">${data.out_money.pct}%</div>
+            <div style="font-size:16px; font-weight:bold;">${s.outMoney.count}檔/${s.outMoney.balance.toFixed(1)}億</div>
+            <div style="font-size:11px; opacity:0.8;">${s.outMoney.pct.toFixed(1)}%</div>
         </div>
     </div>`;
     
     // CV分級統計
-    html += `
-    <div style="font-size:13px; font-weight:bold; color:#c2185b; margin:10px 0 8px 0;">🎯 CV分級分佈</div>
+    html += `<div style="font-size:13px; font-weight:bold; color:#c2185b; margin:10px 0 8px 0;">🎯 CV分級分佈</div>
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:12px;">`;
     
-    data.cv_stats.forEach(cv => {
+    data.cvStats.forEach(cv => {
         html += `
         <div style="background:white; padding:8px; border-radius:6px; border-left:3px solid ${cv.color}; box-shadow:0 1px 3px rgba(0,0,0,0.1);">
             <div style="font-size:12px; color:${cv.color}; font-weight:bold;">${cv.label}</div>
-            <div style="font-size:13px; color:#333;">${cv.count}檔(${cv.pct_count}%) / ${cv.balance.toLocaleString()}億(${cv.pct_balance}%)</div>
+            <div style="font-size:13px; color:#333;">${cv.count}檔(${cv.pct_count.toFixed(1)}%) / ${cv.balance.toFixed(1)}億(${cv.pct_balance.toFixed(1)}%)</div>
         </div>`;
     });
     html += `</div>`;
     
     // 各年度到期統計表
     html += `
-    <div style="font-size:13px; font-weight:bold; color:#c2185b; margin:10px 0 8px 0;">📅 各年度到期壓力分析</div>
+    <div style="font-size:13px; font-weight:bold; color:#c2185b; margin:10px 0 8px 0;">📆 各年度到期壓力分析</div>
     <div class="trend-table-wrapper">
     <table class="trend-year-table">
         <tr>
             <th class="sortable">到期年</th>
             <th class="sortable">總檔數</th>
             <th class="sortable">餘額(億)</th>
-            <th class="sortable">價外檔數</th>
-            <th class="sortable">價外餘額(億)</th>
+            <th class="sortable">價內</th>
+            <th class="sortable">價外</th>
             <th class="sortable">價外比例</th>
+            <th class="sortable">深度價外</th>
         </tr>`;
     
-    data.year_stats.forEach(y => {
+    data.yearStats.forEach(y => {
         const pctColor = y.out_pct >= 70 ? '#c62828' : (y.out_pct >= 60 ? '#f44336' : '#ff9800');
         const bgColor = y.out_pct >= 70 ? '#ffebee' : (y.out_pct >= 60 ? '#fff8e1' : '');
         html += `
         <tr style="background:${bgColor};">
             <td class="year-cell">${y.year}年</td>
-            <td>${y.count}</td>
-            <td>${y.balance.toLocaleString()}</td>
-            <td>${y.out_count}</td>
-            <td>${y.out_balance.toLocaleString()}</td>
+            <td><b>${y.count}</b></td>
+            <td>${y.balance.toFixed(1)}</td>
+            <td style="color:#2e7d32;">${y.in_count}檔/${y.in_balance.toFixed(1)}億</td>
+            <td style="color:#f44336;">${y.out_count}檔/${y.out_balance.toFixed(1)}億</td>
             <td style="color:${pctColor}; font-weight:bold;">${y.out_pct.toFixed(1)}%</td>
+            <td style="color:#c62828;">${y.deep_out_count}檔/${y.deep_out_balance.toFixed(1)}億</td>
         </tr>`;
     });
     html += `</table></div>`;
     
     // 2026-2028到期壓力警示
-    const future = data.year_stats.filter(y => y.year >= 2026 && y.year <= 2028);
-    const futureTotal = future.reduce((sum, y) => sum + y.count, 0);
-    const futureBalance = future.reduce((sum, y) => sum + y.balance, 0);
-    const futureOutCount = future.reduce((sum, y) => sum + y.out_count, 0);
-    const futureOutBalance = future.reduce((sum, y) => sum + y.out_balance, 0);
-    const futureOutPct = (futureOutCount / futureTotal * 100).toFixed(1);
+    const future = data.yearStats.filter(y => y.year >= 2026 && y.year <= 2028);
+    if (future.length > 0) {
+        const futureTotal = future.reduce((sum, y) => sum + y.count, 0);
+        const futureBalance = future.reduce((sum, y) => sum + y.balance, 0);
+        const futureOutCount = future.reduce((sum, y) => sum + y.out_count, 0);
+        const futureOutBalance = future.reduce((sum, y) => sum + y.out_balance, 0);
+        const futureOutPct = (futureOutCount / futureTotal * 100).toFixed(1);
+        
+        html += `
+        <div style="margin:10px 0; padding:10px; background:#ffebee; border-radius:6px; border-left:3px solid #f44336;">
+            <div style="font-weight:bold; color:#c62828; margin-bottom:5px;">⚠️ 2026-2028到期壓力</div>
+            <div style="color:#333; font-size:13px;">
+                總計 <b>${futureTotal}檔</b> / <b>${futureBalance.toFixed(1)}億</b>，
+                其中價外 <b>${futureOutCount}檔(${futureOutPct}%)</b> / <b>${futureOutBalance.toFixed(1)}億</b>
+            </div>
+        </div>`;
+    }
     
+    // TOP10深度價外
     html += `
-    <div style="margin:10px 0; padding:10px; background:#ffebee; border-radius:6px; border-left:3px solid #f44336;">
-        <div style="font-weight:bold; color:#c62828; margin-bottom:5px;">⚠️ 2026-2028到期壓力</div>
-        <div style="color:#333; font-size:13px;">
-            總計 ${futureTotal}檔 / ${futureBalance.toLocaleString()}億，
-            其中價外 ${futureOutCount}檔(${futureOutPct}%) / ${futureOutBalance.toLocaleString()}億
-        </div>
-    </div>`;
-    
-    // TOP5深度價外
-    html += `
-    <div style="font-size:13px; font-weight:bold; color:#c62828; margin:10px 0 8px 0;">🔻 TOP5深度價外CB（依餘額）</div>
+    <div style="font-size:13px; font-weight:bold; color:#c62828; margin:10px 0 8px 0;">🔻 TOP10深度價外CB（依餘額）</div>
     <table class="trend-year-table" style="font-size:12px;">
-        <tr><th>債券</th><th>轉換價</th><th>股價</th><th>CV</th><th>餘額(億)</th></tr>`;
-    data.top_out.forEach(item => {
+        <tr><th>債券</th><th>轉換價</th><th>股價</th><th>CV</th><th>餘額(億)</th><th>到期年</th></tr>`;
+    data.topOut.forEach(item => {
         html += `
         <tr>
             <td style="text-align:left;">${item.name}</td>
@@ -8790,16 +8884,17 @@ function renderOutOfMoneyAnalysis() {
             <td style="text-align:right;">${item.stockPrice.toFixed(2)}</td>
             <td style="text-align:right; color:#f44336; font-weight:bold;">${item.cv.toFixed(1)}</td>
             <td style="text-align:right;">${item.balance.toFixed(1)}</td>
+            <td style="text-align:center;">${item.maturityYear || '-'}</td>
         </tr>`;
     });
     html += `</table>`;
     
-    // TOP5深度價內
+    // TOP10深度價內
     html += `
-    <div style="font-size:13px; font-weight:bold; color:#2e7d32; margin:10px 0 8px 0;">🔺 TOP5深度價內CB（依CV）</div>
+    <div style="font-size:13px; font-weight:bold; color:#2e7d32; margin:10px 0 8px 0;">🔺 TOP10深度價內CB（依CV）</div>
     <table class="trend-year-table" style="font-size:12px;">
-        <tr><th>債券</th><th>轉換價</th><th>股價</th><th>CV</th><th>餘額(億)</th></tr>`;
-    data.top_in.forEach(item => {
+        <tr><th>債券</th><th>轉換價</th><th>股價</th><th>CV</th><th>餘額(億)</th><th>到期年</th></tr>`;
+    data.topIn.forEach(item => {
         html += `
         <tr>
             <td style="text-align:left;">${item.name}</td>
@@ -8807,18 +8902,22 @@ function renderOutOfMoneyAnalysis() {
             <td style="text-align:right;">${item.stockPrice.toFixed(2)}</td>
             <td style="text-align:right; color:#4caf50; font-weight:bold;">${item.cv.toFixed(1)}</td>
             <td style="text-align:right;">${item.balance.toFixed(1)}</td>
+            <td style="text-align:center;">${item.maturityYear || '-'}</td>
         </tr>`;
     });
     html += `</table>`;
     
     // 分析結論
+    const deepOut = data.cvStats.find(c => c.key === 'deep_out');
+    const worstYear = data.yearStats.reduce((max, y) => y.out_pct > max.out_pct ? y : max, data.yearStats[0]);
+    
     html += `
     <div class="trend-insight-box">
         <div class="insight-title">📊 Rex大叔分析結論</div>
         <div class="insight-content">
-            目前CB市場價外比例高達<strong>${data.out_money.pct}%</strong>，
-            深度價外(CV<80)更占<strong>${data.cv_stats[3].pct_count}%</strong>、餘額達<strong>${data.cv_stats[3].balance.toLocaleString()}億</strong>。
-            2027年到期壓力最大（價外比例${data.year_stats[2].out_pct}%），
+            目前CB市場價外比例高達<strong>${s.outMoney.pct.toFixed(1)}%</strong>，
+            深度價外(CV<80)更占<strong>${deepOut.pct_count.toFixed(1)}%</strong>、餘額達<strong>${deepOut.balance.toFixed(1)}億</strong>。
+            <strong>${worstYear.year}年</strong>到期壓力最大（價外比例${worstYear.out_pct.toFixed(1)}%），
             投資人需關注個別CB轉換價值變化，避免持有深度價外CB至到期。
         </div>
     </div>`;

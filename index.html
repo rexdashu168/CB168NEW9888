@@ -7671,6 +7671,7 @@ function toggleRightSection(sectionId, headerElement) {
 // ==========================================
 // v3.96 新增：通用表格排序功能
 // v3.97z_v42 修正：排序前先收合所有展開的明細
+// v3.97z_v43 修正：只選取主表格直接子行，不選取嵌套表格
 // ==========================================
 function enableTableSort(tableId) {
     const table = document.getElementById(tableId);
@@ -7687,12 +7688,19 @@ function sortTable(table, colIndex, th) {
     collapseAllDetailRows(table);
     
     const tbody = table.querySelector('tbody') || table;
-    // v3.97z_v42 修正：排除明細行（detail-row）
-    const rows = Array.from(tbody.querySelectorAll('tr')).filter(row => {
+    
+    // v3.97z_v43 修正：只選取主表格的直接子行（排除嵌套表格的行）
+    const allChildren = Array.from(tbody.children);
+    const rows = allChildren.filter(row => {
+        // 必須是 TR 元素
+        if (row.tagName !== 'TR') return false;
+        // 排除合計行
         if (row.classList.contains('total-row')) return false;
+        // 排除明細行
         if (row.classList.contains('broker-detail-row')) return false;
         if (row.classList.contains('industry-detail-row')) return false;
         if (row.id && row.id.includes('-detail-')) return false;
+        // 必須有 td（排除表頭行）
         return row.querySelector('td');
     });
     
@@ -7700,8 +7708,8 @@ function sortTable(table, colIndex, th) {
     const isAsc = th.classList.contains('sort-asc');
     const isDesc = th.classList.contains('sort-desc');
     
-    // 清除所有表頭的排序狀態
-    table.querySelectorAll('th').forEach(header => {
+    // 清除所有表頭的排序狀態（只清除主表格的）
+    table.querySelectorAll(':scope > thead > tr > th, :scope > tr > th').forEach(header => {
         header.classList.remove('sort-asc', 'sort-desc');
     });
     
@@ -7716,8 +7724,8 @@ function sortTable(table, colIndex, th) {
     
     // 排序（只排序主要行）
     rows.sort((a, b) => {
-        const cellA = a.querySelectorAll('td')[colIndex];
-        const cellB = b.querySelectorAll('td')[colIndex];
+        const cellA = a.querySelectorAll(':scope > td')[colIndex];
+        const cellB = b.querySelectorAll(':scope > td')[colIndex];
         if (!cellA || !cellB) return 0;
         
         let valA = cellA.textContent.trim();
@@ -7740,7 +7748,7 @@ function sortTable(table, colIndex, th) {
     });
     
     // 重新排列行（主要行後面接對應的明細行）
-    const totalRow = tbody.querySelector('tr.total-row');
+    const totalRow = tbody.querySelector(':scope > tr.total-row');
     rows.forEach(row => {
         tbody.appendChild(row);
         // 找到對應的明細行並一起移動

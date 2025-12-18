@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97z-d (新增Step6綜合彙整)</title>
+<title>AI智能可轉債競拍系統 v3.97z-e (Step6黃金比例三策略)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 
 <style>
@@ -2431,20 +2431,42 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
                     </tbody>
                     <tfoot>
                         <tr style="background:#1a237e; color:white; font-weight:bold;">
-                            <td style="padding:10px; border:1px solid #ddd;">📌 綜合建議區間</td>
+                            <td style="padding:10px; border:1px solid #ddd;">📊 統計摘要</td>
                             <td style="padding:10px; text-align:center; border:1px solid #ddd;" id="step6FinalLow">--</td>
                             <td style="padding:10px; text-align:center; border:1px solid #ddd;" id="step6FinalAvg">--</td>
-                            <td style="padding:10px; text-align:center; border:1px solid #ddd; font-size:10px;">五法平均</td>
+                            <td style="padding:10px; text-align:center; border:1px solid #ddd; font-size:10px;" id="step6StdDev">σ=--</td>
                         </tr>
                     </tfoot>
                 </table>
                 
-                <div style="margin-top:12px; padding:10px; background:#fff3e0; border-radius:6px; border-left:4px solid #ff9800;">
-                    <div style="font-size:11px; color:#e65100; font-weight:bold;">💡 使用建議</div>
+                <!-- 黃金比例三策略區塊 -->
+                <div style="display:flex; gap:10px; margin-top:15px;">
+                    <div style="flex:1; background:#ffebee; border-radius:8px; padding:12px; text-align:center; border:2px solid #ef9a9a;">
+                        <div style="font-size:11px; color:#c62828; font-weight:bold;">🛡️ 保守型</div>
+                        <div style="font-size:24px; font-weight:bold; color:#c62828; margin:8px 0;" id="step6Conservative">--</div>
+                        <div style="font-size:10px; color:#666;">平均值</div>
+                        <div style="font-size:10px; color:#999;" id="step6ConsPrem">溢價 --%</div>
+                    </div>
+                    <div style="flex:1; background:#fff8e1; border-radius:8px; padding:12px; text-align:center; border:2px solid #ffcc02;">
+                        <div style="font-size:11px; color:#f57f17; font-weight:bold;">⚖️ 平衡型 ⭐</div>
+                        <div style="font-size:24px; font-weight:bold; color:#f57f17; margin:8px 0;" id="step6Balanced">--</div>
+                        <div style="font-size:10px; color:#666;">+0.618σ</div>
+                        <div style="font-size:10px; color:#999;" id="step6BalPrem">溢價 --%</div>
+                    </div>
+                    <div style="flex:1; background:#e8f5e9; border-radius:8px; padding:12px; text-align:center; border:2px solid #81c784;">
+                        <div style="font-size:11px; color:#2e7d32; font-weight:bold;">🎯 積極型</div>
+                        <div style="font-size:24px; font-weight:bold; color:#2e7d32; margin:8px 0;" id="step6Aggressive">--</div>
+                        <div style="font-size:10px; color:#666;">+1.236σ</div>
+                        <div style="font-size:10px; color:#999;" id="step6AggPrem">溢價 --%</div>
+                    </div>
+                </div>
+                
+                <div style="margin-top:12px; padding:10px; background:#e3f2fd; border-radius:6px; border-left:4px solid #1976d2;">
+                    <div style="font-size:11px; color:#1565c0; font-weight:bold;">💡 黃金比例策略說明</div>
                     <div style="font-size:10px; color:#666; margin-top:4px;">
-                        • 保守策略：參考各方法「最低價格」的平均值<br>
-                        • 積極策略：參考各方法「平均價格」的平均值<br>
-                        • 建議以理論價為基準，溢價不超過綜合建議區間的上限
+                        • 保守型：五種方法預測值的平均，適合穩健投資人<br>
+                        • 平衡型：平均 + 0.618σ，最佳性價比（黃金分割點）<br>
+                        • 積極型：平均 + 1.236σ，適合積極搶標
                     </div>
                 </div>
             </div>
@@ -10452,6 +10474,9 @@ function displayResult(r) {
     const validLows = [step6Data.s1Low, step6Data.s2Low, step6Data.s3Low, step6Data.s4Low, step6Data.s5Low].filter(v => v && !isNaN(v));
     const validAvgs = [step6Data.s1Avg, step6Data.s2Avg, step6Data.s3Avg, step6Data.s4Avg, step6Data.s5Avg].filter(v => v && !isNaN(v));
     
+    // 收集所有有效預測值計算標準差
+    const allPredictions = [...validLows, ...validAvgs].filter(v => v && !isNaN(v));
+    
     if (validLows.length > 0) {
         const finalLow = validLows.reduce((a, b) => a + b, 0) / validLows.length;
         document.getElementById('step6FinalLow').textContent = finalLow.toFixed(2) + '元';
@@ -10459,6 +10484,50 @@ function displayResult(r) {
     if (validAvgs.length > 0) {
         const finalAvg = validAvgs.reduce((a, b) => a + b, 0) / validAvgs.length;
         document.getElementById('step6FinalAvg').textContent = finalAvg.toFixed(2) + '元';
+    }
+    
+    // ========== 黃金比例三策略計算 ==========
+    if (allPredictions.length >= 2) {
+        // 計算平均值
+        const mean = allPredictions.reduce((a, b) => a + b, 0) / allPredictions.length;
+        
+        // 計算標準差
+        const squaredDiffs = allPredictions.map(v => Math.pow(v - mean, 2));
+        const avgSquaredDiff = squaredDiffs.reduce((a, b) => a + b, 0) / allPredictions.length;
+        const stdDev = Math.sqrt(avgSquaredDiff);
+        
+        // 黃金比例係數
+        const PHI = 0.618;
+        const PHI2 = 1.236; // 0.618 * 2
+        
+        // 三策略價格
+        const conservative = mean;
+        const balanced = mean + PHI * stdDev;
+        const aggressive = mean + PHI2 * stdDev;
+        
+        // 計算對理論價的溢價率
+        const consPrem = theoPrice > 0 ? ((conservative / theoPrice) - 1) * 100 : 0;
+        const balPrem = theoPrice > 0 ? ((balanced / theoPrice) - 1) * 100 : 0;
+        const aggPrem = theoPrice > 0 ? ((aggressive / theoPrice) - 1) * 100 : 0;
+        
+        // 填入三策略區塊
+        document.getElementById('step6Conservative').textContent = conservative.toFixed(2) + '元';
+        document.getElementById('step6Balanced').textContent = balanced.toFixed(2) + '元';
+        document.getElementById('step6Aggressive').textContent = aggressive.toFixed(2) + '元';
+        document.getElementById('step6StdDev').textContent = 'σ=' + stdDev.toFixed(2);
+        
+        document.getElementById('step6ConsPrem').textContent = '溢價 ' + consPrem.toFixed(1) + '%';
+        document.getElementById('step6BalPrem').textContent = '溢價 ' + balPrem.toFixed(1) + '%';
+        document.getElementById('step6AggPrem').textContent = '溢價 ' + aggPrem.toFixed(1) + '%';
+        
+        console.log('📊 Step6 黃金比例:', { 
+            mean: mean.toFixed(2), 
+            stdDev: stdDev.toFixed(2),
+            conservative: conservative.toFixed(2),
+            balanced: balanced.toFixed(2),
+            aggressive: aggressive.toFixed(2),
+            predictions: allPredictions
+        });
     }
     
     console.log('📊 Step6 彙整:', step6Data);

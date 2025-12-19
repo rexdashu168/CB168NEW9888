@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97-zs-t (工作表匹配/圖表修正)</title>
+<title>AI智能可轉債競拍系統 v3.97-zs-u (新增終止狀態標籤)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <!-- v3.97-zs-f: kanban_data.js 改為延遲載入，不阻塞頁面 -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -1787,14 +1787,14 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.97-zs-t)...</div>
+    <div>🔄 系統啟動中 (v3.97-zs-u)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
 <div class="container" style="display: none;">
     <div class="header">
         <h1>🤖 AI智能可轉債競拍系統</h1>
-        <span class="version-badge">v3.97-zs-t 工作表匹配/圖表修正</span>
+        <span class="version-badge">v3.97-zs-u 新增終止狀態標籤</span>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -2631,6 +2631,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
             <button type="button" class="basic-info-tab active" onclick="showBasicInfoTab('overview', event)">📋 基本資料</button>
             <button type="button" class="basic-info-tab" onclick="showBasicInfoTab('schedule', event)">📅 發行時程</button>
             <button type="button" class="basic-info-tab" onclick="showBasicInfoTab('putback', event)">💰 賣回條件</button>
+            <button type="button" class="basic-info-tab" onclick="showBasicInfoTab('termination', event)">📌 終止狀態</button>
             <button type="button" class="basic-info-tab" onclick="showBasicInfoTab('auction', event)">🎯 競拍資料</button>
             <button type="button" class="basic-info-tab" onclick="showBasicInfoTab('quote', event)">📊 最新行情</button>
             <button type="button" class="basic-info-tab" onclick="showBasicInfoTab('balance', event)">📈 餘額變化</button>
@@ -15017,6 +15018,9 @@ function showBasicInfoTab(tabName, event) {
         case 'putback':
             renderBasicInfoPutback(cbCode, content);
             break;
+        case 'termination':
+            renderBasicInfoTermination(cbCode, content);
+            break;
         case 'auction':
             renderBasicInfoAuction(cbCode, content);
             break;
@@ -15654,6 +15658,194 @@ function renderBasicInfoPutback(cbCode, container) {
             ${isGuaranteed && guaranteeRaw.length > 5 ? `
             <div style="margin-top:10px; padding:8px 12px; background:rgba(46,125,50,0.1); border-radius:6px; font-size:12px; color:#2e7d32;">
                 <strong>擔保機構：</strong>${guaranteeRaw.replace('有，', '')}
+            </div>
+            ` : ''}
+        </div>
+    `;
+    
+    container.innerHTML = html;
+}
+
+/**
+ * v3.97-zs-u 新增：渲染終止狀態（強制贖回、下市資訊）
+ * 資料來源：kanban_data.js
+ */
+function renderBasicInfoTermination(cbCode, container) {
+    const searchCode = String(cbCode).trim();
+    const numSearchCode = parseInt(searchCode, 10);
+    
+    // 從kanban資料取得終止狀態
+    let kanbanRow = null;
+    if (window.kanbanData && window.kanbanData.data) {
+        kanbanRow = window.kanbanData.data.find(r => {
+            const code = String(r['代號'] || r['債券代碼'] || '').replace('.0', '').trim();
+            return code === searchCode || parseInt(code, 10) === numSearchCode;
+        });
+    }
+    
+    // 從08工作表補充
+    let sheet08Row = null;
+    if (window.sheet08Data && window.sheet08Data.length > 0) {
+        sheet08Row = window.sheet08Data.find(r => {
+            const code = String(r['代號'] || '').replace('.0', '').trim();
+            return code === searchCode || parseInt(code, 10) === numSearchCode;
+        });
+    }
+    
+    // 從01工作表補充
+    let sheet01Row = null;
+    if (window.sheet01Data && window.sheet01Data.length > 0) {
+        sheet01Row = window.sheet01Data.find(r => {
+            const code = String(r['CB代號'] || '').replace('.0', '').trim();
+            return code === searchCode || parseInt(code, 10) === numSearchCode;
+        });
+    }
+    
+    const getValue = (...sources) => {
+        for (const v of sources) {
+            if (v !== undefined && v !== null && v !== '' && v !== '-' && v !== 0) return v;
+        }
+        return '-';
+    };
+    
+    // 取得名稱
+    const cbName = getValue(kanbanRow?.['債券簡稱'], sheet08Row?.['名稱'], sheet01Row?.['名稱']);
+    
+    // 強制贖回資訊
+    const callStartDate = kanbanRow?.['強制贖回起日'];
+    const callEndDate = kanbanRow?.['強制贖回迄日'];
+    const callPrice = kanbanRow?.['強制贖回價格'];
+    const hasCall = callStartDate || callEndDate || (callPrice && callPrice > 0);
+    
+    // 下市資訊
+    const delistDate = kanbanRow?.['終止櫃檯買賣日'];
+    const isDelisted = delistDate && delistDate !== 0;
+    
+    // 停止交易資訊
+    const stopTradeStart = kanbanRow?.['停止交易起日'];
+    const stopTradeEnd = kanbanRow?.['停止交易迄日'];
+    const hasStopTrade = stopTradeStart || stopTradeEnd;
+    
+    // 判斷終止類型
+    let terminationType = '正常交易中';
+    let terminationColor = '#4caf50';
+    let terminationIcon = '✅';
+    
+    if (isDelisted) {
+        terminationType = '已終止櫃檯買賣';
+        terminationColor = '#9e9e9e';
+        terminationIcon = '⏹️';
+    } else if (hasCall && callPrice > 0) {
+        terminationType = '已被強制贖回';
+        terminationColor = '#f44336';
+        terminationIcon = '🔴';
+    } else if (hasStopTrade) {
+        terminationType = '暫停交易中';
+        terminationColor = '#ff9800';
+        terminationIcon = '⚠️';
+    }
+    
+    // 發行餘額
+    const originalAmount = kanbanRow?.['原始發行總額'];
+    const remainingAmount = kanbanRow?.['上月底發行餘額'];
+    const conversionRatio = (originalAmount && remainingAmount && originalAmount > 0) 
+        ? ((1 - remainingAmount / originalAmount) * 100).toFixed(1) 
+        : '-';
+    
+    const html = `
+        <div style="background:linear-gradient(135deg, #eceff1 0%, #cfd8dc 100%); padding:20px; border-radius:8px;">
+            <div style="font-weight:bold; color:#455a64; margin-bottom:15px; font-size:16px;">📌 ${cbCode} ${cbName} 終止狀態</div>
+            
+            <!-- 當前狀態 -->
+            <div style="background:white; padding:15px; border-radius:8px; margin-bottom:15px; border-left:4px solid ${terminationColor};">
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+                    <span style="font-size:24px;">${terminationIcon}</span>
+                    <div>
+                        <div style="font-size:11px; color:#999;">當前狀態</div>
+                        <div style="font-size:18px; font-weight:bold; color:${terminationColor};">${terminationType}</div>
+                    </div>
+                </div>
+                ${isDelisted ? `
+                <div style="background:#f5f5f5; padding:10px; border-radius:6px; margin-top:10px;">
+                    <div style="font-size:12px; color:#666;">
+                        <strong>終止櫃檯買賣日：</strong>${formatDate(delistDate)}
+                    </div>
+                </div>
+                ` : ''}
+            </div>
+            
+            <!-- 強制贖回資訊 -->
+            <div style="background:white; padding:15px; border-radius:8px; margin-bottom:15px; border-left:4px solid #f44336;">
+                <div style="font-size:13px; color:#666; margin-bottom:10px;">🏢 強制贖回條款 (Issuer Call Option)</div>
+                <div style="font-size:11px; color:#999; margin-bottom:12px;">發行公司有權在特定條件下強制贖回CB</div>
+                
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:12px;">
+                    <div>
+                        <div style="font-size:11px; color:#999;">強制贖回起日</div>
+                        <div style="font-size:14px; font-weight:bold; color:#d32f2f;">${formatDate(getValue(callStartDate))}</div>
+                    </div>
+                    <div>
+                        <div style="font-size:11px; color:#999;">強制贖回迄日</div>
+                        <div style="font-size:14px; font-weight:bold; color:#d32f2f;">${formatDate(getValue(callEndDate))}</div>
+                    </div>
+                    <div>
+                        <div style="font-size:11px; color:#999;">強制贖回價格</div>
+                        <div style="font-size:14px; font-weight:bold; color:#2e7d32;">${callPrice && callPrice > 0 ? callPrice + ' 元' : '-'}</div>
+                    </div>
+                </div>
+                
+                ${hasCall && callPrice > 0 ? `
+                <div style="margin-top:12px; padding:10px; background:#ffebee; border-radius:6px; font-size:12px; color:#c62828;">
+                    <strong>⚠️ 注意：</strong>此CB已設定強制贖回條款，當股價連續一段時間達轉換價130%以上時，發行公司可能執行強制贖回。
+                </div>
+                ` : ''}
+            </div>
+            
+            <!-- 停止交易資訊 -->
+            ${hasStopTrade ? `
+            <div style="background:white; padding:15px; border-radius:8px; margin-bottom:15px; border-left:4px solid #ff9800;">
+                <div style="font-size:13px; color:#666; margin-bottom:10px;">⚠️ 停止交易期間</div>
+                <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:12px;">
+                    <div>
+                        <div style="font-size:11px; color:#999;">停止交易起日</div>
+                        <div style="font-size:14px; font-weight:bold; color:#f57c00;">${formatDate(getValue(stopTradeStart))}</div>
+                    </div>
+                    <div>
+                        <div style="font-size:11px; color:#999;">停止交易迄日</div>
+                        <div style="font-size:14px; font-weight:bold; color:#f57c00;">${formatDate(getValue(stopTradeEnd))}</div>
+                    </div>
+                </div>
+            </div>
+            ` : ''}
+            
+            <!-- 發行餘額資訊 -->
+            <div style="background:white; padding:15px; border-radius:8px; border-left:4px solid #1976d2;">
+                <div style="font-size:13px; color:#666; margin-bottom:10px;">💰 發行餘額狀況</div>
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:12px;">
+                    <div>
+                        <div style="font-size:11px; color:#999;">原始發行總額</div>
+                        <div style="font-size:14px; font-weight:bold; color:#1976d2;">${originalAmount ? (originalAmount / 100000000).toFixed(2) + ' 億' : '-'}</div>
+                    </div>
+                    <div>
+                        <div style="font-size:11px; color:#999;">上月底發行餘額</div>
+                        <div style="font-size:14px; font-weight:bold; color:#1976d2;">${remainingAmount ? (remainingAmount / 100000000).toFixed(2) + ' 億' : '-'}</div>
+                    </div>
+                    <div>
+                        <div style="font-size:11px; color:#999;">已轉換/贖回比例</div>
+                        <div style="font-size:14px; font-weight:bold; color:#e65100;">${conversionRatio !== '-' ? conversionRatio + '%' : '-'}</div>
+                    </div>
+                </div>
+                
+                ${conversionRatio !== '-' && parseFloat(conversionRatio) > 80 ? `
+                <div style="margin-top:12px; padding:10px; background:#fff3e0; border-radius:6px; font-size:12px; color:#e65100;">
+                    <strong>📊 提示：</strong>此CB已有 ${conversionRatio}% 被轉換或贖回，流通在外籌碼較少，可能影響流動性。
+                </div>
+                ` : ''}
+            </div>
+            
+            ${!kanbanRow ? `
+            <div style="margin-top:15px; padding:10px; background:#fff8e1; border-radius:6px; font-size:12px; color:#f57c00; text-align:center;">
+                ⚠️ 此CB在 kanban 資料中查無紀錄，可能尚未收錄或代號不符
             </div>
             ` : ''}
         </div>

@@ -4,9 +4,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97-zs-e (效能優化版)</title>
+<title>AI智能可轉債競拍系統 v3.97-zs-f (效能優化版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
-<!-- v3.97-zs-e: kanban_data.js 改為延遲載入，不阻塞頁面 -->
+<!-- v3.97-zs-f: kanban_data.js 改為延遲載入，不阻塞頁面 -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
 <style>
@@ -1794,7 +1794,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 <div class="container" style="display: none;">
     <div class="header">
         <h1>🤖 AI智能可轉債競拍系統</h1>
-        <span class="version-badge">v3.97-zs-e 效能優化版</span>
+        <span class="version-badge">v3.97-zs-f 效能優化版</span>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -2454,10 +2454,10 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 <div id="welcomeMsg" class="welcome-message">
     <h2>歡迎使用AI智能競拍評估系統</h2>
     <p style="margin-top:8px; color:#666; font-size: 13px; line-height:1.6;">
-        v3.97-zs-e 延遲載入優化<br>
-        • kanban_data.js 改為延遲載入<br>
-        • 頁面初始載入不再阻塞<br>
-        • 只在點擊「價格走勢」時才載入資料<br>
+        v3.97-zs-f CBAS溢價分析<br>
+        • 新增「溢價風險分析」區塊<br>
+        • 顯示股價需漲幅才能打平<br>
+        • 高溢價時提醒CB可能不跟漲<br>
         v3.97-zs-b 效能優化版（17次遍歷→2次）<br>
         • 分析法權重：產業30%、信評22%、理論價15%、券商13%、規模10%、股本5%、年期5%<br>
         • 自適應學習：以溢價率計算，建議價=理論價×(1+溢價率)
@@ -3471,7 +3471,7 @@ async function loadStatistics() {
             console.log('半年度統計:', window.halfYearStats);
         }
 
-        // v3.97-zs-e 優化：將17次遍歷合併成1次預處理
+        // v3.97-zs-f 優化：將17次遍歷合併成1次預處理
         // 一次性預處理所有需要的欄位和統計分組
         console.time('⚡ 統計預處理');
         
@@ -4827,7 +4827,7 @@ async function loadStatistics() {
         loadingDiv.style.display = 'none'; 
         document.querySelector('.container').style.display = 'block';
         
-        // v3.97-zs-e 新增：背景預載入三、四區塊所需資料（避免展開時卡頓）
+        // v3.97-zs-f 新增：背景預載入三、四區塊所需資料（避免展開時卡頓）
         setTimeout(() => {
             console.log('⏳ 背景預載入額外資料...');
             
@@ -4838,7 +4838,7 @@ async function loadStatistics() {
                 }).catch(err => console.warn('yuanta預載入失敗:', err));
             }
             
-            // v3.97-zs-e: 移除 kanban 預載入，改為用戶點擊時才載入
+            // v3.97-zs-f: 移除 kanban 預載入，改為用戶點擊時才載入
             // 這樣可以大幅改善手機載入速度
             console.log('ℹ️ kanban 時間序列將在用戶使用價格走勢分析時載入');
         }, 1000); // 延遲1秒後開始，讓主UI先穩定
@@ -16502,7 +16502,7 @@ async function loadKanbanAndRender(cbCode, tabName, period, container) {
 
 /**
  * 載入所有kanban資料
- * v3.97-zs-e: 延遲載入 - 只在需要時才載入 14MB 的資料檔
+ * v3.97-zs-f: 延遲載入 - 只在需要時才載入 14MB 的資料檔
  */
 async function loadAllKanbanData() {
     if (window.kanbanData.loaded || window.kanbanData.loading) return;
@@ -16843,8 +16843,8 @@ function renderCBPriceChart(cbCode, data, container, period) {
     let statusTag, statusBg, statusColor;
     let analysisContent, conclusionContent, educationTip;
     
-    // 計算票面持股成本
-    const holdingCost = convPrice > 0 ? (cbPrice * convPrice / 100) : 0;
+    // 計算理論價值（轉換價值）
+    const theoryValue = convPrice > 0 ? (stockPrice / convPrice * 100) : 0;
     // 計算股價距離轉換價的差距
     const priceDiffPct = convPrice > 0 ? ((stockPrice - convPrice) / convPrice * 100) : 0;
     
@@ -16960,8 +16960,8 @@ function renderCBPriceChart(cbCode, data, container, period) {
                     <div style="font-size:16px; font-weight:bold; color:#e65100;">${premium.toFixed(2)}%</div>
                 </div>
                 <div style="background:#e3f2fd; padding:10px; border-radius:6px; text-align:center;">
-                    <div style="font-size:10px; color:#666;">票面持股成本</div>
-                    <div style="font-size:16px; font-weight:bold; color:#1976d2;">${holdingCost > 0 ? holdingCost.toFixed(2) : '-'}</div>
+                    <div style="font-size:10px; color:#666;">理論價值</div>
+                    <div style="font-size:16px; font-weight:bold; color:#1976d2;">${theoryValue > 0 ? theoryValue.toFixed(2) : '-'}</div>
                 </div>
             </div>
             
@@ -17345,11 +17345,18 @@ function renderCBASChart(cbCode, data, container, period) {
     const finalStockPrice = stockPrice || 0;
     
     // 計算CBAS拆解數據
-    const convRatio = finalConvPrice > 0 ? (100000 / finalConvPrice) : 0;
-    const holdingCost = finalConvPrice > 0 ? (finalCBPrice * finalConvPrice / 100) : 0;
+    const convRatio = finalConvPrice > 0 ? (100000 / finalConvPrice) : 0; // 轉換比例（股）
+    const theoryValue = convRatio > 0 ? (convRatio * finalStockPrice / 1000) : 0; // 理論價值
+    const holdingCost = convRatio > 0 ? (finalCBPrice * 1000 / convRatio) : 0; // 換股成本（元/股）
+    const breakEvenPrice = holdingCost; // 損益兩平股價 = 換股成本
     const bondValue = 100;
     const optionValue = finalCBPrice > 100 ? (finalCBPrice - 100) : 0;
     const optionCost = optionValue * 1000;
+    
+    // 溢價分析計算
+    const pricePremium = finalStockPrice > 0 ? ((holdingCost - finalStockPrice) / finalStockPrice * 100) : 0; // 溢價%
+    const priceGap = holdingCost - finalStockPrice; // 股價差距
+    const needRisePct = pricePremium; // 股價需漲幅度才打平
     
     // 檢查是否有足夠數據
     const hasData = finalCBPrice > 0 && finalConvPrice > 0;
@@ -17431,9 +17438,9 @@ function renderCBASChart(cbCode, data, container, period) {
                     <div style="font-size:9px; color:#999;">${hasData ? '元' : '無資料'}</div>
                 </div>
                 <div style="background:#e3f2fd; padding:10px; border-radius:6px; text-align:center;">
-                    <div style="font-size:10px; color:#666;">票面持股成本</div>
+                    <div style="font-size:10px; color:#666;">換股成本</div>
                     <div style="font-size:16px; font-weight:bold; color:#1976d2;">${hasData ? holdingCost.toFixed(2) : '-'}</div>
-                    <div style="font-size:9px; color:#999;">CB價×轉換價÷100</div>
+                    <div style="font-size:9px; color:#999;">CB金額÷轉換比例</div>
                 </div>
                 <div style="background:#ffebee; padding:10px; border-radius:6px; text-align:center;">
                     <div style="font-size:10px; color:#666;">最大損失/張</div>
@@ -17483,16 +17490,78 @@ function renderCBASChart(cbCode, data, container, period) {
                 </div>
             </div>
             
+            <!-- 溢價風險分析 -->
+            ${hasStockPrice && hasData ? `
+            <div style="margin-top:12px; padding:12px; background:${pricePremium > 15 ? '#ffebee' : pricePremium > 5 ? '#fff3e0' : '#e8f5e9'}; border-radius:8px; border-left:4px solid ${pricePremium > 15 ? '#d32f2f' : pricePremium > 5 ? '#ff9800' : '#4caf50'};">
+                <div style="font-weight:bold; color:#333; margin-bottom:8px; font-size:13px;">
+                    ⚠️ 溢價風險分析
+                </div>
+                <div style="font-size:12px; color:#555; line-height:1.8;">
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+                        <div style="background:rgba(255,255,255,0.7); padding:8px; border-radius:4px;">
+                            <div style="font-size:10px; color:#666;">現股股價</div>
+                            <div style="font-size:16px; font-weight:bold; color:#2e7d32;">${finalStockPrice.toFixed(2)} 元</div>
+                        </div>
+                        <div style="background:rgba(255,255,255,0.7); padding:8px; border-radius:4px;">
+                            <div style="font-size:10px; color:#666;">換股成本</div>
+                            <div style="font-size:16px; font-weight:bold; color:#7b1fa2;">${holdingCost.toFixed(2)} 元</div>
+                        </div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.7); padding:10px; border-radius:4px; margin-bottom:10px;">
+                        <div style="margin-bottom:6px;">
+                            📊 <span style="font-weight:bold;">價差分析：</span>
+                            換股成本比現股貴 <span style="color:#d32f2f; font-weight:bold;">${priceGap.toFixed(2)}</span> 元，
+                            溢價 <span style="color:#d32f2f; font-weight:bold;">${pricePremium.toFixed(1)}%</span>
+                        </div>
+                        <div>
+                            📈 <span style="font-weight:bold;">意涵：</span>
+                            股價需上漲 <span style="color:#7b1fa2; font-weight:bold;">${needRisePct.toFixed(1)}%</span> 到達 ${holdingCost.toFixed(2)} 元，CB 才開始「真正獲利」
+                        </div>
+                    </div>
+                    <div style="background:#fff; padding:10px; border-radius:4px; border:1px solid ${pricePremium > 15 ? '#ffcdd2' : pricePremium > 5 ? '#ffe0b2' : '#c8e6c9'};">
+                        ${pricePremium > 15 ? `
+                            <div style="color:#c62828; font-weight:bold; margin-bottom:4px;">🔴 高溢價風險提醒</div>
+                            <div>溢價超過15%，代表 CB 價格已「提前反映」股價大漲。<br>
+                            即使股價上漲 ${needRisePct.toFixed(0)}% 以內，CB 可能<span style="color:#c62828; font-weight:bold;">不漲反跌</span>（溢價收斂）。<br>
+                            <span style="font-weight:bold;">只有股價大幅上漲超過 ${holdingCost.toFixed(0)} 元，CB 才會跟漲！</span></div>
+                        ` : pricePremium > 5 ? `
+                            <div style="color:#e65100; font-weight:bold; margin-bottom:4px;">🟡 中等溢價注意</div>
+                            <div>溢價 ${pricePremium.toFixed(1)}%，股價需先漲 ${needRisePct.toFixed(0)}% 才能打平換股成本。<br>
+                            股價小漲時，CB 漲幅可能不如預期（部分被溢價收斂吃掉）。</div>
+                        ` : `
+                            <div style="color:#2e7d32; font-weight:bold; margin-bottom:4px;">🟢 低溢價優勢</div>
+                            <div>溢價僅 ${pricePremium.toFixed(1)}%，換股成本接近現股股價。<br>
+                            股價上漲時，CB 將<span style="color:#2e7d32; font-weight:bold;">同步跟漲</span>，連動性高！</div>
+                        `}
+                    </div>
+                </div>
+            </div>
+            ` : ''}
+            
             <!-- 結論 -->
             <div style="margin-top:12px; padding:12px; background:#e8f5e9; border-radius:8px; border-left:4px solid #4caf50;">
                 <div style="font-weight:bold; color:#333; margin-bottom:8px; font-size:13px;">
-                    🎯 結論
+                    🎯 投資結論
                 </div>
-                <div style="font-size:12px; color:#555; line-height:1.6;">
+                <div style="font-size:12px; color:#555; line-height:1.8;">
                     ${hasData ? `
-                        在最多損失 <span style="color:#d32f2f; font-weight:bold;">${optionCost.toLocaleString()}</span> 元的情況下（把風險控制在可以接受的範圍內，先求少輸），
-                        再買一個<span style="color:#2e7d32; font-weight:bold;">未來股價上漲的夢想</span>。
-                        ${hasStockPrice ? `只要未來股價大於 <span style="color:#7b1fa2; font-weight:bold;">${holdingCost.toFixed(2)}</span> 元即可獲利。` : ''}
+                        <div style="margin-bottom:8px;">
+                            ✅ <span style="font-weight:bold;">最大損失：</span>
+                            <span style="color:#d32f2f; font-weight:bold;">${optionCost.toLocaleString()}</span> 元/張
+                            （把風險控制在可接受範圍，先求少輸）
+                        </div>
+                        <div style="margin-bottom:8px;">
+                            ✅ <span style="font-weight:bold;">損益兩平：</span>
+                            股價漲到 <span style="color:#7b1fa2; font-weight:bold;">${breakEvenPrice.toFixed(2)}</span> 元
+                            ${hasStockPrice ? `（需漲 ${needRisePct.toFixed(1)}%）` : ''}
+                        </div>
+                        ${hasStockPrice && pricePremium > 10 ? `
+                        <div style="background:#fff3e0; padding:8px; border-radius:4px; margin-top:8px;">
+                            ⚠️ <span style="font-weight:bold;">溢價提醒：</span>
+                            目前溢價 ${pricePremium.toFixed(1)}%，意味著股價上漲 ${needRisePct.toFixed(0)}% 以內時，
+                            CB 可能<span style="color:#e65100;">不會同步上漲</span>，需等股價突破 ${breakEvenPrice.toFixed(0)} 元才會明顯反映。
+                        </div>
+                        ` : ''}
                     ` : `
                         <span style="color:#999;">需要 CB 價格和轉換價資料才能計算結論</span>
                     `}

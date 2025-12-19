@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97-zs-l (02工作表修正)</title>
+<title>AI智能可轉債競拍系統 v3.97-zs-o (工作表匹配修正)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <!-- v3.97-zs-f: kanban_data.js 改為延遲載入，不阻塞頁面 -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -1825,14 +1825,14 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.97-zs-l)...</div>
+    <div>🔄 系統啟動中 (v3.97-zs-o)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
 <div class="container" style="display: none;">
     <div class="header">
         <h1>🤖 AI智能可轉債競拍系統</h1>
-        <span class="version-badge">v3.97-zs-l 02工作表修正</span>
+        <span class="version-badge">v3.97-zs-o 工作表匹配修正</span>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -3365,7 +3365,17 @@ async function loadStatistics() {
         console.log('📂 Excel檔案中的所有工作表:', workbook.SheetNames);
         
         const getSheetData = (keywords) => { 
-            const n = workbook.SheetNames.find(x => keywords.some(k => x.includes(k)));
+            // v3.97-zs-o: 改用更精確的匹配方式，優先匹配以關鍵字開頭的工作表
+            const n = workbook.SheetNames.find(x => {
+                return keywords.some(k => {
+                    // 如果關鍵字包含 '_'，表示是精確前綴匹配
+                    if (k.includes('_')) {
+                        return x.startsWith(k) || x.includes(k);
+                    }
+                    // 否則檢查是否以 "XX_" 格式開頭
+                    return x.startsWith(k + '_') || x === k;
+                });
+            });
             if (!n) {
                 console.log(`⚠️ 找不到符合關鍵字的工作表: ${keywords.join(', ')}`);
                 return null;
@@ -3374,17 +3384,17 @@ async function loadStatistics() {
             return XLSX.utils.sheet_to_json(workbook.Sheets[n]).map(row => normalizeKeys(row));
         };
 
-        const sheetAuction = getSheetData(['04', '所有CB競拍']);
-        const sheetHighLow = getSheetData(['00', '掛牌', '名稱過濾']);
-        const sheetAllCB = getSheetData(['01', 'ALLCB基本']);
-        const sheetSchedule = getSheetData(['02', 'ALLCB發行時程']); // v3.97z-s 新增
-        const sheetPutback = getSheetData(['03', 'ALLCB賣回']); // v3.97z-s 新增
-        const sheetListed = getSheetData(['08']); // 掛牌中清單
-        const sheetPending = getSheetData(['06', '發行案件']); // v3.59 新增：承銷進行中
-        const sheetBoard = getSheetData(['07', '董事會']); // v3.59 新增：董事會決議
-        const sheetCBClose = getSheetData(['09', '每週日行情']); // v3.62 新增：CB收盤價
-        const sheetBalance = getSheetData(['10', '每週餘額']); // v3.97z-s 新增
-        const sheetIndustry = getSheetData(['16', '產業分類']); // v3.72 新增：產業分類對照表
+        const sheetAuction = getSheetData(['04_', '04', '所有CB競拍']);
+        const sheetHighLow = getSheetData(['00_', '00', '掛牌', '名稱過濾']);
+        const sheetAllCB = getSheetData(['01_', '01', 'ALLCB基本']);
+        const sheetSchedule = getSheetData(['02_ALLCB發行時程', '02_', '發行時程']); // v3.97-zs-o 更精確匹配
+        const sheetPutback = getSheetData(['03_ALLCB賣回條件', '03_', '賣回條件']); // v3.97-zs-o
+        const sheetListed = getSheetData(['08_', '08']); // 掛牌中清單
+        const sheetPending = getSheetData(['06_', '06', '發行案件']); // v3.59 新增：承銷進行中
+        const sheetBoard = getSheetData(['07_', '07', '董事會']); // v3.59 新增：董事會決議
+        const sheetCBClose = getSheetData(['09_', '09', '每週日行情']); // v3.62 新增：CB收盤價
+        const sheetBalance = getSheetData(['10_', '10', '每週餘額']); // v3.97z-s 新增
+        const sheetIndustry = getSheetData(['16_', '16', '產業分類']); // v3.72 新增：產業分類對照表
         
         if (!sheetAuction || sheetAuction.length === 0) throw new Error("找不到競拍資料分頁");
         
@@ -3407,10 +3417,15 @@ async function loadStatistics() {
         console.log('   09(行情):', window.sheet09Data.length, '筆');
         console.log('   10(餘額):', window.sheet10Data.length, '筆');
         
-        // v3.97-zs-l 調試：輸出02工作表欄位名稱
-        if (window.sheet02Data.length > 0) {
+        // v3.97-zs-n 調試：詳細輸出02工作表資訊
+        if (window.sheet02Data && window.sheet02Data.length > 0) {
             console.log('📅 [02工作表] 欄位名稱:', Object.keys(window.sheet02Data[0]));
-            console.log('📅 [02工作表] 第一筆範例:', window.sheet02Data[0]);
+            console.log('📅 [02工作表] 第一筆範例:', JSON.stringify(window.sheet02Data[0]).substring(0, 500));
+            // 檢查最後幾筆是否有99587, 99588
+            const recentCodes = window.sheet02Data.slice(-10).map(r => r['CB代號'] || r['代號'] || '無');
+            console.log('📅 [02工作表] 最後10筆CB代號:', recentCodes);
+        } else {
+            console.log('📅 [02工作表] ⚠️ 未載入或為空！');
         }
 
         // v3.72 新增：建立產業分類對照表（從16工作表）
@@ -15441,7 +15456,16 @@ function renderBasicInfoSchedule(cbCode, container) {
     // 從02工作表取得發行時程
     let scheduleData = null;
     if (window.sheet02Data && window.sheet02Data.length > 0) {
-        // v3.97-zs-l: 多種方式搜尋CB代號
+        // v3.97-zs-n: 調試輸出前5筆資料的CB代號
+        console.log('[02工作表] 總筆數:', window.sheet02Data.length);
+        console.log('[02工作表] 欄位名稱:', Object.keys(window.sheet02Data[0]));
+        
+        const first5Codes = window.sheet02Data.slice(0, 5).map(r => {
+            return r['CB代號'] || r['cb代號'] || r['CB代碼'] || r['代號'] || '無';
+        });
+        console.log('[02工作表] 前5筆CB代號:', first5Codes);
+        
+        // 搜尋CB代號
         scheduleData = window.sheet02Data.find(r => {
             // 嘗試多個可能的欄位名稱
             const code = r['CB代號'] || r['cb代號'] || r['CB代碼'] || r['代號'] || '';
@@ -15450,19 +15474,16 @@ function renderBasicInfoSchedule(cbCode, container) {
             return codeStr === searchCode || codeNum === numSearchCode;
         });
         
-        // 調試輸出
-        if (window.sheet02Data.length > 0) {
-            const firstRow = window.sheet02Data[0];
-            console.log('[02工作表] 欄位名稱:', Object.keys(firstRow));
-            console.log('[02工作表] 第一筆資料範例:', firstRow);
-        }
         if (scheduleData) {
-            console.log('[02工作表] 找到 ' + searchCode + ' 資料:', scheduleData);
+            console.log('[02工作表] ✅ 找到 ' + searchCode + ' 資料:', scheduleData);
         } else {
-            console.log('[02工作表] 找不到 CB代號:', searchCode, '(數字:', numSearchCode, ')');
+            console.log('[02工作表] ❌ 找不到 CB代號:', searchCode, '(數字:', numSearchCode, ')');
+            // 嘗試輸出最後5筆看看有沒有這個代號附近的
+            const last5 = window.sheet02Data.slice(-5);
+            console.log('[02工作表] 最後5筆資料:', last5.map(r => r['CB代號'] || r['代號']));
         }
     } else {
-        console.log('[02工作表] 資料未載入或為空');
+        console.log('[02工作表] ⚠️ 資料未載入或為空, sheet02Data:', window.sheet02Data);
     }
     
     // 從08工作表取得詳細日期
@@ -15591,29 +15612,42 @@ function renderBasicInfoSchedule(cbCode, container) {
  */
 function renderBasicInfoPutback(cbCode, container) {
     const searchCode = String(cbCode).trim();
+    const numSearchCode = parseInt(searchCode, 10);
     
     // 從03工作表取得賣回條件
     let putbackData = null;
     if (window.sheet03Data && window.sheet03Data.length > 0) {
-        putbackData = window.sheet03Data.find(r => String(r['CB代號']).trim() === searchCode);
+        putbackData = window.sheet03Data.find(r => {
+            const code = String(r['CB代號'] || '').replace('.0', '').trim();
+            return code === searchCode || parseInt(code, 10) === numSearchCode;
+        });
     }
     
-    // 從08工作表取得提前償還資訊
+    // 從08工作表取得提前償還資訊（這是投資人賣回權！）
     let sheet08Row = null;
     if (window.sheet08Data && window.sheet08Data.length > 0) {
-        sheet08Row = window.sheet08Data.find(r => String(r['代號']).trim() === searchCode);
+        sheet08Row = window.sheet08Data.find(r => {
+            const code = String(r['代號'] || '').replace('.0', '').trim();
+            return code === searchCode || parseInt(code, 10) === numSearchCode;
+        });
     }
     
     // 從競拍資料補充
     let auctionData = null;
     if (window.auctionDataCache && window.auctionDataCache.length > 0) {
-        auctionData = window.auctionDataCache.find(r => String(r['CB代號']).trim() === searchCode);
+        auctionData = window.auctionDataCache.find(r => {
+            const code = String(r['CB代號'] || '').replace('.0', '').trim();
+            return code === searchCode || parseInt(code, 10) === numSearchCode;
+        });
     }
     
     // 從01工作表補充
     let sheet01Row = null;
     if (window.sheet01Data && window.sheet01Data.length > 0) {
-        sheet01Row = window.sheet01Data.find(r => String(r['CB代號']).trim() === searchCode);
+        sheet01Row = window.sheet01Data.find(r => {
+            const code = String(r['CB代號'] || '').replace('.0', '').trim();
+            return code === searchCode || parseInt(code, 10) === numSearchCode;
+        });
     }
     
     if (!putbackData && !sheet08Row && !auctionData && !sheet01Row) {
@@ -15634,67 +15668,82 @@ function renderBasicInfoPutback(cbCode, container) {
     const guaranteeColor = isGuaranteed ? '#2e7d32' : '#757575';
     const guaranteeIcon = isGuaranteed ? '🛡️' : '📝';
     
+    // 建立提前償還（投資人賣回權）明細
+    let putbackDetails = '';
+    if (sheet08Row) {
+        const putbackItems = [];
+        for (let i = 1; i <= 4; i++) {
+            const date = sheet08Row[`提前償還日${i}`];
+            const price = sheet08Row[`提前償還價格${i}`];
+            const yield_rate = sheet08Row[`提前償還殖利率${i}`];
+            if (date) {
+                putbackItems.push(`<span style="background:#fff3e0; padding:4px 8px; border-radius:4px; font-size:12px;">第${i}次 ${formatDate(date)} @ ${price || '-'}元 (殖利率${yield_rate || '-'}%)</span>`);
+            }
+        }
+        if (putbackItems.length > 0) {
+            putbackDetails = `
+            <div style="margin-top:12px; padding-top:12px; border-top:1px dashed #ddd;">
+                <div style="font-size:11px; color:#999; margin-bottom:8px;">📅 各期賣回價格明細</div>
+                <div style="display:flex; flex-wrap:wrap; gap:8px;">
+                    ${putbackItems.join('')}
+                </div>
+            </div>`;
+        }
+    }
+    
     const html = `
         <div style="background:linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); padding:20px; border-radius:8px;">
             <div style="font-weight:bold; color:#e65100; margin-bottom:15px; font-size:16px;">💰 ${cbCode} ${getValue(putbackData?.['名稱'], sheet08Row?.['名稱'])} 賣回條件</div>
             
-            <!-- 投資人賣回權 -->
+            <!-- 投資人賣回權（Put Option）- 整合03工作表和08工作表的提前償還 -->
             <div style="background:white; padding:15px; border-radius:8px; margin-bottom:15px; border-left:4px solid #ff9800;">
-                <div style="font-size:13px; color:#666; margin-bottom:8px;">📋 投資人提前賣回權</div>
+                <div style="font-size:13px; color:#666; margin-bottom:8px;">📋 投資人賣回權 (Put Option)</div>
+                <div style="font-size:11px; color:#999; margin-bottom:10px;">投資人有權在特定日期將CB以約定價格賣回給發行公司</div>
+                
                 <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:12px;">
                     <div>
                         <div style="font-size:11px; color:#999;">賣回條件</div>
-                        <div style="font-size:14px; font-weight:bold; color:#e65100;">${getValue(putbackData?.['投資人提前賣回'])}</div>
+                        <div style="font-size:14px; font-weight:bold; color:#e65100;">${getValue(putbackData?.['投資人提前賣回'], sheet08Row?.['提前償還日'])}</div>
                     </div>
                     <div>
-                        <div style="font-size:11px; color:#999;">賣回日期1</div>
-                        <div style="font-size:14px; font-weight:bold; color:#1976d2;">${formatDate(getValue(putbackData?.['賣回日期1']))}</div>
+                        <div style="font-size:11px; color:#999;">最近賣回日</div>
+                        <div style="font-size:14px; font-weight:bold; color:#1976d2;">${formatDate(getValue(sheet08Row?.['最近提前償還日'], putbackData?.['賣回日期1']))}</div>
                     </div>
                     <div>
-                        <div style="font-size:11px; color:#999;">賣回日期2</div>
-                        <div style="font-size:14px; font-weight:bold; color:#1976d2;">${formatDate(getValue(putbackData?.['賣回日期2']))}</div>
+                        <div style="font-size:11px; color:#999;">最近賣回價格</div>
+                        <div style="font-size:14px; font-weight:bold; color:#2e7d32;">${getValue(sheet08Row?.['最近提前償還價格'], '-')} 元</div>
+                    </div>
+                    <div>
+                        <div style="font-size:11px; color:#999;">最近賣回殖利率</div>
+                        <div style="font-size:14px; font-weight:bold; color:#7b1fa2;">${getValue(sheet08Row?.['最近提前償還殖利率'], '-')}%</div>
                     </div>
                 </div>
+                
                 ${putbackData?.['賣回條件'] ? `
                 <div style="margin-top:10px; padding:8px; background:#fff8e1; border-radius:4px; font-size:12px; color:#f57c00;">
                     <strong>賣回公式：</strong>${putbackData['賣回條件']}
                 </div>
                 ` : ''}
+                
+                ${putbackDetails}
             </div>
             
-            <!-- 發行人提前償還（從08工作表）-->
-            ${sheet08Row ? `
-            <div style="background:white; padding:15px; border-radius:8px; margin-bottom:15px; border-left:4px solid #9c27b0;">
-                <div style="font-size:13px; color:#666; margin-bottom:8px;">🏢 發行人提前償還權</div>
+            <!-- 發行人強制贖回權（Call Option）-->
+            <div style="background:white; padding:15px; border-radius:8px; margin-bottom:15px; border-left:4px solid #d32f2f;">
+                <div style="font-size:13px; color:#666; margin-bottom:8px;">🏢 發行人強制贖回權 (Call Option)</div>
+                <div style="font-size:11px; color:#999; margin-bottom:10px;">發行公司有權在股價達到一定條件時強制贖回CB</div>
+                
                 <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px;">
                     <div>
-                        <div style="font-size:11px; color:#999;">提前償還條件</div>
-                        <div style="font-size:13px; color:#333;">${getValue(sheet08Row['提前償還日'])}</div>
+                        <div style="font-size:11px; color:#999;">強制贖回條件</div>
+                        <div style="font-size:13px; color:#333;">${getValue(sheet08Row?.['強制贖回條款'], putbackData?.['發行人提前贖回'], '當股價連續30個營業日收盤價達轉換價130%以上')}</div>
                     </div>
                     <div>
-                        <div style="font-size:11px; color:#999;">最近提前償還日</div>
-                        <div style="font-size:14px; font-weight:bold; color:#9c27b0;">${formatDate(getValue(sheet08Row['最近提前償還日']))}</div>
-                    </div>
-                    <div>
-                        <div style="font-size:11px; color:#999;">最近提前償還價格</div>
-                        <div style="font-size:14px; font-weight:bold; color:#e65100;">${getValue(sheet08Row['最近提前償還價格'])} 元</div>
+                        <div style="font-size:11px; color:#999;">強制贖回日</div>
+                        <div style="font-size:14px; font-weight:bold; color:#d32f2f;">${formatDate(getValue(sheet08Row?.['強制贖回日'], '-'))}</div>
                     </div>
                 </div>
-                
-                <!-- 各期提前償還明細 -->
-                ${sheet08Row['提前償還日1'] ? `
-                <div style="margin-top:12px; padding-top:12px; border-top:1px dashed #ddd;">
-                    <div style="font-size:11px; color:#999; margin-bottom:8px;">各期提前償還價格</div>
-                    <div style="display:flex; flex-wrap:wrap; gap:8px;">
-                        ${sheet08Row['提前償還日1'] ? `<span style="background:#f3e5f5; padding:4px 8px; border-radius:4px; font-size:12px;">第1期 ${formatDate(sheet08Row['提前償還日1'])} @ ${sheet08Row['提前償還價格1']}元</span>` : ''}
-                        ${sheet08Row['提前償還日2'] ? `<span style="background:#f3e5f5; padding:4px 8px; border-radius:4px; font-size:12px;">第2期 ${formatDate(sheet08Row['提前償還日2'])} @ ${sheet08Row['提前償還價格2']}元</span>` : ''}
-                        ${sheet08Row['提前償還日3'] ? `<span style="background:#f3e5f5; padding:4px 8px; border-radius:4px; font-size:12px;">第3期 ${formatDate(sheet08Row['提前償還日3'])} @ ${sheet08Row['提前償還價格3']}元</span>` : ''}
-                        ${sheet08Row['提前償還日4'] ? `<span style="background:#f3e5f5; padding:4px 8px; border-radius:4px; font-size:12px;">第4期 ${formatDate(sheet08Row['提前償還日4'])} @ ${sheet08Row['提前償還價格4']}元</span>` : ''}
-                    </div>
-                </div>
-                ` : ''}
             </div>
-            ` : ''}
             
             <!-- 到期還本與擔保 -->
             <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px;">

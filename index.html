@@ -16488,10 +16488,6 @@ function renderStockPriceChart(cbCode, data, container, period) {
     
     // 計算統計數據
     const latestData = data[data.length - 1] || {};
-    const firstData = data[0] || {};
-    const priceChange = latestData.stockPrice && firstData.stockPrice 
-        ? ((latestData.stockPrice - firstData.stockPrice) / firstData.stockPrice * 100).toFixed(2)
-        : 0;
     const isInMoney = latestData.stockPrice > latestData.convPrice;
     
     container.innerHTML = `
@@ -16505,8 +16501,8 @@ function renderStockPriceChart(cbCode, data, container, period) {
                 </div>
             </div>
             
-            <!-- 數據摘要 -->
-            <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-bottom:15px;">
+            <!-- 數據摘要（只顯示股價和轉換價）-->
+            <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; margin-bottom:15px;">
                 <div style="background:#e3f2fd; padding:12px; border-radius:6px; text-align:center;">
                     <div style="font-size:11px; color:#666;">最新股價</div>
                     <div style="font-size:18px; font-weight:bold; color:#1976d2;">${latestData.stockPrice?.toFixed(2) || '-'}</div>
@@ -16514,10 +16510,6 @@ function renderStockPriceChart(cbCode, data, container, period) {
                 <div style="background:#fff3e0; padding:12px; border-radius:6px; text-align:center;">
                     <div style="font-size:11px; color:#666;">轉換價</div>
                     <div style="font-size:18px; font-weight:bold; color:#e65100;">${latestData.convPrice?.toFixed(2) || '-'}</div>
-                </div>
-                <div style="background:#f5f5f5; padding:12px; border-radius:6px; text-align:center;">
-                    <div style="font-size:11px; color:#666;">期間漲跌</div>
-                    <div style="font-size:18px; font-weight:bold; color:${priceChange >= 0 ? '#c62828' : '#2e7d32'};">${priceChange >= 0 ? '+' : ''}${priceChange}%</div>
                 </div>
             </div>
             
@@ -16566,15 +16558,9 @@ function renderStockPriceChart(cbCode, data, container, period) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            interaction: {
-                mode: 'index',
-                intersect: false
-            },
+            interaction: { mode: 'index', intersect: false },
             plugins: {
-                legend: {
-                    position: 'top',
-                    labels: { font: { size: 11 }, boxWidth: 12 }
-                },
+                legend: { position: 'top', labels: { font: { size: 11 }, boxWidth: 12 } },
                 tooltip: {
                     callbacks: {
                         label: function(context) {
@@ -16585,11 +16571,7 @@ function renderStockPriceChart(cbCode, data, container, period) {
             },
             scales: {
                 x: {
-                    ticks: { 
-                        font: { size: 10 },
-                        maxRotation: 45,
-                        maxTicksLimit: 10
-                    },
+                    ticks: { font: { size: 10 }, maxRotation: 45, maxTicksLimit: 10 },
                     grid: { display: false }
                 },
                 y: {
@@ -16609,11 +16591,9 @@ function renderCBPriceChart(cbCode, data, container, period) {
     
     const labels = data.map(d => d.date);
     const cbPrices = data.map(d => d.cbPrice);
-    const convValues = data.map(d => d.convValue);
     const premiums = data.map(d => d.premium);
     
     const latestData = data[data.length - 1] || {};
-    const avgPremium = premiums.length > 0 ? (premiums.reduce((a, b) => a + b, 0) / premiums.length) : 0;
     
     container.innerHTML = `
         <div style="background:#fff; padding:15px; border-radius:8px;">
@@ -16626,23 +16606,15 @@ function renderCBPriceChart(cbCode, data, container, period) {
                 </div>
             </div>
             
-            <!-- 數據摘要 -->
-            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-bottom:15px;">
-                <div style="background:#f3e5f5; padding:10px; border-radius:6px; text-align:center;">
-                    <div style="font-size:10px; color:#666;">CB收盤價</div>
-                    <div style="font-size:16px; font-weight:bold; color:#7b1fa2;">${latestData.cbPrice?.toFixed(2) || '-'}</div>
+            <!-- 數據摘要（只顯示CB市價和折溢價）-->
+            <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; margin-bottom:15px;">
+                <div style="background:#f3e5f5; padding:12px; border-radius:6px; text-align:center;">
+                    <div style="font-size:11px; color:#666;">CB收盤價</div>
+                    <div style="font-size:18px; font-weight:bold; color:#7b1fa2;">${latestData.cbPrice?.toFixed(2) || '-'}</div>
                 </div>
-                <div style="background:#e8f5e9; padding:10px; border-radius:6px; text-align:center;">
-                    <div style="font-size:10px; color:#666;">轉換價值</div>
-                    <div style="font-size:16px; font-weight:bold; color:#2e7d32;">${latestData.convValue?.toFixed(2) || '-'}</div>
-                </div>
-                <div style="background:#fff3e0; padding:10px; border-radius:6px; text-align:center;">
-                    <div style="font-size:10px; color:#666;">當前溢價</div>
-                    <div style="font-size:16px; font-weight:bold; color:#e65100;">${latestData.premium?.toFixed(2) || '-'}%</div>
-                </div>
-                <div style="background:#f5f5f5; padding:10px; border-radius:6px; text-align:center;">
-                    <div style="font-size:10px; color:#666;">期間平均溢價</div>
-                    <div style="font-size:16px; font-weight:bold; color:#666;">${avgPremium.toFixed(2)}%</div>
+                <div style="background:#fff3e0; padding:12px; border-radius:6px; text-align:center;">
+                    <div style="font-size:11px; color:#666;">當前折溢價</div>
+                    <div style="font-size:18px; font-weight:bold; color:#e65100;">${latestData.premium?.toFixed(2) || '-'}%</div>
                 </div>
             </div>
             
@@ -16669,25 +16641,14 @@ function renderCBPriceChart(cbCode, data, container, period) {
                     data: cbPrices,
                     borderColor: '#7b1fa2',
                     backgroundColor: 'rgba(123, 31, 162, 0.1)',
-                    fill: false,
+                    fill: true,
                     tension: 0.1,
                     pointRadius: 0,
                     borderWidth: 2,
                     yAxisID: 'y'
                 },
                 {
-                    label: '轉換價值',
-                    data: convValues,
-                    borderColor: '#2e7d32',
-                    borderDash: [3, 3],
-                    fill: false,
-                    tension: 0.1,
-                    pointRadius: 0,
-                    borderWidth: 1.5,
-                    yAxisID: 'y'
-                },
-                {
-                    label: '溢價率%',
+                    label: '折溢價%',
                     data: premiums,
                     type: 'bar',
                     backgroundColor: premiums.map(p => p >= 0 ? 'rgba(255, 152, 0, 0.5)' : 'rgba(76, 175, 80, 0.5)'),
@@ -16700,15 +16661,9 @@ function renderCBPriceChart(cbCode, data, container, period) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            interaction: {
-                mode: 'index',
-                intersect: false
-            },
+            interaction: { mode: 'index', intersect: false },
             plugins: {
-                legend: {
-                    position: 'top',
-                    labels: { font: { size: 11 }, boxWidth: 12 }
-                }
+                legend: { position: 'top', labels: { font: { size: 11 }, boxWidth: 12 } }
             },
             scales: {
                 x: {
@@ -16716,23 +16671,16 @@ function renderCBPriceChart(cbCode, data, container, period) {
                     grid: { display: false }
                 },
                 y: {
-                    type: 'linear',
-                    display: true,
-                    position: 'left',
+                    type: 'linear', display: true, position: 'left',
                     ticks: { font: { size: 10 } },
                     grid: { color: 'rgba(0,0,0,0.05)' },
-                    title: { display: true, text: '價格', font: { size: 10 } }
+                    title: { display: true, text: 'CB價格', font: { size: 10 } }
                 },
                 y1: {
-                    type: 'linear',
-                    display: true,
-                    position: 'right',
-                    ticks: { 
-                        font: { size: 10 },
-                        callback: function(value) { return value + '%'; }
-                    },
+                    type: 'linear', display: true, position: 'right',
+                    ticks: { font: { size: 10 }, callback: function(value) { return value + '%'; } },
                     grid: { drawOnChartArea: false },
-                    title: { display: true, text: '溢價率', font: { size: 10 } }
+                    title: { display: true, text: '折溢價率', font: { size: 10 } }
                 }
             }
         }
@@ -16750,10 +16698,6 @@ function renderBalanceChart(cbCode, data, container, period) {
     const remainRatios = data.map(d => d.remainRatio);
     
     const latestData = data[data.length - 1] || {};
-    const firstData = data[0] || {};
-    const balanceChange = latestData.balance && firstData.balance
-        ? (firstData.balance - latestData.balance).toFixed(2)
-        : 0;
     const convertedPct = 100 - (latestData.remainRatio || 100);
     
     container.innerHTML = `
@@ -16767,25 +16711,15 @@ function renderBalanceChart(cbCode, data, container, period) {
                 </div>
             </div>
             
-            <!-- 數據摘要 -->
-            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-bottom:15px;">
-                <div style="background:#e3f2fd; padding:10px; border-radius:6px; text-align:center;">
-                    <div style="font-size:10px; color:#666;">原始發行</div>
-                    <div style="font-size:16px; font-weight:bold; color:#1976d2;">${latestData.originalBalance?.toFixed(2) || '-'}</div>
-                    <div style="font-size:9px; color:#999;">億</div>
+            <!-- 數據摘要（只顯示餘額和剩餘比率）-->
+            <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; margin-bottom:15px;">
+                <div style="background:#e8f5e9; padding:12px; border-radius:6px; text-align:center;">
+                    <div style="font-size:11px; color:#666;">流通餘額</div>
+                    <div style="font-size:18px; font-weight:bold; color:#2e7d32;">${latestData.balance?.toFixed(2) || '-'} <span style="font-size:12px; font-weight:normal;">億</span></div>
                 </div>
-                <div style="background:#e8f5e9; padding:10px; border-radius:6px; text-align:center;">
-                    <div style="font-size:10px; color:#666;">流通餘額</div>
-                    <div style="font-size:16px; font-weight:bold; color:#2e7d32;">${latestData.balance?.toFixed(2) || '-'}</div>
-                    <div style="font-size:9px; color:#999;">億</div>
-                </div>
-                <div style="background:#fff3e0; padding:10px; border-radius:6px; text-align:center;">
-                    <div style="font-size:10px; color:#666;">剩餘比率</div>
-                    <div style="font-size:16px; font-weight:bold; color:#e65100;">${latestData.remainRatio?.toFixed(1) || '-'}%</div>
-                </div>
-                <div style="background:#f5f5f5; padding:10px; border-radius:6px; text-align:center;">
-                    <div style="font-size:10px; color:#666;">期間轉換</div>
-                    <div style="font-size:16px; font-weight:bold; color:#7b1fa2;">${balanceChange}億</div>
+                <div style="background:#fff3e0; padding:12px; border-radius:6px; text-align:center;">
+                    <div style="font-size:11px; color:#666;">剩餘比率</div>
+                    <div style="font-size:18px; font-weight:bold; color:#e65100;">${latestData.remainRatio?.toFixed(1) || '-'}%</div>
                 </div>
             </div>
             
@@ -16834,15 +16768,9 @@ function renderBalanceChart(cbCode, data, container, period) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            interaction: {
-                mode: 'index',
-                intersect: false
-            },
+            interaction: { mode: 'index', intersect: false },
             plugins: {
-                legend: {
-                    position: 'top',
-                    labels: { font: { size: 11 }, boxWidth: 12 }
-                }
+                legend: { position: 'top', labels: { font: { size: 11 }, boxWidth: 12 } }
             },
             scales: {
                 x: {
@@ -16850,23 +16778,15 @@ function renderBalanceChart(cbCode, data, container, period) {
                     grid: { display: false }
                 },
                 y: {
-                    type: 'linear',
-                    display: true,
-                    position: 'left',
+                    type: 'linear', display: true, position: 'left',
                     ticks: { font: { size: 10 } },
                     grid: { color: 'rgba(0,0,0,0.05)' },
                     title: { display: true, text: '餘額(億)', font: { size: 10 } }
                 },
                 y1: {
-                    type: 'linear',
-                    display: true,
-                    position: 'right',
-                    min: 0,
-                    max: 100,
-                    ticks: { 
-                        font: { size: 10 },
-                        callback: function(value) { return value + '%'; }
-                    },
+                    type: 'linear', display: true, position: 'right',
+                    min: 0, max: 100,
+                    ticks: { font: { size: 10 }, callback: function(value) { return value + '%'; } },
                     grid: { drawOnChartArea: false },
                     title: { display: true, text: '剩餘比率', font: { size: 10 } }
                 }

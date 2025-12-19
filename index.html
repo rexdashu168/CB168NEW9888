@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97-zs-s (圖表高度/理論價修正)</title>
+<title>AI智能可轉債競拍系統 v3.97-zs-t (工作表匹配/圖表修正)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <!-- v3.97-zs-f: kanban_data.js 改為延遲載入，不阻塞頁面 -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -1781,58 +1781,20 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     font-weight: bold;
     font-size: 14px;
 }
-
-/* v3.97-zs-k 手機版響應式優化 */
-@media (max-width: 480px) {
-    /* 四欄卡片變2x2 */
-    .trend-grid-4 {
-        grid-template-columns: repeat(2, 1fr) !important;
-    }
-    /* 價格走勢選擇器區域優化 */
-    #priceTrendSection > div:first-child > div {
-        flex-direction: column !important;
-        align-items: stretch !important;
-    }
-    #priceTrendSection > div:first-child > div > label {
-        margin-bottom: 5px;
-    }
-    #priceTrendSection > div:first-child > div > input,
-    #priceTrendSection > div:first-child > div > select {
-        width: 100% !important;
-        min-width: unset !important;
-        flex: unset !important;
-    }
-    /* 時間選擇器特別樣式 */
-    #priceTrendPeriod {
-        font-size: 14px !important;
-        padding: 10px 12px !important;
-        border: 2px solid #ff9800 !important;
-        background: #fff3e0 !important;
-    }
-    /* CBAS公式區5欄變垂直排列 */
-    .cbas-formula-grid {
-        grid-template-columns: 1fr !important;
-        gap: 6px !important;
-    }
-    .cbas-formula-grid > div:nth-child(2),
-    .cbas-formula-grid > div:nth-child(4) {
-        display: none !important;
-    }
-}
 </style>
 
 </head>
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.97-zs-s)...</div>
+    <div>🔄 系統啟動中 (v3.97-zs-t)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
 <div class="container" style="display: none;">
     <div class="header">
         <h1>🤖 AI智能可轉債競拍系統</h1>
-        <span class="version-badge">v3.97-zs-s 圖表高度/理論價修正</span>
+        <span class="version-badge">v3.97-zs-t 工作表匹配/圖表修正</span>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -2717,9 +2679,9 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
         
         <!-- 價格走勢標籤頁 -->
         <div class="price-trend-tabs">
-            <button type="button" class="price-trend-tab active" onclick="showPriceTrendTab('stockPrice', event)">📈 股價走勢</button>
-            <button type="button" class="price-trend-tab" onclick="showPriceTrendTab('cbPrice', event)">💹 理論價值</button>
-            <button type="button" class="price-trend-tab" onclick="showPriceTrendTab('balance', event)">📊 籌碼轉換</button>
+            <button type="button" class="price-trend-tab active" onclick="showPriceTrendTab('stockPrice', event)">📈 股價與轉換價</button>
+            <button type="button" class="price-trend-tab" onclick="showPriceTrendTab('cbPrice', event)">💹 理論價值分析</button>
+            <button type="button" class="price-trend-tab" onclick="showPriceTrendTab('balance', event)">📊 籌碼轉換分析</button>
             <button type="button" class="price-trend-tab" onclick="showPriceTrendTab('cbas', event)">🎯 CBAS拆解</button>
         </div>
         <div id="priceTrendContent" style="min-height:300px; padding:15px; background:#fafafa; border-radius:0 0 8px 8px; border:1px solid #e0e0e0; border-top:none;">
@@ -3368,34 +3330,31 @@ async function loadStatistics() {
         if (!response.ok) throw new Error("找不到 00_CB.xlsx");
         const workbook = XLSX.read(await response.arrayBuffer(), { type: 'array' });
         
-        // v3.97-zs-l 調試：輸出所有工作表名稱
-        console.log('📂 Excel檔案中的所有工作表:', workbook.SheetNames);
-        
         const getSheetData = (keywords) => { 
-            // v3.97-zs-o: 改用更精確的匹配方式，優先匹配以關鍵字開頭的工作表
+            // v3.97-zs-t: 改用更精確的匹配方式，優先匹配以關鍵字開頭的工作表
             const n = workbook.SheetNames.find(x => {
                 return keywords.some(k => {
-                    // 如果關鍵字包含 '_'，表示是精確前綴匹配
-                    if (k.includes('_')) {
-                        return x.startsWith(k) || x.includes(k);
+                    // 優先匹配以 "XX_" 格式開頭的工作表
+                    if (k.endsWith('_')) {
+                        return x.startsWith(k);
                     }
-                    // 否則檢查是否以 "XX_" 格式開頭
-                    return x.startsWith(k + '_') || x === k;
+                    // 精確匹配完整關鍵字
+                    return x.startsWith(k + '_') || x === k || x.includes(k);
                 });
             });
             if (!n) {
-                console.log(`⚠️ 找不到符合關鍵字的工作表: ${keywords.join(', ')}`);
+                console.log(`⚠️ 找不到工作表: ${keywords.join(', ')}`);
                 return null;
             }
-            console.log(`✅ 找到工作表: "${n}" (關鍵字: ${keywords.join(', ')})`);
+            console.log(`✅ 找到工作表: "${n}"`);
             return XLSX.utils.sheet_to_json(workbook.Sheets[n]).map(row => normalizeKeys(row));
         };
 
         const sheetAuction = getSheetData(['04_', '04', '所有CB競拍']);
         const sheetHighLow = getSheetData(['00_', '00', '掛牌', '名稱過濾']);
         const sheetAllCB = getSheetData(['01_', '01', 'ALLCB基本']);
-        const sheetSchedule = getSheetData(['02_ALLCB發行時程', '02_', '發行時程']); // v3.97-zs-o 更精確匹配
-        const sheetPutback = getSheetData(['03_ALLCB賣回條件', '03_', '賣回條件']); // v3.97-zs-o
+        const sheetSchedule = getSheetData(['02_', 'ALLCB發行時程']); // v3.97-zs-t 修正匹配
+        const sheetPutback = getSheetData(['03_', 'ALLCB賣回']); // v3.97-zs-t 修正匹配
         const sheetListed = getSheetData(['08_', '08']); // 掛牌中清單
         const sheetPending = getSheetData(['06_', '06', '發行案件']); // v3.59 新增：承銷進行中
         const sheetBoard = getSheetData(['07_', '07', '董事會']); // v3.59 新增：董事會決議
@@ -3423,17 +3382,6 @@ async function loadStatistics() {
         console.log('   08(掛牌中):', window.sheet08Data.length, '筆');
         console.log('   09(行情):', window.sheet09Data.length, '筆');
         console.log('   10(餘額):', window.sheet10Data.length, '筆');
-        
-        // v3.97-zs-n 調試：詳細輸出02工作表資訊
-        if (window.sheet02Data && window.sheet02Data.length > 0) {
-            console.log('📅 [02工作表] 欄位名稱:', Object.keys(window.sheet02Data[0]));
-            console.log('📅 [02工作表] 第一筆範例:', JSON.stringify(window.sheet02Data[0]).substring(0, 500));
-            // 檢查最後幾筆是否有99587, 99588
-            const recentCodes = window.sheet02Data.slice(-10).map(r => r['CB代號'] || r['代號'] || '無');
-            console.log('📅 [02工作表] 最後10筆CB代號:', recentCodes);
-        } else {
-            console.log('📅 [02工作表] ⚠️ 未載入或為空！');
-        }
 
         // v3.72 新增：建立產業分類對照表（從16工作表）
         window.industryMap = {};
@@ -5822,13 +5770,7 @@ function initializeUI() {
     updateAtmospherePanel(); // v3.70 更新市場氛圍面板
     calculateMarketMomentum(); // v3.74 自動計算市場動能
     updateInitialDisplayFromData(); // v3.90 新增：更新初始顯示（從動態數據）
-    
-    // v3.97-zs-r 優化：延遲初始化基本資料查詢模組，避免阻塞主線程
-    if (typeof requestIdleCallback !== 'undefined') {
-        requestIdleCallback(() => initBasicInfoModule(), { timeout: 2000 });
-    } else {
-        setTimeout(initBasicInfoModule, 500);
-    }
+    initBasicInfoModule(); // v3.97z-s 新增：基本資料查詢模組
 }
 
 /**
@@ -7516,27 +7458,26 @@ function toggleRightSection(sectionId, headerElement) {
         content.style.maxHeight = '800px'; // 給足夠高度
         headerElement.classList.remove('collapsed');
         
-        // v3.97-zs-r 優化：延遲初始化檢查
-        if (sectionId === 'basicInfoSection') {
-            // 檢查是否需要初始化
-            if (window.basicInfoNeedInit) {
-                window.basicInfoNeedInit = false;
-                requestAnimationFrame(() => {
-                    populateBasicInfoCBList();
-                });
-            }
+        // 特殊處理：展開價格走勢區塊時自動載入第一筆資料
+        if (sectionId === 'priceTrendSection') {
+            setTimeout(() => {
+                const select = document.getElementById('priceTrendCBSelect');
+                if (select && select.options.length > 1 && !select.value) {
+                    select.selectedIndex = 1; // 選擇第一筆CB
+                    loadPriceTrend(select.value);
+                }
+            }, 100);
         }
         
-        if (sectionId === 'priceTrendSection') {
-            const select = document.getElementById('priceTrendCBSelect');
-            if (select && select.options.length <= 1) {
-                // 選單尚未填充，延遲填充
-                requestAnimationFrame(() => {
-                    if (window.cbDatabase && window.cbDatabase.allCB.length > 0) {
-                        updateCBSelectOptions();
-                    }
-                });
-            }
+        // 特殊處理：展開基本資料區塊時自動載入第一筆資料
+        if (sectionId === 'basicInfoSection') {
+            setTimeout(() => {
+                const select = document.getElementById('basicInfoCBSelect');
+                if (select && select.options.length > 1 && !select.value) {
+                    select.selectedIndex = 1; // 選擇第一筆CB
+                    loadBasicInfo(select.value);
+                }
+            }, 100);
         }
     } else {
         // 收合
@@ -14767,26 +14708,11 @@ let currentPriceTrendCB = null;
 
 /**
  * 初始化基本資料查詢模組
- * v3.97-zs-r 優化：延遲執行，減少初始化時間
  */
 function initBasicInfoModule() {
-    const startTime = performance.now();
     console.log('初始化基本資料查詢模組...');
-    
-    // 先建立資料庫（這是必要的）
     buildCBDatabase();
-    
-    // 延遲填充下拉選單（只在區塊展開時才需要）
-    const basicInfoSection = document.getElementById('basicInfoSection');
-    if (basicInfoSection && !basicInfoSection.classList.contains('collapsed')) {
-        // 區塊已展開，立即填充
-        populateBasicInfoCBList();
-    } else {
-        // 區塊收合中，標記為需要初始化
-        window.basicInfoNeedInit = true;
-    }
-    
-    console.log(`基本資料查詢模組初始化完成，耗時 ${(performance.now() - startTime).toFixed(1)}ms`);
+    populateBasicInfoCBList();
 }
 
 /**
@@ -14950,43 +14876,28 @@ function updateCBSelectOptions() {
     const priceTrendSelect = document.getElementById('priceTrendCBSelect');
     if (!select) return;
     
-    // v3.97-zs-r 優化：使用DocumentFragment減少DOM操作
-    const startTime = performance.now();
-    
     // 排序（依代號倒序，最新的在前面）
     const sortedList = [...filteredCBList].sort((a, b) => {
         return String(b.code).localeCompare(String(a.code));
     });
     
-    // 使用DocumentFragment批量生成選項
-    const fragment = document.createDocumentFragment();
-    const defaultOption = document.createElement('option');
-    defaultOption.value = '';
-    defaultOption.textContent = '-- 請選擇CB代號 --';
-    fragment.appendChild(defaultOption);
+    // 生成選項HTML
+    let optionsHTML = '<option value="">-- 請選擇CB代號 --</option>';
     
     sortedList.forEach(cb => {
-        const option = document.createElement('option');
-        option.value = cb.code;
         const statusIcon = cb.isListed ? '🟢' : '⚫';
         const methodIcon = cb.isAuction ? '🎯' : '📋';
-        option.textContent = `${statusIcon}${methodIcon} ${cb.code} ${cb.name}`;
-        fragment.appendChild(option);
+        optionsHTML += `<option value="${cb.code}">${statusIcon}${methodIcon} ${cb.code} ${cb.name}</option>`;
     });
     
-    // 一次性更新DOM
-    select.innerHTML = '';
-    select.appendChild(fragment);
+    select.innerHTML = optionsHTML;
     
-    // 同步到價格走勢選單（延遲執行避免阻塞）
+    // 同步到價格走勢選單
     if (priceTrendSelect) {
-        requestAnimationFrame(() => {
-            priceTrendSelect.innerHTML = select.innerHTML;
-            initPriceTrendCBOptions();
-        });
+        priceTrendSelect.innerHTML = optionsHTML;
+        // 初始化價格走勢選項列表（供快速搜尋用）
+        initPriceTrendCBOptions();
     }
-    
-    console.log(`[優化] 下拉選單更新完成，${sortedList.length}個選項，耗時 ${(performance.now() - startTime).toFixed(1)}ms`);
 }
 
 /**
@@ -15080,11 +14991,8 @@ function loadBasicInfo(cbCode) {
 
 /**
  * 顯示基本資料標籤頁
- * v3.97-zs-s 新增調試log
  */
 function showBasicInfoTab(tabName, event) {
-    console.log('[showBasicInfoTab] 切換到標籤:', tabName);
-    
     // 更新標籤狀態
     document.querySelectorAll('.basic-info-tab').forEach(tab => tab.classList.remove('active'));
     if (event) event.target.classList.add('active');
@@ -15092,8 +15000,6 @@ function showBasicInfoTab(tabName, event) {
     
     const content = document.getElementById('basicInfoContent');
     const cbCode = currentBasicInfoCB;
-    
-    console.log('[showBasicInfoTab] currentBasicInfoCB:', cbCode);
     
     if (!cbCode) {
         content.innerHTML = `<div style="text-align:center; color:#999; padding:40px;">👆 請先選擇一檔可轉債</div>`;
@@ -15109,7 +15015,6 @@ function showBasicInfoTab(tabName, event) {
             renderBasicInfoSchedule(cbCode, content);
             break;
         case 'putback':
-            console.log('[showBasicInfoTab] 執行 renderBasicInfoPutback');
             renderBasicInfoPutback(cbCode, content);
             break;
         case 'auction':
@@ -15501,89 +15406,37 @@ function renderBasicInfoOverview(cbCode, container) {
  */
 function renderBasicInfoSchedule(cbCode, container) {
     const searchCode = String(cbCode).trim();
-    const numSearchCode = parseInt(searchCode, 10);
     
     // 從02工作表取得發行時程
     let scheduleData = null;
     if (window.sheet02Data && window.sheet02Data.length > 0) {
-        // v3.97-zs-n: 調試輸出前5筆資料的CB代號
-        console.log('[02工作表] 總筆數:', window.sheet02Data.length);
-        console.log('[02工作表] 欄位名稱:', Object.keys(window.sheet02Data[0]));
-        
-        const first5Codes = window.sheet02Data.slice(0, 5).map(r => {
-            return r['CB代號'] || r['cb代號'] || r['CB代碼'] || r['代號'] || '無';
-        });
-        console.log('[02工作表] 前5筆CB代號:', first5Codes);
-        
-        // 搜尋CB代號
-        scheduleData = window.sheet02Data.find(r => {
-            // 嘗試多個可能的欄位名稱
-            const code = r['CB代號'] || r['cb代號'] || r['CB代碼'] || r['代號'] || '';
-            const codeStr = String(code).replace('.0', '').trim();
-            const codeNum = parseInt(codeStr, 10);
-            return codeStr === searchCode || codeNum === numSearchCode;
-        });
-        
-        if (scheduleData) {
-            console.log('[02工作表] ✅ 找到 ' + searchCode + ' 資料:', scheduleData);
-        } else {
-            console.log('[02工作表] ❌ 找不到 CB代號:', searchCode, '(數字:', numSearchCode, ')');
-            // 嘗試輸出最後5筆看看有沒有這個代號附近的
-            const last5 = window.sheet02Data.slice(-5);
-            console.log('[02工作表] 最後5筆資料:', last5.map(r => r['CB代號'] || r['代號']));
-        }
-    } else {
-        console.log('[02工作表] ⚠️ 資料未載入或為空, sheet02Data:', window.sheet02Data);
+        scheduleData = window.sheet02Data.find(r => String(r['CB代號']).trim() === searchCode);
     }
     
     // 從08工作表取得詳細日期
     let sheet08Row = null;
     if (window.sheet08Data && window.sheet08Data.length > 0) {
-        sheet08Row = window.sheet08Data.find(r => {
-            const code = r['代號'] || r['CB代號'] || '';
-            const codeStr = String(code).replace('.0', '').trim();
-            return codeStr === searchCode || parseInt(codeStr, 10) === numSearchCode;
-        });
+        sheet08Row = window.sheet08Data.find(r => String(r['代號']).trim() === searchCode);
     }
     
     // 從競拍資料補充
     let auctionData = null;
     if (window.auctionDataCache && window.auctionDataCache.length > 0) {
-        auctionData = window.auctionDataCache.find(r => {
-            const code = r['CB代號'] || '';
-            const codeStr = String(code).replace('.0', '').trim();
-            return codeStr === searchCode || parseInt(codeStr, 10) === numSearchCode;
-        });
+        auctionData = window.auctionDataCache.find(r => String(r['CB代號']).trim() === searchCode);
     }
     
     // 從01工作表補充
     let sheet01Row = null;
     if (window.sheet01Data && window.sheet01Data.length > 0) {
-        sheet01Row = window.sheet01Data.find(r => {
-            const code = r['CB代號'] || '';
-            const codeStr = String(code).replace('.0', '').trim();
-            return codeStr === searchCode || parseInt(codeStr, 10) === numSearchCode;
-        });
+        sheet01Row = window.sheet01Data.find(r => String(r['CB代號']).trim() === searchCode);
     }
     
-    // v3.97-zs-q: 從kanban資料取得轉換期間（C和D欄）
-    let kanbanRow = null;
-    if (window.kanbanData && window.kanbanData.data) {
-        kanbanRow = window.kanbanData.data.find(r => {
-            const code = String(r['代號'] || r['CB代號'] || '').replace('.0', '').trim();
-            return code === searchCode || parseInt(code, 10) === numSearchCode;
-        });
-        if (kanbanRow) {
-            console.log('[發行時程] kanban找到 ' + searchCode + ', 轉換起:', kanbanRow['轉換起日'] || kanbanRow['轉換日期起'], '轉換迄:', kanbanRow['轉換迄日'] || kanbanRow['轉換日期迄']);
-        }
-    }
-    
-    if (!scheduleData && !sheet08Row && !auctionData && !sheet01Row && !kanbanRow) {
+    if (!scheduleData && !sheet08Row && !auctionData && !sheet01Row) {
         container.innerHTML = `<div style="color:#999; padding:20px; text-align:center;">⚠️ 找不到 ${cbCode} 的發行時程資料</div>`;
         return;
     }
     
-    // 整合各來源資料 - 優先使用02工作表
+    // 整合各來源資料
     const getValue = (...sources) => {
         for (const v of sources) {
             if (v !== undefined && v !== null && v !== '' && v !== '-') return v;
@@ -15591,12 +15444,9 @@ function renderBasicInfoSchedule(cbCode, container) {
         return '-';
     };
     
-    // 取得名稱
-    const cbName = getValue(scheduleData?.['名稱'], sheet08Row?.['名稱'], auctionData?.['名稱'], sheet01Row?.['名稱']);
-    
     const html = `
         <div style="background:linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); padding:20px; border-radius:8px;">
-            <div style="font-weight:bold; color:#1565c0; margin-bottom:15px; font-size:16px;">📅 ${cbCode} ${cbName} 發行時程</div>
+            <div style="font-weight:bold; color:#1565c0; margin-bottom:15px; font-size:16px;">📅 ${cbCode} ${getValue(scheduleData?.['名稱'], sheet08Row?.['名稱'], auctionData?.['名稱'])} 發行時程</div>
             
             <!-- 重要日期時間軸 -->
             <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px; margin-bottom:15px;">
@@ -15620,38 +15470,36 @@ function renderBasicInfoSchedule(cbCode, container) {
                     <div style="font-size:11px; color:#666;">代收價款公告</div>
                     <div style="font-size:14px; font-weight:bold; color:#009688;">${formatDate(getValue(scheduleData?.['代收價款公告']))}</div>
                 </div>
+                <div style="background:white; padding:12px 8px; border-radius:6px; text-align:center; border-left:3px solid #4caf50;">
+                    <div style="font-size:11px; color:#666;">掛牌日期</div>
+                    <div style="font-size:14px; font-weight:bold; color:#4caf50;">${formatDate(getValue(scheduleData?.['掛牌日期'], sheet08Row?.['掛牌日期'], auctionData?.['掛牌日期'], sheet01Row?.['掛牌日期']))}</div>
+                </div>
             </div>
             
-            <!-- 轉換期間與到期資訊 v3.97-zs-q 重新排列 -->
-            <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; margin-bottom:15px;">
-                <div style="background:rgba(255,255,255,0.9); padding:12px; border-radius:6px; border-left:3px solid #4caf50;">
-                    <div style="font-size:12px; color:#666; margin-bottom:5px;">📅 掛牌日期</div>
-                    <div style="font-size:14px; font-weight:bold; color:#4caf50;">
-                        ${formatDate(getValue(scheduleData?.['掛牌日期'], sheet08Row?.['掛牌日期'], auctionData?.['掛牌日期'], sheet01Row?.['掛牌日期'], kanbanRow?.['掛牌日']))}
+            <!-- 轉換期間與到期資訊 -->
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:10px; margin-bottom:15px;">
+                <div style="background:rgba(255,255,255,0.9); padding:12px; border-radius:6px;">
+                    <div style="font-size:12px; color:#666; margin-bottom:5px;">🔄 轉換期間</div>
+                    <div style="font-size:13px; color:#333;">
+                        ${formatDate(getValue(sheet08Row?.['轉換日期起']))} ~ ${formatDate(getValue(sheet08Row?.['轉換日期迄']))}
                     </div>
                 </div>
-                <div style="background:rgba(255,255,255,0.9); padding:12px; border-radius:6px; border-left:3px solid #9c27b0;">
-                    <div style="font-size:12px; color:#666; margin-bottom:5px;">🔧 CBAS拆解日</div>
-                    <div style="font-size:14px; font-weight:bold; color:#9c27b0;">
-                        ${formatDate(getValue(scheduleData?.['CBAS拆解日']))}
+                <div style="background:rgba(255,255,255,0.9); padding:12px; border-radius:6px;">
+                    <div style="font-size:12px; color:#666; margin-bottom:5px;">📅 到期日期</div>
+                    <div style="font-size:13px; font-weight:bold; color:#d32f2f;">
+                        ${formatDate(getValue(scheduleData?.['到期日期'], sheet08Row?.['到期日'], auctionData?.['到期日期'], sheet01Row?.['到期日期']))}
                     </div>
                 </div>
-                <div style="background:rgba(255,255,255,0.9); padding:12px; border-radius:6px; border-left:3px solid #d32f2f;">
-                    <div style="font-size:12px; color:#666; margin-bottom:5px;">📆 到期日期</div>
-                    <div style="font-size:14px; font-weight:bold; color:#d32f2f;">
-                        ${formatDate(getValue(scheduleData?.['到期日期'], sheet08Row?.['到期日'], auctionData?.['到期日期'], sheet01Row?.['到期日期'], kanbanRow?.['到期日']))}
-                    </div>
-                </div>
-                <div style="background:rgba(255,255,255,0.9); padding:12px; border-radius:6px; border-left:3px solid #7b1fa2;">
-                    <div style="font-size:12px; color:#666; margin-bottom:5px;">📋 發行年期</div>
-                    <div style="font-size:14px; font-weight:bold; color:#7b1fa2;">
+                <div style="background:rgba(255,255,255,0.9); padding:12px; border-radius:6px;">
+                    <div style="font-size:12px; color:#666; margin-bottom:5px;">📆 發行年期</div>
+                    <div style="font-size:13px; font-weight:bold; color:#7b1fa2;">
                         ${getValue(sheet08Row?.['還本年限'], auctionData?.['年期'], sheet01Row?.['發行年期'])} 年
                     </div>
                 </div>
-                <div style="background:rgba(255,255,255,0.9); padding:12px; border-radius:6px; grid-column: span 2; border-left:3px solid #1976d2;">
-                    <div style="font-size:12px; color:#666; margin-bottom:5px;">🔄 轉換期間</div>
-                    <div style="font-size:14px; font-weight:bold; color:#1976d2;">
-                        ${formatDate(getValue(kanbanRow?.['轉換起日'], kanbanRow?.['轉換日期起'], sheet08Row?.['轉換日期起']))} ~ ${formatDate(getValue(kanbanRow?.['轉換迄日'], kanbanRow?.['轉換日期迄'], sheet08Row?.['轉換日期迄']))}
+                <div style="background:rgba(255,255,255,0.9); padding:12px; border-radius:6px;">
+                    <div style="font-size:12px; color:#666; margin-bottom:5px;">🔧 CBAS拆解日</div>
+                    <div style="font-size:13px; color:#333;">
+                        ${formatDate(getValue(scheduleData?.['CBAS拆解日']))}
                     </div>
                 </div>
             </div>
@@ -15675,47 +15523,30 @@ function renderBasicInfoSchedule(cbCode, container) {
  * 渲染賣回條件（整合03工作表和08工作表）
  */
 function renderBasicInfoPutback(cbCode, container) {
-    console.log('[renderBasicInfoPutback] 開始執行，cbCode:', cbCode);
-    
     const searchCode = String(cbCode).trim();
-    const numSearchCode = parseInt(searchCode, 10);
     
     // 從03工作表取得賣回條件
     let putbackData = null;
-    console.log('[renderBasicInfoPutback] sheet03Data:', window.sheet03Data?.length || 0, '筆');
     if (window.sheet03Data && window.sheet03Data.length > 0) {
-        putbackData = window.sheet03Data.find(r => {
-            const code = String(r['CB代號'] || '').replace('.0', '').trim();
-            return code === searchCode || parseInt(code, 10) === numSearchCode;
-        });
+        putbackData = window.sheet03Data.find(r => String(r['CB代號']).trim() === searchCode);
     }
     
-    // 從08工作表取得提前償還資訊（這是投資人賣回權！）
+    // 從08工作表取得提前償還資訊
     let sheet08Row = null;
-    console.log('[renderBasicInfoPutback] sheet08Data:', window.sheet08Data?.length || 0, '筆');
     if (window.sheet08Data && window.sheet08Data.length > 0) {
-        sheet08Row = window.sheet08Data.find(r => {
-            const code = String(r['代號'] || '').replace('.0', '').trim();
-            return code === searchCode || parseInt(code, 10) === numSearchCode;
-        });
+        sheet08Row = window.sheet08Data.find(r => String(r['代號']).trim() === searchCode);
     }
     
     // 從競拍資料補充
     let auctionData = null;
     if (window.auctionDataCache && window.auctionDataCache.length > 0) {
-        auctionData = window.auctionDataCache.find(r => {
-            const code = String(r['CB代號'] || '').replace('.0', '').trim();
-            return code === searchCode || parseInt(code, 10) === numSearchCode;
-        });
+        auctionData = window.auctionDataCache.find(r => String(r['CB代號']).trim() === searchCode);
     }
     
     // 從01工作表補充
     let sheet01Row = null;
     if (window.sheet01Data && window.sheet01Data.length > 0) {
-        sheet01Row = window.sheet01Data.find(r => {
-            const code = String(r['CB代號'] || '').replace('.0', '').trim();
-            return code === searchCode || parseInt(code, 10) === numSearchCode;
-        });
+        sheet01Row = window.sheet01Data.find(r => String(r['CB代號']).trim() === searchCode);
     }
     
     if (!putbackData && !sheet08Row && !auctionData && !sheet01Row) {
@@ -15730,104 +15561,73 @@ function renderBasicInfoPutback(cbCode, container) {
         return '-';
     };
     
-    // v3.97-zs-p: 從kanban資料取得強制贖回日
-    let kanbanRow = null;
-    if (window.kanbanData && window.kanbanData.data) {
-        kanbanRow = window.kanbanData.data.find(r => {
-            const code = String(r['代號'] || r['CB代號'] || '').replace('.0', '').trim();
-            return code === searchCode || parseInt(code, 10) === numSearchCode;
-        });
-        if (kanbanRow) {
-            console.log('[賣回條件] kanban找到 ' + searchCode + ':', kanbanRow);
-        }
-    }
-    
-    // 擔保狀態判斷 - v3.97-zs-p 修正：更嚴格的無擔保判斷
-    const guaranteeRaw = getValue(sheet01Row?.['擔保'], sheet08Row?.['債券擔保情形'], auctionData?.['擔保']);
-    // 無擔保的各種表示方式
-    const noGuaranteeValues = ['無', '-', '無擔保', '無擔', '', null, undefined];
-    const isGuaranteed = guaranteeRaw && !noGuaranteeValues.includes(guaranteeRaw) && !guaranteeRaw.includes('無擔保');
+    // 擔保狀態判斷
+    const guaranteeRaw = getValue(sheet08Row?.['債券擔保情形'], auctionData?.['擔保'], sheet01Row?.['擔保']);
+    const isGuaranteed = guaranteeRaw && guaranteeRaw !== '無' && guaranteeRaw !== '-';
     const guaranteeColor = isGuaranteed ? '#2e7d32' : '#757575';
     const guaranteeIcon = isGuaranteed ? '🛡️' : '📝';
-    
-    console.log('[賣回條件] 擔保原始值:', guaranteeRaw, '判定:', isGuaranteed ? '有擔保' : '無擔保');
-    
-    // 建立提前償還（投資人賣回權）明細
-    let putbackDetails = '';
-    if (sheet08Row) {
-        const putbackItems = [];
-        for (let i = 1; i <= 4; i++) {
-            const date = sheet08Row[`提前償還日${i}`];
-            const price = sheet08Row[`提前償還價格${i}`];
-            const yield_rate = sheet08Row[`提前償還殖利率${i}`];
-            if (date) {
-                putbackItems.push(`<span style="background:#fff3e0; padding:4px 8px; border-radius:4px; font-size:12px;">第${i}次 ${formatDate(date)} @ ${price || '-'}元 (殖利率${yield_rate || '-'}%)</span>`);
-            }
-        }
-        if (putbackItems.length > 0) {
-            putbackDetails = `
-            <div style="margin-top:12px; padding-top:12px; border-top:1px dashed #ddd;">
-                <div style="font-size:11px; color:#999; margin-bottom:8px;">📅 各期賣回價格明細</div>
-                <div style="display:flex; flex-wrap:wrap; gap:8px;">
-                    ${putbackItems.join('')}
-                </div>
-            </div>`;
-        }
-    }
     
     const html = `
         <div style="background:linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); padding:20px; border-radius:8px;">
             <div style="font-weight:bold; color:#e65100; margin-bottom:15px; font-size:16px;">💰 ${cbCode} ${getValue(putbackData?.['名稱'], sheet08Row?.['名稱'])} 賣回條件</div>
             
-            <!-- 投資人賣回權（Put Option）- 整合03工作表和08工作表的提前償還 -->
+            <!-- 投資人賣回權 -->
             <div style="background:white; padding:15px; border-radius:8px; margin-bottom:15px; border-left:4px solid #ff9800;">
-                <div style="font-size:13px; color:#666; margin-bottom:8px;">📋 投資人賣回權 (Put Option)</div>
-                <div style="font-size:11px; color:#999; margin-bottom:10px;">投資人有權在特定日期將CB以約定價格賣回給發行公司</div>
-                
+                <div style="font-size:13px; color:#666; margin-bottom:8px;">📋 投資人提前賣回權</div>
                 <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:12px;">
                     <div>
                         <div style="font-size:11px; color:#999;">賣回條件</div>
-                        <div style="font-size:14px; font-weight:bold; color:#e65100;">${getValue(putbackData?.['投資人提前賣回'], sheet08Row?.['提前償還日'])}</div>
+                        <div style="font-size:14px; font-weight:bold; color:#e65100;">${getValue(putbackData?.['投資人提前賣回'])}</div>
                     </div>
                     <div>
-                        <div style="font-size:11px; color:#999;">最近賣回日</div>
-                        <div style="font-size:14px; font-weight:bold; color:#1976d2;">${formatDate(getValue(sheet08Row?.['最近提前償還日'], putbackData?.['賣回日期1']))}</div>
+                        <div style="font-size:11px; color:#999;">賣回日期1</div>
+                        <div style="font-size:14px; font-weight:bold; color:#1976d2;">${formatDate(getValue(putbackData?.['賣回日期1']))}</div>
                     </div>
                     <div>
-                        <div style="font-size:11px; color:#999;">最近賣回價格</div>
-                        <div style="font-size:14px; font-weight:bold; color:#2e7d32;">${getValue(sheet08Row?.['最近提前償還價格'], '-')} 元</div>
-                    </div>
-                    <div>
-                        <div style="font-size:11px; color:#999;">最近賣回殖利率</div>
-                        <div style="font-size:14px; font-weight:bold; color:#7b1fa2;">${getValue(sheet08Row?.['最近提前償還殖利率'], '-')}%</div>
+                        <div style="font-size:11px; color:#999;">賣回日期2</div>
+                        <div style="font-size:14px; font-weight:bold; color:#1976d2;">${formatDate(getValue(putbackData?.['賣回日期2']))}</div>
                     </div>
                 </div>
-                
                 ${putbackData?.['賣回條件'] ? `
                 <div style="margin-top:10px; padding:8px; background:#fff8e1; border-radius:4px; font-size:12px; color:#f57c00;">
                     <strong>賣回公式：</strong>${putbackData['賣回條件']}
                 </div>
                 ` : ''}
-                
-                ${putbackDetails}
             </div>
             
-            <!-- 發行人強制贖回權（Call Option）-->
-            <div style="background:white; padding:15px; border-radius:8px; margin-bottom:15px; border-left:4px solid #d32f2f;">
-                <div style="font-size:13px; color:#666; margin-bottom:8px;">🏢 發行人強制贖回權 (Call Option)</div>
-                <div style="font-size:11px; color:#999; margin-bottom:10px;">發行公司有權在股價達到一定條件時強制贖回CB</div>
-                
+            <!-- 發行人提前償還（從08工作表）-->
+            ${sheet08Row ? `
+            <div style="background:white; padding:15px; border-radius:8px; margin-bottom:15px; border-left:4px solid #9c27b0;">
+                <div style="font-size:13px; color:#666; margin-bottom:8px;">🏢 發行人提前償還權</div>
                 <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px;">
                     <div>
-                        <div style="font-size:11px; color:#999;">強制贖回條件</div>
-                        <div style="font-size:13px; color:#333;">${getValue(sheet08Row?.['強制贖回條款'], putbackData?.['發行人提前贖回'], '當股價連續30個營業日收盤價達轉換價130%以上')}</div>
+                        <div style="font-size:11px; color:#999;">提前償還條件</div>
+                        <div style="font-size:13px; color:#333;">${getValue(sheet08Row['提前償還日'])}</div>
                     </div>
                     <div>
-                        <div style="font-size:11px; color:#999;">強制贖回日</div>
-                        <div style="font-size:14px; font-weight:bold; color:#d32f2f;">${formatDate(getValue(kanbanRow?.['強制贖回日'], kanbanRow?.['提前終止日'], sheet08Row?.['強制贖回日'], '-'))}</div>
+                        <div style="font-size:11px; color:#999;">最近提前償還日</div>
+                        <div style="font-size:14px; font-weight:bold; color:#9c27b0;">${formatDate(getValue(sheet08Row['最近提前償還日']))}</div>
+                    </div>
+                    <div>
+                        <div style="font-size:11px; color:#999;">最近提前償還價格</div>
+                        <div style="font-size:14px; font-weight:bold; color:#e65100;">${getValue(sheet08Row['最近提前償還價格'])} 元</div>
                     </div>
                 </div>
+                
+                <!-- 各期提前償還明細 -->
+                ${sheet08Row['提前償還日1'] ? `
+                <div style="margin-top:12px; padding-top:12px; border-top:1px dashed #ddd;">
+                    <div style="font-size:11px; color:#999; margin-bottom:8px;">各期提前償還價格</div>
+                    <div style="display:flex; flex-wrap:wrap; gap:8px;">
+                        ${sheet08Row['提前償還日1'] ? `<span style="background:#f3e5f5; padding:4px 8px; border-radius:4px; font-size:12px;">第1期 ${formatDate(sheet08Row['提前償還日1'])} @ ${sheet08Row['提前償還價格1']}元</span>` : ''}
+                        ${sheet08Row['提前償還日2'] ? `<span style="background:#f3e5f5; padding:4px 8px; border-radius:4px; font-size:12px;">第2期 ${formatDate(sheet08Row['提前償還日2'])} @ ${sheet08Row['提前償還價格2']}元</span>` : ''}
+                        ${sheet08Row['提前償還日3'] ? `<span style="background:#f3e5f5; padding:4px 8px; border-radius:4px; font-size:12px;">第3期 ${formatDate(sheet08Row['提前償還日3'])} @ ${sheet08Row['提前償還價格3']}元</span>` : ''}
+                        ${sheet08Row['提前償還日4'] ? `<span style="background:#f3e5f5; padding:4px 8px; border-radius:4px; font-size:12px;">第4期 ${formatDate(sheet08Row['提前償還日4'])} @ ${sheet08Row['提前償還價格4']}元</span>` : ''}
+                    </div>
+                </div>
+                ` : ''}
             </div>
+            ` : ''}
             
             <!-- 到期還本與擔保 -->
             <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px;">
@@ -16767,8 +16567,8 @@ async function loadAllKanbanData() {
         
         // 轉換格式：從壓縮陣列格式轉為物件格式
         // 壓縮格式: [日期, 股價*10, CB價*10, 轉換價*10, 餘額千萬]
-        // v3.97-zs-j 效能優化：簡化計算，移除不必要的Set操作
         const allData = {};
+        const allDates = new Set();
         let totalRecords = 0;
         
         for (const cbCode in window.KANBAN_DATA) {
@@ -16777,21 +16577,31 @@ async function loadAllKanbanData() {
             
             allData[cbCode] = rawData.map(arr => {
                 const dateNum = arr[0];
+                const dateStr = String(dateNum);
+                const year = dateStr.substring(0, 4);
+                const month = dateStr.substring(4, 6);
+                const day = dateStr.substring(6, 8);
+                const dateFormatted = `${year}/${month}/${day}`;
+                
+                allDates.add(dateFormatted);
+                
                 const stockPrice = arr[1] / 10;
                 const cbPrice = arr[2] / 10;
                 const convPrice = arr[3] / 10;
-                const balance = arr[4] / 10;
+                const balance = arr[4] / 10; // 億元
+                
                 const convValue = convPrice > 0 ? (stockPrice / convPrice * 100) : 0;
+                const premium = convValue > 0 && cbPrice > 0 ? ((cbPrice - convValue) / convValue * 100) : 0;
                 
                 return {
-                    date: `${String(dateNum).slice(0,4)}/${String(dateNum).slice(4,6)}/${String(dateNum).slice(6,8)}`,
-                    dateNum,
+                    date: dateFormatted,
+                    dateNum: dateNum,
                     stockPrice,
                     cbPrice,
                     convPrice,
-                    balance,
                     convValue,
-                    premium: convValue > 0 && cbPrice > 0 ? ((cbPrice - convValue) / convValue * 100) : 0
+                    premium,
+                    balance
                 };
             });
             
@@ -16799,6 +16609,7 @@ async function loadAllKanbanData() {
         }
         
         window.kanbanData.data = allData;
+        window.kanbanData.dates = [...allDates].sort();
         window.kanbanData.loaded = true;
         
         const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
@@ -16924,7 +16735,7 @@ function renderStockPriceChart(cbCode, data, container, period) {
         <div style="background:#fff; padding:15px; border-radius:8px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                 <div style="font-weight:bold; color:#1976d2; font-size:16px;">
-                    📈 ${cbCode} 股價走勢分析 <span style="font-size:12px; color:#666; font-weight:normal;">(${periodLabel})</span>
+                    📈 ${cbCode} 股價與轉換價走勢 <span style="font-size:12px; color:#666; font-weight:normal;">(${periodLabel})</span>
                 </div>
                 <div style="font-size:12px; padding:4px 10px; border-radius:12px; background:${statusBg}; color:${statusColor};">
                     ${statusTag}
@@ -16934,15 +16745,15 @@ function renderStockPriceChart(cbCode, data, container, period) {
             <!-- 數據摘要 -->
             <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-bottom:15px;">
                 <div style="background:#e3f2fd; padding:12px; border-radius:6px; text-align:center;">
-                    <div style="font-size:11px; color:#666;">現股股價</div>
+                    <div style="font-size:11px; color:#666;">最新股價</div>
                     <div style="font-size:18px; font-weight:bold; color:#1976d2;">${stockPrice.toFixed(2)}</div>
                 </div>
                 <div style="background:#fff3e0; padding:12px; border-radius:6px; text-align:center;">
-                    <div style="font-size:11px; color:#666;">轉換價格</div>
+                    <div style="font-size:11px; color:#666;">轉換價</div>
                     <div style="font-size:18px; font-weight:bold; color:#e65100;">${convPrice.toFixed(2)}</div>
                 </div>
                 <div style="background:${isInMoney ? '#e8f5e9' : '#ffebee'}; padding:12px; border-radius:6px; text-align:center;">
-                    <div style="font-size:11px; color:#666;">價內價外</div>
+                    <div style="font-size:11px; color:#666;">價差</div>
                     <div style="font-size:18px; font-weight:bold; color:${isInMoney ? '#2e7d32' : '#d32f2f'};">${priceDiff >= 0 ? '+' : ''}${priceDiff.toFixed(2)}</div>
                 </div>
             </div>
@@ -16973,28 +16784,16 @@ function renderStockPriceChart(cbCode, data, container, period) {
         priceChartInstance = null;
     }
     
-    // v3.97-zs-j 效能優化：減少資料點（超過60點時採樣）
-    let chartLabels = labels;
-    let chartStockPrices = stockPrices;
-    let chartConvPrices = convPrices;
-    
-    if (labels.length > 60) {
-        const step = Math.ceil(labels.length / 60);
-        chartLabels = labels.filter((_, i) => i % step === 0 || i === labels.length - 1);
-        chartStockPrices = stockPrices.filter((_, i) => i % step === 0 || i === stockPrices.length - 1);
-        chartConvPrices = convPrices.filter((_, i) => i % step === 0 || i === convPrices.length - 1);
-    }
-    
     // 繪製Chart.js圖表（只有股價和轉換價兩條線）
     const ctx = document.getElementById('stockPriceChart').getContext('2d');
     priceChartInstance = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: chartLabels,
+            labels: labels,
             datasets: [
                 {
                     label: '股價',
-                    data: chartStockPrices,
+                    data: stockPrices,
                     borderColor: '#1976d2',
                     backgroundColor: 'rgba(25, 118, 210, 0.1)',
                     fill: true,
@@ -17004,7 +16803,7 @@ function renderStockPriceChart(cbCode, data, container, period) {
                 },
                 {
                     label: '轉換價',
-                    data: chartConvPrices,
+                    data: convPrices,
                     borderColor: '#e65100',
                     borderDash: [5, 5],
                     fill: false,
@@ -17017,7 +16816,6 @@ function renderStockPriceChart(cbCode, data, container, period) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            animation: false, // 禁用動畫提升效能
             interaction: { mode: 'index', intersect: false },
             plugins: {
                 legend: { position: 'top', labels: { font: { size: 11 }, boxWidth: 12 } },
@@ -17169,27 +16967,27 @@ function renderCBPriceChart(cbCode, data, container, period) {
             </div>
             
             <!-- 數據摘要 -->
-            <div class="trend-grid-4" style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-bottom:15px;">
+            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-bottom:15px;">
                 <div style="background:#e8f5e9; padding:10px; border-radius:6px; text-align:center;">
-                    <div style="font-size:10px; color:#666;">轉換價值</div>
+                    <div style="font-size:10px; color:#666;">理論價值</div>
                     <div style="font-size:16px; font-weight:bold; color:#2e7d32;">${hasConvValue ? convValue.toFixed(2) : '-'}</div>
                 </div>
                 <div style="background:#f3e5f5; padding:10px; border-radius:6px; text-align:center;">
-                    <div style="font-size:10px; color:#666;">CB價格</div>
+                    <div style="font-size:10px; color:#666;">CB收盤價</div>
                     <div style="font-size:16px; font-weight:bold; color:#7b1fa2;">${cbPrice.toFixed(2)}</div>
                 </div>
                 <div style="background:#fff3e0; padding:10px; border-radius:6px; text-align:center;">
-                    <div style="font-size:10px; color:#666;">溢折價率</div>
+                    <div style="font-size:10px; color:#666;">溢價率</div>
                     <div style="font-size:16px; font-weight:bold; color:#e65100;">${premium.toFixed(2)}%</div>
                 </div>
                 <div style="background:#e3f2fd; padding:10px; border-radius:6px; text-align:center;">
-                    <div style="font-size:10px; color:#666;">理論價格</div>
+                    <div style="font-size:10px; color:#666;">理論價值</div>
                     <div style="font-size:16px; font-weight:bold; color:#1976d2;">${theoryValue > 0 ? theoryValue.toFixed(2) : '-'}</div>
                 </div>
             </div>
             
             <!-- 圖表區域 -->
-            <div style="height:400px; position:relative;">
+            <div style="height:360px; position:relative;">
                 <canvas id="cbPriceChart"></canvas>
             </div>
             
@@ -17219,29 +17017,14 @@ function renderCBPriceChart(cbCode, data, container, period) {
     }
     
     const ctx = document.getElementById('cbPriceChart').getContext('2d');
-    
-    // v3.97-zs-j 效能優化：減少資料點
-    let chartLabels = labels;
-    let chartCBPrices = cbPrices;
-    let chartConvValues = convValues;
-    let chartPremiums = premiums;
-    
-    if (labels.length > 60) {
-        const step = Math.ceil(labels.length / 60);
-        chartLabels = labels.filter((_, i) => i % step === 0 || i === labels.length - 1);
-        chartCBPrices = cbPrices.filter((_, i) => i % step === 0 || i === cbPrices.length - 1);
-        chartConvValues = convValues.filter((_, i) => i % step === 0 || i === convValues.length - 1);
-        chartPremiums = premiums.filter((_, i) => i % step === 0 || i === premiums.length - 1);
-    }
-    
     priceChartInstance = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: chartLabels,
+            labels: labels,
             datasets: [
                 {
                     label: 'CB價格',
-                    data: chartCBPrices,
+                    data: cbPrices,
                     borderColor: '#7b1fa2',
                     backgroundColor: 'rgba(123, 31, 162, 0.1)',
                     fill: false,
@@ -17252,7 +17035,7 @@ function renderCBPriceChart(cbCode, data, container, period) {
                 },
                 {
                     label: '理論價格',
-                    data: chartConvValues,
+                    data: convValues,
                     borderColor: '#2e7d32',
                     borderDash: [5, 5],
                     fill: false,
@@ -17263,10 +17046,10 @@ function renderCBPriceChart(cbCode, data, container, period) {
                 },
                 {
                     label: '折溢價%',
-                    data: chartPremiums,
+                    data: premiums,
                     type: 'bar',
-                    backgroundColor: chartPremiums.map(p => p >= 0 ? 'rgba(255, 152, 0, 0.4)' : 'rgba(76, 175, 80, 0.4)'),
-                    borderColor: chartPremiums.map(p => p >= 0 ? '#ff9800' : '#4caf50'),
+                    backgroundColor: premiums.map(p => p >= 0 ? 'rgba(255, 152, 0, 0.4)' : 'rgba(76, 175, 80, 0.4)'),
+                    borderColor: premiums.map(p => p >= 0 ? '#ff9800' : '#4caf50'),
                     borderWidth: 1,
                     yAxisID: 'y1'
                 }
@@ -17275,7 +17058,6 @@ function renderCBPriceChart(cbCode, data, container, period) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            animation: false, // 禁用動畫提升效能
             interaction: { mode: 'index', intersect: false },
             plugins: {
                 legend: { position: 'top', labels: { font: { size: 11 }, boxWidth: 12 } }
@@ -17448,9 +17230,9 @@ function renderBalanceChart(cbCode, data, container, period) {
             </div>
             
             <!-- 數據摘要 -->
-            <div class="trend-grid-4" style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-bottom:15px;">
+            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-bottom:15px;">
                 <div style="background:#e3f2fd; padding:10px; border-radius:6px; text-align:center;">
-                    <div style="font-size:10px; color:#666;">CB餘額</div>
+                    <div style="font-size:10px; color:#666;">剩餘CB張數</div>
                     <div style="font-size:16px; font-weight:bold; color:#1976d2;">${latestCBShares.toLocaleString()}</div>
                     <div style="font-size:9px; color:#999;">張</div>
                 </div>
@@ -17460,7 +17242,7 @@ function renderBalanceChart(cbCode, data, container, period) {
                     <div style="font-size:9px; color:#999;">張</div>
                 </div>
                 <div style="background:#fff3e0; padding:10px; border-radius:6px; text-align:center;">
-                    <div style="font-size:10px; color:#666;">轉換比率</div>
+                    <div style="font-size:10px; color:#666;">已轉換</div>
                     <div style="font-size:16px; font-weight:bold; color:#e65100;">${convertedPct.toFixed(1)}%</div>
                     <div style="font-size:9px; color:#999;">${convertedStockShares.toLocaleString(undefined, {maximumFractionDigits: 0})}張</div>
                 </div>
@@ -17472,7 +17254,7 @@ function renderBalanceChart(cbCode, data, container, period) {
             </div>
             
             <!-- 圖表區域 -->
-            <div style="height:400px; position:relative;">
+            <div style="height:320px; position:relative;">
                 <canvas id="balanceChart"></canvas>
             </div>
             
@@ -17497,27 +17279,15 @@ function renderBalanceChart(cbCode, data, container, period) {
         priceChartInstance = null;
     }
     
-    // v3.97-zs-j 效能優化：減少資料點
-    let chartLabels = labels;
-    let chartCBShares = cbShares;
-    let chartStockShares = stockShares;
-    
-    if (labels.length > 60) {
-        const step = Math.ceil(labels.length / 60);
-        chartLabels = labels.filter((_, i) => i % step === 0 || i === labels.length - 1);
-        chartCBShares = cbShares.filter((_, i) => i % step === 0 || i === cbShares.length - 1);
-        chartStockShares = stockShares.filter((_, i) => i % step === 0 || i === stockShares.length - 1);
-    }
-    
     const ctx = document.getElementById('balanceChart').getContext('2d');
     priceChartInstance = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: chartLabels,
+            labels: labels,
             datasets: [
                 {
                     label: 'CB張數',
-                    data: chartCBShares,
+                    data: cbShares,
                     borderColor: '#1976d2',
                     backgroundColor: 'rgba(25, 118, 210, 0.1)',
                     fill: true,
@@ -17528,7 +17298,7 @@ function renderBalanceChart(cbCode, data, container, period) {
                 },
                 {
                     label: '約當股票張數',
-                    data: chartStockShares,
+                    data: stockShares,
                     borderColor: '#2e7d32',
                     borderDash: [5, 5],
                     fill: false,
@@ -17542,7 +17312,6 @@ function renderBalanceChart(cbCode, data, container, period) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            animation: false, // 禁用動畫提升效能
             interaction: { mode: 'index', intersect: false },
             plugins: {
                 legend: { position: 'top', labels: { font: { size: 11 }, boxWidth: 12 } },
@@ -17656,7 +17425,7 @@ function renderCBASChart(cbCode, data, container, period) {
             <!-- 拆解概念說明 -->
             <div style="background:linear-gradient(135deg, #1565c0 0%, #0d47a1 100%); color:white; padding:15px; border-radius:8px; margin-bottom:15px;">
                 <div style="font-weight:bold; margin-bottom:10px; font-size:14px;">📋 可轉債 = 公司債 + 股票選擇權</div>
-                <div class="cbas-formula-grid" style="display:grid; grid-template-columns:1fr auto 1fr auto 1fr; gap:8px; align-items:center; text-align:center;">
+                <div style="display:grid; grid-template-columns:1fr auto 1fr auto 1fr; gap:8px; align-items:center; text-align:center;">
                     <div style="background:rgba(255,255,255,0.2); padding:10px; border-radius:6px;">
                         <div style="font-size:11px; opacity:0.9;">CB市價</div>
                         <div style="font-size:18px; font-weight:bold;">${hasData ? finalCBPrice.toFixed(2) : '-'}</div>
@@ -17678,24 +17447,24 @@ function renderCBASChart(cbCode, data, container, period) {
             </div>
             
             <!-- 關鍵數據 -->
-            <div class="trend-grid-4" style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-bottom:15px;">
+            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-bottom:15px;">
                 <div style="background:#e8f5e9; padding:10px; border-radius:6px; text-align:center;">
                     <div style="font-size:10px; color:#666;">現股股價</div>
                     <div style="font-size:16px; font-weight:bold; color:#2e7d32;">${hasStockPrice ? finalStockPrice.toFixed(2) : '-'}</div>
                     <div style="font-size:9px; color:#999;">${hasStockPrice ? '元' : '無資料'}</div>
                 </div>
                 <div style="background:#fff3e0; padding:10px; border-radius:6px; text-align:center;">
-                    <div style="font-size:10px; color:#666;">轉換價格</div>
+                    <div style="font-size:10px; color:#666;">轉換價</div>
                     <div style="font-size:16px; font-weight:bold; color:#e65100;">${hasData ? finalConvPrice.toFixed(2) : '-'}</div>
                     <div style="font-size:9px; color:#999;">${hasData ? '元' : '無資料'}</div>
                 </div>
                 <div style="background:#e3f2fd; padding:10px; border-radius:6px; text-align:center;">
                     <div style="font-size:10px; color:#666;">換股成本</div>
                     <div style="font-size:16px; font-weight:bold; color:#1976d2;">${hasData ? holdingCost.toFixed(2) : '-'}</div>
-                    <div style="font-size:9px; color:#999;">CB÷轉換比</div>
+                    <div style="font-size:9px; color:#999;">CB金額÷轉換比例</div>
                 </div>
                 <div style="background:#ffebee; padding:10px; border-radius:6px; text-align:center;">
-                    <div style="font-size:10px; color:#666;">最大損失</div>
+                    <div style="font-size:10px; color:#666;">最大損失/張</div>
                     <div style="font-size:16px; font-weight:bold; color:#d32f2f;">${hasData ? optionCost.toLocaleString() : '-'}</div>
                     <div style="font-size:9px; color:#999;">溢價×1000</div>
                 </div>

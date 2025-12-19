@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97z-n (四區塊架構+基本資料查詢)</title>
+<title>AI智能可轉債競拍系統 v3.97z-q (四區塊架構+基本資料查詢)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
@@ -2447,7 +2447,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 <div id="welcomeMsg" class="welcome-message">
     <h2>歡迎使用AI智能競拍評估系統</h2>
     <p style="margin-top:8px; color:#666; font-size: 13px; line-height:1.6;">
-        v3.97z-n 四區塊架構+走勢圖版<br>
+        v3.97z-q 四區塊架構+走勢圖版<br>
         • 分析法權重：產業30%、信評22%、理論價15%、券商13%、規模10%、股本5%、年期5%<br>
         • 自適應學習：以溢價率計算，建議價=理論價×(1+溢價率)
     </p>
@@ -3326,7 +3326,7 @@ async function loadStatistics() {
         window.auctionDataCache = sheetAuction;
         console.log('📊 競拍數據已載入:', sheetAuction.length, '筆（供KNN使用）');
 
-        // v3.97z-n 新增：保存01和08工作表供基本資料查詢模組使用
+        // v3.97z-q 新增：保存01和08工作表供基本資料查詢模組使用
         window.sheet01Data = sheetAllCB || [];
         window.sheet08Data = sheetListed || [];
         console.log('📋 基本資料已載入: 01工作表', window.sheet01Data.length, '筆, 08工作表(掛牌中)', window.sheet08Data.length, '筆');
@@ -6008,14 +6008,14 @@ function initializeUI() {
     generateYearlyRanking();  // v3.55 新增
     generateRealPerformance(); // v3.56 新增
     generateProfitLossAnalysis(); // v3.59 新增
-    // generateDimensionAnalysis(); // v3.97z-n 移除：維度統計已整合至其他區塊
+    // generateDimensionAnalysis(); // v3.97z-q 移除：維度統計已整合至其他區塊
     generateMarketTrendAnalysis(); // v3.58 新增
     initQuickSelect(); // v3.73 修正：移到這裡確保資料已載入
     initSmartTips(); // v3.73 新增：智慧提示系統
     updateAtmospherePanel(); // v3.70 更新市場氛圍面板
     calculateMarketMomentum(); // v3.74 自動計算市場動能
     updateInitialDisplayFromData(); // v3.90 新增：更新初始顯示（從動態數據）
-    initBasicInfoModule(); // v3.97z-n 新增：基本資料查詢模組
+    initBasicInfoModule(); // v3.97z-q 新增：基本資料查詢模組
 }
 
 /**
@@ -8647,7 +8647,7 @@ function showDimensionTab(dimension, event) {
         event.stopPropagation();
     }
     
-    // v3.97z-n: 維度統計已移除，提前返回
+    // v3.97z-q: 維度統計已移除，提前返回
     const contentDiv = document.getElementById('dimensionContent');
     if (!contentDiv) return;
     
@@ -17601,7 +17601,7 @@ function updateAtmospherePanel() {
     `;
 }
 
-// ==================== v3.97z-n 新增：基本資料查詢模組（含篩選功能） ====================
+// ==================== v3.97z-q 新增：基本資料查詢模組（含篩選功能） ====================
 
 // 全域變數 - CB完整資料庫
 window.cbDatabase = {
@@ -17825,6 +17825,15 @@ function populateBasicInfoCBList() {
         buildCBDatabase();
     }
     
+    // v3.97z-q 新增：背景載入yuanta歷史資料（非阻塞）
+    if (!window.yuantaHistoryData.loaded && !window.yuantaHistoryData.loading) {
+        loadYuantaHistoryData().then(() => {
+            console.log('📂 yuanta歷史資料已背景載入完成');
+        }).catch(err => {
+            console.warn('yuanta歷史資料載入失敗:', err);
+        });
+    }
+    
     // 初始化篩選清單（全部）
     filteredCBList = [...db.allCB];
     
@@ -17938,20 +17947,63 @@ function showBasicInfoTab(tabName, event) {
 
 /**
  * 渲染基本資料總覽
+ * v3.97z-q 修改：調整查詢優先順序
+ * - 掛牌中CB：08工作表(最新) → 競拍資料 → yuanta歷史 → 01工作表
+ * - 已下市CB：競拍資料 → yuanta歷史 → 01工作表
  */
 function renderBasicInfoOverview(cbCode, container) {
-    // 從多個資料來源尋找資料
     let data = null;
     let dataSource = '';
     const searchCode = String(cbCode).trim();
     
-    // 1. 先從auctionDataCache尋找（競拍完整資料）
-    if (window.auctionDataCache && window.auctionDataCache.length > 0) {
-        data = window.auctionDataCache.find(r => String(r['CB代號']).trim() === searchCode);
-        if (data) dataSource = 'auctionDataCache';
+    // 先判斷是否掛牌中
+    const isListed = window.cbDatabase?.listedCodes?.has(searchCode);
+    
+    // ========== 掛牌中CB：優先使用08工作表（最新資料）==========
+    if (isListed) {
+        // 1. 優先從 08工作表（掛牌中）尋找
+        if (!data && window.sheet08Data && window.sheet08Data.length > 0) {
+            const sheet08Row = window.sheet08Data.find(r => String(r['代號']).trim() === searchCode);
+            if (sheet08Row) {
+                data = {
+                    'CB代號': sheet08Row['代號'],
+                    '名稱': sheet08Row['名稱'],
+                    '股票代號': sheet08Row['轉換標的代碼'],
+                    '轉換標的名稱': sheet08Row['轉換標的名稱'],
+                    '轉換價': sheet08Row['轉換價格(元)'],
+                    '發行規模': sheet08Row['實際發行總額(百萬)'],
+                    '年期': sheet08Row['還本年限'],
+                    '發行券商': sheet08Row['承銷機構'],
+                    '底標價': sheet08Row['發行價格(元)'] || 100,
+                    '到期還本價格': sheet08Row['到期價格'],
+                    '掛牌日期': sheet08Row['掛牌日期'],
+                    '到期日期': sheet08Row['到期日'],
+                    '擔保': sheet08Row['債券擔保情形'],
+                    '最新餘額': sheet08Row['最新餘額(百萬)'],
+                    '發行時轉換價': sheet08Row['發行時轉換價格(元)'],
+                    '轉換日期起': sheet08Row['轉換日期起'],
+                    '轉換日期迄': sheet08Row['轉換日期迄'],
+                    '提前償還日1': sheet08Row['提前償還日1'],
+                    '提前償還價格1': sheet08Row['提前償還價格1'],
+                    '最近提前償還日': sheet08Row['最近提前償還日'],
+                    '最近提前償還價格': sheet08Row['最近提前償還價格']
+                };
+                dataSource = 'sheet08Data';
+            }
+        }
     }
     
-    // 2. 若找不到，嘗試從 auctionRawData 尋找
+    // ========== 競拍資料（不論掛牌中或已下市）==========
+    // 2. 從auctionDataCache尋找（競拍完整資料）
+    if (!data && window.auctionDataCache && window.auctionDataCache.length > 0) {
+        const auctionRow = window.auctionDataCache.find(r => String(r['CB代號']).trim() === searchCode);
+        if (auctionRow) {
+            data = auctionRow;
+            dataSource = 'auctionDataCache';
+        }
+    }
+    
+    // 3. 從 auctionRawData 尋找
     if (!data && window.auctionRawData && window.auctionRawData.length > 0) {
         const rawData = window.auctionRawData.find(r => String(r.cbCode).trim() === searchCode);
         if (rawData) {
@@ -17985,7 +18037,35 @@ function renderBasicInfoOverview(cbCode, container) {
         }
     }
     
-    // 3. 若仍找不到，從 sheet01Data（01工作表）尋找詢圈資料
+    // ========== 已下市CB：優先使用yuanta歷史資料 ==========
+    // 4. 從 yuanta歷史資料 尋找（已下市CB的主要資料來源）
+    if (!data && window.yuantaHistoryData?.loaded) {
+        const yuantaRow = window.yuantaHistoryData.data[searchCode];
+        if (yuantaRow) {
+            data = {
+                'CB代號': yuantaRow['代號'],
+                '名稱': yuantaRow['名稱'],
+                '股票代號': yuantaRow['轉換標的代碼'],
+                '轉換標的名稱': yuantaRow['轉換標的名稱'],
+                '轉換價': yuantaRow['轉換價格(元)'],
+                '發行規模': yuantaRow['實際發行總額(百萬)'],
+                '年期': yuantaRow['還本年限'],
+                '發行券商': yuantaRow['承銷機構'],
+                '底標價': yuantaRow['發行價格(元)'] || 100,
+                '到期還本價格': yuantaRow['到期價格'],
+                '掛牌日期': yuantaRow['掛牌日期'],
+                '到期日期': yuantaRow['到期日'],
+                '擔保': yuantaRow['債券擔保情形'],
+                '最新餘額': yuantaRow['最新餘額(百萬)'],
+                '發行時轉換價': yuantaRow['發行時轉換價格(元)'],
+                '信用評等': yuantaRow['信用評等'],
+                '_sheetDate': yuantaRow['_sheetDate']
+            };
+            dataSource = 'yuantaHistory';
+        }
+    }
+    
+    // 5. 從 sheet01Data（01工作表）尋找（手工收集資料）
     if (!data && window.sheet01Data && window.sheet01Data.length > 0) {
         const sheet01Row = window.sheet01Data.find(r => String(r['CB代號']).trim() === searchCode);
         if (sheet01Row) {
@@ -18016,7 +18096,7 @@ function renderBasicInfoOverview(cbCode, container) {
         }
     }
     
-    // 4. 從 cbDatabase.basic 補充資料
+    // 6. 從 cbDatabase.basic 補充資料
     if (!data && window.cbDatabase && window.cbDatabase.basic[searchCode]) {
         const basicRow = window.cbDatabase.basic[searchCode];
         data = {
@@ -18037,7 +18117,10 @@ function renderBasicInfoOverview(cbCode, container) {
         container.innerHTML = `<div style="color:#e65100; padding:20px; text-align:center;">
             <div style="font-size:32px; margin-bottom:10px;">⚠️</div>
             <div>找不到 <strong>${cbCode}</strong> 的基本資料</div>
-            <div style="font-size:12px; color:#999; margin-top:8px;">請確認CB代號是否正確，或嘗試調整篩選條件</div>
+            <div style="font-size:12px; color:#999; margin-top:8px;">
+                請確認CB代號是否正確<br>
+                若為較早期已下市CB，可能需要載入yuanta歷史資料
+            </div>
         </div>`;
         document.getElementById('basicInfoStatus').innerHTML = `<span style="color:#e65100;">⚠️ ${cbCode} 無資料</span>`;
         return;
@@ -18045,11 +18128,21 @@ function renderBasicInfoOverview(cbCode, container) {
     
     // 判斷是競拍還是詢圈
     const isAuction = window.cbDatabase?.auctionCodes?.has(searchCode) || dataSource === 'auctionDataCache' || dataSource === 'auctionRawData';
-    const isListed = window.cbDatabase?.listedCodes?.has(searchCode);
     const methodLabel = isAuction ? '🎯 競拍發行' : '📋 詢圈發行';
     const statusLabel = isListed ? '🟢 掛牌中' : '⚫ 已下市';
     
-    document.getElementById('basicInfoStatus').innerHTML = `✅ 已載入 ${cbCode} │ ${methodLabel} │ ${statusLabel}`;
+    // 資料來源標籤
+    const sourceLabels = {
+        'sheet08Data': '📊 08工作表(掛牌中)',
+        'auctionDataCache': '🎯 競拍資料庫',
+        'auctionRawData': '🎯 競拍原始資料',
+        'yuantaHistory': '📂 元大歷史資料',
+        'sheet01Data': '📋 01工作表(手工)',
+        'cbDatabase.basic': '💾 基本資料庫'
+    };
+    const sourceLabel = sourceLabels[dataSource] || dataSource;
+    
+    document.getElementById('basicInfoStatus').innerHTML = `✅ 已載入 ${cbCode} │ ${methodLabel} │ ${statusLabel} │ <span style="font-size:11px; color:#666;">${sourceLabel}</span>`;
     
     // 建立資訊卡片
     const html = `
@@ -18455,7 +18548,7 @@ function renderBasicInfoBalance(cbCode, container) {
     container.innerHTML = html;
 }
 
-// ==================== v3.97z-n 新增：價格走勢分析模組 ====================
+// ==================== v3.97z-q 新增：價格走勢分析模組 ====================
 
 /**
  * 載入價格走勢資料
@@ -18514,7 +18607,7 @@ function showPriceTrendTab(tabName, event) {
     loadKanbanAndRender(cbCode, tabName, period, content);
 }
 
-// ==================== v3.97z-n 新增：CB_kanban資料載入與圖表繪製 ====================
+// ==================== v3.97z-q 新增：CB_kanban資料載入與圖表繪製 ====================
 
 // 全域變數 - kanban時間序列資料
 window.kanbanData = {
@@ -18526,6 +18619,127 @@ window.kanbanData = {
 
 // Chart.js 實例存儲（用於銷毀舊圖表）
 let priceChartInstance = null;
+
+// v3.97z-q 新增：元大歷史資料（yuanta_data1.xlsx + yuanta_data2.xlsx）
+window.yuantaHistoryData = {
+    loaded: false,
+    loading: false,
+    data: {}  // { cbCode: { 最新一筆的完整資料 } }
+};
+
+/**
+ * v3.97z-q 載入元大歷史基本資料
+ * 從 yuanta_data1.xlsx 和 yuanta_data2.xlsx 載入歷年每週基本資料
+ */
+async function loadYuantaHistoryData() {
+    if (window.yuantaHistoryData.loaded || window.yuantaHistoryData.loading) return;
+    window.yuantaHistoryData.loading = true;
+    
+    console.log('📂 開始載入元大歷史資料...');
+    const startTime = Date.now();
+    
+    // 欄位名稱標準化（去掉日期前綴 YYYYMM）
+    function normalizeFieldName(field) {
+        if (!field) return '';
+        return String(field).replace(/^\d{6}/, '').trim();
+    }
+    
+    // 標準欄位對照表（08工作表欄位名稱）
+    const standardFields = [
+        '代號', '名稱', '英文名稱', '票面利率', '轉換價格(元)', '轉換價格生效日期',
+        '轉換標的代碼', '轉換標的名稱', '轉換日期起', '轉換日期迄', '發行日期', '掛牌日期',
+        '到期日', '到期價格', '到期殖利率', '申請發行總額(百萬)', '實際發行總額(百萬)',
+        '發行價格(元)', '最新餘額(百萬)', '還本年限', '發行時轉換價格(元)', '承銷機構',
+        '過戶機構', '提前償還日', '提前償還日1', '提前償還價格1', '提前償還殖利率1',
+        '提前償還日2', '提前償還價格2', '提前償還殖利率2', '提前償還日3', '提前償還價格3',
+        '提前償還殖利率3', '提前償還日4', '提前償還價格4', '提前償還殖利率4',
+        '最近提前償還日', '最近提前償還價格', '最近提前償還殖利率', '債券擔保情形',
+        '重設平均天數3', '重設轉換價格公式', '停止受理轉換登記日期起', '停止受理轉換登記日期訖', '強制贖回日'
+    ];
+    
+    // 額外欄位（yuanta_data1特有）
+    const extraFields = ['本月賣回張數', '本月買回張數', '本月轉換張數', '信用評等', 
+        '重設轉換價格閉鎖期', '靜態重設基準日1', '靜態重設基準日2', '動態重設基準日',
+        '重設溢價率(%)', '重設上限(%)', '重設平均天數1', '重設平均天數2'];
+    
+    const allData = {};
+    
+    // 載入檔案清單（先載入舊的，再載入新的，新的會覆蓋舊的）
+    const files = [
+        { name: 'data/kanban/yuanta_data1.xlsx', datePrefix: 6 },  // 舊格式
+        { name: 'data/kanban/yuanta_data2.xlsx', datePrefix: 6 }   // 新格式
+    ];
+    
+    for (const fileInfo of files) {
+        try {
+            const response = await fetch(fileInfo.name);
+            if (!response.ok) {
+                console.warn(`找不到 ${fileInfo.name}，跳過`);
+                continue;
+            }
+            
+            const workbook = XLSX.read(await response.arrayBuffer(), { type: 'array' });
+            console.log(`載入 ${fileInfo.name}: ${workbook.SheetNames.length} 個工作表`);
+            
+            // 過濾出有效的日期工作表（民國年格式 YYYMMDD）
+            const validSheets = workbook.SheetNames.filter(name => /^\d{7}$/.test(name));
+            
+            // 按日期排序（舊到新）
+            validSheets.sort((a, b) => parseInt(a) - parseInt(b));
+            
+            for (const sheetName of validSheets) {
+                const sheet = workbook.Sheets[sheetName];
+                const rawData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+                
+                if (rawData.length < 2) continue;
+                
+                const headers = rawData[0];
+                // 建立欄位名稱到索引的映射（標準化後）
+                const fieldMap = {};
+                headers.forEach((h, idx) => {
+                    const normalized = normalizeFieldName(h);
+                    if (normalized) fieldMap[normalized] = idx;
+                });
+                
+                // 處理每一列資料
+                for (let i = 1; i < rawData.length; i++) {
+                    const row = rawData[i];
+                    const code = String(row[fieldMap['代號']] || '').trim();
+                    if (!code || code === 'undefined') continue;
+                    
+                    // 建立標準化的資料物件
+                    const record = { _sheetDate: sheetName };
+                    
+                    // 標準欄位
+                    standardFields.forEach(field => {
+                        if (fieldMap[field] !== undefined) {
+                            record[field] = row[fieldMap[field]];
+                        }
+                    });
+                    
+                    // 額外欄位
+                    extraFields.forEach(field => {
+                        if (fieldMap[field] !== undefined) {
+                            record[field] = row[fieldMap[field]];
+                        }
+                    });
+                    
+                    // 儲存（新的會覆蓋舊的，保留最新資料）
+                    allData[code] = record;
+                }
+            }
+        } catch (err) {
+            console.warn(`載入 ${fileInfo.name} 失敗:`, err);
+        }
+    }
+    
+    window.yuantaHistoryData.data = allData;
+    window.yuantaHistoryData.loaded = true;
+    window.yuantaHistoryData.loading = false;
+    
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+    console.log(`✅ 元大歷史資料載入完成: ${Object.keys(allData).length} 檔CB，耗時 ${elapsed} 秒`);
+}
 
 /**
  * 載入kanban資料並渲染圖表
@@ -18601,112 +18815,153 @@ async function loadKanbanAndRender(cbCode, tabName, period, container) {
 
 /**
  * 載入所有kanban檔案資料
+ * v3.97z-q 優化：並行載入 + 進度顯示 + 優先載入近年資料
  */
 async function loadAllKanbanData() {
     if (window.kanbanData.loading) return;
     window.kanbanData.loading = true;
     
-    console.log('開始載入CB_kanban資料...');
+    console.log('開始載入CB_kanban資料（並行優化）...');
     const startTime = Date.now();
     
+    // 更新載入狀態顯示
+    const updateProgress = (msg) => {
+        const container = document.getElementById('priceTrendContent');
+        if (container) {
+            container.innerHTML = `<div style="text-align:center; padding:40px; color:#666;">
+                <div style="font-size:24px; margin-bottom:10px;">⏳</div>
+                <div>${msg}</div>
+                <div style="margin-top:15px; width:200px; height:6px; background:#e0e0e0; border-radius:3px; margin:15px auto;">
+                    <div id="kanbanProgress" style="height:100%; background:linear-gradient(90deg, #667eea, #764ba2); border-radius:3px; width:0%; transition:width 0.3s;"></div>
+                </div>
+            </div>`;
+        }
+    };
+    
+    const setProgress = (pct) => {
+        const bar = document.getElementById('kanbanProgress');
+        if (bar) bar.style.width = pct + '%';
+    };
+    
     try {
-        const files = [
-            'data/kanban/CB_kanban_2017.xlsx',
-            'data/kanban/CB_kanban_2018.xlsx',
-            'data/kanban/CB_kanban_2019.xlsx',
-            'data/kanban/CB_kanban_2020.xlsx',
-            'data/kanban/CB_kanban_2021.xlsx',
-            'data/kanban/CB_kanban_2022.xlsx',
-            'data/kanban/CB_kanban_2023.xlsx',
+        // 優先載入最近3年（最常用），其餘背景載入
+        const priorityFiles = [
+            'data/kanban/CB_kanban_2025.xlsx',
             'data/kanban/CB_kanban_2024.xlsx',
-            'data/kanban/CB_kanban_2025.xlsx'
+            'data/kanban/CB_kanban_2023.xlsx'
+        ];
+        
+        const extraFiles = [
+            'data/kanban/CB_kanban_2022.xlsx',
+            'data/kanban/CB_kanban_2021.xlsx',
+            'data/kanban/CB_kanban_2020.xlsx',
+            'data/kanban/CB_kanban_2019.xlsx',
+            'data/kanban/CB_kanban_2018.xlsx',
+            'data/kanban/CB_kanban_2017.xlsx'
         ];
         
         const allData = {};
         const allDates = [];
         
-        for (const filename of files) {
+        // 處理單個檔案的函數
+        const processFile = async (filename) => {
             try {
                 const response = await fetch(filename);
-                if (!response.ok) {
-                    console.warn(`找不到 ${filename}，跳過`);
-                    continue;
-                }
+                if (!response.ok) return null;
                 
                 const workbook = XLSX.read(await response.arrayBuffer(), { type: 'array' });
-                console.log(`載入 ${filename}: ${workbook.SheetNames.length} 個工作表`);
+                const result = { filename, sheets: 0, records: 0 };
                 
-                // 每個工作表是一個交易日
                 for (const sheetName of workbook.SheetNames) {
-                    // 工作表名稱格式: 20250102
-                    const dateStr = sheetName;
-                    if (!/^\d{8}$/.test(dateStr)) continue;
+                    if (!/^\d{8}$/.test(sheetName)) continue;
                     
-                    const year = dateStr.substring(0, 4);
-                    const month = dateStr.substring(4, 6);
-                    const day = dateStr.substring(6, 8);
+                    const year = sheetName.substring(0, 4);
+                    const month = sheetName.substring(4, 6);
+                    const day = sheetName.substring(6, 8);
                     const dateFormatted = `${year}/${month}/${day}`;
-                    
                     allDates.push(dateFormatted);
                     
                     const sheet = workbook.Sheets[sheetName];
                     const rows = XLSX.utils.sheet_to_json(sheet);
+                    result.sheets++;
                     
                     for (const row of rows) {
                         const code = String(row['債券代碼'] || '').trim();
                         if (!code) continue;
                         
-                        if (!allData[code]) {
-                            allData[code] = [];
-                        }
+                        if (!allData[code]) allData[code] = [];
                         
-                        // 轉換Excel日期數字
                         const convPrice = parseFloat(row['轉換價格']) || 0;
                         const cbPrice = parseFloat(row['轉債參考價格']) || 0;
                         const stockPrice = parseFloat(row['轉換標的股票價格']) || 0;
                         const balance = parseFloat(row['上月底發行餘額']) || 0;
                         const originalBalance = parseFloat(row['原始發行總額']) || 0;
                         
-                        // 計算轉換價值
                         const convValue = convPrice > 0 ? (stockPrice / convPrice * 100) : 0;
-                        // 計算溢折價
                         const premium = convValue > 0 && cbPrice > 0 ? ((cbPrice - convValue) / convValue * 100) : 0;
-                        // 計算剩餘比率
                         const remainRatio = originalBalance > 0 ? (balance / originalBalance * 100) : 100;
                         
                         allData[code].push({
                             date: dateFormatted,
-                            dateNum: parseInt(dateStr),
-                            stockPrice,
-                            cbPrice,
-                            convPrice,
-                            convValue,
-                            premium,
-                            balance: balance / 100000000, // 轉為億
+                            dateNum: parseInt(sheetName),
+                            stockPrice, cbPrice, convPrice, convValue, premium,
+                            balance: balance / 100000000,
                             originalBalance: originalBalance / 100000000,
                             remainRatio
                         });
+                        result.records++;
                     }
                 }
+                return result;
             } catch (err) {
                 console.warn(`載入 ${filename} 失敗:`, err);
+                return null;
             }
-        }
+        };
         
-        // 對每個CB的資料按日期排序
+        // 第一階段：並行載入優先檔案（最近3年）
+        updateProgress('載入最近3年資料...');
+        const priorityPromises = priorityFiles.map(f => processFile(f));
+        const priorityResults = await Promise.all(priorityPromises);
+        
+        let loadedCount = priorityResults.filter(r => r).length;
+        setProgress(50);
+        console.log(`✅ 優先載入完成: ${loadedCount} 個檔案`);
+        
+        // 先標記為已載入，讓使用者可以開始使用
         for (const code in allData) {
             allData[code].sort((a, b) => a.dateNum - b.dateNum);
         }
-        
-        // 日期去重並排序
-        const uniqueDates = [...new Set(allDates)].sort();
-        
         window.kanbanData.data = allData;
-        window.kanbanData.dates = uniqueDates;
+        window.kanbanData.dates = [...new Set(allDates)].sort();
         window.kanbanData.loaded = true;
         
-        const elapsed = Date.now() - startTime;
-        console.log(`CB_kanban資料載入完成: ${Object.keys(allData).length} 檔CB, ${uniqueDates.length} 個交易日, 耗時 ${elapsed}ms`);
+        const elapsed1 = ((Date.now() - startTime) / 1000).toFixed(2);
+        console.log(`⚡ 快速載入完成: ${Object.keys(allData).length} 檔CB，${elapsed1} 秒`);
+        
+        // 第二階段：背景載入額外檔案（不阻塞UI）
+        updateProgress('背景載入歷史資料...');
+        
+        setTimeout(async () => {
+            let extraLoaded = 0;
+            for (const filename of extraFiles) {
+                const result = await processFile(filename);
+                if (result) {
+                    extraLoaded++;
+                    setProgress(50 + (extraLoaded / extraFiles.length * 50));
+                }
+            }
+            
+            // 重新排序
+            for (const code in allData) {
+                allData[code].sort((a, b) => a.dateNum - b.dateNum);
+            }
+            window.kanbanData.data = allData;
+            window.kanbanData.dates = [...new Set(allDates)].sort();
+            
+            const elapsed2 = ((Date.now() - startTime) / 1000).toFixed(2);
+            console.log(`✅ 完整載入完成: ${Object.keys(allData).length} 檔CB，${window.kanbanData.dates.length} 個交易日，${elapsed2} 秒`);
+        }, 100);
         
     } catch (err) {
         console.error('載入kanban資料失敗:', err);

@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97-zs-k (標籤統一版)</title>
+<title>AI智能可轉債競拍系統 v3.97-zs-l (02工作表修正)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <!-- v3.97-zs-f: kanban_data.js 改為延遲載入，不阻塞頁面 -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -1825,14 +1825,14 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.97-zs-k)...</div>
+    <div>🔄 系統啟動中 (v3.97-zs-l)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
 <div class="container" style="display: none;">
     <div class="header">
         <h1>🤖 AI智能可轉債競拍系統</h1>
-        <span class="version-badge">v3.97-zs-k 標籤統一版</span>
+        <span class="version-badge">v3.97-zs-l 02工作表修正</span>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -3361,9 +3361,16 @@ async function loadStatistics() {
         if (!response.ok) throw new Error("找不到 00_CB.xlsx");
         const workbook = XLSX.read(await response.arrayBuffer(), { type: 'array' });
         
+        // v3.97-zs-l 調試：輸出所有工作表名稱
+        console.log('📂 Excel檔案中的所有工作表:', workbook.SheetNames);
+        
         const getSheetData = (keywords) => { 
             const n = workbook.SheetNames.find(x => keywords.some(k => x.includes(k)));
-            if (!n) return null;
+            if (!n) {
+                console.log(`⚠️ 找不到符合關鍵字的工作表: ${keywords.join(', ')}`);
+                return null;
+            }
+            console.log(`✅ 找到工作表: "${n}" (關鍵字: ${keywords.join(', ')})`);
             return XLSX.utils.sheet_to_json(workbook.Sheets[n]).map(row => normalizeKeys(row));
         };
 
@@ -3399,6 +3406,12 @@ async function loadStatistics() {
         console.log('   08(掛牌中):', window.sheet08Data.length, '筆');
         console.log('   09(行情):', window.sheet09Data.length, '筆');
         console.log('   10(餘額):', window.sheet10Data.length, '筆');
+        
+        // v3.97-zs-l 調試：輸出02工作表欄位名稱
+        if (window.sheet02Data.length > 0) {
+            console.log('📅 [02工作表] 欄位名稱:', Object.keys(window.sheet02Data[0]));
+            console.log('📅 [02工作表] 第一筆範例:', window.sheet02Data[0]);
+        }
 
         // v3.72 新增：建立產業分類對照表（從16工作表）
         window.industryMap = {};
@@ -15423,29 +15436,63 @@ function renderBasicInfoOverview(cbCode, container) {
  */
 function renderBasicInfoSchedule(cbCode, container) {
     const searchCode = String(cbCode).trim();
+    const numSearchCode = parseInt(searchCode, 10);
     
     // 從02工作表取得發行時程
     let scheduleData = null;
     if (window.sheet02Data && window.sheet02Data.length > 0) {
-        scheduleData = window.sheet02Data.find(r => String(r['CB代號']).trim() === searchCode);
+        // v3.97-zs-l: 多種方式搜尋CB代號
+        scheduleData = window.sheet02Data.find(r => {
+            // 嘗試多個可能的欄位名稱
+            const code = r['CB代號'] || r['cb代號'] || r['CB代碼'] || r['代號'] || '';
+            const codeStr = String(code).replace('.0', '').trim();
+            const codeNum = parseInt(codeStr, 10);
+            return codeStr === searchCode || codeNum === numSearchCode;
+        });
+        
+        // 調試輸出
+        if (window.sheet02Data.length > 0) {
+            const firstRow = window.sheet02Data[0];
+            console.log('[02工作表] 欄位名稱:', Object.keys(firstRow));
+            console.log('[02工作表] 第一筆資料範例:', firstRow);
+        }
+        if (scheduleData) {
+            console.log('[02工作表] 找到 ' + searchCode + ' 資料:', scheduleData);
+        } else {
+            console.log('[02工作表] 找不到 CB代號:', searchCode, '(數字:', numSearchCode, ')');
+        }
+    } else {
+        console.log('[02工作表] 資料未載入或為空');
     }
     
     // 從08工作表取得詳細日期
     let sheet08Row = null;
     if (window.sheet08Data && window.sheet08Data.length > 0) {
-        sheet08Row = window.sheet08Data.find(r => String(r['代號']).trim() === searchCode);
+        sheet08Row = window.sheet08Data.find(r => {
+            const code = r['代號'] || r['CB代號'] || '';
+            const codeStr = String(code).replace('.0', '').trim();
+            return codeStr === searchCode || parseInt(codeStr, 10) === numSearchCode;
+        });
     }
     
     // 從競拍資料補充
     let auctionData = null;
     if (window.auctionDataCache && window.auctionDataCache.length > 0) {
-        auctionData = window.auctionDataCache.find(r => String(r['CB代號']).trim() === searchCode);
+        auctionData = window.auctionDataCache.find(r => {
+            const code = r['CB代號'] || '';
+            const codeStr = String(code).replace('.0', '').trim();
+            return codeStr === searchCode || parseInt(codeStr, 10) === numSearchCode;
+        });
     }
     
     // 從01工作表補充
     let sheet01Row = null;
     if (window.sheet01Data && window.sheet01Data.length > 0) {
-        sheet01Row = window.sheet01Data.find(r => String(r['CB代號']).trim() === searchCode);
+        sheet01Row = window.sheet01Data.find(r => {
+            const code = r['CB代號'] || '';
+            const codeStr = String(code).replace('.0', '').trim();
+            return codeStr === searchCode || parseInt(codeStr, 10) === numSearchCode;
+        });
     }
     
     if (!scheduleData && !sheet08Row && !auctionData && !sheet01Row) {
@@ -15453,7 +15500,7 @@ function renderBasicInfoSchedule(cbCode, container) {
         return;
     }
     
-    // 整合各來源資料
+    // 整合各來源資料 - 優先使用02工作表
     const getValue = (...sources) => {
         for (const v of sources) {
             if (v !== undefined && v !== null && v !== '' && v !== '-') return v;
@@ -15461,9 +15508,12 @@ function renderBasicInfoSchedule(cbCode, container) {
         return '-';
     };
     
+    // 取得名稱
+    const cbName = getValue(scheduleData?.['名稱'], sheet08Row?.['名稱'], auctionData?.['名稱'], sheet01Row?.['名稱']);
+    
     const html = `
         <div style="background:linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); padding:20px; border-radius:8px;">
-            <div style="font-weight:bold; color:#1565c0; margin-bottom:15px; font-size:16px;">📅 ${cbCode} ${getValue(scheduleData?.['名稱'], sheet08Row?.['名稱'], auctionData?.['名稱'])} 發行時程</div>
+            <div style="font-weight:bold; color:#1565c0; margin-bottom:15px; font-size:16px;">📅 ${cbCode} ${cbName} 發行時程</div>
             
             <!-- 重要日期時間軸 -->
             <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px; margin-bottom:15px;">

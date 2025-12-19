@@ -4604,7 +4604,7 @@ async function loadStatistics() {
                 const id = String(rawId).replace('.0', '').trim();
                 window.cbSupplementMap[id] = {
                     broker: row['發行券商'] || row['承銷券商'] || row['主辦券商'] || '',
-                    capital: safeFloat(row['股本大小']) || safeFloat(row['股本']),
+                    capital: safeFloat(row['股本大小']) || safeFloat(row['股本']) || safeFloat(row['股本(億)']) || safeFloat(row['股本(億元)']),
                     issueSize: safeFloat(row['發行規模']) || safeFloat(row['發行總額'])
                 };
             });
@@ -16498,6 +16498,12 @@ function renderStockPriceChart(cbCode, data, container, period) {
     // 計算統計數據
     const latestData = data[data.length - 1] || {};
     const isInMoney = latestData.stockPrice > latestData.convPrice;
+    const stockPrice = latestData.stockPrice || 0;
+    const convPrice = latestData.convPrice || 0;
+    
+    // 計算情境分析數據
+    const cbPrice = latestData.cbPrice || 100;
+    const holdingCost = cbPrice * 1000; // 持股成本（1張CB = 10萬面額，但用市價計算）
     
     container.innerHTML = `
         <div style="background:#fff; padding:15px; border-radius:8px;">
@@ -16506,25 +16512,49 @@ function renderStockPriceChart(cbCode, data, container, period) {
                     📈 ${cbCode} 股價與轉換價走勢 <span style="font-size:12px; color:#666; font-weight:normal;">(${periodLabel})</span>
                 </div>
                 <div style="font-size:12px; padding:4px 10px; border-radius:12px; background:${isInMoney ? '#e8f5e9' : '#fff3e0'}; color:${isInMoney ? '#2e7d32' : '#e65100'};">
-                    ${isInMoney ? '✅ 價內' : '⚠️ 價外'}
+                    ${isInMoney ? '✅ 價內（股票特性）' : '⚠️ 價外（債券特性）'}
                 </div>
             </div>
             
-            <!-- 數據摘要（只顯示股價和轉換價）-->
+            <!-- 數據摘要 -->
             <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; margin-bottom:15px;">
                 <div style="background:#e3f2fd; padding:12px; border-radius:6px; text-align:center;">
                     <div style="font-size:11px; color:#666;">最新股價</div>
-                    <div style="font-size:18px; font-weight:bold; color:#1976d2;">${latestData.stockPrice?.toFixed(2) || '-'}</div>
+                    <div style="font-size:18px; font-weight:bold; color:#1976d2;">${stockPrice.toFixed(2)}</div>
                 </div>
                 <div style="background:#fff3e0; padding:12px; border-radius:6px; text-align:center;">
                     <div style="font-size:11px; color:#666;">轉換價</div>
-                    <div style="font-size:18px; font-weight:bold; color:#e65100;">${latestData.convPrice?.toFixed(2) || '-'}</div>
+                    <div style="font-size:18px; font-weight:bold; color:#e65100;">${convPrice.toFixed(2)}</div>
                 </div>
             </div>
             
             <!-- 圖表區域 -->
-            <div style="height:280px; position:relative;">
+            <div style="height:220px; position:relative;">
                 <canvas id="stockPriceChart"></canvas>
+            </div>
+            
+            <!-- 情境分析說明 -->
+            <div style="margin-top:15px; padding:12px; background:${isInMoney ? '#e8f5e9' : '#fff8e1'}; border-radius:8px; border-left:4px solid ${isInMoney ? '#4caf50' : '#ff9800'};">
+                <div style="font-weight:bold; color:#333; margin-bottom:8px; font-size:13px;">
+                    ${isInMoney ? '📈 上漲情境分析（價內＝股票特性）' : '📉 下跌情境分析（價外＝債券特性）'}
+                </div>
+                ${isInMoney ? `
+                <div style="font-size:12px; color:#555; line-height:1.6;">
+                    <div style="margin-bottom:6px;">當現股收盤價格<span style="color:#2e7d32; font-weight:bold;">超過轉換價格</span>，可轉債與現股股價將會同步，具有<span style="color:#2e7d32; font-weight:bold;">股票特性</span>。</div>
+                    <div style="margin-bottom:6px;">買進可轉債的交割方式與一般買賣股票一樣，T+2全額交割。</div>
+                    <div style="background:#fff; padding:8px; border-radius:4px; margin:8px 0;">
+                        <span style="font-weight:bold;">結論：</span>當股價超過轉換價，可轉債將會發揮股票的特性，<span style="color:#d32f2f;">漲越多獲利越多</span>。
+                    </div>
+                </div>
+                ` : `
+                <div style="font-size:12px; color:#555; line-height:1.6;">
+                    <div style="margin-bottom:6px;">當現股收盤價格<span style="color:#e65100; font-weight:bold;">低於轉換價格</span>，可轉債與現股股價將不會同步，具有<span style="color:#e65100; font-weight:bold;">債券特性</span>。</div>
+                    <div style="margin-bottom:6px;">在公司沒有倒閉的前提下，當股價跌破轉換價時，可轉債就會充分發揮債券到期還本特性。</div>
+                    <div style="background:#fff; padding:8px; border-radius:4px; margin:8px 0;">
+                        <span style="font-weight:bold;">結論：</span>無擔保時為第一順位求償人，有擔保時有公司實體資產當做抵押擔保，<span style="color:#2e7d32;">下檔風險有限</span>。
+                    </div>
+                </div>
+                `}
             </div>
         </div>
     `;
@@ -16604,6 +16634,12 @@ function renderCBPriceChart(cbCode, data, container, period) {
     const premiums = data.map(d => d.premium);
     
     const latestData = data[data.length - 1] || {};
+    const cbPrice = latestData.cbPrice || 0;
+    const convValue = latestData.convValue || 0;
+    const premium = latestData.premium || 0;
+    const hasConvValue = convValue > 0;
+    const stockPrice = latestData.stockPrice || 0;
+    const convPrice = latestData.convPrice || 0;
     
     container.innerHTML = `
         <div style="background:#fff; padding:15px; border-radius:8px;">
@@ -16611,30 +16647,51 @@ function renderCBPriceChart(cbCode, data, container, period) {
                 <div style="font-weight:bold; color:#7b1fa2; font-size:16px;">
                     💹 ${cbCode} 理論價值分析 <span style="font-size:12px; color:#666; font-weight:normal;">(${periodLabel})</span>
                 </div>
-                <div style="font-size:12px; padding:4px 10px; border-radius:12px; background:${latestData.premium >= 0 ? '#fff3e0' : '#e8f5e9'}; color:${latestData.premium >= 0 ? '#e65100' : '#2e7d32'};">
-                    ${latestData.premium >= 0 ? '溢價' : '折價'} ${Math.abs(latestData.premium || 0).toFixed(2)}%
+                <div style="font-size:12px; padding:4px 10px; border-radius:12px; background:${hasConvValue ? '#e8f5e9' : '#fff3e0'}; color:${hasConvValue ? '#2e7d32' : '#e65100'};">
+                    ${hasConvValue ? '有轉換價值' : '還沒有轉換價值'}
                 </div>
             </div>
             
-            <!-- 數據摘要（CB價格、理論價格、折溢價）-->
+            <!-- 數據摘要 -->
             <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-bottom:15px;">
-                <div style="background:#f3e5f5; padding:12px; border-radius:6px; text-align:center;">
-                    <div style="font-size:11px; color:#666;">CB價格</div>
-                    <div style="font-size:18px; font-weight:bold; color:#7b1fa2;">${latestData.cbPrice?.toFixed(2) || '-'}</div>
-                </div>
                 <div style="background:#e8f5e9; padding:12px; border-radius:6px; text-align:center;">
-                    <div style="font-size:11px; color:#666;">理論價格</div>
-                    <div style="font-size:18px; font-weight:bold; color:#2e7d32;">${latestData.convValue?.toFixed(2) || '-'}</div>
+                    <div style="font-size:11px; color:#666;">理論價值</div>
+                    <div style="font-size:18px; font-weight:bold; color:#2e7d32;">${convValue > 100 ? convValue.toFixed(2) : '-'}</div>
+                </div>
+                <div style="background:#f3e5f5; padding:12px; border-radius:6px; text-align:center;">
+                    <div style="font-size:11px; color:#666;">CB收盤價</div>
+                    <div style="font-size:18px; font-weight:bold; color:#7b1fa2;">${cbPrice.toFixed(2)}</div>
                 </div>
                 <div style="background:#fff3e0; padding:12px; border-radius:6px; text-align:center;">
-                    <div style="font-size:11px; color:#666;">折溢價比率</div>
-                    <div style="font-size:18px; font-weight:bold; color:#e65100;">${latestData.premium?.toFixed(2) || '-'}%</div>
+                    <div style="font-size:11px; color:#666;">溢價（貴了）</div>
+                    <div style="font-size:18px; font-weight:bold; color:#e65100;">${premium.toFixed(2)}%</div>
                 </div>
             </div>
             
             <!-- 圖表區域 -->
-            <div style="height:280px; position:relative;">
+            <div style="height:200px; position:relative;">
                 <canvas id="cbPriceChart"></canvas>
+            </div>
+            
+            <!-- 理論價值分析說明 -->
+            <div style="margin-top:15px; padding:12px; background:#f3e5f5; border-radius:8px; border-left:4px solid #7b1fa2;">
+                <div style="font-weight:bold; color:#333; margin-bottom:8px; font-size:13px;">
+                    📊 可轉換公司債價值分析
+                </div>
+                <div style="font-size:12px; color:#555; line-height:1.6;">
+                    <div style="margin-bottom:6px;">
+                        ${hasConvValue ? 
+                            `理論價值 <span style="color:#2e7d32; font-weight:bold;">${convValue.toFixed(2)}</span> 元，CB收盤價 <span style="color:#7b1fa2; font-weight:bold;">${cbPrice.toFixed(2)}</span> 元，代表買進的可轉債<span style="color:#e65100; font-weight:bold;">溢價（貴了）${premium.toFixed(2)}%</span>。` :
+                            `可轉債的漲跌將<span style="color:#e65100; font-weight:bold;">不與標的股票同步</span>，更多是債券的抗跌性及到期的保本特性。`
+                        }
+                    </div>
+                    <div style="margin-bottom:6px;">
+                        <span style="color:#7b1fa2;">💡 溢價</span>通常是指買可轉債要貴多少%，通常越看好該標的未來的爆發性，越能接受越高的溢價率。
+                    </div>
+                    <div style="background:#fff; padding:8px; border-radius:4px; margin:8px 0;">
+                        <span style="font-weight:bold;">換句話說：</span>通常越沒有轉換價值的標的溢價率就越高，相對的選擇權的<span style="color:#2e7d32;">權利金損失也是最小的</span>。
+                    </div>
+                </div>
             </div>
         </div>
     `;
@@ -16725,17 +16782,27 @@ function renderBalanceChart(cbCode, data, container, period) {
     // 取得轉換價格
     const convPrice = latestData.convPrice || 0;
     
-    // 取得股本資料（從 sheet01Data 查詢）
+    // 取得股本資料（優先從 cbSupplementMap 查詢，再從 sheet01Data 查詢）
     let stockCapital = 0; // 股本（億）
-    if (window.sheet01Data && window.sheet01Data.length > 0) {
+    
+    // 方法1: 從 cbSupplementMap 查詢（在 loadStatistics 中已建立）
+    if (window.cbSupplementMap && window.cbSupplementMap[cbCode]) {
+        stockCapital = window.cbSupplementMap[cbCode].capital || 0;
+    }
+    
+    // 方法2: 如果沒有，從 sheet01Data 查詢
+    if (stockCapital <= 0 && window.sheet01Data && window.sheet01Data.length > 0) {
         const cbInfo = window.sheet01Data.find(row => {
-            const code = String(row['代號'] || row['CB代號'] || '').replace('.0', '').trim();
+            const code = String(row['CB代號'] || row['代號'] || '').replace('.0', '').trim();
             return code === cbCode;
         });
         if (cbInfo) {
-            stockCapital = parseFloat(cbInfo['股本'] || cbInfo['股本(億)'] || 0);
+            // N欄可能的欄位名稱
+            stockCapital = parseFloat(cbInfo['股本大小'] || cbInfo['股本'] || cbInfo['股本(億)'] || cbInfo['股本(億元)'] || 0);
         }
     }
+    
+    console.log(`📊 ${cbCode} 股本資料: ${stockCapital} 億`);
     
     // 計算張數資料（每張CB面額10萬元）
     // CB張數 = 餘額(億) × 1億 / 10萬 = 餘額(億) × 1000
@@ -16758,6 +16825,13 @@ function renderBalanceChart(cbCode, data, container, period) {
     
     // 轉換比率（每張CB可換幾股）
     const convRatio = convPrice > 0 ? (100000 / convPrice) : 0;
+    
+    // 計算CBAS權利金（簡化計算：溢價部分就是權利金概念）
+    const cbPrice = latestData.cbPrice || 100;
+    const premium = latestData.premium || 0;
+    const premiumCost = cbPrice > 100 ? (cbPrice - 100) * 1000 : 0; // 溢價部分的成本
+    const bondValue = 100 * 1000; // 債券部分價值（100元 × 1000）
+    const totalCost = cbPrice * 1000; // 總成本
     
     container.innerHTML = `
         <div style="background:#fff; padding:15px; border-radius:8px;">
@@ -16795,8 +16869,29 @@ function renderBalanceChart(cbCode, data, container, period) {
             </div>
             
             <!-- 圖表區域 -->
-            <div style="height:280px; position:relative;">
+            <div style="height:180px; position:relative;">
                 <canvas id="balanceChart"></canvas>
+            </div>
+            
+            <!-- CBAS拆解說明 -->
+            <div style="margin-top:15px; padding:12px; background:#e3f2fd; border-radius:8px; border-left:4px solid #1976d2;">
+                <div style="font-weight:bold; color:#333; margin-bottom:8px; font-size:13px;">
+                    🎯 CBAS選擇權拆解概念
+                </div>
+                <div style="font-size:12px; color:#555; line-height:1.6;">
+                    <div style="margin-bottom:6px;">
+                        如果買進 <span style="color:#7b1fa2; font-weight:bold;">溢價率 ${premium.toFixed(2)}%</span> 的可轉債 <span style="color:#1976d2; font-weight:bold;">${cbPrice.toFixed(2)}</span> 元，
+                        等於票面持股成本 <span style="color:#e65100; font-weight:bold;">${(cbPrice * convPrice / 100).toFixed(2)}</span> 元。
+                    </div>
+                    <div style="margin-bottom:6px;">
+                        會拆解的主要用意在於，積極看好的客戶只想參與股票上漲機會，所以會選擇<span style="color:#d32f2f; font-weight:bold;">只付出權利金</span>，只持有股票上漲選擇權部位。
+                    </div>
+                    <div style="background:#fff; padding:8px; border-radius:4px; margin:8px 0;">
+                        <div style="font-weight:bold; margin-bottom:4px;">結論：</div>
+                        在最多損失 <span style="color:#d32f2f; font-weight:bold;">${premiumCost.toLocaleString()}</span> 元的情況下（把風險控制在可以接受的範圍內，先求少輸），<br>
+                        再買一個<span style="color:#2e7d32; font-weight:bold;">未來股價上漲的夢想</span>。
+                    </div>
+                </div>
             </div>
         </div>
     `;

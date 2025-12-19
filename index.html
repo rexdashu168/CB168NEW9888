@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97-zs-u (新增終止狀態標籤)</title>
+<title>AI智能可轉債競拍系統 v3.97-zs-v (調試版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <!-- v3.97-zs-f: kanban_data.js 改為延遲載入，不阻塞頁面 -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -1794,7 +1794,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 <div class="container" style="display: none;">
     <div class="header">
         <h1>🤖 AI智能可轉債競拍系統</h1>
-        <span class="version-badge">v3.97-zs-u 新增終止狀態標籤</span>
+        <span class="version-badge">v3.97-zs-v 調試版</span>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -14994,6 +14994,8 @@ function loadBasicInfo(cbCode) {
  * 顯示基本資料標籤頁
  */
 function showBasicInfoTab(tabName, event) {
+    console.log('[showBasicInfoTab] 開始執行, tabName:', tabName);
+    
     // 更新標籤狀態
     document.querySelectorAll('.basic-info-tab').forEach(tab => tab.classList.remove('active'));
     if (event) event.target.classList.add('active');
@@ -15002,36 +15004,51 @@ function showBasicInfoTab(tabName, event) {
     const content = document.getElementById('basicInfoContent');
     const cbCode = currentBasicInfoCB;
     
+    console.log('[showBasicInfoTab] currentBasicInfoCB:', cbCode);
+    
     if (!cbCode) {
         content.innerHTML = `<div style="text-align:center; color:#999; padding:40px;">👆 請先選擇一檔可轉債</div>`;
         return;
     }
     
     // 根據標籤顯示不同內容
-    switch(tabName) {
-        case 'overview':
-            renderBasicInfoOverview(cbCode, content);
-            break;
-        case 'schedule':
-            renderBasicInfoSchedule(cbCode, content);
-            break;
-        case 'putback':
-            renderBasicInfoPutback(cbCode, content);
-            break;
-        case 'termination':
-            renderBasicInfoTermination(cbCode, content);
-            break;
-        case 'auction':
-            renderBasicInfoAuction(cbCode, content);
-            break;
-        case 'quote':
-            renderBasicInfoQuote(cbCode, content);
-            break;
-        case 'balance':
-            renderBasicInfoBalance(cbCode, content);
-            break;
-        default:
-            content.innerHTML = `<div style="color:#999;">未知標籤：${tabName}</div>`;
+    try {
+        switch(tabName) {
+            case 'overview':
+                console.log('[showBasicInfoTab] 執行 renderBasicInfoOverview');
+                renderBasicInfoOverview(cbCode, content);
+                break;
+            case 'schedule':
+                console.log('[showBasicInfoTab] 執行 renderBasicInfoSchedule');
+                renderBasicInfoSchedule(cbCode, content);
+                break;
+            case 'putback':
+                console.log('[showBasicInfoTab] 執行 renderBasicInfoPutback');
+                renderBasicInfoPutback(cbCode, content);
+                break;
+            case 'termination':
+                console.log('[showBasicInfoTab] 執行 renderBasicInfoTermination');
+                renderBasicInfoTermination(cbCode, content);
+                break;
+            case 'auction':
+                console.log('[showBasicInfoTab] 執行 renderBasicInfoAuction');
+                renderBasicInfoAuction(cbCode, content);
+                break;
+            case 'quote':
+                console.log('[showBasicInfoTab] 執行 renderBasicInfoQuote');
+                renderBasicInfoQuote(cbCode, content);
+                break;
+            case 'balance':
+                console.log('[showBasicInfoTab] 執行 renderBasicInfoBalance');
+                renderBasicInfoBalance(cbCode, content);
+                break;
+            default:
+                content.innerHTML = `<div style="color:#999;">未知標籤：${tabName}</div>`;
+        }
+        console.log('[showBasicInfoTab] 執行完成');
+    } catch(e) {
+        console.error('[showBasicInfoTab] 錯誤:', e);
+        content.innerHTML = `<div style="color:#c62828; padding:20px;">❌ 載入錯誤: ${e.message}</div>`;
     }
 }
 
@@ -15409,13 +15426,16 @@ function renderBasicInfoOverview(cbCode, container) {
  * 渲染發行時程
  */
 function renderBasicInfoSchedule(cbCode, container) {
+    console.log('[renderBasicInfoSchedule] 開始執行, cbCode:', cbCode);
     const searchCode = String(cbCode).trim();
     
     // 從02工作表取得發行時程
     let scheduleData = null;
+    console.log('[renderBasicInfoSchedule] sheet02Data:', window.sheet02Data?.length || 0, '筆');
     if (window.sheet02Data && window.sheet02Data.length > 0) {
         scheduleData = window.sheet02Data.find(r => String(r['CB代號']).trim() === searchCode);
     }
+    console.log('[renderBasicInfoSchedule] scheduleData:', scheduleData ? '找到' : '未找到');
     
     // 從08工作表取得詳細日期
     let sheet08Row = null;
@@ -15671,17 +15691,20 @@ function renderBasicInfoPutback(cbCode, container) {
  * 資料來源：kanban_data.js
  */
 function renderBasicInfoTermination(cbCode, container) {
+    console.log('[renderBasicInfoTermination] 開始執行, cbCode:', cbCode);
     const searchCode = String(cbCode).trim();
     const numSearchCode = parseInt(searchCode, 10);
     
     // 從kanban資料取得終止狀態
     let kanbanRow = null;
+    console.log('[renderBasicInfoTermination] kanbanData:', window.kanbanData?.data?.length || 0, '筆');
     if (window.kanbanData && window.kanbanData.data) {
         kanbanRow = window.kanbanData.data.find(r => {
             const code = String(r['代號'] || r['債券代碼'] || '').replace('.0', '').trim();
             return code === searchCode || parseInt(code, 10) === numSearchCode;
         });
     }
+    console.log('[renderBasicInfoTermination] kanbanRow:', kanbanRow ? '找到' : '未找到');
     
     // 從08工作表補充
     let sheet08Row = null;

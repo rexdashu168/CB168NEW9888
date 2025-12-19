@@ -275,13 +275,13 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     border-bottom: none;
 }
 .price-trend-tab {
-    padding: 8px 12px;
+    padding: 6px 10px;
     border: none;
     background: #e1bee7;
     color: #7b1fa2;
     border-radius: 6px;
     cursor: pointer;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 500;
     transition: all 0.2s;
 }
@@ -2641,15 +2641,21 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
             <div style="margin-bottom:15px; padding:10px; background:#f5f5f5; border-radius:8px;">
                 <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
                     <label style="font-weight:bold; color:#333;">🔍 選擇可轉債：</label>
+                    <input type="text" id="priceTrendCBInput" placeholder="輸入代號快速搜尋..." 
+                           oninput="filterPriceTrendCBList(this.value)"
+                           onkeypress="if(event.key==='Enter') searchPriceTrendCB(this.value)"
+                           style="width:140px; padding:8px 12px; border:2px solid #1976d2; border-radius:6px; font-size:14px;">
                     <select id="priceTrendCBSelect" onchange="loadPriceTrend(this.value)" style="flex:1; min-width:200px; padding:8px 12px; border:2px solid #388e3c; border-radius:6px; font-size:14px;">
                         <option value="">-- 請選擇CB代號 --</option>
                     </select>
                     <select id="priceTrendPeriod" onchange="updatePriceTrendPeriod()" style="padding:8px 12px; border:1px solid #ccc; border-radius:6px;">
-                        <option value="30">近30天</option>
-                        <option value="60">近60天</option>
-                        <option value="90" selected>近90天</option>
-                        <option value="180">近180天</option>
-                        <option value="all">全部期間</option>
+                        <option value="30">1月</option>
+                        <option value="90" selected>3月</option>
+                        <option value="180">6月</option>
+                        <option value="365">1年</option>
+                        <option value="730">2年</option>
+                        <option value="1095">3年</option>
+                        <option value="all">全部</option>
                     </select>
                 </div>
             </div>
@@ -2659,6 +2665,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
                 <button type="button" class="price-trend-tab active" onclick="showPriceTrendTab('stockPrice', event)">📈 股價與轉換價</button>
                 <button type="button" class="price-trend-tab" onclick="showPriceTrendTab('cbPrice', event)">💹 理論價值分析</button>
                 <button type="button" class="price-trend-tab" onclick="showPriceTrendTab('balance', event)">📊 籌碼轉換分析</button>
+                <button type="button" class="price-trend-tab" onclick="showPriceTrendTab('cbas', event)">🎯 CBAS拆解</button>
             </div>
             <div id="priceTrendContent" style="min-height:300px; padding:15px; background:#fafafa; border-radius:0 0 8px 8px; border:1px solid #e0e0e0; border-top:none;">
                 <div style="text-align:center; color:#999; padding:40px;">
@@ -14859,6 +14866,8 @@ function updateCBSelectOptions() {
     // 同步到價格走勢選單
     if (priceTrendSelect) {
         priceTrendSelect.innerHTML = optionsHTML;
+        // 初始化價格走勢選項列表（供快速搜尋用）
+        initPriceTrendCBOptions();
     }
 }
 
@@ -16060,6 +16069,113 @@ function renderBasicInfoBalance(cbCode, container) {
 
 // ==================== v3.97z-s 新增：價格走勢分析模組 ====================
 
+// 儲存原始選項列表
+let priceTrendCBOptions = [];
+let isAutoSelecting = false; // 避免遞迴
+
+/**
+ * 初始化價格走勢CB選項（保存原始列表）
+ */
+function initPriceTrendCBOptions() {
+    const select = document.getElementById('priceTrendCBSelect');
+    if (select) {
+        priceTrendCBOptions = Array.from(select.options).slice(1); // 排除第一個空選項
+    }
+}
+
+/**
+ * 篩選價格走勢CB列表（即時篩選）
+ */
+function filterPriceTrendCBList(keyword) {
+    const select = document.getElementById('priceTrendCBSelect');
+    if (!select || isAutoSelecting) return;
+    
+    // 確保已初始化選項列表
+    if (priceTrendCBOptions.length === 0) {
+        initPriceTrendCBOptions();
+    }
+    
+    const kw = keyword.trim().toLowerCase();
+    
+    // 清空現有選項（保留第一個）
+    select.innerHTML = '<option value="">-- 請選擇CB代號 --</option>';
+    
+    // 篩選並重建選項
+    let matchedValue = '';
+    priceTrendCBOptions.forEach(opt => {
+        const text = opt.textContent.toLowerCase();
+        const value = opt.value.toLowerCase();
+        if (!kw || text.includes(kw) || value.includes(kw)) {
+            const newOpt = opt.cloneNode(true);
+            select.appendChild(newOpt);
+            if (!matchedValue) matchedValue = opt.value;
+        }
+    });
+    
+    // 如果只剩一個選項且有關鍵字，自動選擇
+    if (kw && select.options.length === 2) {
+        isAutoSelecting = true;
+        select.selectedIndex = 1;
+        const selectedValue = select.value;
+        loadPriceTrend(selectedValue);
+        // 載入後恢復所有選項並清空輸入框
+        setTimeout(() => {
+            const input = document.getElementById('priceTrendCBInput');
+            if (input) input.value = '';
+            // 恢復所有選項
+            select.innerHTML = '<option value="">-- 請選擇CB代號 --</option>';
+            priceTrendCBOptions.forEach(opt => {
+                select.appendChild(opt.cloneNode(true));
+            });
+            select.value = selectedValue;
+            isAutoSelecting = false;
+        }, 100);
+    }
+}
+
+/**
+ * 搜尋價格走勢CB（按Enter直接載入）
+ */
+function searchPriceTrendCB(keyword) {
+    const kw = keyword.trim();
+    if (!kw) return;
+    
+    // 確保已初始化選項列表
+    if (priceTrendCBOptions.length === 0) {
+        initPriceTrendCBOptions();
+    }
+    
+    // 精確匹配代號
+    const exactMatch = priceTrendCBOptions.find(opt => 
+        opt.value === kw || opt.value.startsWith(kw)
+    );
+    
+    const select = document.getElementById('priceTrendCBSelect');
+    const input = document.getElementById('priceTrendCBInput');
+    
+    // 恢復所有選項
+    select.innerHTML = '<option value="">-- 請選擇CB代號 --</option>';
+    priceTrendCBOptions.forEach(opt => {
+        select.appendChild(opt.cloneNode(true));
+    });
+    
+    if (exactMatch) {
+        select.value = exactMatch.value;
+        loadPriceTrend(exactMatch.value);
+        if (input) input.value = '';
+    } else {
+        // 模糊匹配
+        const fuzzyMatch = priceTrendCBOptions.find(opt => 
+            opt.textContent.toLowerCase().includes(kw.toLowerCase())
+        );
+        if (fuzzyMatch) {
+            select.value = fuzzyMatch.value;
+            loadPriceTrend(fuzzyMatch.value);
+            if (input) input.value = '';
+        }
+    }
+}
+
 /**
  * 載入價格走勢資料
  */
@@ -16084,7 +16200,8 @@ function updatePriceTrendPeriod() {
         const activeTab = document.querySelector('.price-trend-tab.active');
         if (activeTab) {
             const tabName = activeTab.textContent.includes('股價') ? 'stockPrice' :
-                           activeTab.textContent.includes('理論價值') ? 'cbPrice' : 'balance';
+                           activeTab.textContent.includes('理論價值') ? 'cbPrice' : 
+                           activeTab.textContent.includes('籌碼') ? 'balance' : 'cbas';
             showPriceTrendTab(tabName);
         }
     }
@@ -16097,7 +16214,7 @@ function showPriceTrendTab(tabName, event) {
     // 更新標籤狀態
     document.querySelectorAll('.price-trend-tab').forEach(tab => tab.classList.remove('active'));
     if (event) event.target.classList.add('active');
-    else document.querySelector(`.price-trend-tab:nth-child(${tabName === 'stockPrice' ? 1 : tabName === 'cbPrice' ? 2 : 3})`).classList.add('active');
+    else document.querySelector(`.price-trend-tab:nth-child(${tabName === 'stockPrice' ? 1 : tabName === 'cbPrice' ? 2 : tabName === 'balance' ? 3 : 4})`).classList.add('active');
     
     const content = document.getElementById('priceTrendContent');
     const cbCode = currentPriceTrendCB;
@@ -16314,6 +16431,9 @@ async function loadKanbanAndRender(cbCode, tabName, period, container) {
                 break;
             case 'balance':
                 renderBalanceChart(cbCode, filteredData, container, period);
+                break;
+            case 'cbas':
+                renderCBASChart(cbCode, filteredData, container, period);
                 break;
         }
         
@@ -16704,10 +16824,12 @@ function renderCBPriceChart(cbCode, data, container, period) {
     
     // 動態分析判斷
     let statusTag, statusBg, statusColor;
-    let analysisContent, conclusionContent;
+    let analysisContent, conclusionContent, educationTip;
     
     // 計算票面持股成本
     const holdingCost = convPrice > 0 ? (cbPrice * convPrice / 100) : 0;
+    // 計算股價距離轉換價的差距
+    const priceDiffPct = convPrice > 0 ? ((stockPrice - convPrice) / convPrice * 100) : 0;
     
     if (hasConvValue) {
         // 有轉換價值
@@ -16721,6 +16843,7 @@ function renderCBPriceChart(cbCode, data, container, period) {
                 <div style="margin-bottom:6px;">可轉債價格<span style="color:#2e7d32; font-weight:bold;">非常接近理論價值</span>，幾乎等同於持有股票，上漲時將與股價同步獲利。</div>
             `;
             conclusionContent = `低溢價代表<span style="color:#2e7d32;">買進成本接近股票</span>，但仍保有債券的到期保護，是較理想的進場時機。`;
+            educationTip = `💡 低溢價時CB與股票連動性最高，股價漲跌會直接反映在CB價格上。`;
         } else if (premium <= 15) {
             statusTag = '✅ 合理溢價';
             statusBg = '#e3f2fd';
@@ -16731,6 +16854,7 @@ function renderCBPriceChart(cbCode, data, container, period) {
                 <div style="margin-bottom:6px;">溢價率處於<span style="color:#1976d2; font-weight:bold;">合理區間</span>，反映了市場對標的股票有一定的上漲預期。</div>
             `;
             conclusionContent = `合理溢價代表市場看好但不過熱，<span style="color:#1976d2;">具有參與股價上漲的空間</span>，同時保有債券保護。`;
+            educationTip = `💡 溢價是指買CB要貴多少%，越看好標的未來的爆發性，越能接受越高的溢價率。`;
         } else if (premium <= 30) {
             statusTag = '⚠️ 偏高溢價';
             statusBg = '#fff3e0';
@@ -16741,6 +16865,7 @@ function renderCBPriceChart(cbCode, data, container, period) {
                 <div style="margin-bottom:6px;">溢價率<span style="color:#e65100; font-weight:bold;">偏高</span>，市場對此標的有較高的上漲預期，買進需股價上漲 ${premium.toFixed(0)}% 以上才能回本。</div>
             `;
             conclusionContent = `偏高溢價代表<span style="color:#e65100;">需要較大的股價漲幅才能獲利</span>，建議評估標的基本面是否支持這樣的預期。`;
+            educationTip = `💡 溢價偏高時，即使股價上漲，CB可能因「溢價收斂」而漲幅落後股票。`;
         } else {
             statusTag = '🔴 過高溢價';
             statusBg = '#ffebee';
@@ -16751,6 +16876,7 @@ function renderCBPriceChart(cbCode, data, container, period) {
                 <div style="margin-bottom:6px;">溢價率<span style="color:#d32f2f; font-weight:bold;">過高</span>，即使股價上漲，可轉債價格也可能因溢價收斂而表現不佳。</div>
             `;
             conclusionContent = `過高溢價風險較大，<span style="color:#d32f2f;">股價需大漲超過 ${premium.toFixed(0)}% 才能真正獲利</span>，建議謹慎評估或等待溢價收斂。`;
+            educationTip = `💡 過高溢價通常出現在熱門題材股，需留意溢價收斂風險。`;
         }
     } else {
         // 沒有轉換價值（價外）
@@ -16758,11 +16884,14 @@ function renderCBPriceChart(cbCode, data, container, period) {
             statusTag = '💎 折價（低於面額）';
             statusBg = '#e8f5e9';
             statusColor = '#2e7d32';
+            const discount = 100 - cbPrice;
             analysisContent = `
-                <div style="margin-bottom:6px;">CB收盤價 <span style="color:#2e7d32; font-weight:bold;">${cbPrice.toFixed(2)}</span> 元，<span style="color:#2e7d32; font-weight:bold;">低於面額100元</span>。</div>
-                <div style="margin-bottom:6px;">目前<span style="color:#2e7d32; font-weight:bold;">沒有轉換價值</span>，但買進價格低於面額，持有至到期可獲得價差收益。</div>
+                <div style="margin-bottom:6px;">CB收盤價 <span style="color:#2e7d32; font-weight:bold;">${cbPrice.toFixed(2)}</span> 元，<span style="color:#2e7d32; font-weight:bold;">低於面額100元</span>，折價 ${discount.toFixed(2)} 元。</div>
+                <div style="margin-bottom:6px;">目前<span style="color:#2e7d32; font-weight:bold;">沒有轉換價值</span>，但買進價格低於面額，若公司不倒，持有至到期可賺取價差。</div>
+                <div style="margin-bottom:6px;">📌 <span style="color:#1565c0; font-weight:bold;">賣回操作機會：</span>若有投資人提前賣回日，可考慮買進後於賣回日以100元賣回給公司，賺取約 ${discount.toFixed(2)} 元價差。</div>
             `;
-            conclusionContent = `折價買進代表<span style="color:#2e7d32;">到期保本有額外收益</span>，同時保有股價上漲時的轉換機會，是低風險的選擇。`;
+            conclusionContent = `折價買進代表<span style="color:#2e7d32;">到期保本有額外收益</span>，同時保有股價上漲時的轉換機會，是低風險的操作策略。`;
+            educationTip = `💡 折價CB適合保守型投資人，需留意公司信用風險及流動性。評等差或無擔保的標的，券商可能不接受拆解成選擇權。`;
         } else if (cbPrice <= 105) {
             statusTag = '⚡ 小幅溢價（近面額）';
             statusBg = '#fff3e0';
@@ -16772,6 +16901,7 @@ function renderCBPriceChart(cbCode, data, container, period) {
                 <div style="margin-bottom:6px;">價格略高於面額，溢價部分 ${(cbPrice - 100).toFixed(2)} 元可視為<span style="color:#ff9800; font-weight:bold;">購買股價上漲選擇權的權利金</span>。</div>
             `;
             conclusionContent = `小幅溢價是合理的，<span style="color:#ff9800;">最多損失約 ${((cbPrice - 100) * 1000).toLocaleString()} 元/張</span>，換取未來股價上漲的參與權。`;
+            educationTip = `💡 價外CB具有「抗跌性」，跌到一定程度後就不太會再跌，但相對的也會「抗漲」，要等股價回到轉換價附近才會與股票同步。`;
         } else {
             statusTag = '⚠️ 無轉換價值但溢價';
             statusBg = '#ffebee';
@@ -16779,9 +16909,11 @@ function renderCBPriceChart(cbCode, data, container, period) {
             const premiumAmount = (cbPrice - 100) * 1000;
             analysisContent = `
                 <div style="margin-bottom:6px;">CB收盤價 <span style="color:#d32f2f; font-weight:bold;">${cbPrice.toFixed(2)}</span> 元，目前<span style="color:#d32f2f; font-weight:bold;">沒有轉換價值</span>，但價格高於面額 ${(cbPrice - 100).toFixed(2)} 元。</div>
-                <div style="margin-bottom:6px;">溢價部分每張約 <span style="color:#d32f2f; font-weight:bold;">${premiumAmount.toLocaleString()}</span> 元，若持有至到期且股價未超過轉換價，這部分將是損失。</div>
+                <div style="margin-bottom:6px;">當股價大幅低於轉換價時，溢價會很嚴重，這是因為CB的<span style="color:#d32f2f; font-weight:bold;">抗跌保本性</span>讓它跌到一定程度後就不太會再跌，而股票可能還在持續下跌。</div>
+                <div style="margin-bottom:6px;">⚠️ 此時CB與股票會<span style="color:#d32f2f; font-weight:bold;">失去連動性</span>：先「抗跌」，抗跌之後是「抗漲」（漲不動），要等股價回到轉換價附近，CB才會與股票同步。</div>
             `;
-            conclusionContent = `<span style="color:#d32f2f;">需謹慎評估</span>，除非非常看好標的股未來能大幅上漲，否則高溢價無轉換價值的CB風險較高。`;
+            conclusionContent = `<span style="color:#d32f2f;">高溢價無轉換價值</span>代表股價已大幅偏離轉換價，除非看好標的股能大幅反彈，否則建議謹慎評估。`;
+            educationTip = `💡 評等差、無擔保或跌太多的標的，券商會考量風險，可能不能拆解成選擇權。`;
         }
     }
     
@@ -16832,6 +16964,11 @@ function renderCBPriceChart(cbCode, data, container, period) {
                         <span style="font-weight:bold;">結論：</span>${conclusionContent}
                     </div>
                 </div>
+            </div>
+            
+            <!-- 教育小提示 -->
+            <div style="margin-top:10px; padding:10px; background:#f5f5f5; border-radius:8px; font-size:11px; color:#666; line-height:1.5;">
+                ${educationTip}
             </div>
         </div>
     `;
@@ -17096,14 +17233,6 @@ function renderBalanceChart(cbCode, data, container, period) {
                     </div>
                 </div>
             </div>
-            
-            <!-- CBAS選擇權概念 -->
-            <div style="margin-top:10px; padding:10px; background:#f5f5f5; border-radius:8px; font-size:11px; color:#666;">
-                <span style="font-weight:bold;">💡 選擇權概念：</span>
-                以CB價格 ${cbPrice.toFixed(2)} 元買進，若持有至到期股價未超過轉換價，
-                最多損失約 <span style="color:#d32f2f; font-weight:bold;">${premiumCost > 0 ? premiumCost.toLocaleString() : '0'}</span> 元/張（溢價部分），
-                但保有未來股價上漲的參與權。
-            </div>
         </div>
     `;
     
@@ -17179,14 +17308,205 @@ function renderBalanceChart(cbCode, data, container, period) {
 }
 
 /**
+ * 渲染CBAS選擇權拆解分析圖
+ */
+function renderCBASChart(cbCode, data, container, period) {
+    const periodLabel = getPeriodLabel(period);
+    const latestData = data[data.length - 1] || {};
+    
+    // 取得基本數據
+    const cbPrice = latestData.cbPrice || 0;
+    const stockPrice = latestData.stockPrice || 0;
+    const convPrice = latestData.convPrice || 0;
+    const premium = latestData.premium || 0;
+    const convValue = latestData.convValue || 0;
+    
+    // 計算CBAS拆解數據
+    const convRatio = convPrice > 0 ? (100000 / convPrice) : 0; // 轉換比率（每張CB可換幾股）
+    const holdingCost = convPrice > 0 ? (cbPrice * convPrice / 100) : 0; // 票面持股成本
+    const bondValue = 100; // 債券面額
+    const optionValue = cbPrice > 100 ? (cbPrice - 100) : 0; // 選擇權價值（溢價部分）
+    const optionCost = optionValue * 1000; // 選擇權成本（每張）
+    const totalCost = cbPrice * 1000; // 總成本（每張）
+    
+    // 計算損益兩平點
+    const breakEvenPrice = holdingCost; // 股價需漲到此價位才能回本
+    const breakEvenPct = stockPrice > 0 ? ((breakEvenPrice - stockPrice) / stockPrice * 100) : 0;
+    
+    // 情境模擬計算
+    const scenarios = [
+        { name: '股價上漲20%', pct: 20 },
+        { name: '股價上漲50%', pct: 50 },
+        { name: '股價上漲100%', pct: 100 },
+        { name: '股價下跌20%', pct: -20 },
+        { name: '股價下跌50%', pct: -50 }
+    ].map(s => {
+        const newStockPrice = stockPrice * (1 + s.pct / 100);
+        const newConvValue = convPrice > 0 ? (newStockPrice / convPrice * 100) : 0;
+        const newCBPrice = Math.max(100, newConvValue); // CB價格至少等於面額
+        const cbReturn = cbPrice > 0 ? ((newCBPrice - cbPrice) / cbPrice * 100) : 0;
+        const stockReturn = s.pct;
+        return { ...s, newStockPrice, newCBPrice, cbReturn, stockReturn };
+    });
+    
+    container.innerHTML = `
+        <div style="background:#fff; padding:15px; border-radius:8px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <div style="font-weight:bold; color:#1565c0; font-size:16px;">
+                    🎯 ${cbCode} CBAS選擇權拆解分析
+                </div>
+                <div style="font-size:12px; padding:4px 10px; border-radius:12px; background:#e3f2fd; color:#1565c0;">
+                    轉換比率 ${convRatio.toFixed(0)} 股/張
+                </div>
+            </div>
+            
+            <!-- 拆解概念說明 -->
+            <div style="background:linear-gradient(135deg, #1565c0 0%, #0d47a1 100%); color:white; padding:15px; border-radius:8px; margin-bottom:15px;">
+                <div style="font-weight:bold; margin-bottom:10px; font-size:14px;">📋 可轉債 = 公司債 + 股票選擇權</div>
+                <div style="display:grid; grid-template-columns:1fr auto 1fr auto 1fr; gap:10px; align-items:center; text-align:center;">
+                    <div style="background:rgba(255,255,255,0.2); padding:10px; border-radius:6px;">
+                        <div style="font-size:11px; opacity:0.9;">CB市價</div>
+                        <div style="font-size:20px; font-weight:bold;">${cbPrice.toFixed(2)}</div>
+                        <div style="font-size:10px; opacity:0.8;">元/張</div>
+                    </div>
+                    <div style="font-size:20px;">=</div>
+                    <div style="background:rgba(255,255,255,0.2); padding:10px; border-radius:6px;">
+                        <div style="font-size:11px; opacity:0.9;">債券價值</div>
+                        <div style="font-size:20px; font-weight:bold;">${bondValue.toFixed(2)}</div>
+                        <div style="font-size:10px; opacity:0.8;">面額保本</div>
+                    </div>
+                    <div style="font-size:20px;">+</div>
+                    <div style="background:rgba(255,255,255,0.2); padding:10px; border-radius:6px;">
+                        <div style="font-size:11px; opacity:0.9;">選擇權價值</div>
+                        <div style="font-size:20px; font-weight:bold;">${optionValue.toFixed(2)}</div>
+                        <div style="font-size:10px; opacity:0.8;">權利金</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 關鍵數據 -->
+            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-bottom:15px;">
+                <div style="background:#e8f5e9; padding:12px; border-radius:6px; text-align:center;">
+                    <div style="font-size:10px; color:#666;">現股股價</div>
+                    <div style="font-size:18px; font-weight:bold; color:#2e7d32;">-</div>
+                    <div style="font-size:9px; color:#999;">待輸入</div>
+                </div>
+                <div style="background:#fff3e0; padding:12px; border-radius:6px; text-align:center;">
+                    <div style="font-size:10px; color:#666;">轉換價</div>
+                    <div style="font-size:18px; font-weight:bold; color:#e65100;">-</div>
+                    <div style="font-size:9px; color:#999;">待輸入</div>
+                </div>
+                <div style="background:#e3f2fd; padding:12px; border-radius:6px; text-align:center;">
+                    <div style="font-size:10px; color:#666;">票面持股成本</div>
+                    <div style="font-size:18px; font-weight:bold; color:#1976d2;">-</div>
+                    <div style="font-size:9px; color:#999;">CB價×轉換價÷100</div>
+                </div>
+                <div style="background:#ffebee; padding:12px; border-radius:6px; text-align:center;">
+                    <div style="font-size:10px; color:#666;">最大損失/張</div>
+                    <div style="font-size:18px; font-weight:bold; color:#d32f2f;">-</div>
+                    <div style="font-size:9px; color:#999;">溢價部分</div>
+                </div>
+            </div>
+            
+            <!-- 拆解說明 -->
+            <div style="background:#fff8e1; padding:15px; border-radius:8px; border-left:4px solid #ffc107; margin-bottom:15px;">
+                <div style="font-weight:bold; color:#333; margin-bottom:10px; font-size:13px;">
+                    💡 CBAS拆解的主要用意
+                </div>
+                <div style="font-size:12px; color:#555; line-height:1.8;">
+                    <div style="margin-bottom:8px;">
+                        <span style="color:#1565c0; font-weight:bold;">會拆解的主要用意在於</span>，積極看好的客戶只想參與股票上漲機會，所以會選擇<span style="color:#d32f2f; font-weight:bold;">只付出權利金</span>，只持有股票上漲選擇權部位。
+                    </div>
+                    <div style="margin-bottom:8px;">
+                        而<span style="color:#2e7d32; font-weight:bold;">債券本金</span>將由券商尋找願意提供債券本金轉取得當利息的客戶進行拆解交割。
+                    </div>
+                    <div style="margin-bottom:8px;">
+                        實務上以<span style="color:#7b1fa2; font-weight:bold;">折現率計算出權利金百元報價</span>，簡單說就是持有到可轉債選擇權到期日的利息成本。
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 情境分析表格 -->
+            <div style="background:#f5f5f5; padding:15px; border-radius:8px;">
+                <div style="font-weight:bold; color:#333; margin-bottom:10px; font-size:13px;">
+                    📊 情境分析（數據待輸入後自動計算）
+                </div>
+                <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                    <thead>
+                        <tr style="background:#e0e0e0;">
+                            <th style="padding:8px; text-align:left; border-radius:4px 0 0 0;">情境</th>
+                            <th style="padding:8px; text-align:right;">預期股價</th>
+                            <th style="padding:8px; text-align:right;">預期CB價</th>
+                            <th style="padding:8px; text-align:right;">股票報酬</th>
+                            <th style="padding:8px; text-align:right; border-radius:0 4px 0 0;">CB報酬</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr style="background:#fff;">
+                            <td style="padding:8px;">股價上漲20%</td>
+                            <td style="padding:8px; text-align:right; color:#666;">-</td>
+                            <td style="padding:8px; text-align:right; color:#666;">-</td>
+                            <td style="padding:8px; text-align:right; color:#2e7d32;">+20.0%</td>
+                            <td style="padding:8px; text-align:right; color:#666;">-</td>
+                        </tr>
+                        <tr style="background:#fafafa;">
+                            <td style="padding:8px;">股價上漲50%</td>
+                            <td style="padding:8px; text-align:right; color:#666;">-</td>
+                            <td style="padding:8px; text-align:right; color:#666;">-</td>
+                            <td style="padding:8px; text-align:right; color:#2e7d32;">+50.0%</td>
+                            <td style="padding:8px; text-align:right; color:#666;">-</td>
+                        </tr>
+                        <tr style="background:#fff;">
+                            <td style="padding:8px;">股價上漲100%</td>
+                            <td style="padding:8px; text-align:right; color:#666;">-</td>
+                            <td style="padding:8px; text-align:right; color:#666;">-</td>
+                            <td style="padding:8px; text-align:right; color:#2e7d32;">+100.0%</td>
+                            <td style="padding:8px; text-align:right; color:#666;">-</td>
+                        </tr>
+                        <tr style="background:#fafafa;">
+                            <td style="padding:8px;">股價下跌20%</td>
+                            <td style="padding:8px; text-align:right; color:#666;">-</td>
+                            <td style="padding:8px; text-align:right; color:#666;">-</td>
+                            <td style="padding:8px; text-align:right; color:#d32f2f;">-20.0%</td>
+                            <td style="padding:8px; text-align:right; color:#666;">-</td>
+                        </tr>
+                        <tr style="background:#fff; border-radius:0 0 4px 4px;">
+                            <td style="padding:8px; border-radius:0 0 0 4px;">股價下跌50%</td>
+                            <td style="padding:8px; text-align:right; color:#666;">-</td>
+                            <td style="padding:8px; text-align:right; color:#666;">-</td>
+                            <td style="padding:8px; text-align:right; color:#d32f2f;">-50.0%</td>
+                            <td style="padding:8px; text-align:right; color:#666; border-radius:0 0 4px 0;">-</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- 結論 -->
+            <div style="margin-top:15px; padding:12px; background:#e8f5e9; border-radius:8px; border-left:4px solid #4caf50;">
+                <div style="font-weight:bold; color:#333; margin-bottom:8px; font-size:13px;">
+                    🎯 結論
+                </div>
+                <div style="font-size:12px; color:#555; line-height:1.6;">
+                    在最多損失 <span style="color:#d32f2f; font-weight:bold;">-</span> 元的情況下（把風險控制在可以接受的範圍內，先求少輸），<br>
+                    再買一個<span style="color:#2e7d32; font-weight:bold;">未來股價上漲的夢想</span>，只要未來的 <span style="color:#1565c0; font-weight:bold;">-</span> 天 / <span style="color:#1565c0; font-weight:bold;">-</span> 年內，
+                    股價大於 <span style="color:#7b1fa2; font-weight:bold;">-</span> 元。
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+/**
  * 取得期間標籤
  */
 function getPeriodLabel(period) {
     const labels = {
-        '30': '近30天',
-        '60': '近60天',
-        '90': '近90天',
-        '180': '近180天',
+        '30': '近1個月',
+        '90': '近3個月',
+        '180': '近6個月',
+        '365': '近1年',
+        '730': '近2年',
+        '1095': '近3年',
         'all': '全部期間'
     };
     return labels[period] || period;

@@ -4,8 +4,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97z-j (四區塊架構+基本資料查詢)</title>
+<title>AI智能可轉債競拍系統 v3.97z-k (四區塊架構+基本資料查詢)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
 <style>
 /* ================= 風格設定 ================= */
@@ -3315,7 +3316,7 @@ async function loadStatistics() {
         window.auctionDataCache = sheetAuction;
         console.log('📊 競拍數據已載入:', sheetAuction.length, '筆（供KNN使用）');
 
-        // v3.97z-j 新增：保存01和08工作表供基本資料查詢模組使用
+        // v3.97z-k 新增：保存01和08工作表供基本資料查詢模組使用
         window.sheet01Data = sheetAllCB || [];
         window.sheet08Data = sheetListed || [];
         console.log('📋 基本資料已載入: 01工作表', window.sheet01Data.length, '筆, 08工作表(掛牌中)', window.sheet08Data.length, '筆');
@@ -5997,14 +5998,14 @@ function initializeUI() {
     generateYearlyRanking();  // v3.55 新增
     generateRealPerformance(); // v3.56 新增
     generateProfitLossAnalysis(); // v3.59 新增
-    // generateDimensionAnalysis(); // v3.97z-j 移除：維度統計已整合至其他區塊
+    // generateDimensionAnalysis(); // v3.97z-k 移除：維度統計已整合至其他區塊
     generateMarketTrendAnalysis(); // v3.58 新增
     initQuickSelect(); // v3.73 修正：移到這裡確保資料已載入
     initSmartTips(); // v3.73 新增：智慧提示系統
     updateAtmospherePanel(); // v3.70 更新市場氛圍面板
     calculateMarketMomentum(); // v3.74 自動計算市場動能
     updateInitialDisplayFromData(); // v3.90 新增：更新初始顯示（從動態數據）
-    initBasicInfoModule(); // v3.97z-j 新增：基本資料查詢模組
+    initBasicInfoModule(); // v3.97z-k 新增：基本資料查詢模組
 }
 
 /**
@@ -8636,7 +8637,7 @@ function showDimensionTab(dimension, event) {
         event.stopPropagation();
     }
     
-    // v3.97z-j: 維度統計已移除，提前返回
+    // v3.97z-k: 維度統計已移除，提前返回
     const contentDiv = document.getElementById('dimensionContent');
     if (!contentDiv) return;
     
@@ -17590,7 +17591,7 @@ function updateAtmospherePanel() {
     `;
 }
 
-// ==================== v3.97z-j 新增：基本資料查詢模組（含篩選功能） ====================
+// ==================== v3.97z-k 新增：基本資料查詢模組（含篩選功能） ====================
 
 // 全域變數 - CB完整資料庫
 window.cbDatabase = {
@@ -18339,7 +18340,7 @@ function renderBasicInfoBalance(cbCode, container) {
     container.innerHTML = html;
 }
 
-// ==================== v3.97z-j 新增：價格走勢分析模組 ====================
+// ==================== v3.97z-k 新增：價格走勢分析模組 ====================
 
 /**
  * 載入價格走勢資料
@@ -18391,375 +18392,614 @@ function showPriceTrendTab(tabName, event) {
     // 顯示載入中
     content.innerHTML = `<div style="text-align:center; padding:40px; color:#666;">⏳ 載入 ${cbCode} 價格走勢中...</div>`;
     
-    // 模擬價格走勢圖（實際使用時需要載入CB_kanban資料）
-    setTimeout(() => {
+    // 取得期間設定
+    const period = document.getElementById('priceTrendPeriod')?.value || '90';
+    
+    // 載入kanban資料並繪製圖表
+    loadKanbanAndRender(cbCode, tabName, period, content);
+}
+
+// ==================== v3.97z-k 新增：CB_kanban資料載入與圖表繪製 ====================
+
+// 全域變數 - kanban時間序列資料
+window.kanbanData = {
+    loaded: false,
+    loading: false,
+    data: {},  // { cbCode: [{ date, stockPrice, cbPrice, convPrice, balance }] }
+    dates: []  // 所有日期清單
+};
+
+// Chart.js 實例存儲（用於銷毀舊圖表）
+let priceChartInstance = null;
+
+/**
+ * 載入kanban資料並渲染圖表
+ */
+async function loadKanbanAndRender(cbCode, tabName, period, container) {
+    try {
+        // 檢查是否已載入資料
+        if (!window.kanbanData.loaded && !window.kanbanData.loading) {
+            container.innerHTML = `<div style="text-align:center; padding:40px; color:#666;">⏳ 首次載入歷史資料中，請稍候...</div>`;
+            await loadAllKanbanData();
+        }
+        
+        // 等待載入完成
+        while (window.kanbanData.loading) {
+            await new Promise(r => setTimeout(r, 100));
+        }
+        
+        // 取得該CB的時間序列資料
+        const cbTimeSeries = window.kanbanData.data[cbCode] || [];
+        
+        if (cbTimeSeries.length === 0) {
+            container.innerHTML = `
+                <div style="text-align:center; padding:40px; color:#999;">
+                    <div style="font-size:48px; margin-bottom:15px;">📭</div>
+                    <div style="font-size:14px;">找不到 ${cbCode} 的歷史價格資料</div>
+                    <div style="font-size:12px; margin-top:10px; color:#aaa;">可能是新發行或已下市的CB</div>
+                </div>`;
+            return;
+        }
+        
+        // 依期間篩選資料
+        const filteredData = filterDataByPeriod(cbTimeSeries, period);
+        
+        // 渲染對應的圖表
         switch(tabName) {
             case 'stockPrice':
-                renderStockPriceTrend(cbCode, content);
+                renderStockPriceChart(cbCode, filteredData, container, period);
                 break;
             case 'cbPrice':
-                renderCBPriceTrend(cbCode, content);
+                renderCBPriceChart(cbCode, filteredData, container, period);
                 break;
             case 'balance':
-                renderBalanceTrend(cbCode, content);
+                renderBalanceChart(cbCode, filteredData, container, period);
                 break;
         }
-    }, 100);
+        
+    } catch (err) {
+        console.error('載入kanban資料失敗:', err);
+        container.innerHTML = `<div style="text-align:center; padding:40px; color:#c62828;">❌ 載入資料失敗: ${err.message}</div>`;
+    }
 }
 
 /**
- * 渲染股價與轉換價走勢
+ * 載入所有kanban檔案資料
  */
-function renderStockPriceTrend(cbCode, container) {
-    const searchCode = String(cbCode).trim();
+async function loadAllKanbanData() {
+    if (window.kanbanData.loading) return;
+    window.kanbanData.loading = true;
     
-    // 取得CB資料
-    let data = null;
-    if (window.auctionDataCache && window.auctionDataCache.length > 0) {
-        data = window.auctionDataCache.find(r => String(r['CB代號']).trim() === searchCode);
-    }
-    if (!data && window.auctionRawData && window.auctionRawData.length > 0) {
-        data = window.auctionRawData.find(r => String(r.cbCode).trim() === searchCode);
-    }
+    console.log('開始載入CB_kanban資料...');
+    const startTime = Date.now();
     
-    // 提取價格資訊
-    const stockPrice = data ? (parseFloat(data['截標收盤']) || 0) : 0;
-    const convPrice = data ? (parseFloat(data['轉換價']) || 0) : 0;
-    const theoPrice = data ? (parseFloat(data['理論價']) || 0) : 0;
-    const convValue = convPrice > 0 ? (stockPrice / convPrice * 100) : 0;
-    const priceRatio = stockPrice > 0 && convPrice > 0 ? (stockPrice / convPrice * 100) : 0;
-    
-    // 計算圖表比例（以最大值為100%）
-    const maxPrice = Math.max(stockPrice, convPrice, theoPrice, convValue, 100);
-    const stockPct = (stockPrice / maxPrice * 100).toFixed(1);
-    const convPricePct = (convPrice / maxPrice * 100).toFixed(1);
-    const theoPct = (theoPrice / maxPrice * 100).toFixed(1);
-    const convValuePct = (convValue / maxPrice * 100).toFixed(1);
-    
-    const html = `
-        <div style="background:#fff; padding:20px; border-radius:8px;">
-            <div style="font-weight:bold; color:#1976d2; margin-bottom:15px; font-size:16px;">
-                📈 ${cbCode} 股價與轉換價分析
-            </div>
-            
-            <!-- 數據卡片 -->
-            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-bottom:20px;">
-                <div style="background:#e3f2fd; padding:12px; border-radius:8px; text-align:center;">
-                    <div style="font-size:11px; color:#666;">截標日股價</div>
-                    <div style="font-size:18px; font-weight:bold; color:#1976d2;">${stockPrice ? stockPrice.toFixed(2) : '-'}</div>
-                </div>
-                <div style="background:#fff3e0; padding:12px; border-radius:8px; text-align:center;">
-                    <div style="font-size:11px; color:#666;">轉換價格</div>
-                    <div style="font-size:18px; font-weight:bold; color:#e65100;">${convPrice ? convPrice.toFixed(2) : '-'}</div>
-                </div>
-                <div style="background:#e8f5e9; padding:12px; border-radius:8px; text-align:center;">
-                    <div style="font-size:11px; color:#666;">轉換價值</div>
-                    <div style="font-size:18px; font-weight:bold; color:#2e7d32;">${convValue ? convValue.toFixed(2) : '-'}</div>
-                </div>
-                <div style="background:#f3e5f5; padding:12px; border-radius:8px; text-align:center;">
-                    <div style="font-size:11px; color:#666;">理論價</div>
-                    <div style="font-size:18px; font-weight:bold; color:#7b1fa2;">${theoPrice ? theoPrice.toFixed(2) : '-'}</div>
-                </div>
-            </div>
-            
-            <!-- 視覺化條形圖 -->
-            <div style="background:#f5f5f5; padding:15px; border-radius:8px;">
-                <div style="font-size:12px; color:#666; margin-bottom:12px;">📊 價格比較圖</div>
+    try {
+        const files = [
+            'CB_kanban_2023.xlsx',
+            'CB_kanban_2024.xlsx',
+            'CB_kanban_2025.xlsx'
+        ];
+        
+        const allData = {};
+        const allDates = [];
+        
+        for (const filename of files) {
+            try {
+                const response = await fetch(filename);
+                if (!response.ok) {
+                    console.warn(`找不到 ${filename}，跳過`);
+                    continue;
+                }
                 
-                <div style="margin-bottom:10px;">
-                    <div style="display:flex; align-items:center; margin-bottom:5px;">
-                        <span style="width:80px; font-size:11px; color:#666;">截標股價</span>
-                        <div style="flex:1; background:#e0e0e0; height:24px; border-radius:4px; overflow:hidden;">
-                            <div style="width:${stockPct}%; background:linear-gradient(90deg, #1976d2, #42a5f5); height:100%; border-radius:4px; display:flex; align-items:center; justify-content:flex-end; padding-right:8px;">
-                                <span style="color:white; font-size:11px; font-weight:bold;">${stockPrice ? stockPrice.toFixed(2) : '-'}</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div style="display:flex; align-items:center; margin-bottom:5px;">
-                        <span style="width:80px; font-size:11px; color:#666;">轉換價</span>
-                        <div style="flex:1; background:#e0e0e0; height:24px; border-radius:4px; overflow:hidden;">
-                            <div style="width:${convPricePct}%; background:linear-gradient(90deg, #e65100, #ff9800); height:100%; border-radius:4px; display:flex; align-items:center; justify-content:flex-end; padding-right:8px;">
-                                <span style="color:white; font-size:11px; font-weight:bold;">${convPrice ? convPrice.toFixed(2) : '-'}</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div style="display:flex; align-items:center; margin-bottom:5px;">
-                        <span style="width:80px; font-size:11px; color:#666;">轉換價值</span>
-                        <div style="flex:1; background:#e0e0e0; height:24px; border-radius:4px; overflow:hidden;">
-                            <div style="width:${convValuePct}%; background:linear-gradient(90deg, #2e7d32, #66bb6a); height:100%; border-radius:4px; display:flex; align-items:center; justify-content:flex-end; padding-right:8px;">
-                                <span style="color:white; font-size:11px; font-weight:bold;">${convValue ? convValue.toFixed(2) : '-'}</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div style="display:flex; align-items:center;">
-                        <span style="width:80px; font-size:11px; color:#666;">理論價</span>
-                        <div style="flex:1; background:#e0e0e0; height:24px; border-radius:4px; overflow:hidden;">
-                            <div style="width:${theoPct}%; background:linear-gradient(90deg, #7b1fa2, #ab47bc); height:100%; border-radius:4px; display:flex; align-items:center; justify-content:flex-end; padding-right:8px;">
-                                <span style="color:white; font-size:11px; font-weight:bold;">${theoPrice ? theoPrice.toFixed(2) : '-'}</span>
-                            </div>
-                        </div>
-                    </div>
+                const workbook = XLSX.read(await response.arrayBuffer(), { type: 'array' });
+                console.log(`載入 ${filename}: ${workbook.SheetNames.length} 個工作表`);
+                
+                // 每個工作表是一個交易日
+                for (const sheetName of workbook.SheetNames) {
+                    // 工作表名稱格式: 20250102
+                    const dateStr = sheetName;
+                    if (!/^\d{8}$/.test(dateStr)) continue;
+                    
+                    const year = dateStr.substring(0, 4);
+                    const month = dateStr.substring(4, 6);
+                    const day = dateStr.substring(6, 8);
+                    const dateFormatted = `${year}/${month}/${day}`;
+                    
+                    allDates.push(dateFormatted);
+                    
+                    const sheet = workbook.Sheets[sheetName];
+                    const rows = XLSX.utils.sheet_to_json(sheet);
+                    
+                    for (const row of rows) {
+                        const code = String(row['債券代碼'] || '').trim();
+                        if (!code) continue;
+                        
+                        if (!allData[code]) {
+                            allData[code] = [];
+                        }
+                        
+                        // 轉換Excel日期數字
+                        const convPrice = parseFloat(row['轉換價格']) || 0;
+                        const cbPrice = parseFloat(row['轉債參考價格']) || 0;
+                        const stockPrice = parseFloat(row['轉換標的股票價格']) || 0;
+                        const balance = parseFloat(row['上月底發行餘額']) || 0;
+                        const originalBalance = parseFloat(row['原始發行總額']) || 0;
+                        
+                        // 計算轉換價值
+                        const convValue = convPrice > 0 ? (stockPrice / convPrice * 100) : 0;
+                        // 計算溢折價
+                        const premium = convValue > 0 && cbPrice > 0 ? ((cbPrice - convValue) / convValue * 100) : 0;
+                        // 計算剩餘比率
+                        const remainRatio = originalBalance > 0 ? (balance / originalBalance * 100) : 100;
+                        
+                        allData[code].push({
+                            date: dateFormatted,
+                            dateNum: parseInt(dateStr),
+                            stockPrice,
+                            cbPrice,
+                            convPrice,
+                            convValue,
+                            premium,
+                            balance: balance / 100000000, // 轉為億
+                            originalBalance: originalBalance / 100000000,
+                            remainRatio
+                        });
+                    }
+                }
+            } catch (err) {
+                console.warn(`載入 ${filename} 失敗:`, err);
+            }
+        }
+        
+        // 對每個CB的資料按日期排序
+        for (const code in allData) {
+            allData[code].sort((a, b) => a.dateNum - b.dateNum);
+        }
+        
+        // 日期去重並排序
+        const uniqueDates = [...new Set(allDates)].sort();
+        
+        window.kanbanData.data = allData;
+        window.kanbanData.dates = uniqueDates;
+        window.kanbanData.loaded = true;
+        
+        const elapsed = Date.now() - startTime;
+        console.log(`CB_kanban資料載入完成: ${Object.keys(allData).length} 檔CB, ${uniqueDates.length} 個交易日, 耗時 ${elapsed}ms`);
+        
+    } catch (err) {
+        console.error('載入kanban資料失敗:', err);
+    } finally {
+        window.kanbanData.loading = false;
+    }
+}
+
+/**
+ * 依期間篩選資料
+ */
+function filterDataByPeriod(data, period) {
+    if (period === 'all' || !data || data.length === 0) return data;
+    
+    const days = parseInt(period) || 90;
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+    const cutoffNum = parseInt(cutoffDate.toISOString().slice(0, 10).replace(/-/g, ''));
+    
+    return data.filter(d => d.dateNum >= cutoffNum);
+}
+
+/**
+ * 渲染股價與轉換價走勢圖
+ */
+function renderStockPriceChart(cbCode, data, container, period) {
+    const periodLabel = getPeriodLabel(period);
+    
+    // 準備圖表資料
+    const labels = data.map(d => d.date);
+    const stockPrices = data.map(d => d.stockPrice);
+    const convPrices = data.map(d => d.convPrice);
+    const convValues = data.map(d => d.convValue);
+    
+    // 計算統計數據
+    const latestData = data[data.length - 1] || {};
+    const firstData = data[0] || {};
+    const priceChange = latestData.stockPrice && firstData.stockPrice 
+        ? ((latestData.stockPrice - firstData.stockPrice) / firstData.stockPrice * 100).toFixed(2)
+        : 0;
+    const isInMoney = latestData.stockPrice > latestData.convPrice;
+    
+    container.innerHTML = `
+        <div style="background:#fff; padding:15px; border-radius:8px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <div style="font-weight:bold; color:#1976d2; font-size:16px;">
+                    📈 ${cbCode} 股價與轉換價走勢 <span style="font-size:12px; color:#666; font-weight:normal;">(${periodLabel})</span>
+                </div>
+                <div style="font-size:12px; padding:4px 10px; border-radius:12px; background:${isInMoney ? '#e8f5e9' : '#fff3e0'}; color:${isInMoney ? '#2e7d32' : '#e65100'};">
+                    ${isInMoney ? '✅ 價內' : '⚠️ 價外'}
                 </div>
             </div>
             
-            <!-- 分析結論 -->
-            <div style="margin-top:15px; padding:12px; background:${priceRatio >= 100 ? '#e8f5e9' : '#fff3e0'}; border-radius:6px; border-left:4px solid ${priceRatio >= 100 ? '#4caf50' : '#ff9800'};">
-                <div style="font-size:12px; color:#666;">💡 分析結論</div>
-                <div style="font-size:13px; color:#333; margin-top:5px;">
-                    股價/轉換價 = <strong style="color:${priceRatio >= 100 ? '#2e7d32' : '#e65100'};">${priceRatio ? priceRatio.toFixed(2) : '-'}%</strong>
-                    ${priceRatio >= 100 ? '（價內，具轉換價值）' : '（價外，需等待股價上漲）'}
+            <!-- 數據摘要 -->
+            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-bottom:15px;">
+                <div style="background:#e3f2fd; padding:10px; border-radius:6px; text-align:center;">
+                    <div style="font-size:10px; color:#666;">最新股價</div>
+                    <div style="font-size:16px; font-weight:bold; color:#1976d2;">${latestData.stockPrice?.toFixed(2) || '-'}</div>
                 </div>
+                <div style="background:#fff3e0; padding:10px; border-radius:6px; text-align:center;">
+                    <div style="font-size:10px; color:#666;">轉換價</div>
+                    <div style="font-size:16px; font-weight:bold; color:#e65100;">${latestData.convPrice?.toFixed(2) || '-'}</div>
+                </div>
+                <div style="background:#e8f5e9; padding:10px; border-radius:6px; text-align:center;">
+                    <div style="font-size:10px; color:#666;">轉換價值</div>
+                    <div style="font-size:16px; font-weight:bold; color:#2e7d32;">${latestData.convValue?.toFixed(2) || '-'}</div>
+                </div>
+                <div style="background:#f5f5f5; padding:10px; border-radius:6px; text-align:center;">
+                    <div style="font-size:10px; color:#666;">期間漲跌</div>
+                    <div style="font-size:16px; font-weight:bold; color:${priceChange >= 0 ? '#c62828' : '#2e7d32'};">${priceChange >= 0 ? '+' : ''}${priceChange}%</div>
+                </div>
+            </div>
+            
+            <!-- 圖表區域 -->
+            <div style="height:280px; position:relative;">
+                <canvas id="stockPriceChart"></canvas>
             </div>
         </div>
     `;
     
-    container.innerHTML = html;
+    // 銷毀舊圖表
+    if (priceChartInstance) {
+        priceChartInstance.destroy();
+        priceChartInstance = null;
+    }
+    
+    // 繪製Chart.js圖表
+    const ctx = document.getElementById('stockPriceChart').getContext('2d');
+    priceChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: '股價',
+                    data: stockPrices,
+                    borderColor: '#1976d2',
+                    backgroundColor: 'rgba(25, 118, 210, 0.1)',
+                    fill: false,
+                    tension: 0.1,
+                    pointRadius: 0,
+                    borderWidth: 2
+                },
+                {
+                    label: '轉換價',
+                    data: convPrices,
+                    borderColor: '#e65100',
+                    borderDash: [5, 5],
+                    fill: false,
+                    tension: 0,
+                    pointRadius: 0,
+                    borderWidth: 2
+                },
+                {
+                    label: '轉換價值',
+                    data: convValues,
+                    borderColor: '#2e7d32',
+                    backgroundColor: 'rgba(46, 125, 50, 0.1)',
+                    fill: true,
+                    tension: 0.1,
+                    pointRadius: 0,
+                    borderWidth: 1.5
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: { font: { size: 11 }, boxWidth: 12 }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': ' + context.parsed.y.toFixed(2);
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    ticks: { 
+                        font: { size: 10 },
+                        maxRotation: 45,
+                        maxTicksLimit: 10
+                    },
+                    grid: { display: false }
+                },
+                y: {
+                    ticks: { font: { size: 10 } },
+                    grid: { color: 'rgba(0,0,0,0.05)' }
+                }
+            }
+        }
+    });
 }
 
 /**
- * 渲染CB市價與折溢價走勢
+ * 渲染CB市價與折溢價走勢圖
  */
-function renderCBPriceTrend(cbCode, container) {
-    const searchCode = String(cbCode).trim();
+function renderCBPriceChart(cbCode, data, container, period) {
+    const periodLabel = getPeriodLabel(period);
     
-    // 取得CB資料
-    let data = null;
-    if (window.auctionDataCache && window.auctionDataCache.length > 0) {
-        data = window.auctionDataCache.find(r => String(r['CB代號']).trim() === searchCode);
-    }
-    if (!data && window.auctionRawData && window.auctionRawData.length > 0) {
-        data = window.auctionRawData.find(r => String(r.cbCode).trim() === searchCode);
-    }
+    const labels = data.map(d => d.date);
+    const cbPrices = data.map(d => d.cbPrice);
+    const convValues = data.map(d => d.convValue);
+    const premiums = data.map(d => d.premium);
     
-    // 提取競拍結果
-    const minBid = data ? (parseFloat(data['最低得標']) || 0) : 0;
-    const avgBid = data ? (parseFloat(data['平均得標']) || 0) : 0;
-    const theoPrice = data ? (parseFloat(data['理論價']) || 0) : 0;
-    const minPremium = data ? (parseFloat(data['最低溢價']) || 0) : 0;
-    const avgPremium = data ? (parseFloat(data['平均溢價']) || 0) : 0;
-    const basePrice = 100; // 底標價
+    const latestData = data[data.length - 1] || {};
+    const avgPremium = premiums.length > 0 ? (premiums.reduce((a, b) => a + b, 0) / premiums.length) : 0;
     
-    // 計算圖表比例
-    const maxPrice = Math.max(minBid, avgBid, theoPrice, basePrice, 110);
-    const minBidPct = (minBid / maxPrice * 100).toFixed(1);
-    const avgBidPct = (avgBid / maxPrice * 100).toFixed(1);
-    const theoPct = (theoPrice / maxPrice * 100).toFixed(1);
-    const basePct = (basePrice / maxPrice * 100).toFixed(1);
-    
-    // 溢價圓餅圖數據
-    const minPremPct = Math.min(Math.abs(minPremium * 100), 30);
-    const avgPremPct = Math.min(Math.abs(avgPremium * 100), 30);
-    
-    const html = `
-        <div style="background:#fff; padding:20px; border-radius:8px;">
-            <div style="font-weight:bold; color:#7b1fa2; margin-bottom:15px; font-size:16px;">
-                💹 ${cbCode} 競拍結果與溢價分析
-            </div>
-            
-            <!-- 數據卡片 -->
-            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-bottom:20px;">
-                <div style="background:#e8f5e9; padding:12px; border-radius:8px; text-align:center; border:2px solid #4caf50;">
-                    <div style="font-size:11px; color:#666;">最低得標</div>
-                    <div style="font-size:18px; font-weight:bold; color:#2e7d32;">${minBid ? minBid.toFixed(2) : '-'}</div>
+    container.innerHTML = `
+        <div style="background:#fff; padding:15px; border-radius:8px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <div style="font-weight:bold; color:#7b1fa2; font-size:16px;">
+                    💹 ${cbCode} CB市價與折溢價走勢 <span style="font-size:12px; color:#666; font-weight:normal;">(${periodLabel})</span>
                 </div>
-                <div style="background:#fff3e0; padding:12px; border-radius:8px; text-align:center; border:2px solid #ff9800;">
-                    <div style="font-size:11px; color:#666;">平均得標</div>
-                    <div style="font-size:18px; font-weight:bold; color:#e65100;">${avgBid ? avgBid.toFixed(2) : '-'}</div>
-                </div>
-                <div style="background:#e3f2fd; padding:12px; border-radius:8px; text-align:center;">
-                    <div style="font-size:11px; color:#666;">理論價</div>
-                    <div style="font-size:18px; font-weight:bold; color:#1976d2;">${theoPrice ? theoPrice.toFixed(2) : '-'}</div>
-                </div>
-                <div style="background:#fce4ec; padding:12px; border-radius:8px; text-align:center;">
-                    <div style="font-size:11px; color:#666;">最低溢價</div>
-                    <div style="font-size:18px; font-weight:bold; color:#c2185b;">${minPremium ? (minPremium * 100).toFixed(2) + '%' : '-'}</div>
+                <div style="font-size:12px; padding:4px 10px; border-radius:12px; background:${latestData.premium >= 0 ? '#fff3e0' : '#e8f5e9'}; color:${latestData.premium >= 0 ? '#e65100' : '#2e7d32'};">
+                    ${latestData.premium >= 0 ? '溢價' : '折價'} ${Math.abs(latestData.premium || 0).toFixed(2)}%
                 </div>
             </div>
             
-            <!-- 價格比較條形圖 -->
-            <div style="background:#f5f5f5; padding:15px; border-radius:8px; margin-bottom:15px;">
-                <div style="font-size:12px; color:#666; margin-bottom:12px;">📊 競拍價格比較</div>
-                
-                <div style="display:flex; align-items:center; margin-bottom:8px;">
-                    <span style="width:70px; font-size:11px; color:#666;">底標價</span>
-                    <div style="flex:1; background:#e0e0e0; height:22px; border-radius:4px; overflow:hidden; position:relative;">
-                        <div style="width:${basePct}%; background:#9e9e9e; height:100%; border-radius:4px;"></div>
-                        <span style="position:absolute; right:8px; top:3px; font-size:11px; color:#333;">${basePrice}</span>
-                    </div>
+            <!-- 數據摘要 -->
+            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-bottom:15px;">
+                <div style="background:#f3e5f5; padding:10px; border-radius:6px; text-align:center;">
+                    <div style="font-size:10px; color:#666;">CB收盤價</div>
+                    <div style="font-size:16px; font-weight:bold; color:#7b1fa2;">${latestData.cbPrice?.toFixed(2) || '-'}</div>
                 </div>
-                <div style="display:flex; align-items:center; margin-bottom:8px;">
-                    <span style="width:70px; font-size:11px; color:#666;">理論價</span>
-                    <div style="flex:1; background:#e0e0e0; height:22px; border-radius:4px; overflow:hidden; position:relative;">
-                        <div style="width:${theoPct}%; background:linear-gradient(90deg, #1976d2, #42a5f5); height:100%; border-radius:4px;"></div>
-                        <span style="position:absolute; right:8px; top:3px; font-size:11px; color:#333;">${theoPrice ? theoPrice.toFixed(2) : '-'}</span>
-                    </div>
+                <div style="background:#e8f5e9; padding:10px; border-radius:6px; text-align:center;">
+                    <div style="font-size:10px; color:#666;">轉換價值</div>
+                    <div style="font-size:16px; font-weight:bold; color:#2e7d32;">${latestData.convValue?.toFixed(2) || '-'}</div>
                 </div>
-                <div style="display:flex; align-items:center; margin-bottom:8px;">
-                    <span style="width:70px; font-size:11px; color:#2e7d32; font-weight:bold;">最低得標</span>
-                    <div style="flex:1; background:#e0e0e0; height:26px; border-radius:4px; overflow:hidden; position:relative;">
-                        <div style="width:${minBidPct}%; background:linear-gradient(90deg, #2e7d32, #66bb6a); height:100%; border-radius:4px;"></div>
-                        <span style="position:absolute; right:8px; top:5px; font-size:12px; font-weight:bold; color:#333;">${minBid ? minBid.toFixed(2) : '-'}</span>
-                    </div>
+                <div style="background:#fff3e0; padding:10px; border-radius:6px; text-align:center;">
+                    <div style="font-size:10px; color:#666;">當前溢價</div>
+                    <div style="font-size:16px; font-weight:bold; color:#e65100;">${latestData.premium?.toFixed(2) || '-'}%</div>
                 </div>
-                <div style="display:flex; align-items:center;">
-                    <span style="width:70px; font-size:11px; color:#e65100; font-weight:bold;">平均得標</span>
-                    <div style="flex:1; background:#e0e0e0; height:26px; border-radius:4px; overflow:hidden; position:relative;">
-                        <div style="width:${avgBidPct}%; background:linear-gradient(90deg, #e65100, #ff9800); height:100%; border-radius:4px;"></div>
-                        <span style="position:absolute; right:8px; top:5px; font-size:12px; font-weight:bold; color:#333;">${avgBid ? avgBid.toFixed(2) : '-'}</span>
-                    </div>
+                <div style="background:#f5f5f5; padding:10px; border-radius:6px; text-align:center;">
+                    <div style="font-size:10px; color:#666;">期間平均溢價</div>
+                    <div style="font-size:16px; font-weight:bold; color:#666;">${avgPremium.toFixed(2)}%</div>
                 </div>
             </div>
             
-            <!-- 溢價分析 -->
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
-                <div style="background:#e8f5e9; padding:15px; border-radius:8px; text-align:center;">
-                    <div style="font-size:12px; color:#666; margin-bottom:8px;">最低得標溢價</div>
-                    <div style="position:relative; width:80px; height:80px; margin:0 auto;">
-                        <svg viewBox="0 0 36 36" style="transform:rotate(-90deg);">
-                            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#e0e0e0" stroke-width="3"/>
-                            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#4caf50" stroke-width="3" 
-                                stroke-dasharray="${minPremPct * 3.33}, 100" stroke-linecap="round"/>
-                        </svg>
-                        <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:14px; font-weight:bold; color:#2e7d32;">
-                            ${minPremium ? (minPremium * 100).toFixed(2) : '-'}%
-                        </div>
-                    </div>
-                </div>
-                <div style="background:#fff3e0; padding:15px; border-radius:8px; text-align:center;">
-                    <div style="font-size:12px; color:#666; margin-bottom:8px;">平均得標溢價</div>
-                    <div style="position:relative; width:80px; height:80px; margin:0 auto;">
-                        <svg viewBox="0 0 36 36" style="transform:rotate(-90deg);">
-                            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#e0e0e0" stroke-width="3"/>
-                            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#ff9800" stroke-width="3" 
-                                stroke-dasharray="${avgPremPct * 3.33}, 100" stroke-linecap="round"/>
-                        </svg>
-                        <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:14px; font-weight:bold; color:#e65100;">
-                            ${avgPremium ? (avgPremium * 100).toFixed(2) : '-'}%
-                        </div>
-                    </div>
-                </div>
+            <!-- 圖表區域 -->
+            <div style="height:280px; position:relative;">
+                <canvas id="cbPriceChart"></canvas>
             </div>
         </div>
     `;
     
-    container.innerHTML = html;
+    if (priceChartInstance) {
+        priceChartInstance.destroy();
+        priceChartInstance = null;
+    }
+    
+    const ctx = document.getElementById('cbPriceChart').getContext('2d');
+    priceChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'CB收盤價',
+                    data: cbPrices,
+                    borderColor: '#7b1fa2',
+                    backgroundColor: 'rgba(123, 31, 162, 0.1)',
+                    fill: false,
+                    tension: 0.1,
+                    pointRadius: 0,
+                    borderWidth: 2,
+                    yAxisID: 'y'
+                },
+                {
+                    label: '轉換價值',
+                    data: convValues,
+                    borderColor: '#2e7d32',
+                    borderDash: [3, 3],
+                    fill: false,
+                    tension: 0.1,
+                    pointRadius: 0,
+                    borderWidth: 1.5,
+                    yAxisID: 'y'
+                },
+                {
+                    label: '溢價率%',
+                    data: premiums,
+                    type: 'bar',
+                    backgroundColor: premiums.map(p => p >= 0 ? 'rgba(255, 152, 0, 0.5)' : 'rgba(76, 175, 80, 0.5)'),
+                    borderColor: premiums.map(p => p >= 0 ? '#ff9800' : '#4caf50'),
+                    borderWidth: 1,
+                    yAxisID: 'y1'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: { font: { size: 11 }, boxWidth: 12 }
+                }
+            },
+            scales: {
+                x: {
+                    ticks: { font: { size: 10 }, maxRotation: 45, maxTicksLimit: 10 },
+                    grid: { display: false }
+                },
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    ticks: { font: { size: 10 } },
+                    grid: { color: 'rgba(0,0,0,0.05)' },
+                    title: { display: true, text: '價格', font: { size: 10 } }
+                },
+                y1: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    ticks: { 
+                        font: { size: 10 },
+                        callback: function(value) { return value + '%'; }
+                    },
+                    grid: { drawOnChartArea: false },
+                    title: { display: true, text: '溢價率', font: { size: 10 } }
+                }
+            }
+        }
+    });
 }
 
 /**
- * 渲染餘額與轉換分析
+ * 渲染餘額與轉換走勢圖
  */
-function renderBalanceTrend(cbCode, container) {
-    const searchCode = String(cbCode).trim();
+function renderBalanceChart(cbCode, data, container, period) {
+    const periodLabel = getPeriodLabel(period);
     
-    // 取得CB資料
-    let data = null;
-    if (window.auctionDataCache && window.auctionDataCache.length > 0) {
-        data = window.auctionDataCache.find(r => String(r['CB代號']).trim() === searchCode);
-    }
-    if (!data && window.auctionRawData && window.auctionRawData.length > 0) {
-        data = window.auctionRawData.find(r => String(r.cbCode).trim() === searchCode);
-    }
+    const labels = data.map(d => d.date);
+    const balances = data.map(d => d.balance);
+    const remainRatios = data.map(d => d.remainRatio);
     
-    // 提取發行資訊
-    const issueSize = data ? (parseFloat(data['發行規模']) || 0) : 0;
-    const auctionShares = data ? (parseFloat(data['競拍張數']) || 0) : 0;
-    const bidShares = data ? (parseFloat(data['投標張數']) || 0) : 0;
-    const bidMultiple = data ? (parseFloat(data['投標倍數']) || 0) : 0;
-    const broker = data ? (data['發行券商'] || '-') : '-';
-    const guarantee = data ? (data['擔保'] || '-') : '-';
-    const tcri = data ? (data['TCRI'] || '-') : '-';
+    const latestData = data[data.length - 1] || {};
+    const firstData = data[0] || {};
+    const balanceChange = latestData.balance && firstData.balance
+        ? (firstData.balance - latestData.balance).toFixed(2)
+        : 0;
+    const convertedPct = 100 - (latestData.remainRatio || 100);
     
-    // 計算競拍佔發行比例（假設競拍佔40%）
-    const totalShares = auctionShares > 0 ? auctionShares / 0.4 : 0;
-    const auctionPct = totalShares > 0 ? (auctionShares / totalShares * 100) : 40;
-    const inquiryPct = 100 - auctionPct;
-    
-    // 投標倍數視覺化
-    const multipleWidth = Math.min(bidMultiple * 20, 100); // 5x = 100%
-    
-    const html = `
-        <div style="background:#fff; padding:20px; border-radius:8px;">
-            <div style="font-weight:bold; color:#2e7d32; margin-bottom:15px; font-size:16px;">
-                📊 ${cbCode} 發行與競拍概況
-            </div>
-            
-            <!-- 發行資訊卡片 -->
-            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-bottom:20px;">
-                <div style="background:#e3f2fd; padding:12px; border-radius:8px; text-align:center;">
-                    <div style="font-size:11px; color:#666;">發行規模</div>
-                    <div style="font-size:18px; font-weight:bold; color:#1976d2;">${issueSize ? issueSize.toLocaleString() : '-'}</div>
-                    <div style="font-size:10px; color:#999;">百萬</div>
+    container.innerHTML = `
+        <div style="background:#fff; padding:15px; border-radius:8px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <div style="font-weight:bold; color:#2e7d32; font-size:16px;">
+                    📊 ${cbCode} 餘額與轉換走勢 <span style="font-size:12px; color:#666; font-weight:normal;">(${periodLabel})</span>
                 </div>
-                <div style="background:#fff3e0; padding:12px; border-radius:8px; text-align:center;">
-                    <div style="font-size:11px; color:#666;">競拍張數</div>
-                    <div style="font-size:18px; font-weight:bold; color:#e65100;">${auctionShares ? auctionShares.toLocaleString() : '-'}</div>
-                    <div style="font-size:10px; color:#999;">張</div>
-                </div>
-                <div style="background:#f3e5f5; padding:12px; border-radius:8px; text-align:center;">
-                    <div style="font-size:11px; color:#666;">投標張數</div>
-                    <div style="font-size:18px; font-weight:bold; color:#7b1fa2;">${bidShares ? bidShares.toLocaleString() : '-'}</div>
-                    <div style="font-size:10px; color:#999;">張</div>
-                </div>
-                <div style="background:#e8f5e9; padding:12px; border-radius:8px; text-align:center; border:2px solid #4caf50;">
-                    <div style="font-size:11px; color:#666;">投標倍數</div>
-                    <div style="font-size:18px; font-weight:bold; color:#2e7d32;">${bidMultiple ? bidMultiple.toFixed(2) + 'x' : '-'}</div>
+                <div style="font-size:12px; padding:4px 10px; border-radius:12px; background:#e8f5e9; color:#2e7d32;">
+                    已轉換 ${convertedPct.toFixed(1)}%
                 </div>
             </div>
             
-            <!-- 投標倍數視覺化 -->
-            <div style="background:#f5f5f5; padding:15px; border-radius:8px; margin-bottom:15px;">
-                <div style="font-size:12px; color:#666; margin-bottom:10px;">📈 投標熱度指標</div>
-                <div style="display:flex; align-items:center; gap:10px;">
-                    <span style="font-size:11px; color:#999; width:30px;">冷</span>
-                    <div style="flex:1; background:#e0e0e0; height:30px; border-radius:15px; overflow:hidden; position:relative;">
-                        <div style="width:${multipleWidth}%; height:100%; border-radius:15px; background:linear-gradient(90deg, 
-                            ${bidMultiple < 2 ? '#66bb6a' : bidMultiple < 3 ? '#ffb74d' : bidMultiple < 4 ? '#ff8a65' : '#ef5350'}, 
-                            ${bidMultiple < 2 ? '#4caf50' : bidMultiple < 3 ? '#ff9800' : bidMultiple < 4 ? '#ff5722' : '#f44336'});"></div>
-                        <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:14px; font-weight:bold; color:#333;">
-                            ${bidMultiple ? bidMultiple.toFixed(2) + 'x' : '-'}
-                        </div>
-                    </div>
-                    <span style="font-size:11px; color:#f44336; width:30px;">熱</span>
+            <!-- 數據摘要 -->
+            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-bottom:15px;">
+                <div style="background:#e3f2fd; padding:10px; border-radius:6px; text-align:center;">
+                    <div style="font-size:10px; color:#666;">原始發行</div>
+                    <div style="font-size:16px; font-weight:bold; color:#1976d2;">${latestData.originalBalance?.toFixed(2) || '-'}</div>
+                    <div style="font-size:9px; color:#999;">億</div>
                 </div>
-                <div style="display:flex; justify-content:space-between; margin-top:5px; font-size:10px; color:#999;">
-                    <span>1x</span><span>2x</span><span>3x</span><span>4x</span><span>5x+</span>
+                <div style="background:#e8f5e9; padding:10px; border-radius:6px; text-align:center;">
+                    <div style="font-size:10px; color:#666;">流通餘額</div>
+                    <div style="font-size:16px; font-weight:bold; color:#2e7d32;">${latestData.balance?.toFixed(2) || '-'}</div>
+                    <div style="font-size:9px; color:#999;">億</div>
+                </div>
+                <div style="background:#fff3e0; padding:10px; border-radius:6px; text-align:center;">
+                    <div style="font-size:10px; color:#666;">剩餘比率</div>
+                    <div style="font-size:16px; font-weight:bold; color:#e65100;">${latestData.remainRatio?.toFixed(1) || '-'}%</div>
+                </div>
+                <div style="background:#f5f5f5; padding:10px; border-radius:6px; text-align:center;">
+                    <div style="font-size:10px; color:#666;">期間轉換</div>
+                    <div style="font-size:16px; font-weight:bold; color:#7b1fa2;">${balanceChange}億</div>
                 </div>
             </div>
             
-            <!-- 發行結構圓餅圖 -->
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
-                <div style="background:#e3f2fd; padding:15px; border-radius:8px;">
-                    <div style="font-size:12px; color:#666; margin-bottom:10px; text-align:center;">發行結構</div>
-                    <div style="position:relative; width:100px; height:100px; margin:0 auto;">
-                        <svg viewBox="0 0 36 36" style="transform:rotate(-90deg);">
-                            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#ff9800" stroke-width="4"/>
-                            <circle cx="18" cy="18" r="15.9" fill="none" stroke="#1976d2" stroke-width="4" 
-                                stroke-dasharray="${auctionPct}, 100" stroke-linecap="round"/>
-                        </svg>
-                        <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center;">
-                            <div style="font-size:12px; font-weight:bold; color:#1976d2;">${auctionPct.toFixed(0)}%</div>
-                            <div style="font-size:9px; color:#666;">競拍</div>
-                        </div>
-                    </div>
-                    <div style="display:flex; justify-content:center; gap:15px; margin-top:10px; font-size:10px;">
-                        <span><span style="display:inline-block; width:10px; height:10px; background:#1976d2; border-radius:2px; margin-right:3px;"></span>競拍</span>
-                        <span><span style="display:inline-block; width:10px; height:10px; background:#ff9800; border-radius:2px; margin-right:3px;"></span>詢圈</span>
-                    </div>
-                </div>
-                
-                <div style="background:#fff3e0; padding:15px; border-radius:8px;">
-                    <div style="font-size:12px; color:#666; margin-bottom:10px; text-align:center;">發行條件</div>
-                    <table style="width:100%; font-size:11px;">
-                        <tr><td style="color:#666; padding:3px 0;">發行券商</td><td style="font-weight:bold; text-align:right;">${broker}</td></tr>
-                        <tr><td style="color:#666; padding:3px 0;">擔保類型</td><td style="font-weight:bold; text-align:right; color:${guarantee === '有擔保' ? '#2e7d32' : '#e65100'};">${guarantee}</td></tr>
-                        <tr><td style="color:#666; padding:3px 0;">信用評等</td><td style="font-weight:bold; text-align:right;">TCRI ${tcri}</td></tr>
-                    </table>
-                </div>
+            <!-- 圖表區域 -->
+            <div style="height:280px; position:relative;">
+                <canvas id="balanceChart"></canvas>
             </div>
         </div>
     `;
     
-    container.innerHTML = html;
+    if (priceChartInstance) {
+        priceChartInstance.destroy();
+        priceChartInstance = null;
+    }
+    
+    const ctx = document.getElementById('balanceChart').getContext('2d');
+    priceChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: '流通餘額(億)',
+                    data: balances,
+                    borderColor: '#2e7d32',
+                    backgroundColor: 'rgba(46, 125, 50, 0.2)',
+                    fill: true,
+                    tension: 0.1,
+                    pointRadius: 0,
+                    borderWidth: 2,
+                    yAxisID: 'y'
+                },
+                {
+                    label: '剩餘比率%',
+                    data: remainRatios,
+                    borderColor: '#ff9800',
+                    borderDash: [5, 5],
+                    fill: false,
+                    tension: 0.1,
+                    pointRadius: 0,
+                    borderWidth: 2,
+                    yAxisID: 'y1'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: { font: { size: 11 }, boxWidth: 12 }
+                }
+            },
+            scales: {
+                x: {
+                    ticks: { font: { size: 10 }, maxRotation: 45, maxTicksLimit: 10 },
+                    grid: { display: false }
+                },
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    ticks: { font: { size: 10 } },
+                    grid: { color: 'rgba(0,0,0,0.05)' },
+                    title: { display: true, text: '餘額(億)', font: { size: 10 } }
+                },
+                y1: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    min: 0,
+                    max: 100,
+                    ticks: { 
+                        font: { size: 10 },
+                        callback: function(value) { return value + '%'; }
+                    },
+                    grid: { drawOnChartArea: false },
+                    title: { display: true, text: '剩餘比率', font: { size: 10 } }
+                }
+            }
+        }
+    });
 }
 
 /**

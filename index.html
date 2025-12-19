@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97z-l (四區塊架構+基本資料查詢)</title>
+<title>AI智能可轉債競拍系統 v3.97z-m (四區塊架構+基本資料查詢)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
@@ -2447,7 +2447,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 <div id="welcomeMsg" class="welcome-message">
     <h2>歡迎使用AI智能競拍評估系統</h2>
     <p style="margin-top:8px; color:#666; font-size: 13px; line-height:1.6;">
-        v3.97z-l 四區塊架構+走勢圖版<br>
+        v3.97z-m 四區塊架構+走勢圖版<br>
         • 分析法權重：產業30%、信評22%、理論價15%、券商13%、規模10%、股本5%、年期5%<br>
         • 自適應學習：以溢價率計算，建議價=理論價×(1+溢價率)
     </p>
@@ -3326,7 +3326,7 @@ async function loadStatistics() {
         window.auctionDataCache = sheetAuction;
         console.log('📊 競拍數據已載入:', sheetAuction.length, '筆（供KNN使用）');
 
-        // v3.97z-l 新增：保存01和08工作表供基本資料查詢模組使用
+        // v3.97z-m 新增：保存01和08工作表供基本資料查詢模組使用
         window.sheet01Data = sheetAllCB || [];
         window.sheet08Data = sheetListed || [];
         console.log('📋 基本資料已載入: 01工作表', window.sheet01Data.length, '筆, 08工作表(掛牌中)', window.sheet08Data.length, '筆');
@@ -6008,14 +6008,14 @@ function initializeUI() {
     generateYearlyRanking();  // v3.55 新增
     generateRealPerformance(); // v3.56 新增
     generateProfitLossAnalysis(); // v3.59 新增
-    // generateDimensionAnalysis(); // v3.97z-l 移除：維度統計已整合至其他區塊
+    // generateDimensionAnalysis(); // v3.97z-m 移除：維度統計已整合至其他區塊
     generateMarketTrendAnalysis(); // v3.58 新增
     initQuickSelect(); // v3.73 修正：移到這裡確保資料已載入
     initSmartTips(); // v3.73 新增：智慧提示系統
     updateAtmospherePanel(); // v3.70 更新市場氛圍面板
     calculateMarketMomentum(); // v3.74 自動計算市場動能
     updateInitialDisplayFromData(); // v3.90 新增：更新初始顯示（從動態數據）
-    initBasicInfoModule(); // v3.97z-l 新增：基本資料查詢模組
+    initBasicInfoModule(); // v3.97z-m 新增：基本資料查詢模組
 }
 
 /**
@@ -8647,7 +8647,7 @@ function showDimensionTab(dimension, event) {
         event.stopPropagation();
     }
     
-    // v3.97z-l: 維度統計已移除，提前返回
+    // v3.97z-m: 維度統計已移除，提前返回
     const contentDiv = document.getElementById('dimensionContent');
     if (!contentDiv) return;
     
@@ -17601,7 +17601,7 @@ function updateAtmospherePanel() {
     `;
 }
 
-// ==================== v3.97z-l 新增：基本資料查詢模組（含篩選功能） ====================
+// ==================== v3.97z-m 新增：基本資料查詢模組（含篩選功能） ====================
 
 // 全域變數 - CB完整資料庫
 window.cbDatabase = {
@@ -17940,26 +17940,116 @@ function showBasicInfoTab(tabName, event) {
  * 渲染基本資料總覽
  */
 function renderBasicInfoOverview(cbCode, container) {
-    // 從auctionDataCache尋找資料
+    // 從多個資料來源尋找資料
     let data = null;
+    let dataSource = '';
     const searchCode = String(cbCode).trim();
     
+    // 1. 先從auctionDataCache尋找（競拍完整資料）
     if (window.auctionDataCache && window.auctionDataCache.length > 0) {
         data = window.auctionDataCache.find(r => String(r['CB代號']).trim() === searchCode);
+        if (data) dataSource = 'auctionDataCache';
     }
     
-    // 若找不到，嘗試從 auctionRawData 尋找
+    // 2. 若找不到，嘗試從 auctionRawData 尋找
     if (!data && window.auctionRawData && window.auctionRawData.length > 0) {
-        data = window.auctionRawData.find(r => String(r.cbCode).trim() === searchCode);
+        const rawData = window.auctionRawData.find(r => String(r.cbCode).trim() === searchCode);
+        if (rawData) {
+            data = {
+                'CB代號': rawData.cbCode,
+                '名稱': rawData.name,
+                '股票代號': rawData.stockCode,
+                '產業分類': rawData.industry,
+                '信用評等': rawData.tcri,
+                'TCRI': rawData.tcri,
+                '擔保': rawData.guarantee,
+                '發行規模': rawData.issueSize,
+                '年期': rawData.term,
+                '股本(億)': rawData.capitalBillion,
+                '競拍張數': rawData.auctionShares,
+                '發行券商': rawData.broker,
+                '轉換價': rawData.convPrice,
+                '截標收盤': rawData.stockPrice,
+                '理論價': rawData.theoPrice,
+                '轉換比率': rawData.convRatio,
+                '年化波動': rawData.volatility,
+                'PBR': rawData.pbr,
+                '開標日期': rawData.openDate,
+                '截標日': rawData.bidDeadline,
+                '最低得標': rawData.minBid,
+                '平均得標': rawData.avgBid,
+                '投標倍數': rawData.bidMultiple,
+                '合格件數': rawData.validBids
+            };
+            dataSource = 'auctionRawData';
+        }
+    }
+    
+    // 3. 若仍找不到，從 sheet01Data（01工作表）尋找詢圈資料
+    if (!data && window.sheet01Data && window.sheet01Data.length > 0) {
+        const sheet01Row = window.sheet01Data.find(r => String(r['CB代號']).trim() === searchCode);
+        if (sheet01Row) {
+            data = {
+                'CB代號': sheet01Row['CB代號'],
+                '名稱': sheet01Row['名稱'],
+                '股票代號': sheet01Row['股票代號'],
+                '產業分類': sheet01Row['產業分類'],
+                '信用評等': sheet01Row['信用評等'],
+                'TCRI': sheet01Row['信用評等'],
+                '擔保': sheet01Row['擔保'],
+                '發行規模': sheet01Row['發行規模'],
+                '年期': sheet01Row['發行年期'],
+                '股本(億)': sheet01Row['股本大小'],
+                '發行券商': sheet01Row['發行券商'],
+                '轉換價': sheet01Row['轉換價格'],
+                '底標價': sheet01Row['發行價格'] || 100,
+                '產業地位': sheet01Row['產業地位'],
+                '到期還本價格': sheet01Row['到期還本價格'],
+                '訂價溢價率': sheet01Row['訂價溢價率'],
+                '掛牌日期': sheet01Row['掛牌日期'],
+                '到期日期': sheet01Row['到期日期'],
+                '掛牌最高': sheet01Row['掛牌最高'],
+                '掛牌最低': sheet01Row['掛牌最低'],
+                '發行方式': sheet01Row['詢圈競拍']
+            };
+            dataSource = 'sheet01Data';
+        }
+    }
+    
+    // 4. 從 cbDatabase.basic 補充資料
+    if (!data && window.cbDatabase && window.cbDatabase.basic[searchCode]) {
+        const basicRow = window.cbDatabase.basic[searchCode];
+        data = {
+            'CB代號': basicRow['CB代號'],
+            '名稱': basicRow['名稱'],
+            '股票代號': basicRow['股票代號'],
+            '產業分類': basicRow['產業分類'],
+            '信用評等': basicRow['信用評等'],
+            '擔保': basicRow['擔保'],
+            '發行規模': basicRow['發行規模'],
+            '年期': basicRow['發行年期'],
+            '發行方式': basicRow['詢圈競拍']
+        };
+        dataSource = 'cbDatabase.basic';
     }
     
     if (!data) {
-        container.innerHTML = `<div style="color:#e65100; padding:20px;">⚠️ 找不到 ${cbCode} 的基本資料</div>`;
-        document.getElementById('basicInfoStatus').textContent = `⚠️ ${cbCode} 無資料`;
+        container.innerHTML = `<div style="color:#e65100; padding:20px; text-align:center;">
+            <div style="font-size:32px; margin-bottom:10px;">⚠️</div>
+            <div>找不到 <strong>${cbCode}</strong> 的基本資料</div>
+            <div style="font-size:12px; color:#999; margin-top:8px;">請確認CB代號是否正確，或嘗試調整篩選條件</div>
+        </div>`;
+        document.getElementById('basicInfoStatus').innerHTML = `<span style="color:#e65100;">⚠️ ${cbCode} 無資料</span>`;
         return;
     }
     
-    document.getElementById('basicInfoStatus').textContent = `✅ 已載入 ${cbCode}`;
+    // 判斷是競拍還是詢圈
+    const isAuction = window.cbDatabase?.auctionCodes?.has(searchCode) || dataSource === 'auctionDataCache' || dataSource === 'auctionRawData';
+    const isListed = window.cbDatabase?.listedCodes?.has(searchCode);
+    const methodLabel = isAuction ? '🎯 競拍發行' : '📋 詢圈發行';
+    const statusLabel = isListed ? '🟢 掛牌中' : '⚫ 已下市';
+    
+    document.getElementById('basicInfoStatus').innerHTML = `✅ 已載入 ${cbCode} │ ${methodLabel} │ ${statusLabel}`;
     
     // 建立資訊卡片
     const html = `
@@ -17972,8 +18062,9 @@ function renderBasicInfoOverview(cbCode, container) {
                     <tr><td style="color:#666;">名稱</td><td>${data['名稱'] || '-'}</td></tr>
                     <tr><td style="color:#666;">轉換標的</td><td>${data['股票代號'] || '-'}</td></tr>
                     <tr><td style="color:#666;">產業分類</td><td>${data['產業分類'] || '-'}</td></tr>
-                    <tr><td style="color:#666;">信用評等</td><td>${data['信用評等'] || data['TCRI'] || '-'}</td></tr>
+                    <tr><td style="color:#666;">信用評等</td><td>TCRI ${data['信用評等'] || data['TCRI'] || '-'}</td></tr>
                     <tr><td style="color:#666;">擔保情形</td><td>${data['擔保'] || '-'}</td></tr>
+                    <tr><td style="color:#666;">發行方式</td><td style="color:${isAuction ? '#e65100' : '#1565c0'}; font-weight:bold;">${isAuction ? '競拍' : '詢圈'}</td></tr>
                 </table>
             </div>
             
@@ -17985,8 +18076,8 @@ function renderBasicInfoOverview(cbCode, container) {
                     <tr><td style="color:#666;">底標價</td><td>${data['底標價'] || '100'}元</td></tr>
                     <tr><td style="color:#666;">發行年期</td><td>${data['年期'] || '-'}年</td></tr>
                     <tr><td style="color:#666;">股本規模</td><td>${formatNumber(data['股本(億)'])} 億</td></tr>
-                    <tr><td style="color:#666;">競拍張數</td><td>${formatNumber(data['競拍張數'])} 張</td></tr>
                     <tr><td style="color:#666;">發行券商</td><td style="font-size:11px;">${data['發行券商'] || '-'}</td></tr>
+                    <tr><td style="color:#666;">訂價溢價率</td><td>${data['訂價溢價率'] ? (data['訂價溢價率'] * 100).toFixed(2) + '%' : '-'}</td></tr>
                 </table>
             </div>
             
@@ -18003,7 +18094,8 @@ function renderBasicInfoOverview(cbCode, container) {
                 </table>
             </div>
             
-            <!-- 競拍結果卡 -->
+            <!-- 第四卡片：競拍顯示結果，詢圈顯示掛牌表現 -->
+            ${isAuction ? `
             <div style="background:#f3e5f5; padding:15px; border-radius:8px; border-left:4px solid #9c27b0;">
                 <div style="font-weight:bold; color:#7b1fa2; margin-bottom:10px;">🎯 競拍結果</div>
                 <table style="width:100%; font-size:13px;">
@@ -18015,6 +18107,19 @@ function renderBasicInfoOverview(cbCode, container) {
                     <tr><td style="color:#666;">合格件數</td><td>${data['合格件數'] || '-'} 件</td></tr>
                 </table>
             </div>
+            ` : `
+            <div style="background:#e0f7fa; padding:15px; border-radius:8px; border-left:4px solid #00bcd4;">
+                <div style="font-weight:bold; color:#00838f; margin-bottom:10px;">📊 掛牌表現</div>
+                <table style="width:100%; font-size:13px;">
+                    <tr><td style="color:#666; width:40%;">掛牌日期</td><td>${formatDate(data['掛牌日期'])}</td></tr>
+                    <tr><td style="color:#666;">到期日期</td><td>${formatDate(data['到期日期'])}</td></tr>
+                    <tr><td style="color:#666;">掛牌最高</td><td style="font-weight:bold; color:#c62828;">${data['掛牌最高'] || '-'}元</td></tr>
+                    <tr><td style="color:#666;">掛牌最低</td><td style="font-weight:bold; color:#2e7d32;">${data['掛牌最低'] || '-'}元</td></tr>
+                    <tr><td style="color:#666;">到期還本價</td><td>${data['到期還本價格'] || '-'}元</td></tr>
+                    <tr><td style="color:#666;">交易狀態</td><td style="color:${isListed ? '#2e7d32' : '#666'};">${isListed ? '🟢 掛牌中' : '⚫ 已下市'}</td></tr>
+                </table>
+            </div>
+            `}
         </div>
     `;
     
@@ -18350,7 +18455,7 @@ function renderBasicInfoBalance(cbCode, container) {
     container.innerHTML = html;
 }
 
-// ==================== v3.97z-l 新增：價格走勢分析模組 ====================
+// ==================== v3.97z-m 新增：價格走勢分析模組 ====================
 
 /**
  * 載入價格走勢資料
@@ -18409,7 +18514,7 @@ function showPriceTrendTab(tabName, event) {
     loadKanbanAndRender(cbCode, tabName, period, content);
 }
 
-// ==================== v3.97z-l 新增：CB_kanban資料載入與圖表繪製 ====================
+// ==================== v3.97z-m 新增：CB_kanban資料載入與圖表繪製 ====================
 
 // 全域變數 - kanban時間序列資料
 window.kanbanData = {
@@ -18438,15 +18543,36 @@ async function loadKanbanAndRender(cbCode, tabName, period, container) {
             await new Promise(r => setTimeout(r, 100));
         }
         
-        // 取得該CB的時間序列資料
-        const cbTimeSeries = window.kanbanData.data[cbCode] || [];
+        // 取得該CB的時間序列資料（同時嘗試字串和數字格式）
+        const searchCode = String(cbCode).trim();
+        let cbTimeSeries = window.kanbanData.data[searchCode] || [];
+        
+        // 如果找不到，嘗試純數字格式（去掉前導零）
+        if (cbTimeSeries.length === 0) {
+            const numCode = parseInt(searchCode, 10);
+            if (!isNaN(numCode)) {
+                cbTimeSeries = window.kanbanData.data[String(numCode)] || [];
+            }
+        }
+        
+        // 除錯輸出
+        console.log(`[kanban] 查詢 ${searchCode}, 找到 ${cbTimeSeries.length} 筆資料`);
         
         if (cbTimeSeries.length === 0) {
+            // 檢查kanban中是否有該CB（列出前10個key作為參考）
+            const keys = Object.keys(window.kanbanData.data).slice(0, 10);
+            console.log(`[kanban] 資料庫中前10個CB代號:`, keys);
+            
             container.innerHTML = `
                 <div style="text-align:center; padding:40px; color:#999;">
                     <div style="font-size:48px; margin-bottom:15px;">📭</div>
-                    <div style="font-size:14px;">找不到 ${cbCode} 的歷史價格資料</div>
-                    <div style="font-size:12px; margin-top:10px; color:#aaa;">可能是新發行或已下市的CB</div>
+                    <div style="font-size:14px;">找不到 <strong>${cbCode}</strong> 的歷史價格資料</div>
+                    <div style="font-size:12px; margin-top:10px; color:#aaa;">
+                        可能原因：<br>
+                        • 新發行的CB，尚無歷史行情<br>
+                        • 已下市較久的CB，不在kanban資料中<br>
+                        • 請確認CB_kanban檔案是否在同一目錄
+                    </div>
                 </div>`;
             return;
         }

@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97z-i (四區塊架構+基本資料查詢)</title>
+<title>AI智能可轉債競拍系統 v3.97z-j (四區塊架構+基本資料查詢)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 
 <style>
@@ -2549,8 +2549,8 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
         <div class="right-section-content collapsed" id="basicInfoSection">
             
             <!-- CB選擇器 -->
-            <div style="margin-bottom:15px; padding:10px; background:#f5f5f5; border-radius:8px;">
-                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <div style="margin-bottom:15px; padding:15px; background:#f5f5f5; border-radius:8px;">
+                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">
                     <label style="font-weight:bold; color:#333;">🔍 選擇可轉債：</label>
                     <select id="basicInfoCBSelect" onchange="loadBasicInfo(this.value)" style="flex:1; min-width:200px; padding:8px 12px; border:2px solid #1976d2; border-radius:6px; font-size:14px;">
                         <option value="">-- 請選擇或輸入CB代號 --</option>
@@ -2559,8 +2559,42 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
                         🔄 重整
                     </button>
                 </div>
-                <div style="margin-top:8px; font-size:12px; color:#666;">
+                
+                <!-- 篩選器 -->
+                <div style="display:flex; gap:20px; flex-wrap:wrap; padding:10px; background:white; border-radius:6px; border:1px solid #e0e0e0;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-size:12px; color:#666; font-weight:bold;">發行方式：</span>
+                        <label style="font-size:12px; cursor:pointer;">
+                            <input type="radio" name="issueMethod" value="all" checked onchange="filterCBList()"> 全部
+                        </label>
+                        <label style="font-size:12px; cursor:pointer; color:#2e7d32;">
+                            <input type="radio" name="issueMethod" value="auction" onchange="filterCBList()"> 競拍
+                            <span id="auctionCount" style="font-size:10px; color:#999;">(0)</span>
+                        </label>
+                        <label style="font-size:12px; cursor:pointer; color:#1976d2;">
+                            <input type="radio" name="issueMethod" value="inquiry" onchange="filterCBList()"> 詢圈
+                            <span id="inquiryCount" style="font-size:10px; color:#999;">(0)</span>
+                        </label>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-size:12px; color:#666; font-weight:bold;">交易狀態：</span>
+                        <label style="font-size:12px; cursor:pointer;">
+                            <input type="radio" name="listingStatus" value="all" checked onchange="filterCBList()"> 全部
+                        </label>
+                        <label style="font-size:12px; cursor:pointer; color:#4caf50;">
+                            <input type="radio" name="listingStatus" value="listed" onchange="filterCBList()"> 掛牌中
+                            <span id="listedCount" style="font-size:10px; color:#999;">(0)</span>
+                        </label>
+                        <label style="font-size:12px; cursor:pointer; color:#9e9e9e;">
+                            <input type="radio" name="listingStatus" value="delisted" onchange="filterCBList()"> 已下市
+                            <span id="delistedCount" style="font-size:10px; color:#999;">(0)</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div style="margin-top:8px; font-size:12px; color:#666; display:flex; justify-content:space-between; align-items:center;">
                     <span id="basicInfoStatus">提示：可從左側競拍清單點選標的，或直接從下拉選單選擇</span>
+                    <span id="cbListCount" style="font-size:11px; color:#999;"></span>
                 </div>
             </div>
             
@@ -3280,6 +3314,11 @@ async function loadStatistics() {
         // v3.81 新增：保存競拍數據供KNN超級預測引擎使用
         window.auctionDataCache = sheetAuction;
         console.log('📊 競拍數據已載入:', sheetAuction.length, '筆（供KNN使用）');
+
+        // v3.97z-j 新增：保存01和08工作表供基本資料查詢模組使用
+        window.sheet01Data = sheetAllCB || [];
+        window.sheet08Data = sheetListed || [];
+        console.log('📋 基本資料已載入: 01工作表', window.sheet01Data.length, '筆, 08工作表(掛牌中)', window.sheet08Data.length, '筆');
 
         // v3.72 新增：建立產業分類對照表（從16工作表）
         window.industryMap = {};
@@ -5958,14 +5997,14 @@ function initializeUI() {
     generateYearlyRanking();  // v3.55 新增
     generateRealPerformance(); // v3.56 新增
     generateProfitLossAnalysis(); // v3.59 新增
-    // generateDimensionAnalysis(); // v3.97z-i 移除：維度統計已整合至其他區塊
+    // generateDimensionAnalysis(); // v3.97z-j 移除：維度統計已整合至其他區塊
     generateMarketTrendAnalysis(); // v3.58 新增
     initQuickSelect(); // v3.73 修正：移到這裡確保資料已載入
     initSmartTips(); // v3.73 新增：智慧提示系統
     updateAtmospherePanel(); // v3.70 更新市場氛圍面板
     calculateMarketMomentum(); // v3.74 自動計算市場動能
     updateInitialDisplayFromData(); // v3.90 新增：更新初始顯示（從動態數據）
-    initBasicInfoModule(); // v3.97z-i 新增：基本資料查詢模組
+    initBasicInfoModule(); // v3.97z-j 新增：基本資料查詢模組
 }
 
 /**
@@ -8597,7 +8636,7 @@ function showDimensionTab(dimension, event) {
         event.stopPropagation();
     }
     
-    // v3.97z-i: 維度統計已移除，提前返回
+    // v3.97z-j: 維度統計已移除，提前返回
     const contentDiv = document.getElementById('dimensionContent');
     if (!contentDiv) return;
     
@@ -17551,20 +17590,24 @@ function updateAtmospherePanel() {
     `;
 }
 
-// ==================== v3.97z-i 新增：基本資料查詢模組 ====================
+// ==================== v3.97z-j 新增：基本資料查詢模組（含篩選功能） ====================
 
-// 全域變數
-let basicInfoData = {
-    sheet08: null,  // 最新動態每週基本資料
-    sheet01: null,  // ALLCB基本資料
-    sheet02: null,  // ALLCB發行時程
-    sheet03: null,  // ALLCB賣回條件
-    sheet04: null,  // 所有CB競拍資料庫
-    sheet09: null,  // 最新動態每週日行情
-    sheet10: null   // 最新動態每週餘額表
+// 全域變數 - CB完整資料庫
+window.cbDatabase = {
+    allCB: [],           // 所有CB清單（整合後）
+    basic: {},           // 01工作表 - 基本資料 (以CB代號為key)
+    schedule: {},        // 02工作表 - 發行時程
+    putback: {},         // 03工作表 - 賣回條件
+    auction: {},         // 04工作表 - 競拍資料
+    listed: {},          // 08工作表 - 掛牌中清單
+    quote: {},           // 09工作表 - 最新行情
+    balance: {},         // 10工作表 - 餘額變化
+    listedCodes: new Set(), // 掛牌中的CB代號集合
+    auctionCodes: new Set() // 競拍發行的CB代號集合
 };
 
-let priceTrendData = {}; // 價格走勢時間序列資料
+// 篩選後的CB清單
+let filteredCBList = [];
 let currentBasicInfoCB = null;
 let currentPriceTrendCB = null;
 
@@ -17573,54 +17616,183 @@ let currentPriceTrendCB = null;
  */
 function initBasicInfoModule() {
     console.log('初始化基本資料查詢模組...');
+    buildCBDatabase();
     populateBasicInfoCBList();
 }
 
 /**
- * 填充基本資料CB選擇清單
+ * 建立CB完整資料庫（整合多個工作表）
  */
-function populateBasicInfoCBList() {
+function buildCBDatabase() {
+    const db = window.cbDatabase;
+    
+    // 從04工作表（競拍資料）建立競拍代號集合
+    if (window.auctionDataCache && window.auctionDataCache.length > 0) {
+        window.auctionDataCache.forEach(row => {
+            const code = String(row['CB代號'] || '').trim();
+            if (code) {
+                db.auctionCodes.add(code);
+                db.auction[code] = row;
+            }
+        });
+    }
+    
+    // 從auctionRawData補充競拍資料
+    if (window.auctionRawData && window.auctionRawData.length > 0) {
+        window.auctionRawData.forEach(row => {
+            const code = String(row.cbCode || '').trim();
+            if (code && !db.auctionCodes.has(code)) {
+                db.auctionCodes.add(code);
+                // 轉換欄位名稱
+                db.auction[code] = {
+                    'CB代號': code,
+                    '名稱': row.name,
+                    '開標日期': row.openDate,
+                    '最低得標': row.minBid,
+                    '平均得標': row.avgBid,
+                    '理論價': row.theoPrice,
+                    '投標倍數': row.bidMultiple,
+                    '最低溢價': row.minPremium,
+                    '發行規模': row.issueSize,
+                    '轉換價': row.convPrice,
+                    '截標收盤': row.stockPrice,
+                    '發行券商': row.broker,
+                    'TCRI': row.tcri,
+                    '擔保': row.guarantee,
+                    '產業分類': row.industry,
+                    '年期': row.term,
+                    '競拍張數': row.auctionShares,
+                    '投標張數': row.bidShares
+                };
+            }
+        });
+    }
+    
+    // 假設01、02、03、08、09、10工作表資料會在Excel載入時一併處理
+    // 這裡先從已有的資料建立基礎清單
+    
+    // 建立所有CB清單
+    const cbMap = new Map();
+    
+    // 從競拍資料加入
+    db.auctionCodes.forEach(code => {
+        const auctionData = db.auction[code];
+        if (auctionData) {
+            cbMap.set(code, {
+                code: code,
+                name: auctionData['名稱'] || '',
+                isAuction: true,
+                isListed: false, // 預設為已下市，後面會更新
+                issueMethod: '競拍',
+                status: '已下市'
+            });
+        }
+    });
+    
+    // 從其他來源補充（如果有載入01工作表）
+    if (window.sheet01Data && window.sheet01Data.length > 0) {
+        window.sheet01Data.forEach(row => {
+            const code = String(row['CB代號'] || '').trim();
+            const name = String(row['名稱'] || '');
+            const method = String(row['詢圈競拍'] || '').trim();
+            
+            if (code) {
+                if (!cbMap.has(code)) {
+                    cbMap.set(code, {
+                        code: code,
+                        name: name,
+                        isAuction: method === '競拍',
+                        isListed: false,
+                        issueMethod: method || (db.auctionCodes.has(code) ? '競拍' : '詢圈'),
+                        status: '已下市'
+                    });
+                } else {
+                    const existing = cbMap.get(code);
+                    existing.issueMethod = method || existing.issueMethod;
+                    existing.isAuction = method === '競拍' || existing.isAuction;
+                }
+                
+                // 儲存基本資料
+                db.basic[code] = row;
+            }
+        });
+    }
+    
+    // 從08工作表判斷掛牌中
+    if (window.sheet08Data && window.sheet08Data.length > 0) {
+        window.sheet08Data.forEach(row => {
+            const code = String(row['代號'] || '').trim();
+            if (code) {
+                db.listedCodes.add(code);
+                db.listed[code] = row;
+                
+                if (cbMap.has(code)) {
+                    const cb = cbMap.get(code);
+                    cb.isListed = true;
+                    cb.status = '掛牌中';
+                }
+            }
+        });
+    }
+    
+    // 轉換為陣列
+    db.allCB = Array.from(cbMap.values());
+    
+    console.log(`CB資料庫建立完成: 總計 ${db.allCB.length} 檔, 競拍 ${db.auctionCodes.size} 檔, 掛牌中 ${db.listedCodes.size} 檔`);
+}
+
+/**
+ * 篩選CB清單
+ */
+function filterCBList() {
+    const methodFilter = document.querySelector('input[name="issueMethod"]:checked')?.value || 'all';
+    const statusFilter = document.querySelector('input[name="listingStatus"]:checked')?.value || 'all';
+    
+    const db = window.cbDatabase;
+    
+    // 篩選
+    filteredCBList = db.allCB.filter(cb => {
+        // 發行方式篩選
+        if (methodFilter === 'auction' && !cb.isAuction) return false;
+        if (methodFilter === 'inquiry' && cb.isAuction) return false;
+        
+        // 交易狀態篩選
+        if (statusFilter === 'listed' && !cb.isListed) return false;
+        if (statusFilter === 'delisted' && cb.isListed) return false;
+        
+        return true;
+    });
+    
+    // 更新下拉選單
+    updateCBSelectOptions();
+    
+    // 更新計數顯示
+    const listCountEl = document.getElementById('cbListCount');
+    if (listCountEl) {
+        listCountEl.textContent = `顯示 ${filteredCBList.length} 檔`;
+    }
+}
+
+/**
+ * 更新CB下拉選單選項
+ */
+function updateCBSelectOptions() {
     const select = document.getElementById('basicInfoCBSelect');
     const priceTrendSelect = document.getElementById('priceTrendCBSelect');
     if (!select) return;
     
-    // 從已載入的統計資料中取得CB清單
-    const cbList = [];
-    
-    // 從auctionDataCache取得（已從Excel載入）
-    if (window.auctionDataCache && window.auctionDataCache.length > 0) {
-        window.auctionDataCache.forEach(row => {
-            const code = String(row['CB代號'] || '');
-            const name = String(row['名稱'] || '');
-            if (code && !cbList.find(c => c.code === code)) {
-                cbList.push({ code, name, status: '' });
-            }
-        });
-    }
-    
-    // 從auctionRawData補充
-    if (window.auctionRawData && window.auctionRawData.length > 0) {
-        window.auctionRawData.forEach(row => {
-            const code = String(row.cbCode || '');
-            const name = String(row.name || '');
-            if (code && !cbList.find(c => c.code === code)) {
-                cbList.push({ code, name, status: '' });
-            }
-        });
-    }
-    
     // 排序（依代號倒序，最新的在前面）
-    cbList.sort((a, b) => {
-        const codeA = String(a.code || '');
-        const codeB = String(b.code || '');
-        return codeB.localeCompare(codeA);
+    const sortedList = [...filteredCBList].sort((a, b) => {
+        return String(b.code).localeCompare(String(a.code));
     });
     
-    // 填充選單
+    // 生成選項HTML
     let optionsHTML = '<option value="">-- 請選擇CB代號 --</option>';
     
-    cbList.forEach(cb => {
-        optionsHTML += `<option value="${cb.code}">${cb.code} ${cb.name}</option>`;
+    sortedList.forEach(cb => {
+        const statusIcon = cb.isListed ? '🟢' : '⚫';
+        const methodIcon = cb.isAuction ? '🎯' : '📋';
+        optionsHTML += `<option value="${cb.code}">${statusIcon}${methodIcon} ${cb.code} ${cb.name}</option>`;
     });
     
     select.innerHTML = optionsHTML;
@@ -17629,15 +17801,57 @@ function populateBasicInfoCBList() {
     if (priceTrendSelect) {
         priceTrendSelect.innerHTML = optionsHTML;
     }
+}
+
+/**
+ * 填充基本資料CB選擇清單（初始化用）
+ */
+function populateBasicInfoCBList() {
+    const db = window.cbDatabase;
     
-    console.log(`基本資料查詢模組初始化完成，共 ${cbList.length} 檔CB可查詢`);
+    // 如果資料庫為空，從現有資料建立
+    if (db.allCB.length === 0) {
+        buildCBDatabase();
+    }
+    
+    // 初始化篩選清單（全部）
+    filteredCBList = [...db.allCB];
+    
+    // 更新統計數字
+    const auctionCount = db.allCB.filter(cb => cb.isAuction).length;
+    const inquiryCount = db.allCB.filter(cb => !cb.isAuction).length;
+    const listedCount = db.allCB.filter(cb => cb.isListed).length;
+    const delistedCount = db.allCB.filter(cb => !cb.isListed).length;
+    
+    // 更新UI顯示
+    const auctionCountEl = document.getElementById('auctionCount');
+    const inquiryCountEl = document.getElementById('inquiryCount');
+    const listedCountEl = document.getElementById('listedCount');
+    const delistedCountEl = document.getElementById('delistedCount');
+    
+    if (auctionCountEl) auctionCountEl.textContent = `(${auctionCount})`;
+    if (inquiryCountEl) inquiryCountEl.textContent = `(${inquiryCount})`;
+    if (listedCountEl) listedCountEl.textContent = `(${listedCount})`;
+    if (delistedCountEl) delistedCountEl.textContent = `(${delistedCount})`;
+    
+    // 更新下拉選單
+    updateCBSelectOptions();
+    
+    const listCountEl = document.getElementById('cbListCount');
+    if (listCountEl) {
+        listCountEl.textContent = `共 ${db.allCB.length} 檔`;
+    }
+    
+    console.log(`基本資料查詢模組初始化完成，共 ${db.allCB.length} 檔CB可查詢 (競拍${auctionCount}/詢圈${inquiryCount}, 掛牌中${listedCount}/已下市${delistedCount})`);
 }
 
 /**
  * 重整基本資料清單
  */
 function refreshBasicInfoList() {
+    buildCBDatabase();
     populateBasicInfoCBList();
+    filterCBList();
     document.getElementById('basicInfoStatus').textContent = '✅ 清單已重整';
 }
 
@@ -17650,11 +17864,20 @@ function loadBasicInfo(cbCode) {
             <div style="text-align:center; color:#999; padding:40px;">
                 👆 請先選擇一檔可轉債
             </div>`;
+        document.getElementById('basicInfoStatus').textContent = '提示：請選擇一檔可轉債查看詳細資料';
         return;
     }
     
     currentBasicInfoCB = cbCode;
-    document.getElementById('basicInfoStatus').textContent = `正在載入 ${cbCode} 的資料...`;
+    
+    // 取得CB狀態資訊
+    const db = window.cbDatabase;
+    const cbInfo = db.allCB.find(cb => cb.code === cbCode);
+    
+    const methodLabel = cbInfo?.isAuction ? '🎯競拍發行' : '📋詢圈發行';
+    const statusLabel = cbInfo?.isListed ? '🟢掛牌中' : '⚫已下市';
+    
+    document.getElementById('basicInfoStatus').textContent = `✅ 已載入 ${cbCode} │ ${methodLabel} │ ${statusLabel}`;
     
     // 顯示預設標籤（基本資料）
     showBasicInfoTab('overview');
@@ -17897,15 +18120,39 @@ function renderBasicInfoAuction(cbCode, container) {
     let data = null;
     const searchCode = String(cbCode).trim();
     
+    // 先檢查是否為競拍發行
+    const db = window.cbDatabase;
+    const cbInfo = db.allCB.find(cb => cb.code === searchCode);
+    const isAuction = cbInfo?.isAuction || db.auctionCodes.has(searchCode);
+    
     if (window.auctionDataCache && window.auctionDataCache.length > 0) {
         data = window.auctionDataCache.find(r => String(r['CB代號']).trim() === searchCode);
     }
     if (!data && window.auctionRawData && window.auctionRawData.length > 0) {
         data = window.auctionRawData.find(r => String(r.cbCode).trim() === searchCode);
     }
+    if (!data && db.auction[searchCode]) {
+        data = db.auction[searchCode];
+    }
     
-    if (!data) {
-        container.innerHTML = `<div style="color:#999; padding:20px;">⚠️ 找不到 ${cbCode} 的競拍資料（可能是詢圈發行）</div>`;
+    if (!data || !isAuction) {
+        // 詢圈發行 - 顯示說明
+        container.innerHTML = `
+            <div style="background:linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); padding:25px; border-radius:8px; text-align:center;">
+                <div style="font-size:48px; margin-bottom:15px;">📋</div>
+                <div style="font-weight:bold; color:#1976d2; font-size:18px; margin-bottom:10px;">本檔為詢圈發行</div>
+                <div style="color:#666; font-size:14px; line-height:1.8;">
+                    ${cbCode} 採用詢圈方式發行，無公開競拍資料。<br>
+                    詢圈發行由承銷商向特定法人詢價圈購，<br>
+                    不經由公開競標程序。
+                </div>
+                <div style="margin-top:20px; padding:15px; background:rgba(255,255,255,0.8); border-radius:6px;">
+                    <div style="font-size:12px; color:#666;">💡 提示</div>
+                    <div style="font-size:13px; color:#333; margin-top:5px;">
+                        可切換至「基本資料」或「發行時程」查看其他發行條件
+                    </div>
+                </div>
+            </div>`;
         return;
     }
     
@@ -18092,7 +18339,7 @@ function renderBasicInfoBalance(cbCode, container) {
     container.innerHTML = html;
 }
 
-// ==================== v3.97z-i 新增：價格走勢分析模組 ====================
+// ==================== v3.97z-j 新增：價格走勢分析模組 ====================
 
 /**
  * 載入價格走勢資料

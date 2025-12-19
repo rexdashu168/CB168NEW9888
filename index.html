@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97-zs-x (字體優化)</title>
+<title>AI智能可轉債競拍系統 v3.97-zs-y (修正版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <!-- v3.97-zs-f: kanban_data.js 改為延遲載入，不阻塞頁面 -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -1794,7 +1794,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 <div class="container" style="display: none;">
     <div class="header">
         <h1>🤖 AI智能可轉債競拍系統</h1>
-        <span class="version-badge">v3.97-zs-x 字體優化</span>
+        <span class="version-badge">v3.97-zs-y 修正版</span>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -15346,7 +15346,7 @@ function renderBasicInfoOverview(cbCode, container) {
                     <tr><td style="color:#666; padding:4px 0;">強贖觸發價</td><td style="color:#9c27b0; font-weight:bold; padding:4px 0;">${callTrigger130}元 <span style="font-size:11px; color:#999;">(130%)</span></td></tr>
                     <tr><td style="color:#666; padding:4px 0;">每張可換股數</td><td style="font-weight:bold; padding:4px 0;">${sharesPerBond} 股</td></tr>
                     <tr><td style="color:#666; padding:4px 0;">截標收盤價</td><td style="padding:4px 0;">${data['截標收盤'] || '-'}元</td></tr>
-                    <tr><td style="color:#666; padding:4px 0;">理論價</td><td style="color:#1976d2; font-weight:bold; padding:4px 0;">${data['理論價'] || '-'}元</td></tr>
+                    <tr><td style="color:#666; padding:4px 0;">理論價</td><td style="color:#1976d2; font-weight:bold; padding:4px 0;">${data['理論價'] ? parseFloat(data['理論價']).toFixed(2) : '-'}元</td></tr>
                     <tr><td style="color:#666; padding:4px 0;">年化波動</td><td style="padding:4px 0;">${data['年化波動'] ? (data['年化波動'] * 100).toFixed(2) + '%' : '-'}</td></tr>
                 </table>
             </div>
@@ -15688,14 +15688,19 @@ function renderBasicInfoTermination(cbCode, container) {
     const searchCode = String(cbCode).trim();
     const numSearchCode = parseInt(searchCode, 10);
     
-    // 從kanban資料取得終止狀態
+    // v3.97-zs-y 修正：kanbanData.data 是物件（key=CB代號, value=時間序列陣列）
     let kanbanRow = null;
-    console.log('[renderBasicInfoTermination] kanbanData:', window.kanbanData?.data?.length || 0, '筆');
-    if (window.kanbanData && window.kanbanData.data) {
-        kanbanRow = window.kanbanData.data.find(r => {
-            const code = String(r['代號'] || r['債券代碼'] || '').replace('.0', '').trim();
-            return code === searchCode || parseInt(code, 10) === numSearchCode;
-        });
+    if (window.kanbanData && window.kanbanData.data && window.kanbanData.loaded) {
+        // 嘗試用代號直接存取
+        let cbTimeSeries = window.kanbanData.data[searchCode];
+        if (!cbTimeSeries && numSearchCode) {
+            cbTimeSeries = window.kanbanData.data[String(numSearchCode)];
+        }
+        // 取最新一筆資料
+        if (cbTimeSeries && cbTimeSeries.length > 0) {
+            kanbanRow = cbTimeSeries[cbTimeSeries.length - 1];
+            console.log('[renderBasicInfoTermination] kanban找到', searchCode, '共', cbTimeSeries.length, '筆，取最新');
+        }
     }
     console.log('[renderBasicInfoTermination] kanbanRow:', kanbanRow ? '找到' : '未找到');
     
@@ -16127,7 +16132,7 @@ function renderBasicInfoQuote(cbCode, container) {
                     </div>
                     <div style="background:white; padding:12px; border-radius:6px; text-align:center; border:2px solid #9c27b0;">
                         <div style="font-size:11px; color:#666;">理論價</div>
-                        <div style="font-size:16px; font-weight:bold; color:#7b1fa2;">${theoPrice || '-'}元</div>
+                        <div style="font-size:16px; font-weight:bold; color:#7b1fa2;">${theoPrice ? theoPrice.toFixed(2) : '-'}元</div>
                     </div>
                     <div style="background:white; padding:12px; border-radius:6px; text-align:center;">
                         <div style="font-size:11px; color:#666;">年化波動率</div>

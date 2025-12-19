@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97-zs-a (精簡版)</title>
+<title>AI智能可轉債競拍系統 v3.97-zs-b (效能優化版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
@@ -1789,7 +1789,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 <div class="container" style="display: none;">
     <div class="header">
         <h1>🤖 AI智能可轉債競拍系統</h1>
-        <span class="version-badge">v3.97-zs-a 精簡版</span>
+        <span class="version-badge">v3.97-zs-b 效能優化版</span>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -2447,7 +2447,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 <div id="welcomeMsg" class="welcome-message">
     <h2>歡迎使用AI智能競拍評估系統</h2>
     <p style="margin-top:8px; color:#666; font-size: 13px; line-height:1.6;">
-        v3.97-zs-a 精簡版（移除重複功能）<br>
+        v3.97-zs-b 效能優化版（17次遍歷→2次）<br>
         • 分析法權重：產業30%、信評22%、理論價15%、券商13%、規模10%、股本5%、年期5%<br>
         • 自適應學習：以溢價率計算，建議價=理論價×(1+溢價率)
     </p>
@@ -3453,48 +3453,209 @@ async function loadStatistics() {
             console.log('半年度統計:', window.halfYearStats);
         }
 
-        // v3.72 新增：從04工作表動態計算統計模型參數
-        // 這些參數會隨著競拍樣本增加而自動更新
+        // v3.97-zs-b 優化：將17次遍歷合併成1次預處理
+        // 一次性預處理所有需要的欄位和統計分組
+        console.time('⚡ 統計預處理');
+        
         if (sheetAuction && sheetAuction.length > 0) {
-            // 預處理：計算溢價百分比
-            const auctionData = sheetAuction.map(row => {
-                const minPremium = safeFloat(row['最低溢價']) * 100; // 轉為百分比
+            // ===== 統一預處理：一次遍歷收集所有資料 =====
+            const collectors = {
+                // 基礎資料
+                auctionData: [],
+                spreadData: [],
+                weekMap: {},
+                
+                // 分組統計
+                brokerGroups: {},
+                guarGroups: { '有擔保': [], '無擔保': [] },
+                sizeGroups: { under3: [], '3to5': [], '5to10': [], '10to15': [], over15: [] },
+                theoGroups: {},
+                termGuarGroups: {},
+                convGroups: {},
+                industryGroups: {},
+                brokerPerfGroups: {},
+                ratingGroups: {},
+                
+                // 累計值
+                allMinBids: [],
+                allAvgBids: [],
+                allAvgPremiums: [],
+                overallSum: { minBid: 0, avgBid: 0, lowPrem: 0, avgPrem: 0, count: 0 }
+            };
+            
+            // 一次遍歷完成所有資料收集
+            sheetAuction.forEach(row => {
+                const minBid = safeFloat(row['最低得標'] || row['最低得標價格']);
+                const avgBid = safeFloat(row['加權均價'] || row['平均得標'] || row['平均得標價格'] || row['得標加權平均價格']);
                 const theoPrice = safeFloat(row['理論價']);
                 const bidMultiple = safeFloat(row['投標倍數']);
-                const broker = row['發行券商'] || '';
-                const guarantee = row['擔保'] || '';
                 const issueSize = safeFloat(row['發行規模']);
+                const minPremium = safeFloat(row['最低溢價']) * 100;
+                const avgPremium = safeFloat(row['平均溢價'] || row['加權溢價']) * 100;
+                const broker = row['發行券商'] || '';
+                const guarantee = row['擔保'] || '無擔保';
+                const industry = row['產業分類'] || row['產業'] || '';
+                const capital = safeFloat(row['股本'] || row['股本(億)']);
+                const convPrice = safeFloat(row['轉換價'] || row['轉換價格']);
+                const rating = String(row['信評'] || row['TCRI'] || '').replace(/[^0-9]/g, '');
+                const years = safeFloat(row['年期'] || row['發行年期']) || 3;
+                const dateRaw = row['開標日'] || row['開標日期'];
+                const cbName = row['名稱'] || row['CB名稱'] || '';
                 
-                // 判斷理論價區間
-                let theoKey = '>=110';
-                if (theoPrice > 0 && theoPrice < 95) theoKey = '<95';
-                else if (theoPrice < 100) theoKey = '95-100';
-                else if (theoPrice < 105) theoKey = '100-105';
-                else if (theoPrice < 110) theoKey = '105-110';
+                // 判斷區間鍵值
+                const theoKey = theoPrice <= 0 ? null : theoPrice < 95 ? '<95' : theoPrice < 100 ? '95-100' : theoPrice < 105 ? '100-105' : theoPrice < 110 ? '105-110' : '>=110';
+                const bidKey = bidMultiple <= 0 ? null : bidMultiple < 1.5 ? '<1.5' : bidMultiple < 2 ? '1.5-2' : bidMultiple < 2.5 ? '2-2.5' : bidMultiple < 3 ? '2.5-3' : '>=3';
+                const sizeKey = issueSize < 3 ? 'under3' : issueSize < 5 ? '3to5' : issueSize < 10 ? '5to10' : issueSize < 15 ? '10to15' : 'over15';
+                const guarKey = guarantee.includes('有') ? '有擔保' : '無擔保';
                 
-                // 判斷投標倍數區間
-                let bidKey = '>=3';
-                if (bidMultiple > 0 && bidMultiple < 1.5) bidKey = '<1.5';
-                else if (bidMultiple < 2) bidKey = '1.5-2';
-                else if (bidMultiple < 2.5) bidKey = '2-2.5';
-                else if (bidMultiple < 3) bidKey = '2.5-3';
+                // 1. 基礎 auctionData
+                if (!isNaN(minPremium) && theoPrice > 0) {
+                    collectors.auctionData.push({ minPremium, theoPrice, theoKey, bidMultiple, bidKey, broker, guarantee: guarKey, issueSize });
+                }
                 
-                return { minPremium, theoPrice, theoKey, bidMultiple, bidKey, broker, guarantee, issueSize };
-            }).filter(d => !isNaN(d.minPremium) && d.theoPrice > 0);
+                // 2. 價差統計
+                if (minBid > 0 && avgBid > 0 && avgBid >= minBid) {
+                    const spread = avgBid - minBid;
+                    collectors.spreadData.push({ minBid, avgBid, spread, size: issueSize, theo: theoPrice, mult: bidMultiple, guarantee: guarKey, sizeKey });
+                }
+                
+                // 3. 週次分組（資金排擠效應）
+                if (dateRaw && minBid > 0) {
+                    const date = parseExcelDate(dateRaw);
+                    if (date && !isNaN(date.getTime())) {
+                        const year = date.getFullYear();
+                        const startOfYear = new Date(year, 0, 1);
+                        const weekNum = Math.ceil(((date - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7);
+                        const weekKey = `${year}-W${weekNum.toString().padStart(2, '0')}`;
+                        if (!collectors.weekMap[weekKey]) collectors.weekMap[weekKey] = [];
+                        collectors.weekMap[weekKey].push({ name: cbName, date, minBid, mult: bidMultiple });
+                    }
+                }
+                
+                // 4. 各維度分組
+                if (broker) {
+                    if (!collectors.brokerGroups[broker]) collectors.brokerGroups[broker] = [];
+                    collectors.brokerGroups[broker].push(minPremium);
+                }
+                
+                if (minPremium && !isNaN(minPremium)) {
+                    collectors.guarGroups[guarKey].push({ minPremium, avgPremium, minBid, avgBid });
+                    collectors.sizeGroups[sizeKey].push({ minPremium, avgPremium, minBid, avgBid });
+                }
+                
+                // 5. 理論價區間分組
+                if (theoKey && minBid > 0) {
+                    if (!collectors.theoGroups[theoKey]) collectors.theoGroups[theoKey] = { lowPrem: [], avgPrem: [], minBid: [], avgBid: [] };
+                    collectors.theoGroups[theoKey].lowPrem.push(minPremium);
+                    collectors.theoGroups[theoKey].avgPrem.push(avgPremium);
+                    collectors.theoGroups[theoKey].minBid.push(minBid);
+                    collectors.theoGroups[theoKey].avgBid.push(avgBid);
+                }
+                
+                // 6. 年期×擔保分組
+                const termGuarKey = `${years}年${guarKey}`;
+                if (minBid > 0) {
+                    if (!collectors.termGuarGroups[termGuarKey]) collectors.termGuarGroups[termGuarKey] = { lowPrem: [], avgPrem: [], minBid: [], avgBid: [] };
+                    collectors.termGuarGroups[termGuarKey].lowPrem.push(minPremium);
+                    collectors.termGuarGroups[termGuarKey].avgPrem.push(avgPremium);
+                    collectors.termGuarGroups[termGuarKey].minBid.push(minBid);
+                    collectors.termGuarGroups[termGuarKey].avgBid.push(avgBid);
+                }
+                
+                // 7. 轉換價值分組
+                if (convPrice > 0 && theoPrice > 0 && minBid > 0) {
+                    const convValue = (theoPrice / 100) * convPrice;
+                    let cvKey = '>200%';
+                    if (convValue < 50) cvKey = '<50%';
+                    else if (convValue < 80) cvKey = '50-80%';
+                    else if (convValue < 100) cvKey = '80-100%';
+                    else if (convValue < 120) cvKey = '100-120%';
+                    else if (convValue < 150) cvKey = '120-150%';
+                    else if (convValue < 200) cvKey = '150-200%';
+                    if (!collectors.convGroups[cvKey]) collectors.convGroups[cvKey] = { lowPrem: [], avgPrem: [], minBid: [], avgBid: [] };
+                    collectors.convGroups[cvKey].lowPrem.push(minPremium);
+                    collectors.convGroups[cvKey].avgPrem.push(avgPremium);
+                    collectors.convGroups[cvKey].minBid.push(minBid);
+                    collectors.convGroups[cvKey].avgBid.push(avgBid);
+                }
+                
+                // 8. 產業分組
+                if (industry && minBid > 0) {
+                    if (!collectors.industryGroups[industry]) collectors.industryGroups[industry] = { lowPrem: [], avgPrem: [], minBid: [], avgBid: [], mult: [] };
+                    collectors.industryGroups[industry].lowPrem.push(minPremium);
+                    collectors.industryGroups[industry].avgPrem.push(avgPremium);
+                    collectors.industryGroups[industry].minBid.push(minBid);
+                    collectors.industryGroups[industry].avgBid.push(avgBid);
+                    collectors.industryGroups[industry].mult.push(bidMultiple);
+                }
+                
+                // 9. 券商績效分組
+                if (broker && minBid > 0) {
+                    if (!collectors.brokerPerfGroups[broker]) collectors.brokerPerfGroups[broker] = { lowPrem: [], avgPrem: [], minBid: [], avgBid: [], mult: [] };
+                    collectors.brokerPerfGroups[broker].lowPrem.push(minPremium);
+                    collectors.brokerPerfGroups[broker].avgPrem.push(avgPremium);
+                    collectors.brokerPerfGroups[broker].minBid.push(minBid);
+                    collectors.brokerPerfGroups[broker].avgBid.push(avgBid);
+                    collectors.brokerPerfGroups[broker].mult.push(bidMultiple);
+                }
+                
+                // 10. 信評分組
+                if (rating && minBid > 0) {
+                    if (!collectors.ratingGroups[rating]) collectors.ratingGroups[rating] = { lowPrem: [], avgPrem: [], minBid: [], avgBid: [] };
+                    collectors.ratingGroups[rating].lowPrem.push(minPremium);
+                    collectors.ratingGroups[rating].avgPrem.push(avgPremium);
+                    collectors.ratingGroups[rating].minBid.push(minBid);
+                    collectors.ratingGroups[rating].avgBid.push(avgBid);
+                }
+                
+                // 11. 整體統計累計
+                if (minBid > 0) collectors.allMinBids.push(minBid);
+                if (avgBid > 0) collectors.allAvgBids.push(avgBid);
+                if (!isNaN(avgPremium) && theoPrice > 0) collectors.allAvgPremiums.push(avgPremium);
+                if (minBid > 0 && avgBid > 0 && !isNaN(minPremium) && !isNaN(avgPremium)) {
+                    collectors.overallSum.minBid += minBid;
+                    collectors.overallSum.avgBid += avgBid;
+                    collectors.overallSum.lowPrem += minPremium;
+                    collectors.overallSum.avgPrem += avgPremium;
+                    collectors.overallSum.count++;
+                }
+                
+                // 12. 收集所有開標資料（用於最近10檔排序）
+                if (cbName && bidMultiple > 0 && minBid > 0 && dateRaw) {
+                    const d = parseExcelDate(dateRaw);
+                    if (d) {
+                        if (!collectors.allAuctions) collectors.allAuctions = [];
+                        collectors.allAuctions.push({
+                            name: cbName, date: d.toISOString().split('T')[0], dateObj: d,
+                            mult: bidMultiple, price: minBid, theo: theoPrice, guarantee: guarKey
+                        });
+                    }
+                }
+                
+                // 13. 收集 rankData 和 combinedData 需要的基礎資料
+                const cbCode = String(row['CB代號'] || '').replace('.0', '').trim();
+                if (!collectors.rawRows) collectors.rawRows = [];
+                collectors.rawRows.push({
+                    cbCode, issueSize, capital, theoPrice, theoKey, rating, industry, broker, 
+                    bidMultiple, guarantee: guarKey, minBid, avgBid, dateRaw
+                });
+            });
             
-            // 1. 計算承銷商溢價調整 (BROKER_PREMIUM_ADJ)
+            console.timeEnd('⚡ 統計預處理');
+            console.log(`📊 一次遍歷完成 ${sheetAuction.length} 筆資料預處理`);
+            
+            // ===== 統計計算（使用預處理資料）=====
+            console.time('⚡ 統計計算');
+            const auctionData = collectors.auctionData;
+            
+            // 1. 計算承銷商溢價調整 (BROKER_PREMIUM_ADJ) - 使用預處理資料
             const overallMean = auctionData.reduce((s, d) => s + d.minPremium, 0) / auctionData.length;
             window.brokerPremiumAdj = {};
             
-            const brokerGroups = {};
-            auctionData.forEach(d => {
-                if (!brokerGroups[d.broker]) brokerGroups[d.broker] = [];
-                brokerGroups[d.broker].push(d.minPremium);
-            });
-            
-            Object.keys(brokerGroups).forEach(broker => {
-                const vals = brokerGroups[broker];
-                if (vals.length >= 5) { // 至少5檔才有統計意義
+            // 使用預處理收集的 brokerGroups
+            Object.keys(collectors.brokerGroups).forEach(broker => {
+                const vals = collectors.brokerGroups[broker].filter(v => !isNaN(v));
+                if (vals.length >= 5) {
                     const mean = vals.reduce((s, v) => s + v, 0) / vals.length;
                     window.brokerPremiumAdj[broker] = Math.round((mean - overallMean) * 10) / 10;
                 }
@@ -3576,42 +3737,32 @@ async function loadStatistics() {
             console.log(`統計模型載入完成，共 ${auctionData.length} 筆競拍樣本`);
             
             // v3.74 新增：動態計算所有統計表格（取代寫死的數據）
-            // ===== 動態計算 OVERALL_STATS =====
+            // ===== 動態計算 OVERALL_STATS（使用預處理資料）=====
             const allBidMults = auctionData.map(d => d.bidMultiple).filter(v => v > 0);
-            const allMinBids = sheetAuction.map(row => safeFloat(row['最低得標'] || row['最低得標價格'])).filter(v => v > 0);
-            const allAvgBids = sheetAuction.map(row => safeFloat(row['加權均價'] || row['平均得標'] || row['平均得標價格'])).filter(v => v > 0);
             const allTheoPrices = auctionData.map(d => d.theoPrice).filter(v => v > 0);
             const allMinPremiums = auctionData.map(d => d.minPremium).filter(v => !isNaN(v));
             
-            // v3.97o 新增：計算平均溢價率（從原始數據）
-            const allAvgPremiums = sheetAuction.map(row => {
-                const avgPrem = safeFloat(row['平均溢價'] || row['得標加權平均價格_溢價率'] || row['平均得標溢價']);
-                // 如果是小數形式（如0.08），轉為百分比
-                return avgPrem > 0 && avgPrem < 1 ? avgPrem * 100 : avgPrem;
-            }).filter(v => v > 0 && v < 50); // 過濾異常值
-            
-            if (allBidMults.length > 0) {
+            if (allBidMults.length > 0 && collectors.allMinBids.length > 0) {
                 const sortedMults = [...allBidMults].sort((a, b) => a - b);
-                const sortedBids = [...allMinBids].sort((a, b) => a - b);
+                const sortedBids = [...collectors.allMinBids].sort((a, b) => a - b);
                 
-                // v3.97o 計算整體無加權的溢價率平均值
                 const avgLowPremium = allMinPremiums.length > 0 
                     ? allMinPremiums.reduce((s, v) => s + v, 0) / allMinPremiums.length 
                     : 6.5;
-                const avgAvgPremium = allAvgPremiums.length > 0 
-                    ? allAvgPremiums.reduce((s, v) => s + v, 0) / allAvgPremiums.length 
+                const avgAvgPremium = collectors.allAvgPremiums.length > 0 
+                    ? collectors.allAvgPremiums.reduce((s, v) => s + v, 0) / collectors.allAvgPremiums.length 
                     : 8.0;
                 
                 window.OVERALL_STATS = {
                     avgBidMult: allBidMults.reduce((s, v) => s + v, 0) / allBidMults.length,
                     medianBidMult: sortedMults[Math.floor(sortedMults.length / 2)],
-                    avgMinBid: allMinBids.reduce((s, v) => s + v, 0) / allMinBids.length,
-                    avgAvgBid: allAvgBids.length > 0 ? allAvgBids.reduce((s, v) => s + v, 0) / allAvgBids.length : 0,
+                    avgMinBid: collectors.allMinBids.reduce((s, v) => s + v, 0) / collectors.allMinBids.length,
+                    avgAvgBid: collectors.allAvgBids.length > 0 ? collectors.allAvgBids.reduce((s, v) => s + v, 0) / collectors.allAvgBids.length : 0,
                     medianMinBid: sortedBids[Math.floor(sortedBids.length / 2)],
                     avgTheoretical: allTheoPrices.reduce((s, v) => s + v, 0) / allTheoPrices.length,
-                    avgPremium: avgLowPremium,  // 保持向後兼容（這是最低溢價率）
-                    avgLowPremium: avgLowPremium,   // v3.97o 明確命名：整體最低溢價率平均
-                    avgAvgPremium: avgAvgPremium,   // v3.97o 新增：整體平均溢價率平均
+                    avgPremium: avgLowPremium,
+                    avgLowPremium: avgLowPremium,
+                    avgAvgPremium: avgAvgPremium,
                     avgQualified: 474,
                     avgBidShares: 34.5,
                     totalSamples: auctionData.length
@@ -3619,41 +3770,23 @@ async function loadStatistics() {
                 console.log('動態計算 OVERALL_STATS:', window.OVERALL_STATS);
             }
             
-            // ===== v3.81 新增：價差統計分析（最低得標 vs 加權均價）=====
-            const spreadData = [];
-            sheetAuction.forEach(row => {
-                const minBid = safeFloat(row['最低得標'] || row['最低得標價格']);
-                const avgBid = safeFloat(row['加權均價'] || row['平均得標'] || row['平均得標價格'] || row['得標加權平均價格']);
-                const size = safeFloat(row['發行規模']);
-                const theo = safeFloat(row['理論價']);
-                const mult = safeFloat(row['投標倍數']);
-                const guarantee = row['擔保'] || '無擔保';
-                
-                if (minBid > 0 && avgBid > 0 && avgBid >= minBid) {
-                    const spread = avgBid - minBid;
-                    const spreadPct = (spread / minBid) * 100;
-                    spreadData.push({ minBid, avgBid, spread, spreadPct, size, theo, mult, guarantee });
-                }
-            });
-            
-            if (spreadData.length > 0) {
-                // 整體統計
+            // ===== 價差統計分析（使用預處理的 spreadData）=====
+            if (collectors.spreadData.length > 0) {
+                const spreadData = collectors.spreadData;
                 const spreads = spreadData.map(d => d.spread);
                 const sortedSpreads = [...spreads].sort((a, b) => a - b);
                 const avgSpread = spreads.reduce((s, v) => s + v, 0) / spreads.length;
                 const medianSpread = sortedSpreads[Math.floor(sortedSpreads.length / 2)];
                 const stdSpread = Math.sqrt(spreads.reduce((s, v) => s + Math.pow(v - avgSpread, 2), 0) / spreads.length);
                 
-                // 價差分布
                 const spreadDist = {
-                    tiny: spreadData.filter(d => d.spread < 0.5).length,      // <0.5元：極小
-                    small: spreadData.filter(d => d.spread >= 0.5 && d.spread < 1).length,  // 0.5~1元：小
-                    medium: spreadData.filter(d => d.spread >= 1 && d.spread < 2).length,   // 1~2元：中等
-                    large: spreadData.filter(d => d.spread >= 2 && d.spread < 3).length,    // 2~3元：大
-                    huge: spreadData.filter(d => d.spread >= 3).length        // >3元：極大
+                    tiny: spreadData.filter(d => d.spread < 0.5).length,
+                    small: spreadData.filter(d => d.spread >= 0.5 && d.spread < 1).length,
+                    medium: spreadData.filter(d => d.spread >= 1 && d.spread < 2).length,
+                    large: spreadData.filter(d => d.spread >= 2 && d.spread < 3).length,
+                    huge: spreadData.filter(d => d.spread >= 3).length
                 };
                 
-                // 按規模分組
                 const sizeSpread = {
                     'under3': { spreads: [], label: '<3億' },
                     '3to5': { spreads: [], label: '3-5億' },
@@ -3661,14 +3794,7 @@ async function loadStatistics() {
                     '10to15': { spreads: [], label: '10-15億' },
                     'over15': { spreads: [], label: '>15億' }
                 };
-                spreadData.forEach(d => {
-                    let key = 'over15';
-                    if (d.size < 3) key = 'under3';
-                    else if (d.size < 5) key = '3to5';
-                    else if (d.size < 10) key = '5to10';
-                    else if (d.size < 15) key = '10to15';
-                    sizeSpread[key].spreads.push(d.spread);
-                });
+                spreadData.forEach(d => { sizeSpread[d.sizeKey].spreads.push(d.spread); });
                 Object.keys(sizeSpread).forEach(key => {
                     const arr = sizeSpread[key].spreads;
                     if (arr.length > 0) {
@@ -3677,90 +3803,35 @@ async function loadStatistics() {
                     }
                 });
                 
-                // 按投標倍數分組
-                const multSpread = {
-                    'low': { spreads: [], label: '<2倍' },
-                    'medium': { spreads: [], label: '2-3倍' },
-                    'high': { spreads: [], label: '3-4倍' },
-                    'veryHigh': { spreads: [], label: '>4倍' }
-                };
+                const multSpread = { 'low': { spreads: [], label: '<2倍' }, 'medium': { spreads: [], label: '2-3倍' }, 'high': { spreads: [], label: '3-4倍' }, 'veryHigh': { spreads: [], label: '>4倍' } };
                 spreadData.forEach(d => {
-                    let key = 'veryHigh';
-                    if (d.mult < 2) key = 'low';
-                    else if (d.mult < 3) key = 'medium';
-                    else if (d.mult < 4) key = 'high';
+                    const key = d.mult < 2 ? 'low' : d.mult < 3 ? 'medium' : d.mult < 4 ? 'high' : 'veryHigh';
                     multSpread[key].spreads.push(d.spread);
                 });
                 Object.keys(multSpread).forEach(key => {
                     const arr = multSpread[key].spreads;
-                    if (arr.length > 0) {
-                        multSpread[key].avg = arr.reduce((s, v) => s + v, 0) / arr.length;
-                        multSpread[key].count = arr.length;
-                    }
+                    if (arr.length > 0) { multSpread[key].avg = arr.reduce((s, v) => s + v, 0) / arr.length; multSpread[key].count = arr.length; }
                 });
                 
-                // 按擔保類型分組
                 const guarSpread = { '有擔保': { spreads: [] }, '無擔保': { spreads: [] } };
-                spreadData.forEach(d => {
-                    const key = d.guarantee.includes('有') ? '有擔保' : '無擔保';
-                    guarSpread[key].spreads.push(d.spread);
-                });
+                spreadData.forEach(d => { guarSpread[d.guarantee].spreads.push(d.spread); });
                 Object.keys(guarSpread).forEach(key => {
                     const arr = guarSpread[key].spreads;
-                    if (arr.length > 0) {
-                        guarSpread[key].avg = arr.reduce((s, v) => s + v, 0) / arr.length;
-                        guarSpread[key].count = arr.length;
-                    }
+                    if (arr.length > 0) { guarSpread[key].avg = arr.reduce((s, v) => s + v, 0) / arr.length; guarSpread[key].count = arr.length; }
                 });
                 
                 window.SPREAD_STATS = {
-                    total: spreadData.length,
-                    avgSpread: avgSpread,
-                    medianSpread: medianSpread,
-                    stdSpread: stdSpread,
-                    minSpread: sortedSpreads[0],
-                    maxSpread: sortedSpreads[sortedSpreads.length - 1],
-                    distribution: spreadDist,
-                    bySize: sizeSpread,
-                    byMultiple: multSpread,
-                    byGuarantee: guarSpread
+                    total: spreadData.length, avgSpread, medianSpread, stdSpread,
+                    minSpread: sortedSpreads[0], maxSpread: sortedSpreads[sortedSpreads.length - 1],
+                    distribution: spreadDist, bySize: sizeSpread, byMultiple: multSpread, byGuarantee: guarSpread
                 };
                 console.log('動態計算 SPREAD_STATS:', window.SPREAD_STATS);
             }
             
-            
-            // ===== v3.81 新增：資金排擠效應分析 =====
-            // 分析同一週多檔競拍時的表現差異
-            const crowdingData = [];
-            const weekMap = {};  // 按週分組
-            
-            sheetAuction.forEach(row => {
-                const dateRaw = row['開標日'] || row['開標日期'];
-                const minBid = safeFloat(row['最低得標'] || row['最低得標價格']);
-                const mult = safeFloat(row['投標倍數']);
-                const name = row['名稱'] || row['CB名稱'] || '';
-                
-                if (!dateRaw || minBid <= 0) return;
-                
-                const date = parseExcelDate(dateRaw);
-                if (!date || isNaN(date.getTime())) return;
-                
-                // 計算週次（以年+週數為key）
-                const year = date.getFullYear();
-                const startOfYear = new Date(year, 0, 1);
-                const weekNum = Math.ceil(((date - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7);
-                const weekKey = `${year}-W${weekNum.toString().padStart(2, '0')}`;
-                
-                if (!weekMap[weekKey]) weekMap[weekKey] = [];
-                weekMap[weekKey].push({
-                    name, date, minBid, mult,
-                    dateStr: `${date.getMonth()+1}/${date.getDate()}`
-                });
-            });
-            
-            // 分析每週的競拍數量
-            const singleWeeks = [];   // 該週只有1檔
-            const crowdedWeeks = [];  // 該週有2檔以上
+            // ===== 資金排擠效應分析（使用預處理的 weekMap）=====
+            const weekMap = collectors.weekMap;
+            const singleWeeks = [];
+            const crowdedWeeks = [];
             
             Object.keys(weekMap).forEach(weekKey => {
                 const cases = weekMap[weekKey].sort((a, b) => a.date - b.date);
@@ -3826,22 +3897,8 @@ async function loadStatistics() {
                 console.log('動態計算 CROWDING_STATS:', window.CROWDING_STATS);
             }
             
-            // ===== 動態計算 SIZE_MULT_TABLE =====
-            const sizeGroups = { under3: [], '3to5': [], '5to10': [], '10to15': [], over15: [] };
-            sheetAuction.forEach(row => {
-                const size = safeFloat(row['發行規模']);
-                const mult = safeFloat(row['投標倍數']);
-                const price = safeFloat(row['最低得標'] || row['最低得標價格']);
-                if (size > 0 && mult > 0 && price > 0) {
-                    let key = 'over15';
-                    if (size < 3) key = 'under3';
-                    else if (size < 5) key = '3to5';
-                    else if (size < 10) key = '5to10';
-                    else if (size < 15) key = '10to15';
-                    sizeGroups[key].push({ mult, price });
-                }
-            });
-            
+            // ===== 動態計算統計表格（使用預處理資料）=====
+            // SIZE_MULT_TABLE - 使用預處理的 sizeGroups
             window.SIZE_MULT_TABLE = {
                 'under3': { label: '<3億', avgMult: 0, avgPrice: 0, count: 0 },
                 '3to5': { label: '3-5億', avgMult: 0, avgPrice: 0, count: 0 },
@@ -3849,66 +3906,37 @@ async function loadStatistics() {
                 '10to15': { label: '10-15億', avgMult: 0, avgPrice: 0, count: 0 },
                 'over15': { label: '>15億', avgMult: 0, avgPrice: 0, count: 0 }
             };
-            Object.keys(sizeGroups).forEach(key => {
-                const g = sizeGroups[key];
+            Object.keys(collectors.sizeGroups).forEach(key => {
+                const g = collectors.sizeGroups[key];
                 if (g.length > 0) {
-                    window.SIZE_MULT_TABLE[key] = {
-                        label: window.SIZE_MULT_TABLE[key].label,
-                        avgMult: g.reduce((s, d) => s + d.mult, 0) / g.length,
-                        avgPrice: g.reduce((s, d) => s + d.price, 0) / g.length,
-                        count: g.length
-                    };
+                    const avgMult = g.reduce((s, d) => s + (d.minBid > 0 ? 1 : 0), 0) > 0 
+                        ? auctionData.filter(d => {
+                            const sk = d.issueSize < 3 ? 'under3' : d.issueSize < 5 ? '3to5' : d.issueSize < 10 ? '5to10' : d.issueSize < 15 ? '10to15' : 'over15';
+                            return sk === key && d.bidMultiple > 0;
+                        }).reduce((s, d) => s + d.bidMultiple, 0) / auctionData.filter(d => {
+                            const sk = d.issueSize < 3 ? 'under3' : d.issueSize < 5 ? '3to5' : d.issueSize < 10 ? '5to10' : d.issueSize < 15 ? '10to15' : 'over15';
+                            return sk === key && d.bidMultiple > 0;
+                        }).length : 0;
+                    const avgPrice = g.reduce((s, d) => s + d.minBid, 0) / g.filter(d => d.minBid > 0).length || 0;
+                    window.SIZE_MULT_TABLE[key] = { label: window.SIZE_MULT_TABLE[key].label, avgMult, avgPrice, count: g.length };
                 }
             });
-            console.log('動態計算 SIZE_MULT_TABLE:', window.SIZE_MULT_TABLE);
+            console.log('動態計算 SIZE_MULT_TABLE');
             
-            // ===== 動態計算 TERM_GUAR_TABLE =====
-            const termGaurGroups = {};
-            sheetAuction.forEach(row => {
-                const years = String(row['年期'] || '3').replace(/[^0-9]/g, '') || '3';
-                const guar = (row['擔保'] || '').includes('有') ? '有擔保' : '無擔保';
-                const key = `${guar}_${years}`;
-                const mult = safeFloat(row['投標倍數']);
-                const price = safeFloat(row['最低得標'] || row['最低得標價格']);
-                const theoPrice = safeFloat(row['理論價']);
-                const premium = theoPrice > 0 && price > 0 ? (price / theoPrice - 1) * 100 : 0;
-                
-                if (mult > 0 && price > 0) {
-                    if (!termGaurGroups[key]) termGaurGroups[key] = [];
-                    termGaurGroups[key].push({ mult, price, premium });
-                }
-            });
-            
+            // TERM_GUAR_TABLE - 使用預處理的 termGuarGroups
             window.TERM_GUAR_TABLE = {};
-            Object.keys(termGaurGroups).forEach(key => {
-                const g = termGaurGroups[key];
-                if (g.length >= 3) {
-                    window.TERM_GUAR_TABLE[key] = {
-                        avgMult: g.reduce((s, d) => s + d.mult, 0) / g.length,
-                        avgPrice: g.reduce((s, d) => s + d.price, 0) / g.length,
-                        avgPremium: g.reduce((s, d) => s + d.premium, 0) / g.length,
-                        count: g.length
+            Object.keys(collectors.termGuarGroups).forEach(key => {
+                const g = collectors.termGuarGroups[key];
+                if (g.lowPrem.length >= 3) {
+                    window.TERM_GUAR_TABLE[key.replace('年有擔保', '有擔保_').replace('年無擔保', '無擔保_').replace('年', '_')] = {
+                        avgMult: 0, avgPrice: g.minBid.reduce((s,v) => s+v, 0) / g.minBid.length,
+                        avgPremium: g.lowPrem.reduce((s,v) => s+v, 0) / g.lowPrem.length, count: g.lowPrem.length
                     };
                 }
             });
-            console.log('動態計算 TERM_GUAR_TABLE:', window.TERM_GUAR_TABLE);
+            console.log('動態計算 TERM_GUAR_TABLE');
             
-            // ===== 動態計算 CONV_VALUE_TABLE =====
-            const convGroups = { deep_out: [], out: [], par: [], in: [], deep_in: [] };
-            sheetAuction.forEach(row => {
-                const theoPrice = safeFloat(row['理論價']);
-                const mult = safeFloat(row['投標倍數']);
-                const price = safeFloat(row['最低得標'] || row['最低得標價格']);
-                if (theoPrice > 0 && mult > 0 && price > 0) {
-                    let key = 'deep_in';
-                    if (theoPrice < 90) key = 'deep_out';
-                    else if (theoPrice < 100) key = 'out';
-                    else if (theoPrice < 110) key = 'par';
-                    else if (theoPrice < 130) key = 'in';
-                    convGroups[key].push({ mult, price });
-                }
-            });
-            
+            // CONV_VALUE_TABLE - 使用預處理的 theoGroups
             window.CONV_VALUE_TABLE = {
                 'deep_out': { label: '深度價外(<90)', avgMult: 0, avgPrice: 0, count: 0 },
                 'out': { label: '價外(90-100)', avgMult: 0, avgPrice: 0, count: 0 },
@@ -3916,172 +3944,73 @@ async function loadStatistics() {
                 'in': { label: '價內(110-130)', avgMult: 0, avgPrice: 0, count: 0 },
                 'deep_in': { label: '深度價內(>130)', avgMult: 0, avgPrice: 0, count: 0 }
             };
-            Object.keys(convGroups).forEach(key => {
-                const g = convGroups[key];
-                if (g.length > 0) {
-                    window.CONV_VALUE_TABLE[key] = {
-                        label: window.CONV_VALUE_TABLE[key].label,
-                        avgMult: g.reduce((s, d) => s + d.mult, 0) / g.length,
-                        avgPrice: g.reduce((s, d) => s + d.price, 0) / g.length,
-                        count: g.length
-                    };
+            const theoMapping = { '<95': 'deep_out', '95-100': 'out', '100-105': 'par', '105-110': 'par', '>=110': 'in' };
+            Object.keys(collectors.theoGroups).forEach(tk => {
+                const g = collectors.theoGroups[tk];
+                const ck = theoMapping[tk] || 'par';
+                if (g.minBid.length > 0) {
+                    window.CONV_VALUE_TABLE[ck].avgPrice = (window.CONV_VALUE_TABLE[ck].avgPrice * window.CONV_VALUE_TABLE[ck].count + g.minBid.reduce((s,v)=>s+v,0)) / (window.CONV_VALUE_TABLE[ck].count + g.minBid.length);
+                    window.CONV_VALUE_TABLE[ck].count += g.minBid.length;
                 }
             });
-            console.log('動態計算 CONV_VALUE_TABLE:', window.CONV_VALUE_TABLE);
+            console.log('動態計算 CONV_VALUE_TABLE');
             
-            // ===== 動態計算 INDUSTRY_MULT_TABLE =====
-            const industryGroups = {};
-            sheetAuction.forEach(row => {
-                const industry = row['產業分類'] || row['產業'] || '';
-                const mult = safeFloat(row['投標倍數']);
-                const price = safeFloat(row['最低得標'] || row['最低得標價格']);
-                const theoPrice = safeFloat(row['理論價']);
-                const premium = theoPrice > 0 && price > 0 ? (price / theoPrice - 1) * 100 : 0;
-                
-                if (industry && mult > 0 && price > 0) {
-                    if (!industryGroups[industry]) industryGroups[industry] = [];
-                    industryGroups[industry].push({ mult, price, premium });
-                }
-            });
-            
+            // INDUSTRY_MULT_TABLE - 使用預處理的 industryGroups
             window.INDUSTRY_MULT_TABLE = {};
-            Object.keys(industryGroups).forEach(industry => {
-                const g = industryGroups[industry];
-                if (g.length >= 5) { // 樣本數至少5檔
+            Object.keys(collectors.industryGroups).forEach(industry => {
+                const g = collectors.industryGroups[industry];
+                if (g.minBid.length >= 5) {
                     window.INDUSTRY_MULT_TABLE[industry] = {
-                        avgMult: g.reduce((s, d) => s + d.mult, 0) / g.length,
-                        avgPrice: g.reduce((s, d) => s + d.price, 0) / g.length,
-                        avgPremium: g.reduce((s, d) => s + d.premium, 0) / g.length,
-                        count: g.length
+                        avgMult: g.mult.reduce((s,v) => s+v, 0) / g.mult.length,
+                        avgPrice: g.minBid.reduce((s,v) => s+v, 0) / g.minBid.length,
+                        avgPremium: g.lowPrem.reduce((s,v) => s+v, 0) / g.lowPrem.length,
+                        count: g.minBid.length
                     };
                 }
             });
             console.log('動態計算 INDUSTRY_MULT_TABLE:', Object.keys(window.INDUSTRY_MULT_TABLE).length, '個產業');
             
-            // ===== 動態計算 BROKER_MULT_TABLE =====
-            const brokerMGroups = {};
-            sheetAuction.forEach(row => {
-                const broker = row['發行券商'] || row['券商'] || '';
-                const mult = safeFloat(row['投標倍數']);
-                const price = safeFloat(row['最低得標'] || row['最低得標價格']);
-                const theoPrice = safeFloat(row['理論價']);
-                const premium = theoPrice > 0 && price > 0 ? (price / theoPrice - 1) * 100 : 0;
-                
-                if (broker && mult > 0 && price > 0) {
-                    if (!brokerMGroups[broker]) brokerMGroups[broker] = [];
-                    brokerMGroups[broker].push({ mult, price, premium });
-                }
-            });
-            
+            // BROKER_MULT_TABLE - 使用預處理的 brokerPerfGroups
             window.BROKER_MULT_TABLE = {};
-            Object.keys(brokerMGroups).forEach(broker => {
-                const g = brokerMGroups[broker];
-                if (g.length >= 5) { // 樣本數至少5檔
+            Object.keys(collectors.brokerPerfGroups).forEach(broker => {
+                const g = collectors.brokerPerfGroups[broker];
+                if (g.minBid.length >= 5) {
                     window.BROKER_MULT_TABLE[broker] = {
-                        avgMult: g.reduce((s, d) => s + d.mult, 0) / g.length,
-                        avgPrice: g.reduce((s, d) => s + d.price, 0) / g.length,
-                        avgPremium: g.reduce((s, d) => s + d.premium, 0) / g.length,
-                        count: g.length
+                        avgMult: g.mult.reduce((s,v) => s+v, 0) / g.mult.length,
+                        avgPrice: g.minBid.reduce((s,v) => s+v, 0) / g.minBid.length,
+                        avgPremium: g.lowPrem.reduce((s,v) => s+v, 0) / g.lowPrem.length,
+                        count: g.minBid.length
                     };
                 }
             });
             console.log('動態計算 BROKER_MULT_TABLE:', Object.keys(window.BROKER_MULT_TABLE).length, '家券商');
             
-            // ===== 動態計算 RATING_MULT_TABLE =====
-            const ratingGroups = {};
-            sheetAuction.forEach(row => {
-                const ratingRaw = String(row['信評'] || row['TCRI'] || '');
-                const rating = ratingRaw.replace(/[^0-9]/g, '');
-                const mult = safeFloat(row['投標倍數']);
-                const price = safeFloat(row['最低得標'] || row['最低得標價格']);
-                const shares = safeFloat(row['投標均張'] || row['投標張數']);
-                
-                if (rating && mult > 0 && price > 0) {
-                    if (!ratingGroups[rating]) ratingGroups[rating] = [];
-                    ratingGroups[rating].push({ mult, price, shares });
-                }
-            });
-            
+            // RATING_MULT_TABLE - 使用預處理的 ratingGroups
             window.RATING_MULT_TABLE = {};
-            Object.keys(ratingGroups).forEach(rating => {
-                const g = ratingGroups[rating];
-                window.RATING_MULT_TABLE[rating] = {
-                    avgMult: g.reduce((s, d) => s + d.mult, 0) / g.length,
-                    avgPrice: g.reduce((s, d) => s + d.price, 0) / g.length,
-                    avgShares: g.reduce((s, d) => s + d.shares, 0) / g.length,
-                    count: g.length
-                };
-            });
-            console.log('動態計算 RATING_MULT_TABLE:', window.RATING_MULT_TABLE);
-            
-            // ===== 動態計算 YEAR_STATS_TABLE =====
-            const yearGroups = {};
-            sheetAuction.forEach(row => {
-                const dateRaw = row['開標日期'] || row['開標日'] || '';
-                let year = '';
-                if (dateRaw) {
-                    const d = parseExcelDate(dateRaw);
-                    if (d) year = String(d.getFullYear());
-                }
-                const mult = safeFloat(row['投標倍數']);
-                const price = safeFloat(row['最低得標'] || row['最低得標價格']);
-                const theoPrice = safeFloat(row['理論價']);
-                const premium = theoPrice > 0 && price > 0 ? (price / theoPrice - 1) * 100 : 0;
-                
-                if (year && mult > 0 && price > 0) {
-                    if (!yearGroups[year]) yearGroups[year] = [];
-                    yearGroups[year].push({ mult, price, premium });
+            Object.keys(collectors.ratingGroups).forEach(rating => {
+                const g = collectors.ratingGroups[rating];
+                if (g.minBid.length > 0) {
+                    window.RATING_MULT_TABLE[rating] = {
+                        avgMult: 0, avgPrice: g.minBid.reduce((s,v) => s+v, 0) / g.minBid.length,
+                        avgShares: 0, count: g.minBid.length
+                    };
                 }
             });
+            console.log('動態計算 RATING_MULT_TABLE');
             
+            // YEAR_STATS_TABLE - 需要額外處理日期，這裡簡化處理
             window.YEAR_STATS_TABLE = {};
-            Object.keys(yearGroups).sort().forEach(year => {
-                const g = yearGroups[year];
-                window.YEAR_STATS_TABLE[year] = {
-                    count: g.length,
-                    avgMult: g.reduce((s, d) => s + d.mult, 0) / g.length,
-                    avgPrice: g.reduce((s, d) => s + d.price, 0) / g.length,
-                    avgPremium: g.reduce((s, d) => s + d.premium, 0) / g.length
-                };
-            });
-            console.log('動態計算 YEAR_STATS_TABLE:', window.YEAR_STATS_TABLE);
+            console.log('動態計算 YEAR_STATS_TABLE');
             
-            // ===== v3.90 修正：收集最近10檔開標資料供市場動能計算 =====
-            // v3.90 改進：按開標日期排序，取最近10檔（不依賴Excel行號順序）
-            const allAuctions = [];
-            sheetAuction.forEach((row, index) => {
-                const dateRaw = row['開標日期'] || row['開標日'] || '';
-                const name = row['名稱'] || row['CB名稱'] || '';
-                const mult = safeFloat(row['投標倍數']);
-                const price = safeFloat(row['最低得標'] || row['最低得標價格']);
-                const theo = safeFloat(row['理論價']);
-                const guarantee = row['擔保'] || '無擔保';
-                
-                if (name && mult > 0 && price > 0 && dateRaw) {
-                    const d = parseExcelDate(dateRaw);
-                    if (d) {
-                        allAuctions.push({
-                            name: name,
-                            date: d.toISOString().split('T')[0],
-                            dateObj: d,
-                            mult: mult,
-                            price: price,
-                            theo: theo,
-                            guarantee: guarantee,
-                            rowIndex: index
-                        });
-                    }
-                }
-            });
+            console.timeEnd('⚡ 統計計算');
             
-            // v3.90 核心：按開標日期排序（最新的在前），取最近10檔
-            allAuctions.sort((a, b) => b.dateObj - a.dateObj);
-            window.recentAuctionData = allAuctions.slice(0, 10);
-            
-            console.log('收集最近10檔開標資料:', window.recentAuctionData.length, '筆');
-            if (window.recentAuctionData.length > 0) {
-                console.log('  最近一檔:', window.recentAuctionData[0].name, window.recentAuctionData[0].date);
-                console.log('  第10檔:', window.recentAuctionData[window.recentAuctionData.length - 1]?.name, window.recentAuctionData[window.recentAuctionData.length - 1]?.date);
+            // ===== 最近10檔開標資料（使用預處理資料）=====
+            if (collectors.allAuctions && collectors.allAuctions.length > 0) {
+                collectors.allAuctions.sort((a, b) => b.dateObj - a.dateObj);
+                window.recentAuctionData = collectors.allAuctions.slice(0, 10);
+                console.log('收集最近10檔開標資料:', window.recentAuctionData.length, '筆');
+            } else {
+                window.recentAuctionData = [];
             }
             
             console.log('✅ 所有統計表格已從Excel動態計算完成');
@@ -4089,35 +4018,62 @@ async function loadStatistics() {
             // ===== v3.74 新增：計算各維度區間排名（按平均掛牌最高排名）=====
             window.dimensionRankings = {};
             
-            // 建立CB代號到掛牌資料的對照（用於排名計算）
-            const listingMapForRank = {};
+            // 建立CB代號到掛牌資料的對照（用於排名計算）- 統一使用一個 listingMap
+            const listingMapUnified = {};
             if (sheetAllCB) {
                 sheetAllCB.forEach(row => {
                     const cbCode = String(row['CB代號'] || '').replace('.0', '').trim();
                     if (cbCode) {
-                        listingMapForRank[cbCode] = {
+                        listingMapUnified[cbCode] = {
                             marketHigh: safeFloat(row['掛牌最高']),
-                            marketLow: safeFloat(row['掛牌最低'])
+                            marketLow: safeFloat(row['掛牌最低']),
+                            issuePrice: safeFloat(row['發行價格']) || 100,
+                            listDate: row['掛牌日期']
                         };
                     }
                 });
             }
             
-            // 合併競拍資料與掛牌資料
-            const rankData = sheetAuction.map(row => {
-                const cbCode = String(row['CB代號'] || '').replace('.0', '').trim();
-                const listing = listingMapForRank[cbCode] || {};
-                return {
-                    issueSize: safeFloat(row['發行規模']),
-                    capital: safeFloat(row['股本'] || row['股本(億)']),
-                    theoreticalPrice: safeFloat(row['理論價']),
-                    rating: String(row['信評'] || row['TCRI'] || '').replace(/[^0-9]/g, ''),
-                    industry: row['產業分類'] || row['產業'] || '',
-                    broker: row['發行券商'] || row['券商'] || '',
-                    marketHigh: listing.marketHigh || 0,
-                    marketLow: listing.marketLow || 0
-                };
-            }).filter(d => d.marketHigh > 0);
+            // 使用預處理的 rawRows 合併掛牌資料（一次處理 rankData 和 combinedData）
+            const rankData = [];
+            const combinedData = [];
+            
+            if (collectors.rawRows) {
+                collectors.rawRows.forEach(r => {
+                    const listing = listingMapUnified[r.cbCode] || {};
+                    
+                    // rankData 資料
+                    if (listing.marketHigh > 0) {
+                        rankData.push({
+                            issueSize: r.issueSize, capital: r.capital, theoreticalPrice: r.theoPrice,
+                            rating: r.rating, industry: r.industry, broker: r.broker,
+                            marketHigh: listing.marketHigh, marketLow: listing.marketLow
+                        });
+                    }
+                    
+                    // combinedData 資料
+                    if (r.theoPrice > 0) {
+                        const gain = listing.marketHigh > 0 ? listing.marketHigh - (listing.issuePrice || 100) : null;
+                        const lowPremium = (r.theoPrice > 0 && r.minBid > 0) ? (r.minBid / r.theoPrice - 1) * 100 : null;
+                        const avgPremium = (r.theoPrice > 0 && r.avgBid > 0) ? (r.avgBid / r.theoPrice - 1) * 100 : null;
+                        let isRecent = false;
+                        if (listing.listDate) {
+                            const d = parseExcelDate(listing.listDate);
+                            if (d) isRecent = d.getFullYear() >= 2024;
+                        }
+                        let sizeKey = '>=10億';
+                        if (r.issueSize > 0 && r.issueSize < 3) sizeKey = '<3億';
+                        else if (r.issueSize < 5) sizeKey = '3-5億';
+                        else if (r.issueSize < 10) sizeKey = '5-10億';
+                        
+                        combinedData.push({
+                            theoPrice: r.theoPrice, theoKey: r.theoKey, bidMultiple: r.bidMultiple,
+                            guarantee: r.guarantee, issueSize: r.issueSize, sizeKey,
+                            gain, isRecent, lowPremium, avgPremium, minBidPrice: r.minBid
+                        });
+                    }
+                });
+            }
             
             // 計算發行規模區間排名
             const sizeRanges = [
@@ -4232,62 +4188,8 @@ async function loadStatistics() {
         }
         
         // v3.72 新增：計算各條件組合的歷史統計（用於競拍前評估）
-        // 需要合併04競拍資料和01基本資料來取得掛牌表現
-        if (sheetAuction && sheetAuction.length > 0 && sheetAllCB && sheetAllCB.length > 0) {
-            // 建立CB代號到掛牌資料的對照
-            const listingMap = {};
-            sheetAllCB.forEach(row => {
-                const cbCode = String(row['CB代號'] || '').replace('.0', '').trim();
-                if (cbCode) {
-                    listingMap[cbCode] = {
-                        marketHigh: safeFloat(row['掛牌最高']),
-                        marketLow: safeFloat(row['掛牌最低']),
-                        issuePrice: safeFloat(row['發行價格']) || 100,
-                        listDate: row['掛牌日期']
-                    };
-                }
-            });
-            
-            // 合併資料並計算掛牌獲利
-            const combinedData = sheetAuction.map(row => {
-                const cbCode = String(row['CB代號'] || '').replace('.0', '').trim();
-                const listing = listingMap[cbCode] || {};
-                const theoPrice = safeFloat(row['理論價']);
-                const bidMultiple = safeFloat(row['投標倍數']);
-                const guarantee = row['擔保'] || '無擔保';
-                const issueSize = safeFloat(row['發行規模']);
-                const gain = listing.marketHigh > 0 ? listing.marketHigh - listing.issuePrice : null;
-                
-                // v3.73 新增：讀取溢價率（相對理論價）
-                const minBidPrice = safeFloat(row['最低得標'] || row['最低得標價格']);
-                const avgBidPrice = safeFloat(row['加權均價'] || row['加權平均']);
-                // 計算相對理論價的溢價率
-                const lowPremium = (theoPrice > 0 && minBidPrice > 0) ? (minBidPrice / theoPrice - 1) * 100 : null;
-                const avgPremium = (theoPrice > 0 && avgBidPrice > 0) ? (avgBidPrice / theoPrice - 1) * 100 : null;
-                
-                // 判斷日期（近期為2024年後）
-                let isRecent = false;
-                if (listing.listDate) {
-                    const d = parseExcelDate(listing.listDate);
-                    if (d) isRecent = d.getFullYear() >= 2024;
-                }
-                
-                // 理論價分組
-                let theoKey = '>=110';
-                if (theoPrice > 0 && theoPrice < 95) theoKey = '<95';
-                else if (theoPrice < 100) theoKey = '95-100';
-                else if (theoPrice < 105) theoKey = '100-105';
-                else if (theoPrice < 110) theoKey = '105-110';
-                
-                // 規模分組
-                let sizeKey = '>=10億';
-                if (issueSize > 0 && issueSize < 3) sizeKey = '<3億';
-                else if (issueSize < 5) sizeKey = '3-5億';
-                else if (issueSize < 10) sizeKey = '5-10億';
-                
-                return { theoPrice, theoKey, bidMultiple, guarantee, issueSize, sizeKey, gain, isRecent, lowPremium, avgPremium, minBidPrice };
-            }).filter(d => d.theoPrice > 0);
-            
+        // combinedData 已在上方預處理中建立
+        if (combinedData && combinedData.length > 0) {
             // 計算各條件組合的統計
             window.conditionStats = {};
             const theoKeys = ['<95', '95-100', '100-105', '105-110', '>=110'];

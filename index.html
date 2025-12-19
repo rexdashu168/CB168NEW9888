@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97-zs-p (擔保判斷修正)</title>
+<title>AI智能可轉債競拍系統 v3.97-zs-q (發行時程佈局調整)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <!-- v3.97-zs-f: kanban_data.js 改為延遲載入，不阻塞頁面 -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -1825,14 +1825,14 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.97-zs-p)...</div>
+    <div>🔄 系統啟動中 (v3.97-zs-q)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
 <div class="container" style="display: none;">
     <div class="header">
         <h1>🤖 AI智能可轉債競拍系統</h1>
-        <span class="version-badge">v3.97-zs-p 擔保判斷修正</span>
+        <span class="version-badge">v3.97-zs-q 發行時程佈局調整</span>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -15516,7 +15516,19 @@ function renderBasicInfoSchedule(cbCode, container) {
         });
     }
     
-    if (!scheduleData && !sheet08Row && !auctionData && !sheet01Row) {
+    // v3.97-zs-q: 從kanban資料取得轉換期間（C和D欄）
+    let kanbanRow = null;
+    if (window.kanbanData && window.kanbanData.data) {
+        kanbanRow = window.kanbanData.data.find(r => {
+            const code = String(r['代號'] || r['CB代號'] || '').replace('.0', '').trim();
+            return code === searchCode || parseInt(code, 10) === numSearchCode;
+        });
+        if (kanbanRow) {
+            console.log('[發行時程] kanban找到 ' + searchCode + ', 轉換起:', kanbanRow['轉換起日'] || kanbanRow['轉換日期起'], '轉換迄:', kanbanRow['轉換迄日'] || kanbanRow['轉換日期迄']);
+        }
+    }
+    
+    if (!scheduleData && !sheet08Row && !auctionData && !sheet01Row && !kanbanRow) {
         container.innerHTML = `<div style="color:#999; padding:20px; text-align:center;">⚠️ 找不到 ${cbCode} 的發行時程資料</div>`;
         return;
     }
@@ -15558,36 +15570,38 @@ function renderBasicInfoSchedule(cbCode, container) {
                     <div style="font-size:11px; color:#666;">代收價款公告</div>
                     <div style="font-size:14px; font-weight:bold; color:#009688;">${formatDate(getValue(scheduleData?.['代收價款公告']))}</div>
                 </div>
-                <div style="background:white; padding:12px 8px; border-radius:6px; text-align:center; border-left:3px solid #4caf50;">
-                    <div style="font-size:11px; color:#666;">掛牌日期</div>
-                    <div style="font-size:14px; font-weight:bold; color:#4caf50;">${formatDate(getValue(scheduleData?.['掛牌日期'], sheet08Row?.['掛牌日期'], auctionData?.['掛牌日期'], sheet01Row?.['掛牌日期']))}</div>
-                </div>
             </div>
             
-            <!-- 轉換期間與到期資訊 -->
-            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:10px; margin-bottom:15px;">
-                <div style="background:rgba(255,255,255,0.9); padding:12px; border-radius:6px;">
-                    <div style="font-size:12px; color:#666; margin-bottom:5px;">🔄 轉換期間</div>
-                    <div style="font-size:13px; color:#333;">
-                        ${formatDate(getValue(sheet08Row?.['轉換日期起']))} ~ ${formatDate(getValue(sheet08Row?.['轉換日期迄']))}
+            <!-- 轉換期間與到期資訊 v3.97-zs-q 重新排列 -->
+            <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; margin-bottom:15px;">
+                <div style="background:rgba(255,255,255,0.9); padding:12px; border-radius:6px; border-left:3px solid #4caf50;">
+                    <div style="font-size:12px; color:#666; margin-bottom:5px;">📅 掛牌日期</div>
+                    <div style="font-size:14px; font-weight:bold; color:#4caf50;">
+                        ${formatDate(getValue(scheduleData?.['掛牌日期'], sheet08Row?.['掛牌日期'], auctionData?.['掛牌日期'], sheet01Row?.['掛牌日期'], kanbanRow?.['掛牌日']))}
                     </div>
                 </div>
-                <div style="background:rgba(255,255,255,0.9); padding:12px; border-radius:6px;">
-                    <div style="font-size:12px; color:#666; margin-bottom:5px;">📅 到期日期</div>
-                    <div style="font-size:13px; font-weight:bold; color:#d32f2f;">
-                        ${formatDate(getValue(scheduleData?.['到期日期'], sheet08Row?.['到期日'], auctionData?.['到期日期'], sheet01Row?.['到期日期']))}
+                <div style="background:rgba(255,255,255,0.9); padding:12px; border-radius:6px; border-left:3px solid #9c27b0;">
+                    <div style="font-size:12px; color:#666; margin-bottom:5px;">🔧 CBAS拆解日</div>
+                    <div style="font-size:14px; font-weight:bold; color:#9c27b0;">
+                        ${formatDate(getValue(scheduleData?.['CBAS拆解日']))}
                     </div>
                 </div>
-                <div style="background:rgba(255,255,255,0.9); padding:12px; border-radius:6px;">
-                    <div style="font-size:12px; color:#666; margin-bottom:5px;">📆 發行年期</div>
-                    <div style="font-size:13px; font-weight:bold; color:#7b1fa2;">
+                <div style="background:rgba(255,255,255,0.9); padding:12px; border-radius:6px; border-left:3px solid #d32f2f;">
+                    <div style="font-size:12px; color:#666; margin-bottom:5px;">📆 到期日期</div>
+                    <div style="font-size:14px; font-weight:bold; color:#d32f2f;">
+                        ${formatDate(getValue(scheduleData?.['到期日期'], sheet08Row?.['到期日'], auctionData?.['到期日期'], sheet01Row?.['到期日期'], kanbanRow?.['到期日']))}
+                    </div>
+                </div>
+                <div style="background:rgba(255,255,255,0.9); padding:12px; border-radius:6px; border-left:3px solid #7b1fa2;">
+                    <div style="font-size:12px; color:#666; margin-bottom:5px;">📋 發行年期</div>
+                    <div style="font-size:14px; font-weight:bold; color:#7b1fa2;">
                         ${getValue(sheet08Row?.['還本年限'], auctionData?.['年期'], sheet01Row?.['發行年期'])} 年
                     </div>
                 </div>
-                <div style="background:rgba(255,255,255,0.9); padding:12px; border-radius:6px;">
-                    <div style="font-size:12px; color:#666; margin-bottom:5px;">🔧 CBAS拆解日</div>
-                    <div style="font-size:13px; color:#333;">
-                        ${formatDate(getValue(scheduleData?.['CBAS拆解日']))}
+                <div style="background:rgba(255,255,255,0.9); padding:12px; border-radius:6px; grid-column: span 2; border-left:3px solid #1976d2;">
+                    <div style="font-size:12px; color:#666; margin-bottom:5px;">🔄 轉換期間</div>
+                    <div style="font-size:14px; font-weight:bold; color:#1976d2;">
+                        ${formatDate(getValue(kanbanRow?.['轉換起日'], kanbanRow?.['轉換日期起'], sheet08Row?.['轉換日期起']))} ~ ${formatDate(getValue(kanbanRow?.['轉換迄日'], kanbanRow?.['轉換日期迄'], sheet08Row?.['轉換日期迄']))}
                     </div>
                 </div>
             </div>

@@ -16312,7 +16312,7 @@ async function loadAllKanbanData() {
     if (window.kanbanData.loading) return;
     window.kanbanData.loading = true;
     
-    console.log('開始載入CB_kanban資料（並行優化）...');
+    console.log('開始載入CB_kanban資料（自動偵測年份）...');
     const startTime = Date.now();
     
     // 更新載入狀態顯示
@@ -16335,24 +16335,21 @@ async function loadAllKanbanData() {
     };
     
     try {
-        // 優先載入最近3年（最常用），其餘背景載入
-        const priorityFiles = [
-            'data/kanban/CB_kanban_2025.xlsx',
-            'data/kanban/CB_kanban_2024.xlsx',
-            'data/kanban/CB_kanban_2023.xlsx'
-        ];
+        // 自動生成年份列表（從當前年份往回到2017年）
+        const currentYear = new Date().getFullYear();
+        const startYear = 2017; // kanban 資料最早年份
         
-        const extraFiles = [
-            'data/kanban/CB_kanban_2022.xlsx',
-            'data/kanban/CB_kanban_2021.xlsx',
-            'data/kanban/CB_kanban_2020.xlsx',
-            'data/kanban/CB_kanban_2019.xlsx',
-            'data/kanban/CB_kanban_2018.xlsx',
-            'data/kanban/CB_kanban_2017.xlsx'
-        ];
+        // 生成所有可能的檔案路徑
+        const allPossibleFiles = [];
+        for (let year = currentYear; year >= startYear; year--) {
+            allPossibleFiles.push(`data/kanban/CB_kanban_${year}.xlsx`);
+        }
+        
+        console.log(`📂 載入 ${startYear}-${currentYear} 年的 kanban 檔案...`);
         
         const allData = {};
         const allDates = [];
+        const loadedYears = [];
         
         // 處理單個檔案的函數
         const processFile = async (filename) => {
@@ -16362,6 +16359,10 @@ async function loadAllKanbanData() {
                 
                 const workbook = XLSX.read(await response.arrayBuffer(), { type: 'array' });
                 const result = { filename, sheets: 0, records: 0 };
+                
+                // 從檔名取得年份
+                const yearMatch = filename.match(/CB_kanban_(\d{4})\.xlsx/);
+                if (yearMatch) loadedYears.push(parseInt(yearMatch[1]));
                 
                 for (const sheetName of workbook.SheetNames) {
                     if (!/^\d{8}$/.test(sheetName)) continue;
@@ -16405,54 +16406,43 @@ async function loadAllKanbanData() {
                 }
                 return result;
             } catch (err) {
-                console.warn(`載入 ${filename} 失敗:`, err);
+                // 檔案不存在是正常的，不需要警告
                 return null;
             }
         };
         
-        // 第一階段：並行載入優先檔案（最近3年）
-        updateProgress('載入最近3年資料...');
-        const priorityPromises = priorityFiles.map(f => processFile(f));
-        const priorityResults = await Promise.all(priorityPromises);
+        // 並行載入所有檔案（自動偵測存在的年份）
+        updateProgress('自動偵測並載入歷史資料...');
         
-        let loadedCount = priorityResults.filter(r => r).length;
-        setProgress(50);
-        console.log(`✅ 優先載入完成: ${loadedCount} 個檔案`);
+        let loadedCount = 0;
+        const totalFiles = allPossibleFiles.length;
         
-        // 先標記為已載入，讓使用者可以開始使用
+        // 分批並行載入（每批5個檔案，避免同時請求太多）
+        const batchSize = 5;
+        for (let i = 0; i < allPossibleFiles.length; i += batchSize) {
+            const batch = allPossibleFiles.slice(i, i + batchSize);
+            const results = await Promise.all(batch.map(f => processFile(f)));
+            
+            loadedCount += results.filter(r => r).length;
+            setProgress((i + batchSize) / totalFiles * 100);
+        }
+        
+        // 排序每個 CB 的時間序列
         for (const code in allData) {
             allData[code].sort((a, b) => a.dateNum - b.dateNum);
         }
+        
         window.kanbanData.data = allData;
         window.kanbanData.dates = [...new Set(allDates)].sort();
         window.kanbanData.loaded = true;
         
-        const elapsed1 = ((Date.now() - startTime) / 1000).toFixed(2);
-        console.log(`⚡ 快速載入完成: ${Object.keys(allData).length} 檔CB，${elapsed1} 秒`);
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+        loadedYears.sort((a, b) => a - b);
+        const yearRange = loadedYears.length > 0 ? `${loadedYears[0]}-${loadedYears[loadedYears.length-1]}` : '無';
         
-        // 第二階段：背景載入額外檔案（不阻塞UI）
-        updateProgress('背景載入歷史資料...');
-        
-        setTimeout(async () => {
-            let extraLoaded = 0;
-            for (const filename of extraFiles) {
-                const result = await processFile(filename);
-                if (result) {
-                    extraLoaded++;
-                    setProgress(50 + (extraLoaded / extraFiles.length * 50));
-                }
-            }
-            
-            // 重新排序
-            for (const code in allData) {
-                allData[code].sort((a, b) => a.dateNum - b.dateNum);
-            }
-            window.kanbanData.data = allData;
-            window.kanbanData.dates = [...new Set(allDates)].sort();
-            
-            const elapsed2 = ((Date.now() - startTime) / 1000).toFixed(2);
-            console.log(`✅ 完整載入完成: ${Object.keys(allData).length} 檔CB，${window.kanbanData.dates.length} 個交易日，${elapsed2} 秒`);
-        }, 100);
+        console.log(`✅ Kanban載入完成: ${Object.keys(allData).length} 檔CB，${window.kanbanData.dates.length} 個交易日`);
+        console.log(`   年份範圍: ${yearRange} (共 ${loadedYears.length} 個年份檔案)`);
+        console.log(`   耗時: ${elapsed} 秒`);
         
     } catch (err) {
         console.error('載入kanban資料失敗:', err);

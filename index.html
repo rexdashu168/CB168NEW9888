@@ -2657,8 +2657,8 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
             <!-- 價格走勢標籤頁 -->
             <div class="price-trend-tabs">
                 <button type="button" class="price-trend-tab active" onclick="showPriceTrendTab('stockPrice', event)">📈 股價與轉換價</button>
-                <button type="button" class="price-trend-tab" onclick="showPriceTrendTab('cbPrice', event)">💹 CB市價與折溢價</button>
-                <button type="button" class="price-trend-tab" onclick="showPriceTrendTab('balance', event)">📊 餘額與轉換</button>
+                <button type="button" class="price-trend-tab" onclick="showPriceTrendTab('cbPrice', event)">💹 理論價值分析</button>
+                <button type="button" class="price-trend-tab" onclick="showPriceTrendTab('balance', event)">📊 籌碼轉換分析</button>
             </div>
             <div id="priceTrendContent" style="min-height:300px; padding:15px; background:#fafafa; border-radius:0 0 8px 8px; border:1px solid #e0e0e0; border-top:none;">
                 <div style="text-align:center; color:#999; padding:40px;">
@@ -4808,6 +4808,25 @@ async function loadStatistics() {
         
         loadingDiv.style.display = 'none'; 
         document.querySelector('.container').style.display = 'block';
+        
+        // v3.97-zs-b 新增：背景預載入三、四區塊所需資料（避免展開時卡頓）
+        setTimeout(() => {
+            console.log('⏳ 背景預載入額外資料...');
+            
+            // 預載入 yuanta 歷史資料（基本資料查詢用）
+            if (typeof loadYuantaHistoryData === 'function') {
+                loadYuantaHistoryData().then(() => {
+                    console.log('✅ 背景預載入: yuanta 歷史資料完成');
+                }).catch(err => console.warn('yuanta預載入失敗:', err));
+            }
+            
+            // 預載入 kanban 時間序列資料（價格走勢分析用）
+            if (typeof loadAllKanbanData === 'function') {
+                loadAllKanbanData().then(() => {
+                    console.log('✅ 背景預載入: kanban 時間序列完成');
+                }).catch(err => console.warn('kanban預載入失敗:', err));
+            }
+        }, 1000); // 延遲1秒後開始，讓主UI先穩定
     } catch (error) { 
         console.error(error); 
         loadingDiv.innerHTML = `<div style="padding:20px;background:white;color:#D32F2F;border-radius:10px;text-align:center;max-width:400px;">
@@ -16065,7 +16084,7 @@ function updatePriceTrendPeriod() {
         const activeTab = document.querySelector('.price-trend-tab.active');
         if (activeTab) {
             const tabName = activeTab.textContent.includes('股價') ? 'stockPrice' :
-                           activeTab.textContent.includes('CB市價') ? 'cbPrice' : 'balance';
+                           activeTab.textContent.includes('理論價值') ? 'cbPrice' : 'balance';
             showPriceTrendTab(tabName);
         }
     }
@@ -16574,13 +16593,14 @@ function renderStockPriceChart(cbCode, data, container, period) {
 }
 
 /**
- * 渲染CB市價與折溢價走勢圖
+ * 渲染理論價值分析圖（CB價格 vs 理論價格 + 折溢價比率）
  */
 function renderCBPriceChart(cbCode, data, container, period) {
     const periodLabel = getPeriodLabel(period);
     
     const labels = data.map(d => d.date);
     const cbPrices = data.map(d => d.cbPrice);
+    const convValues = data.map(d => d.convValue);  // 理論價格（轉換價值）
     const premiums = data.map(d => d.premium);
     
     const latestData = data[data.length - 1] || {};
@@ -16589,21 +16609,25 @@ function renderCBPriceChart(cbCode, data, container, period) {
         <div style="background:#fff; padding:15px; border-radius:8px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                 <div style="font-weight:bold; color:#7b1fa2; font-size:16px;">
-                    💹 ${cbCode} CB市價與折溢價走勢 <span style="font-size:12px; color:#666; font-weight:normal;">(${periodLabel})</span>
+                    💹 ${cbCode} 理論價值分析 <span style="font-size:12px; color:#666; font-weight:normal;">(${periodLabel})</span>
                 </div>
                 <div style="font-size:12px; padding:4px 10px; border-radius:12px; background:${latestData.premium >= 0 ? '#fff3e0' : '#e8f5e9'}; color:${latestData.premium >= 0 ? '#e65100' : '#2e7d32'};">
                     ${latestData.premium >= 0 ? '溢價' : '折價'} ${Math.abs(latestData.premium || 0).toFixed(2)}%
                 </div>
             </div>
             
-            <!-- 數據摘要（只顯示CB市價和折溢價）-->
-            <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; margin-bottom:15px;">
+            <!-- 數據摘要（CB價格、理論價格、折溢價）-->
+            <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-bottom:15px;">
                 <div style="background:#f3e5f5; padding:12px; border-radius:6px; text-align:center;">
-                    <div style="font-size:11px; color:#666;">CB收盤價</div>
+                    <div style="font-size:11px; color:#666;">CB價格</div>
                     <div style="font-size:18px; font-weight:bold; color:#7b1fa2;">${latestData.cbPrice?.toFixed(2) || '-'}</div>
                 </div>
+                <div style="background:#e8f5e9; padding:12px; border-radius:6px; text-align:center;">
+                    <div style="font-size:11px; color:#666;">理論價格</div>
+                    <div style="font-size:18px; font-weight:bold; color:#2e7d32;">${latestData.convValue?.toFixed(2) || '-'}</div>
+                </div>
                 <div style="background:#fff3e0; padding:12px; border-radius:6px; text-align:center;">
-                    <div style="font-size:11px; color:#666;">當前折溢價</div>
+                    <div style="font-size:11px; color:#666;">折溢價比率</div>
                     <div style="font-size:18px; font-weight:bold; color:#e65100;">${latestData.premium?.toFixed(2) || '-'}%</div>
                 </div>
             </div>
@@ -16627,11 +16651,22 @@ function renderCBPriceChart(cbCode, data, container, period) {
             labels: labels,
             datasets: [
                 {
-                    label: 'CB收盤價',
+                    label: 'CB價格',
                     data: cbPrices,
                     borderColor: '#7b1fa2',
                     backgroundColor: 'rgba(123, 31, 162, 0.1)',
-                    fill: true,
+                    fill: false,
+                    tension: 0.1,
+                    pointRadius: 0,
+                    borderWidth: 2,
+                    yAxisID: 'y'
+                },
+                {
+                    label: '理論價格',
+                    data: convValues,
+                    borderColor: '#2e7d32',
+                    borderDash: [5, 5],
+                    fill: false,
                     tension: 0.1,
                     pointRadius: 0,
                     borderWidth: 2,
@@ -16641,7 +16676,7 @@ function renderCBPriceChart(cbCode, data, container, period) {
                     label: '折溢價%',
                     data: premiums,
                     type: 'bar',
-                    backgroundColor: premiums.map(p => p >= 0 ? 'rgba(255, 152, 0, 0.5)' : 'rgba(76, 175, 80, 0.5)'),
+                    backgroundColor: premiums.map(p => p >= 0 ? 'rgba(255, 152, 0, 0.4)' : 'rgba(76, 175, 80, 0.4)'),
                     borderColor: premiums.map(p => p >= 0 ? '#ff9800' : '#4caf50'),
                     borderWidth: 1,
                     yAxisID: 'y1'
@@ -16664,7 +16699,7 @@ function renderCBPriceChart(cbCode, data, container, period) {
                     type: 'linear', display: true, position: 'left',
                     ticks: { font: { size: 10 } },
                     grid: { color: 'rgba(0,0,0,0.05)' },
-                    title: { display: true, text: 'CB價格', font: { size: 10 } }
+                    title: { display: true, text: '價格', font: { size: 10 } }
                 },
                 y1: {
                     type: 'linear', display: true, position: 'right',
@@ -16678,38 +16713,84 @@ function renderCBPriceChart(cbCode, data, container, period) {
 }
 
 /**
- * 渲染餘額與轉換走勢圖
+ * 渲染籌碼轉換分析圖（CB張數、約當股票張數、佔股本比）
  */
 function renderBalanceChart(cbCode, data, container, period) {
     const periodLabel = getPeriodLabel(period);
     
     const labels = data.map(d => d.date);
-    const balances = data.map(d => d.balance);
-    const remainRatios = data.map(d => d.remainRatio);
-    
     const latestData = data[data.length - 1] || {};
-    const convertedPct = 100 - (latestData.remainRatio || 100);
+    const firstData = data[0] || {};
+    
+    // 取得轉換價格
+    const convPrice = latestData.convPrice || 0;
+    
+    // 取得股本資料（從 sheet01Data 查詢）
+    let stockCapital = 0; // 股本（億）
+    if (window.sheet01Data && window.sheet01Data.length > 0) {
+        const cbInfo = window.sheet01Data.find(row => {
+            const code = String(row['代號'] || row['CB代號'] || '').replace('.0', '').trim();
+            return code === cbCode;
+        });
+        if (cbInfo) {
+            stockCapital = parseFloat(cbInfo['股本'] || cbInfo['股本(億)'] || 0);
+        }
+    }
+    
+    // 計算張數資料（每張CB面額10萬元）
+    // CB張數 = 餘額(億) × 1億 / 10萬 = 餘額(億) × 1000
+    // 約當股票張數 = CB張數 × (10萬/轉換價) / 1000 = 餘額(億) × 1000 × 100000 / 轉換價 / 1000 = 餘額 × 100000 / 轉換價
+    const cbShares = data.map(d => d.balance * 1000); // CB張數
+    const stockShares = data.map(d => convPrice > 0 ? d.balance * 100000 / convPrice : 0); // 約當股票張數
+    
+    const latestCBShares = latestData.balance ? latestData.balance * 1000 : 0;
+    const latestStockShares = convPrice > 0 ? latestData.balance * 100000 / convPrice : 0;
+    const originalCBShares = latestData.originalBalance ? latestData.originalBalance * 1000 : 0;
+    const originalStockShares = convPrice > 0 ? latestData.originalBalance * 100000 / convPrice : 0;
+    
+    // 已轉換張數
+    const convertedCBShares = originalCBShares - latestCBShares;
+    const convertedStockShares = originalStockShares - latestStockShares;
+    
+    // 佔股本比（股本以億元為單位，股票面額10元，1億元=1000萬股=1萬張）
+    const stockCapitalShares = stockCapital * 10000; // 股本張數
+    const stockCapitalPct = stockCapitalShares > 0 ? (latestStockShares / stockCapitalShares * 100) : 0;
+    
+    // 轉換比率（每張CB可換幾股）
+    const convRatio = convPrice > 0 ? (100000 / convPrice) : 0;
     
     container.innerHTML = `
         <div style="background:#fff; padding:15px; border-radius:8px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                 <div style="font-weight:bold; color:#2e7d32; font-size:16px;">
-                    📊 ${cbCode} 餘額與轉換走勢 <span style="font-size:12px; color:#666; font-weight:normal;">(${periodLabel})</span>
+                    📊 ${cbCode} 籌碼轉換分析 <span style="font-size:12px; color:#666; font-weight:normal;">(${periodLabel})</span>
                 </div>
                 <div style="font-size:12px; padding:4px 10px; border-radius:12px; background:#e8f5e9; color:#2e7d32;">
-                    已轉換 ${convertedPct.toFixed(1)}%
+                    轉換比率 ${convRatio.toFixed(0)}股/張
                 </div>
             </div>
             
-            <!-- 數據摘要（只顯示餘額和剩餘比率）-->
-            <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; margin-bottom:15px;">
-                <div style="background:#e8f5e9; padding:12px; border-radius:6px; text-align:center;">
-                    <div style="font-size:11px; color:#666;">流通餘額</div>
-                    <div style="font-size:18px; font-weight:bold; color:#2e7d32;">${latestData.balance?.toFixed(2) || '-'} <span style="font-size:12px; font-weight:normal;">億</span></div>
+            <!-- 數據摘要 -->
+            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-bottom:15px;">
+                <div style="background:#e3f2fd; padding:10px; border-radius:6px; text-align:center;">
+                    <div style="font-size:10px; color:#666;">剩餘CB張數</div>
+                    <div style="font-size:16px; font-weight:bold; color:#1976d2;">${latestCBShares.toLocaleString()}</div>
+                    <div style="font-size:9px; color:#999;">張</div>
                 </div>
-                <div style="background:#fff3e0; padding:12px; border-radius:6px; text-align:center;">
-                    <div style="font-size:11px; color:#666;">剩餘比率</div>
-                    <div style="font-size:18px; font-weight:bold; color:#e65100;">${latestData.remainRatio?.toFixed(1) || '-'}%</div>
+                <div style="background:#e8f5e9; padding:10px; border-radius:6px; text-align:center;">
+                    <div style="font-size:10px; color:#666;">約當股票</div>
+                    <div style="font-size:16px; font-weight:bold; color:#2e7d32;">${latestStockShares.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
+                    <div style="font-size:9px; color:#999;">張</div>
+                </div>
+                <div style="background:#fff3e0; padding:10px; border-radius:6px; text-align:center;">
+                    <div style="font-size:10px; color:#666;">已轉換股票</div>
+                    <div style="font-size:16px; font-weight:bold; color:#e65100;">${convertedStockShares.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
+                    <div style="font-size:9px; color:#999;">張</div>
+                </div>
+                <div style="background:#f3e5f5; padding:10px; border-radius:6px; text-align:center;">
+                    <div style="font-size:10px; color:#666;">佔股本比</div>
+                    <div style="font-size:16px; font-weight:bold; color:#7b1fa2;">${stockCapitalPct.toFixed(2)}%</div>
+                    <div style="font-size:9px; color:#999;">${stockCapital > 0 ? '股本' + stockCapital.toFixed(1) + '億' : '無股本資料'}</div>
                 </div>
             </div>
             
@@ -16732,10 +16813,10 @@ function renderBalanceChart(cbCode, data, container, period) {
             labels: labels,
             datasets: [
                 {
-                    label: '流通餘額(億)',
-                    data: balances,
-                    borderColor: '#2e7d32',
-                    backgroundColor: 'rgba(46, 125, 50, 0.2)',
+                    label: 'CB張數',
+                    data: cbShares,
+                    borderColor: '#1976d2',
+                    backgroundColor: 'rgba(25, 118, 210, 0.1)',
                     fill: true,
                     tension: 0.1,
                     pointRadius: 0,
@@ -16743,9 +16824,9 @@ function renderBalanceChart(cbCode, data, container, period) {
                     yAxisID: 'y'
                 },
                 {
-                    label: '剩餘比率%',
-                    data: remainRatios,
-                    borderColor: '#ff9800',
+                    label: '約當股票張數',
+                    data: stockShares,
+                    borderColor: '#2e7d32',
                     borderDash: [5, 5],
                     fill: false,
                     tension: 0.1,
@@ -16760,7 +16841,14 @@ function renderBalanceChart(cbCode, data, container, period) {
             maintainAspectRatio: false,
             interaction: { mode: 'index', intersect: false },
             plugins: {
-                legend: { position: 'top', labels: { font: { size: 11 }, boxWidth: 12 } }
+                legend: { position: 'top', labels: { font: { size: 11 }, boxWidth: 12 } },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': ' + context.parsed.y.toLocaleString(undefined, {maximumFractionDigits: 0}) + ' 張';
+                        }
+                    }
+                }
             },
             scales: {
                 x: {
@@ -16769,16 +16857,15 @@ function renderBalanceChart(cbCode, data, container, period) {
                 },
                 y: {
                     type: 'linear', display: true, position: 'left',
-                    ticks: { font: { size: 10 } },
+                    ticks: { font: { size: 10 }, callback: function(value) { return value.toLocaleString(); } },
                     grid: { color: 'rgba(0,0,0,0.05)' },
-                    title: { display: true, text: '餘額(億)', font: { size: 10 } }
+                    title: { display: true, text: 'CB張數', font: { size: 10 } }
                 },
                 y1: {
                     type: 'linear', display: true, position: 'right',
-                    min: 0, max: 100,
-                    ticks: { font: { size: 10 }, callback: function(value) { return value + '%'; } },
+                    ticks: { font: { size: 10 }, callback: function(value) { return value.toLocaleString(); } },
                     grid: { drawOnChartArea: false },
-                    title: { display: true, text: '剩餘比率', font: { size: 10 } }
+                    title: { display: true, text: '約當股票張數', font: { size: 10 } }
                 }
             }
         }

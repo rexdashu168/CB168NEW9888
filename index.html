@@ -4707,14 +4707,15 @@ async function loadStatistics() {
             }
         }
 
-        // 建立掛牌高低對照表
-        const highLowMap = {};
+        // 建立掛牌高低對照表（設為全域變數以供基本資料查詢）
+        window.highLowMap = {};
         if (sheetHighLow && sheetHighLow.length > 0) {
             sheetHighLow.forEach(row => {
                 let id = row['代號'] || row['CB代號'] || row['股票代號'];
-                if(id) highLowMap[String(id).replace('.0','').trim()] = row;
+                if(id) window.highLowMap[String(id).replace('.0','').trim()] = row;
             });
         }
+        const highLowMap = window.highLowMap; // 保持向下兼容
         
         // 讀取詢圈資料 (從01工作表)
         if (sheetAllCB && sheetAllCB.length > 0) {
@@ -14913,6 +14914,22 @@ function smartSearchBasicInfo(keyword) {
         return;
     }
     
+    // v3.97-zs-ah: 取得目前的篩選條件
+    const methodFilter = document.querySelector('input[name="issueMethod"]:checked')?.value || 'all';
+    const statusFilter = document.querySelector('input[name="listingStatus"]:checked')?.value || 'all';
+    
+    // 根據篩選條件決定搜尋範圍
+    let searchPool = db.allCB;
+    if (methodFilter !== 'all' || statusFilter !== 'all') {
+        searchPool = db.allCB.filter(cb => {
+            if (methodFilter === 'auction' && !cb.isAuction) return false;
+            if (methodFilter === 'inquiry' && cb.isAuction) return false;
+            if (statusFilter === 'listed' && !cb.isListed) return false;
+            if (statusFilter === 'delisted' && cb.isListed) return false;
+            return true;
+        });
+    }
+    
     // 智能搜尋邏輯
     let matches = [];
     const isNumeric = /^\d+$/.test(searchTerm);
@@ -14921,15 +14938,13 @@ function smartSearchBasicInfo(keyword) {
         // 數字搜尋模式
         if (searchTerm.length <= 4) {
             // 短代號（如 2383）：搜尋母股代號開頭的所有 CB
-            // CB 代號格式：母股代號(4碼) + 期次(1碼)，如 23837 = 台光電七
-            matches = db.allCB.filter(cb => {
+            matches = searchPool.filter(cb => {
                 const cbCode = String(cb.code);
-                // 檢查 CB 代號是否以此數字開頭
                 return cbCode.startsWith(searchTerm);
             });
         } else {
             // 長代號（如 23837）：精確或前綴匹配
-            matches = db.allCB.filter(cb => {
+            matches = searchPool.filter(cb => {
                 const cbCode = String(cb.code);
                 return cbCode === searchTerm || cbCode.startsWith(searchTerm);
             });
@@ -14937,7 +14952,7 @@ function smartSearchBasicInfo(keyword) {
     } else {
         // 文字搜尋模式（名稱搜尋）
         const searchLower = searchTerm.toLowerCase();
-        matches = db.allCB.filter(cb => {
+        matches = searchPool.filter(cb => {
             const name = (cb.name || '').toLowerCase();
             return name.includes(searchLower);
         });
@@ -14946,11 +14961,19 @@ function smartSearchBasicInfo(keyword) {
     // 排序結果（依代號倒序，最新的在前）
     matches.sort((a, b) => String(b.code).localeCompare(String(a.code)));
     
+    // v3.97-zs-ah: 顯示目前篩選範圍提示
+    const filterHint = [];
+    if (methodFilter === 'auction') filterHint.push('競拍');
+    if (methodFilter === 'inquiry') filterHint.push('詢圈');
+    if (statusFilter === 'listed') filterHint.push('掛牌中');
+    if (statusFilter === 'delisted') filterHint.push('已下市');
+    const filterText = filterHint.length > 0 ? `（篩選：${filterHint.join('+')}）` : '';
+    
     // 顯示結果
     if (matches.length === 0) {
         resultsContainer.innerHTML = `
             <div style="padding:15px; color:#999; text-align:center;">
-                找不到符合「${searchTerm}」的可轉債
+                找不到符合「${searchTerm}」的可轉債 ${filterText}
             </div>`;
         resultsContainer.style.display = 'block';
         return;
@@ -14961,6 +14984,14 @@ function smartSearchBasicInfo(keyword) {
     const displayMatches = matches.slice(0, maxDisplay);
     
     let html = '';
+    
+    // v3.97-zs-ah: 顯示搜尋範圍提示
+    if (filterHint.length > 0) {
+        html += `<div style="padding:8px 15px; background:#e3f2fd; font-size:11px; color:#1976d2; border-bottom:1px solid #90caf9;">
+            🔍 搜尋範圍：${filterHint.join(' + ')}（共 ${matches.length} 筆符合）
+        </div>`;
+    }
+    
     displayMatches.forEach((cb, idx) => {
         const statusIcon = cb.isListed ? '🟢' : '⚫';
         const methodIcon = cb.isAuction ? '🎯' : '📋';
@@ -15051,7 +15082,7 @@ function handleBasicInfoSearchKey(event) {
 }
 
 /**
- * 清除搜尋
+ * 清除搜尋並重置篩選條件
  */
 function clearBasicInfoSearch() {
     const searchInput = document.getElementById('basicInfoSearch');
@@ -15064,18 +15095,38 @@ function clearBasicInfoSearch() {
         resultsContainer.style.display = 'none';
         resultsContainer.innerHTML = '';
     }
+    
+    // v3.97-zs-ah: 重置篩選條件到「全部」
+    resetFiltersToAll();
 }
 
 /**
- * 篩選CB清單
+ * v3.97-zs-ah 新增：重置所有篩選條件到「全部」
+ */
+function resetFiltersToAll() {
+    // 重置發行方式為「全部」
+    const methodAllRadio = document.querySelector('input[name="issueMethod"][value="all"]');
+    if (methodAllRadio) methodAllRadio.checked = true;
+    
+    // 重置交易狀態為「全部」
+    const statusAllRadio = document.querySelector('input[name="listingStatus"][value="all"]');
+    if (statusAllRadio) statusAllRadio.checked = true;
+    
+    // 重新載入完整清單
+    filterCBList();
+}
+
+/**
+ * 篩選CB清單（v3.97-zs-ah 優化：統計數字連動）
  */
 function filterCBList() {
     const methodFilter = document.querySelector('input[name="issueMethod"]:checked')?.value || 'all';
     const statusFilter = document.querySelector('input[name="listingStatus"]:checked')?.value || 'all';
     
     const db = window.cbDatabase;
+    if (!db || !db.allCB) return;
     
-    // 篩選
+    // 篩選結果
     filteredCBList = db.allCB.filter(cb => {
         // 發行方式篩選
         if (methodFilter === 'auction' && !cb.isAuction) return false;
@@ -15087,6 +15138,44 @@ function filterCBList() {
         
         return true;
     });
+    
+    // v3.97-zs-ah: 更新統計數字（連動顯示）
+    // 根據當前「交易狀態」篩選，計算各發行方式數量
+    let auctionCount, inquiryCount;
+    if (statusFilter === 'listed') {
+        auctionCount = db.allCB.filter(cb => cb.isAuction && cb.isListed).length;
+        inquiryCount = db.allCB.filter(cb => !cb.isAuction && cb.isListed).length;
+    } else if (statusFilter === 'delisted') {
+        auctionCount = db.allCB.filter(cb => cb.isAuction && !cb.isListed).length;
+        inquiryCount = db.allCB.filter(cb => !cb.isAuction && !cb.isListed).length;
+    } else {
+        auctionCount = db.allCB.filter(cb => cb.isAuction).length;
+        inquiryCount = db.allCB.filter(cb => !cb.isAuction).length;
+    }
+    
+    // 根據當前「發行方式」篩選，計算各交易狀態數量
+    let listedCount, delistedCount;
+    if (methodFilter === 'auction') {
+        listedCount = db.allCB.filter(cb => cb.isAuction && cb.isListed).length;
+        delistedCount = db.allCB.filter(cb => cb.isAuction && !cb.isListed).length;
+    } else if (methodFilter === 'inquiry') {
+        listedCount = db.allCB.filter(cb => !cb.isAuction && cb.isListed).length;
+        delistedCount = db.allCB.filter(cb => !cb.isAuction && !cb.isListed).length;
+    } else {
+        listedCount = db.allCB.filter(cb => cb.isListed).length;
+        delistedCount = db.allCB.filter(cb => !cb.isListed).length;
+    }
+    
+    // 更新UI顯示
+    const auctionCountEl = document.getElementById('auctionCount');
+    const inquiryCountEl = document.getElementById('inquiryCount');
+    const listedCountEl = document.getElementById('listedCount');
+    const delistedCountEl = document.getElementById('delistedCount');
+    
+    if (auctionCountEl) auctionCountEl.textContent = `(${auctionCount})`;
+    if (inquiryCountEl) inquiryCountEl.textContent = `(${inquiryCount})`;
+    if (listedCountEl) listedCountEl.textContent = `(${listedCount})`;
+    if (delistedCountEl) delistedCountEl.textContent = `(${delistedCount})`;
     
     // 更新下拉選單
     updateCBSelectOptions();
@@ -15185,6 +15274,17 @@ function populateBasicInfoCBList() {
  * 重整基本資料清單
  */
 function refreshBasicInfoList() {
+    // v3.97-zs-ah: 先重置篩選條件
+    const methodAllRadio = document.querySelector('input[name="issueMethod"][value="all"]');
+    if (methodAllRadio) methodAllRadio.checked = true;
+    const statusAllRadio = document.querySelector('input[name="listingStatus"][value="all"]');
+    if (statusAllRadio) statusAllRadio.checked = true;
+    
+    // 清除搜尋框
+    const searchInput = document.getElementById('basicInfoSearch');
+    if (searchInput) searchInput.value = '';
+    
+    // 重建資料庫並填充清單
     buildCBDatabase();
     populateBasicInfoCBList();
     filterCBList();
@@ -15914,7 +16014,20 @@ function renderBasicInfoOverview(cbCode, container) {
         return String(val);
     };
     
-    // 建立資訊卡片 - v3.97-zs-ag 靠右對齊 + 統一標題（保留原設計）
+    // v3.97-zs-ai: 從 highLowMap (00工作表) 取得資金用途
+    let fundUsage = '-';
+    if (window.highLowMap && window.highLowMap[searchCode]) {
+        const hlRow = window.highLowMap[searchCode];
+        fundUsage = hlRow['資金用途'] || hlRow['募集資金用途'] || '-';
+    }
+    
+    // v3.97-zs-ai: 從 sheet16 (industryMap) 取得更細的產業分類
+    let detailedIndustry = industryInfo;
+    if (stockCode && window.industryMap && window.industryMap[stockCode]) {
+        detailedIndustry = window.industryMap[stockCode];
+    }
+    
+    // 建立資訊卡片 - v3.97-zs-ai 優化：移除計算公式到底部方塊
     const html = `
         ${renderTabHeader('基本資料', '📋', '#1976d2', completeness.percentage, statusLabel, cbCode, cbName)}
         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:18px;">
@@ -15925,14 +16038,14 @@ function renderBasicInfoOverview(cbCode, container) {
                     <tr><td style="color:#666; width:40%; padding:6px 0;">代號</td><td style="font-weight:600; padding:6px 0; text-align:right;">${data['CB代號'] || cbCode}</td></tr>
                     <tr><td style="color:#666; padding:6px 0;">名稱</td><td style="font-weight:600; padding:6px 0; text-align:right;">${data['名稱'] || '-'}</td></tr>
                     <tr><td style="color:#666; padding:6px 0;">轉換標的</td><td style="font-weight:600; padding:6px 0; text-align:right;">${data['股票代號'] || '-'}</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">產業分類</td><td style="font-weight:600; padding:6px 0; text-align:right;">${industryInfo}</td></tr>
+                    <tr><td style="color:#666; padding:6px 0;">產業分類</td><td style="font-weight:600; padding:6px 0; text-align:right;">${detailedIndustry}</td></tr>
                     <tr><td style="color:#666; padding:6px 0;">信用評等</td><td style="font-weight:600; padding:6px 0; text-align:right;">TCRI ${creditRating}</td></tr>
                     <tr><td style="color:#666; padding:6px 0;">擔保情形</td><td style="font-weight:600; padding:6px 0; text-align:right;">${guarantee}</td></tr>
                     <tr><td style="color:#666; padding:6px 0;">發行方式</td><td style="color:${isAuction ? '#e65100' : '#1565c0'}; font-weight:bold; padding:6px 0; text-align:right;">${isAuction ? '🎯 競拍' : '📋 詢圈'}</td></tr>
                 </table>
             </div>
             
-            <!-- 發行條件卡 - v3.97-zs-ag 優化：規模用億、發行價、訂價溢價率 -->
+            <!-- 發行條件卡 - v3.97-zs-ai 優化：新增資金用途 -->
             <div style="background:#fff3e0; padding:20px; border-radius:12px; border-left:5px solid #ff9800;">
                 <div style="font-weight:bold; color:#e65100; margin-bottom:15px; font-size:16px;">💰 發行條件</div>
                 <table style="width:100%; font-size:15px; line-height:1.9;">
@@ -15942,10 +16055,11 @@ function renderBasicInfoOverview(cbCode, container) {
                     <tr><td style="color:#666; padding:6px 0;">發行年期</td><td style="font-weight:600; padding:6px 0; text-align:right;">${data['年期'] || '-'}年</td></tr>
                     <tr><td style="color:#666; padding:6px 0;">剩餘年期</td><td style="color:${remainYears !== null && remainYears < 1 ? '#c62828' : '#2e7d32'}; font-weight:bold; padding:6px 0; text-align:right;">${remainYearsDisplay}</td></tr>
                     <tr><td style="color:#666; padding:6px 0;">發行券商</td><td style="font-weight:600; padding:6px 0; text-align:right;">${brokerDisplay}</td></tr>
+                    <tr><td style="color:#666; padding:6px 0;">資金用途</td><td style="font-weight:600; padding:6px 0; text-align:right; font-size:13px;">${fundUsage}</td></tr>
                 </table>
             </div>
             
-            <!-- 轉換資訊卡 - v3.97-zs-ag 優化：新增市價、理論價、CB參考價、溢折價 -->
+            <!-- 轉換資訊卡 - v3.97-zs-ai 優化：移除公式說明 -->
             <div style="background:#e8f5e9; padding:20px; border-radius:12px; border-left:5px solid #4caf50;">
                 <div style="font-weight:bold; color:#2e7d32; margin-bottom:15px; font-size:16px;">🔄 轉換資訊</div>
                 <table style="width:100%; font-size:15px; line-height:1.9;">
@@ -15972,10 +16086,10 @@ function renderBasicInfoOverview(cbCode, container) {
                     <tr><td style="color:#666; padding:6px 0;">強贖觸發價</td><td style="color:#9c27b0; font-weight:bold; padding:6px 0; text-align:right;">${callTrigger130}元 <span style="font-size:11px; color:#888;">(130%)</span></td></tr>
                     <tr><td style="color:#666; padding:6px 0;">轉換比例</td><td style="font-weight:600; padding:6px 0; text-align:right;">${convRatio} 股</td></tr>
                     <tr><td style="color:#666; padding:6px 0;">股票最新市價</td><td style="font-weight:bold; color:#1976d2; padding:6px 0; text-align:right;">${latestStockPrice > 0 ? latestStockPrice.toFixed(2) + '元' : '-'}</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">理論價 <span style="font-size:10px; color:#999;">((市價÷轉換價)×100)</span></td><td style="color:#e65100; font-weight:bold; padding:6px 0; text-align:right;">${theoreticalPrice ? theoreticalPrice + '元' : '-'}</td></tr>
+                    <tr><td style="color:#666; padding:6px 0;">理論價</td><td style="color:#e65100; font-weight:bold; padding:6px 0; text-align:right;">${theoreticalPrice ? theoreticalPrice + '元' : '-'}</td></tr>
                     <tr><td style="color:#666; padding:6px 0;">CB參考價格</td><td style="font-weight:bold; color:#2e7d32; padding:6px 0; text-align:right;">${latestCBPrice > 0 ? latestCBPrice.toFixed(2) + '元' : '-'}</td></tr>
                     <tr>
-                        <td style="color:#666; padding:6px 0;">溢折價率 <span style="font-size:10px; color:#999;">((CB價÷理論價-1)×100%)</span></td>
+                        <td style="color:#666; padding:6px 0;">溢折價率</td>
                         <td style="font-weight:bold; padding:6px 0; text-align:right; color:${premiumDiscount !== null ? (parseFloat(premiumDiscount) > 0 ? '#c62828' : '#2e7d32') : '#666'};">
                             ${premiumDiscount !== null ? (parseFloat(premiumDiscount) > 0 ? '+' : '') + premiumDiscount + '%' : '-'}
                         </td>
@@ -15985,7 +16099,7 @@ function renderBasicInfoOverview(cbCode, container) {
             </div>
         </div>
         
-        <!-- v3.97-zs-ag 新增：產業資訊方塊 -->
+        <!-- v3.97-zs-ai 新增：產業資訊方塊 -->
         ${industryPosition ? `
         <div style="margin-top:18px; background:rgba(156,39,176,0.1); padding:15px 18px; border-radius:10px; border-left:4px solid #9c27b0;">
             <div style="font-size:14px; color:#666; margin-bottom:8px;">🏭 產業資訊</div>
@@ -15995,6 +16109,28 @@ function renderBasicInfoOverview(cbCode, container) {
             </div>
         </div>
         ` : ''}
+        
+        <!-- v3.97-zs-ai 新增：計算公式說明方塊 -->
+        <div style="margin-top:18px; background:#f5f5f5; padding:15px 18px; border-radius:10px; border:1px solid #e0e0e0;">
+            <div style="font-size:14px; color:#666; margin-bottom:10px;">📐 計算公式說明</div>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(250px, 1fr)); gap:15px; font-size:13px;">
+                <div style="background:white; padding:12px; border-radius:8px; border-left:3px solid #e65100;">
+                    <div style="color:#666; margin-bottom:6px;">理論價 (轉換價值)</div>
+                    <div style="font-family:monospace; color:#e65100; font-weight:bold;">(股票市價 ÷ 轉換價) × 100</div>
+                    <div style="color:#888; font-size:11px; margin-top:6px;">當理論價 > 100 代表具有轉換價值</div>
+                </div>
+                <div style="background:white; padding:12px; border-radius:8px; border-left:3px solid #1976d2;">
+                    <div style="color:#666; margin-bottom:6px;">溢折價率</div>
+                    <div style="font-family:monospace; color:#1976d2; font-weight:bold;">(CB價格 ÷ 理論價 - 1) × 100%</div>
+                    <div style="color:#888; font-size:11px; margin-top:6px;">正值=溢價(貴)，負值=折價(便宜)</div>
+                </div>
+                <div style="background:white; padding:12px; border-radius:8px; border-left:3px solid #9c27b0;">
+                    <div style="color:#666; margin-bottom:6px;">強贖觸發價</div>
+                    <div style="font-family:monospace; color:#9c27b0; font-weight:bold;">轉換價 × 130%</div>
+                    <div style="color:#888; font-size:11px; margin-top:6px;">股價連續30日達此價可能觸發強贖</div>
+                </div>
+            </div>
+        </div>
     `;
     
     container.innerHTML = html;

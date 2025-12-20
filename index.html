@@ -3296,11 +3296,18 @@ function formatDate(dateVal) {
         return `${date.getFullYear()}/${(date.getMonth()+1).toString().padStart(2,'0')}/${date.getDate().toString().padStart(2,'0')}`;
     }
     if (typeof dateVal === 'string') {
-        // v3.97-zs-bg: 移除時間部分 (處理 "2024-07-19 00:00:00" 格式)
-        let dateOnly = dateVal.split(' ')[0];  // 取空格前的日期部分
+        // v3.97-zs-bg: 全面移除時間部分
+        let dateOnly = dateVal
+            .split(' ')[0]           // 處理 "2024-07-19 00:00:00"
+            .split('T')[0]           // 處理 "2024-07-19T00:00:00" (ISO格式)
+            .replace(/\s*\d{2}:\d{2}:\d{2}.*$/, '')  // 移除任何剩餘的時間格式
+            .trim();
         return dateOnly.replace(/-/g, '/');
     }
-    return dateVal;
+    if (dateVal instanceof Date) {
+        return `${dateVal.getFullYear()}/${(dateVal.getMonth()+1).toString().padStart(2,'0')}/${dateVal.getDate().toString().padStart(2,'0')}`;
+    }
+    return String(dateVal).split(' ')[0].replace(/-/g, '/');
 }
 
 function normalizePremium(premium) {

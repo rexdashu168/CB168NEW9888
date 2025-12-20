@@ -17628,7 +17628,15 @@ async function renderConversionTable(cbCode) {
         filteredData = allData;
     }
     
-    // 倒序顯示（最新在前）
+    // 取得發行總額（用於計算剩餘比率）
+    let totalIssue = 0;
+    const sheet08Row = window.sheet08Data?.find(r => String(r['代號']).trim() === searchCode);
+    if (sheet08Row) {
+        totalIssue = parseFloat(sheet08Row['實際發行總額(百萬)']) || 0;
+        totalIssue = totalIssue / 100; // 轉為億元
+    }
+    
+    // 倒序顯示（最新在前），並計算增減
     const displayData = [...filteredData].reverse();
     
     // 時間區間文字
@@ -17638,20 +17646,21 @@ async function renderConversionTable(cbCode) {
     };
     const periodText = periodTexts[period] || period;
     
+    // v3.97-zs-ap: 改用新的欄位格式（本週餘額、上週餘額、增減數額、增減比率、剩餘比率）
     let tableHtml = `
         <div style="text-align:center; margin-bottom:12px; font-size:14px; color:#666;">
-            📋 ${periodText}轉換記錄（資料來源：CB_kanban O欄「上月底發行餘額」）
+            📋 ${periodText}餘額變化記錄
         </div>
         <div style="max-height:350px; overflow-y:auto;">
             <table style="width:100%; border-collapse:collapse; font-size:13px;">
                 <thead style="position:sticky; top:0; background:#00838f; color:white;">
                     <tr>
-                        <th style="padding:10px 8px; text-align:center;">日期</th>
-                        <th style="padding:10px 8px; text-align:right;">發行餘額(億)</th>
-                        <th style="padding:10px 8px; text-align:right;">轉換價</th>
-                        <th style="padding:10px 8px; text-align:right;">CB價格</th>
-                        <th style="padding:10px 8px; text-align:right;">股價</th>
-                        <th style="padding:10px 8px; text-align:right;">溢價率</th>
+                        <th style="padding:10px 6px; text-align:center;">日期</th>
+                        <th style="padding:10px 6px; text-align:right;">本週餘額</th>
+                        <th style="padding:10px 6px; text-align:right;">上週餘額</th>
+                        <th style="padding:10px 6px; text-align:right;">增減數額</th>
+                        <th style="padding:10px 6px; text-align:right;">增減比率</th>
+                        <th style="padding:10px 6px; text-align:right;">剩餘比率</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -17659,15 +17668,38 @@ async function renderConversionTable(cbCode) {
     
     displayData.forEach((d, i) => {
         const bgColor = i % 2 === 0 ? '#f5f5f5' : 'white';
-        const premiumColor = d.premium > 0 ? '#d32f2f' : d.premium < 0 ? '#2e7d32' : '#666';
+        
+        // 本週餘額（億元轉張數：億元 × 10000 = 張）
+        const thisWeekBalance = d.balance || 0;
+        const thisWeekShares = Math.round(thisWeekBalance * 10000);
+        
+        // 上週餘額（取下一筆，因為是倒序排列）
+        const prevData = displayData[i + 1];
+        const lastWeekBalance = prevData?.balance || thisWeekBalance;
+        const lastWeekShares = Math.round(lastWeekBalance * 10000);
+        
+        // 增減數額和比率
+        const changeShares = thisWeekShares - lastWeekShares;
+        const changeRate = lastWeekShares > 0 ? ((changeShares / lastWeekShares) * 100) : 0;
+        
+        // 剩餘比率
+        const remainRate = totalIssue > 0 ? ((thisWeekBalance / totalIssue) * 100) : 100;
+        
+        // 顏色：減少為綠色（轉換中），增加為紅色
+        const changeColor = changeShares < 0 ? '#2e7d32' : changeShares > 0 ? '#d32f2f' : '#666';
+        
         tableHtml += `
             <tr style="background:${bgColor};">
-                <td style="padding:8px; text-align:center; color:#666;">${d.date || '-'}</td>
-                <td style="padding:8px; text-align:right; font-weight:bold; color:#00838f;">${d.balance ? d.balance.toFixed(2) : '-'}</td>
-                <td style="padding:8px; text-align:right;">${d.convPrice ? d.convPrice.toFixed(2) : '-'}</td>
-                <td style="padding:8px; text-align:right; color:#2e7d32;">${d.cbPrice ? d.cbPrice.toFixed(2) : '-'}</td>
-                <td style="padding:8px; text-align:right; color:#1976d2;">${d.stockPrice ? d.stockPrice.toFixed(2) : '-'}</td>
-                <td style="padding:8px; text-align:right; color:${premiumColor};">${d.premium ? (d.premium > 0 ? '+' : '') + d.premium.toFixed(2) + '%' : '-'}</td>
+                <td style="padding:8px 6px; text-align:center; color:#666;">${d.date || '-'}</td>
+                <td style="padding:8px 6px; text-align:right; font-weight:bold; color:#00838f;">${formatNumber(thisWeekShares)}</td>
+                <td style="padding:8px 6px; text-align:right; color:#666;">${formatNumber(lastWeekShares)}</td>
+                <td style="padding:8px 6px; text-align:right; color:${changeColor}; font-weight:bold;">
+                    ${changeShares !== 0 ? (changeShares > 0 ? '+' : '') + formatNumber(changeShares) : '0'}
+                </td>
+                <td style="padding:8px 6px; text-align:right; color:${changeColor};">
+                    ${changeRate !== 0 ? (changeRate > 0 ? '+' : '') + changeRate.toFixed(2) + '%' : '0%'}
+                </td>
+                <td style="padding:8px 6px; text-align:right; color:#1976d2;">${remainRate.toFixed(1)}%</td>
             </tr>
         `;
     });
@@ -17677,7 +17709,7 @@ async function renderConversionTable(cbCode) {
             </table>
         </div>
         <div style="text-align:center; font-size:12px; color:#888; margin-top:10px;">
-            顯示 ${displayData.length} 期資料
+            顯示 ${displayData.length} 期資料 | 單位：張（1張=10萬元）
         </div>
     `;
     

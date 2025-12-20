@@ -3514,6 +3514,23 @@ async function loadStatistics() {
             ? await loadCSV(`${csvBasePath}13_stop_convert.csv`)
             : await loadExcelSheet(workbook, ['13_', '13', '停止轉換', '暫停轉換']);
         
+        // v3.97-zs-bg: 預留工作表載入（供日後擴充使用）
+        const sheetFilterRange = useCSV 
+            ? await loadCSV(`${csvBasePath}05_filter_range.csv`)
+            : await loadExcelSheet(workbook, ['05_', '05', '篩選範圍']);
+            
+        const sheetCallExecute = useCSV 
+            ? await loadCSV(`${csvBasePath}12_call_execute.csv`)
+            : await loadExcelSheet(workbook, ['12_', '12', '強制贖回']);
+            
+        const sheetPriceAdjust = useCSV 
+            ? await loadCSV(`${csvBasePath}14_price_adjust.csv`)
+            : await loadExcelSheet(workbook, ['14_', '14', '價格調整']);
+            
+        const sheetCbasCalc = useCSV 
+            ? await loadCSV(`${csvBasePath}15_cbas_calc.csv`)
+            : await loadExcelSheet(workbook, ['15_', '15', 'CBAS計算']);
+        
         // v3.97-zs-ag: 抓取 sheet10 日期 (從 CSV 標題或 Excel H1)
         window.sheet10Date = null;
         if (useCSV) {
@@ -3559,6 +3576,13 @@ async function loadStatistics() {
         window.sheet09Data = sheetCBClose || [];
         window.sheet10Data = sheetBalance || [];
         window.sheet13Data = sheetSuspend || []; // v3.97-zs-aj 新增：暫停轉換資訊
+        
+        // v3.97-zs-bg: 預留工作表資料（供日後擴充使用）
+        window.sheet05Data = sheetFilterRange || [];  // 篩選範圍
+        window.sheet12Data = sheetCallExecute || [];  // 強制贖回執行
+        window.sheet14Data = sheetPriceAdjust || [];  // 價格調整
+        window.sheet15Data = sheetCbasCalc || [];     // CBAS計算
+        
         console.log('📋 基本資料工作表已載入:');
         console.log('   01(基本):', window.sheet01Data.length, '筆');
         console.log('   02(時程):', window.sheet02Data.length, '筆');
@@ -3566,6 +3590,12 @@ async function loadStatistics() {
         console.log('   08(掛牌中):', window.sheet08Data.length, '筆');
         console.log('   09(行情):', window.sheet09Data.length, '筆');
         console.log('   10(餘額):', window.sheet10Data.length, '筆');
+        console.log('   13(暫停轉換):', window.sheet13Data.length, '筆');
+        // 預留工作表
+        if (window.sheet05Data.length > 0) console.log('   05(篩選範圍):', window.sheet05Data.length, '筆');
+        if (window.sheet12Data.length > 0) console.log('   12(強制贖回):', window.sheet12Data.length, '筆');
+        if (window.sheet14Data.length > 0) console.log('   14(價格調整):', window.sheet14Data.length, '筆');
+        if (window.sheet15Data.length > 0) console.log('   15(CBAS計算):', window.sheet15Data.length, '筆');
 
         // v3.72 新增：建立產業分類對照表（從16工作表）
         window.industryMap = {};
@@ -4783,10 +4813,10 @@ async function loadStatistics() {
                 const premium = safeFloat(row['權利金(佰元報價)']);
                 const remainingYears = safeFloat(row['剩餘年期']);
                 const discountRate = safeFloat(row['溢(折)價%']);
-                const ratingRaw = row['擔保銀行/信用評等(TCRI)'] || '';
+                const ratingRaw = String(row['擔保銀行/信用評等(TCRI)'] || '').trim();
                 
                 // 判斷擔保類型：數字為TCRI無擔保，非數字為銀行有擔保
-                const isGuaranteed = ratingRaw && !/^\d+$/.test(ratingRaw.trim());
+                const isGuaranteed = ratingRaw && !/^\d+$/.test(ratingRaw);
                 const guaranteeType = isGuaranteed ? 'guaranteed' : 'unguaranteed';
                 const guaranteeDisplay = isGuaranteed ? ratingRaw : `TCRI ${ratingRaw}`;
                 

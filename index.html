@@ -15569,8 +15569,78 @@ function renderBasicInfoOverview(cbCode, container) {
         }
     }
     
-    // 取得轉換價
-    const convPrice = parseFloat(data['轉換價']) || 0;
+    // ========== v3.97-zs-ag 優化：轉換價格資料來源統一處理 ==========
+    // 1. 發行轉換價（原始）- 優先從 yuanta 或 01 工作表取得
+    let issueConvPrice = 0;  // 發行時的轉換價
+    let issueConvPriceSource = '';
+    
+    // 優先從 yuanta 取得發行轉換價
+    if (window.yuantaHistoryData?.loaded) {
+        const yuantaRow = window.yuantaHistoryData.data[searchCode];
+        if (yuantaRow && yuantaRow['轉換價格(元)']) {
+            issueConvPrice = parseFloat(yuantaRow['轉換價格(元)']) || 0;
+            issueConvPriceSource = 'yuanta';
+        }
+        // 另外檢查「發行時轉換價格(元)」欄位
+        if (!issueConvPrice && yuantaRow && yuantaRow['發行時轉換價格(元)']) {
+            issueConvPrice = parseFloat(yuantaRow['發行時轉換價格(元)']) || 0;
+            issueConvPriceSource = 'yuanta';
+        }
+    }
+    
+    // 從 01 工作表補充
+    if (!issueConvPrice && window.sheet01Data && window.sheet01Data.length > 0) {
+        const sheet01Row = window.sheet01Data.find(r => String(r['CB代號']).trim() === searchCode);
+        if (sheet01Row && sheet01Row['轉換價格']) {
+            issueConvPrice = parseFloat(sheet01Row['轉換價格']) || 0;
+            issueConvPriceSource = 'sheet01';
+        }
+    }
+    
+    // 如果都沒有，使用 data 中的轉換價
+    if (!issueConvPrice) {
+        issueConvPrice = parseFloat(data['轉換價']) || parseFloat(data['發行時轉換價']) || 0;
+        issueConvPriceSource = 'data';
+    }
+    
+    // 2. 最新轉換價 - 從 kanban 最新資料取得
+    let latestConvPrice = 0;  // 最新調整後的轉換價
+    let latestConvPriceDate = '';
+    let convPriceAdjusted = false;  // 是否有調整過
+    
+    // 從 kanban 取得最新轉換價
+    if (window.kanbanData?.loaded && window.kanbanData.data[searchCode]) {
+        const cbTimeSeries = window.kanbanData.data[searchCode];
+        if (cbTimeSeries && cbTimeSeries.length > 0) {
+            // 取最新一筆
+            const latestRecord = cbTimeSeries[cbTimeSeries.length - 1];
+            if (latestRecord && latestRecord.convPrice > 0) {
+                latestConvPrice = latestRecord.convPrice;
+                latestConvPriceDate = latestRecord.date;
+            }
+        }
+    }
+    
+    // 從 09 工作表補充最新轉換價（掛牌中的CB）
+    if (!latestConvPrice && window.sheet09Data && window.sheet09Data.length > 0) {
+        const quote09Row = window.sheet09Data.find(r => String(r['代碼']).trim() === searchCode);
+        if (quote09Row && quote09Row['轉換價格']) {
+            latestConvPrice = parseFloat(quote09Row['轉換價格']) || 0;
+        }
+    }
+    
+    // 如果沒有最新轉換價，使用發行轉換價
+    if (!latestConvPrice) {
+        latestConvPrice = issueConvPrice;
+    }
+    
+    // 判斷是否有調整過（差異超過 0.01 元視為有調整）
+    if (issueConvPrice > 0 && latestConvPrice > 0 && Math.abs(latestConvPrice - issueConvPrice) > 0.01) {
+        convPriceAdjusted = true;
+    }
+    
+    // 使用最新轉換價作為主要顯示
+    const convPrice = latestConvPrice || issueConvPrice || parseFloat(data['轉換價']) || 0;
     
     // 計算強制贖回觸發價 (130%)
     const callTrigger130 = convPrice > 0 ? (convPrice * 1.3).toFixed(2) : '-';
@@ -15675,6 +15745,79 @@ function renderBasicInfoOverview(cbCode, container) {
     // 判斷是否有強制贖回條款
     const hasCallOption = callStartDate && callStartDate !== '-' && callStartDate !== '無';
     
+    // v3.97-zs-ag: 投資人賣回條款欄位
+    let putbackStartDate = '-';
+    let putbackEndDate = '-';
+    let putbackPrice = '-';
+    let putbackCondition = '-';
+    let putbackDate1 = '-';
+    let putbackDate2 = '-';
+    let putbackYTM = '-';  // 賣回殖利率
+    
+    // 從 yuantaHistoryData 讀取賣回權資訊
+    if (window.yuantaHistoryData?.loaded) {
+        const yuantaRow = window.yuantaHistoryData.data[searchCode];
+        if (yuantaRow) {
+            putbackStartDate = yuantaRow['最近賣回權起日'] || '-';
+            putbackEndDate = yuantaRow['最近賣回權迄日'] || '-';
+            putbackPrice = yuantaRow['最近賣回權價格'] || '-';
+        }
+    }
+    
+    // 從 sheet03Data (賣回條件工作表) 補充
+    if (window.sheet03Data && window.sheet03Data.length > 0) {
+        const putbackRow = window.sheet03Data.find(r => String(r['CB代號'] || r['代號']).trim() === searchCode);
+        if (putbackRow) {
+            if (!putbackCondition || putbackCondition === '-') putbackCondition = putbackRow['投資人提前賣回'] || '-';
+            if (!putbackDate1 || putbackDate1 === '-') putbackDate1 = putbackRow['賣回日期1'] || '-';
+            if (!putbackDate2 || putbackDate2 === '-') putbackDate2 = putbackRow['賣回日期2'] || '-';
+            if (!putbackPrice || putbackPrice === '-') putbackPrice = putbackRow['賣回價格1'] || putbackRow['賣回價格'] || '-';
+            if (!putbackYTM || putbackYTM === '-') putbackYTM = putbackRow['賣回殖利率'] || putbackRow['YTP'] || '-';
+        }
+    }
+    
+    // 從 sheet01Data 補充
+    if (window.sheet01Data?.length > 0) {
+        const sheet01Row = window.sheet01Data.find(r => String(r['CB代號']).trim() === searchCode);
+        if (sheet01Row) {
+            if (!putbackDate1 || putbackDate1 === '-') putbackDate1 = sheet01Row['賣回日1'] || sheet01Row['賣回日期1'] || '-';
+            if (!putbackDate2 || putbackDate2 === '-') putbackDate2 = sheet01Row['賣回日2'] || sheet01Row['賣回日期2'] || '-';
+            if (!putbackPrice || putbackPrice === '-') putbackPrice = sheet01Row['賣回價格1'] || sheet01Row['賣回價格'] || '-';
+        }
+    }
+    
+    // 判斷是否有賣回條款
+    const hasPutbackOption = (putbackDate1 && putbackDate1 !== '-') || (putbackStartDate && putbackStartDate !== '-');
+    
+    // 計算距離最近賣回日天數
+    let daysToPutback = null;
+    let nearestPutbackDate = null;
+    const parsePutbackDate = (val) => {
+        if (!val || val === '-') return null;
+        if (typeof val === 'number') {
+            return new Date((val - 25569) * 86400 * 1000);
+        }
+        const d = new Date(val);
+        return isNaN(d.getTime()) ? null : d;
+    };
+    
+    // 找最近的賣回日
+    const pd1 = parsePutbackDate(putbackDate1);
+    const pd2 = parsePutbackDate(putbackDate2);
+    const pds = parsePutbackDate(putbackStartDate);
+    
+    [pd1, pd2, pds].forEach(d => {
+        if (d && d > today) {
+            if (!nearestPutbackDate || d < nearestPutbackDate) {
+                nearestPutbackDate = d;
+            }
+        }
+    });
+    
+    if (nearestPutbackDate) {
+        daysToPutback = Math.ceil((nearestPutbackDate.getTime() - today.getTime()) / (24 * 60 * 60 * 1000));
+    }
+    
     // 格式化日期
     const formatCallDate = (val) => {
         if (!val || val === '-' || val === '無') return '-';
@@ -15717,16 +15860,33 @@ function renderBasicInfoOverview(cbCode, container) {
                 </table>
             </div>
             
-            <!-- 轉換資訊卡 -->
+            <!-- 轉換資訊卡 - v3.97-zs-ag 優化轉換價格顯示 -->
             <div style="background:#e8f5e9; padding:20px; border-radius:12px; border-left:5px solid #4caf50;">
                 <div style="font-weight:bold; color:#2e7d32; margin-bottom:15px; font-size:16px;">🔄 轉換資訊</div>
                 <table style="width:100%; font-size:15px; line-height:1.9;">
-                    <tr><td style="color:#666; width:40%; padding:6px 0;">轉換價</td><td style="font-weight:bold; color:#c62828; padding:6px 0; font-size:16px; text-align:right;">${convPrice || '-'}元</td></tr>
+                    <tr>
+                        <td style="color:#666; width:40%; padding:6px 0;">發行轉換價</td>
+                        <td style="font-weight:600; padding:6px 0; text-align:right;">${issueConvPrice || '-'}元</td>
+                    </tr>
+                    <tr>
+                        <td style="color:#666; padding:6px 0;">最新轉換價</td>
+                        <td style="font-weight:bold; color:#c62828; padding:6px 0; font-size:16px; text-align:right;">
+                            ${latestConvPrice || '-'}元
+                            ${convPriceAdjusted ? `<span style="font-size:11px; color:#e65100; margin-left:4px;">⚡調整</span>` : ''}
+                        </td>
+                    </tr>
+                    ${convPriceAdjusted ? `
+                    <tr>
+                        <td style="color:#666; padding:6px 0; font-size:13px;">調整幅度</td>
+                        <td style="padding:6px 0; text-align:right; font-size:13px; color:${latestConvPrice < issueConvPrice ? '#2e7d32' : '#c62828'};">
+                            ${latestConvPrice < issueConvPrice ? '▼' : '▲'} ${Math.abs(latestConvPrice - issueConvPrice).toFixed(2)}元 
+                            (${((latestConvPrice - issueConvPrice) / issueConvPrice * 100).toFixed(2)}%)
+                        </td>
+                    </tr>
+                    ` : ''}
                     <tr><td style="color:#666; padding:6px 0;">強贖觸發價</td><td style="color:#9c27b0; font-weight:bold; padding:6px 0; text-align:right;">${callTrigger130}元 <span style="font-size:12px; color:#999;">(130%)</span></td></tr>
                     <tr><td style="color:#666; padding:6px 0;">轉換比例</td><td style="font-weight:600; padding:6px 0; text-align:right;">${convRatio} 股</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">截標收盤價</td><td style="font-weight:600; padding:6px 0; text-align:right;">${data['截標收盤'] || '-'}元</td></tr>
                     <tr><td style="color:#666; padding:6px 0;">理論價</td><td style="color:#1976d2; font-weight:bold; padding:6px 0; text-align:right;">${data['理論價'] ? parseFloat(data['理論價']).toFixed(2) : '-'}元</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">年化波動</td><td style="font-weight:600; padding:6px 0; text-align:right;">${data['年化波動'] ? (data['年化波動'] * 100).toFixed(2) + '%' : '-'}</td></tr>
                 </table>
             </div>
             
@@ -15788,6 +15948,44 @@ function renderBasicInfoOverview(cbCode, container) {
             ${hasCallOption ? `
             <div style="margin-top:12px; background:#fff3e0; padding:10px 12px; border-radius:6px; border-left:3px solid #ff9800;">
                 <span style="font-size:13px; color:#e65100;">⚠️ <strong>注意：</strong>此CB設有強制贖回條款，當股價連續一段時間達轉換價130%以上時，發行公司可能執行強制贖回。</span>
+            </div>
+            ` : ''}
+        </div>
+        
+        <!-- v3.97-zs-ag 新增：投資人賣回條款區塊 -->
+        <div style="margin-top:18px; background:linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); padding:20px; border-radius:12px; border-left:5px solid #4caf50;">
+            <div style="text-align:center; margin-bottom:15px;">
+                <div style="font-size:17px; font-weight:bold; color:#2e7d32;">👤 投資人賣回條款 (Investor Put Option)</div>
+                <div style="font-size:13px; color:#888; margin-top:5px;">投資人有權利在賣回的時間依發行鎖定的價格及利率賣回給公司，公司無條件給付利息及本金</div>
+            </div>
+            
+            <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:12px; margin-bottom:12px;">
+                <div style="background:rgba(255,255,255,0.7); padding:12px; border-radius:8px; text-align:center; border:1px solid #a5d6a7;">
+                    <div style="font-size:13px; color:#888; margin-bottom:6px;">賣回日1</div>
+                    <div style="font-size:16px; font-weight:bold; color:#2e7d32;">${formatCallDate(putbackDate1)}</div>
+                </div>
+                <div style="background:rgba(255,255,255,0.7); padding:12px; border-radius:8px; text-align:center; border:1px solid #a5d6a7;">
+                    <div style="font-size:13px; color:#888; margin-bottom:6px;">賣回日2</div>
+                    <div style="font-size:16px; font-weight:bold; color:#2e7d32;">${formatCallDate(putbackDate2)}</div>
+                </div>
+            </div>
+            
+            <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:12px;">
+                <div style="background:rgba(255,255,255,0.7); padding:12px; border-radius:8px; text-align:center; border:1px solid #a5d6a7;">
+                    <div style="font-size:13px; color:#888; margin-bottom:6px;">賣回價格</div>
+                    <div style="font-size:16px; font-weight:bold; color:#2e7d32;">${putbackPrice && putbackPrice !== '-' ? putbackPrice + '元' : '-'}</div>
+                </div>
+                <div style="background:rgba(255,255,255,0.7); padding:12px; border-radius:8px; text-align:center; border:1px solid #a5d6a7;">
+                    <div style="font-size:13px; color:#888; margin-bottom:6px;">距離最近賣回日</div>
+                    <div style="font-size:16px; font-weight:bold; color:${daysToPutback !== null && daysToPutback < 180 ? '#e65100' : '#2e7d32'};">
+                        ${daysToPutback !== null ? (daysToPutback > 0 ? formatNumber(daysToPutback) + ' 天' : '已過期') : '-'}
+                    </div>
+                </div>
+            </div>
+            
+            ${hasPutbackOption && daysToPutback !== null && daysToPutback > 0 && daysToPutback < 365 ? `
+            <div style="margin-top:12px; background:#e3f2fd; padding:10px 12px; border-radius:6px; border-left:3px solid #1976d2;">
+                <span style="font-size:13px; color:#1565c0;">📌 <strong>提示：</strong>此CB距離最近賣回日僅剩 <strong>${daysToPutback}</strong> 天，若目前價格低於賣回價格，可考慮買進後於賣回日以 ${putbackPrice || '100'} 元賣回給公司。</span>
             </div>
             ` : ''}
         </div>

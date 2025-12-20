@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97-zs-bk (效能優化版)</title>
+<title>AI智能可轉債競拍系統 v3.97-zs-bl (標籤緩存優化版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <!-- v3.97-zs-ae: 改用 CB_kanban_YYYY.xlsx 載入時間序列資料，取代 kanban_data.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -7706,7 +7706,7 @@ function showMarketTrendTab(tab, event) {
         event.stopPropagation();
     }
     
-    // v3.97-zs-bh: 效能優化 - 減少 DOM 查詢次數
+    // 更新標籤狀態
     const tabs = document.querySelectorAll('.market-trend-tab');
     const tabMap = {
         'supply': '供給分析', 'yearly': '年度趨勢', 'industry': '產業分析',
@@ -7725,8 +7725,18 @@ function showMarketTrendTab(tab, event) {
     
     const content = document.getElementById('marketTrendContent');
     
-    // 使用 requestAnimationFrame 避免阻塞
-    requestAnimationFrame(() => {
+    // v3.97-zs-bl: 檢查緩存（市場趨勢資料不常變，適合緩存）
+    if (window.tabCache.marketTrend[tab]) {
+        content.innerHTML = window.tabCache.marketTrend[tab];
+        setTimeout(() => initTableSortForContent(), 20);
+        return;
+    }
+    
+    // 顯示載入中
+    content.innerHTML = `<div style="text-align:center; padding:30px; color:#666;">⏳ 載入中...</div>`;
+    
+    // 使用 setTimeout 讓載入訊息先顯示
+    setTimeout(() => {
         let html = '';
         switch(tab) {
             case 'supply': html = renderSupplyAnalysis(); break;
@@ -7743,9 +7753,13 @@ function showMarketTrendTab(tab, event) {
             case 'issueNum': html = renderIssueNumAnalysis(); break;
             case 'ky': html = renderKYAnalysis(); break;
         }
+        
+        // 存入緩存
+        window.tabCache.marketTrend[tab] = html;
+        
         content.innerHTML = html;
-        setTimeout(() => initTableSortForContent(), 50);
-    });
+        setTimeout(() => initTableSortForContent(), 20);
+    }, 10);
 }
 
 function renderYearlyTrend() {
@@ -15448,11 +15462,17 @@ function loadBasicInfo(cbCode) {
 /**
  * 顯示基本資料標籤頁
  */
+// v3.97-zs-bl: 標籤內容緩存系統
+window.tabCache = {
+    basicInfo: {},  // { cbCode: { tabName: htmlContent, rendered: Set } }
+    priceTrend: {}, // { cbCode: { tabName: htmlContent } }
+    marketTrend: {} // { tabName: htmlContent }
+};
+
 function showBasicInfoTab(tabName, event) {
-    // v3.97-zs-bh: 效能優化 - 使用 requestAnimationFrame
     window.currentBasicInfoTab = tabName;
     
-    // 更新標籤狀態（使用 for 迴圈更高效）
+    // 更新標籤狀態
     const tabs = document.querySelectorAll('.basic-info-tab');
     for (let i = 0; i < tabs.length; i++) {
         tabs[i].classList.remove('active');
@@ -15468,39 +15488,76 @@ function showBasicInfoTab(tabName, event) {
         return;
     }
     
-    // 使用 requestAnimationFrame 避免阻塞主線程
-    requestAnimationFrame(() => {
+    // v3.97-zs-bl: 檢查緩存
+    const cacheKey = `${cbCode}_${tabName}`;
+    if (window.tabCache.basicInfo[cacheKey]) {
+        content.innerHTML = window.tabCache.basicInfo[cacheKey];
+        return;
+    }
+    
+    // 顯示載入中（立即顯示，不阻塞）
+    content.innerHTML = `<div style="text-align:center; padding:40px; color:#666;">⏳ 載入中...</div>`;
+    
+    // 使用 setTimeout 讓載入中訊息先顯示
+    setTimeout(() => {
         try {
+            // 創建臨時容器來渲染內容
+            const tempDiv = document.createElement('div');
+            
             switch(tabName) {
                 case 'overview':
-                    renderBasicInfoOverview(cbCode, content);
+                    renderBasicInfoOverview(cbCode, tempDiv);
                     break;
                 case 'schedule':
-                    renderBasicInfoSchedule(cbCode, content);
+                    renderBasicInfoSchedule(cbCode, tempDiv);
                     break;
                 case 'putback':
-                    renderBasicInfoPutback(cbCode, content);
+                    renderBasicInfoPutback(cbCode, tempDiv);
                     break;
                 case 'callOption':
-                    renderBasicInfoCallOption(cbCode, content);
+                    renderBasicInfoCallOption(cbCode, tempDiv);
                     break;
                 case 'auction':
-                    renderBasicInfoAuction(cbCode, content);
+                    renderBasicInfoAuction(cbCode, tempDiv);
                     break;
                 case 'quote':
-                    renderBasicInfoQuote(cbCode, content);
+                    renderBasicInfoQuote(cbCode, tempDiv);
                     break;
                 case 'balance':
-                    renderBasicInfoBalance(cbCode, content);
+                    renderBasicInfoBalance(cbCode, tempDiv);
                     break;
                 default:
-                    content.innerHTML = `<div style="color:#999;">未知標籤：${tabName}</div>`;
+                    tempDiv.innerHTML = `<div style="color:#999;">未知標籤：${tabName}</div>`;
             }
+            
+            // 存入緩存（balance 標籤因為有圖表不緩存）
+            if (tabName !== 'balance') {
+                window.tabCache.basicInfo[cacheKey] = tempDiv.innerHTML;
+            }
+            
+            // 顯示內容
+            content.innerHTML = tempDiv.innerHTML;
+            
         } catch(e) {
             console.error('[showBasicInfoTab] 錯誤:', e);
             content.innerHTML = `<div style="color:#c62828; padding:20px;">❌ 載入錯誤: ${e.message}</div>`;
         }
-    });
+    }, 10);
+}
+
+// v3.97-zs-bl: 當選擇新的 CB 時清除緩存
+function clearBasicInfoCache(cbCode) {
+    if (cbCode) {
+        // 清除特定 CB 的緩存
+        Object.keys(window.tabCache.basicInfo).forEach(key => {
+            if (key.startsWith(cbCode + '_')) {
+                delete window.tabCache.basicInfo[key];
+            }
+        });
+    } else {
+        // 清除所有緩存
+        window.tabCache.basicInfo = {};
+    }
 }
 
 /**

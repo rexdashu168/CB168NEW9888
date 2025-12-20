@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97-zs-ag (標題統一+產業資訊+靠右對齊)</title>
+<title>AI智能可轉債競拍系統 v3.97-zs-au (週/月餘額分開+Y軸優化)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <!-- v3.97-zs-ae: 改用 CB_kanban_YYYY.xlsx 載入時間序列資料，取代 kanban_data.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -16493,85 +16493,158 @@ function renderBasicInfoPutback(cbCode, container) {
  * 專門從 CB_kanban_YYYY.xlsx 讀取 A欄(代號) + J-M欄(強制贖回資料)
  * 這是獨立的載入函數，不與其他資料混用
  */
-window.cbCallOptionData = { loaded: false, loading: false, data: {} };
+window.cbCallOptionData = { loaded: false, loading: false, data: {}, loadedYears: [] };
 
+/**
+ * v3.97-zs-at 優化：強制贖回資料載入
+ * 1. localStorage 快取（7天有效）
+ * 2. 先載入最新年份，背景載入其餘
+ * 3. 系統初始化時預載入
+ */
 async function loadCBCallOptionData() {
     if (window.cbCallOptionData.loaded || window.cbCallOptionData.loading) return;
     window.cbCallOptionData.loading = true;
     
-    const years = [2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017];
-    const allData = {};
+    const startTime = Date.now();
+    const CACHE_KEY = 'cbCallOptionCache';
+    const CACHE_EXPIRY = 7 * 24 * 60 * 60 * 1000; // 7天
     
-    for (const year of years) {
-        const filename = `data/kanban/CB_kanban_${year}.xlsx`;
-        try {
-            const response = await fetch(filename);
-            if (!response.ok) continue;
-            
-            const arrayBuffer = await response.arrayBuffer();
-            const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-            
-            // 取所有日期工作表
-            const validSheets = workbook.SheetNames.filter(name => /^\d{8}$/.test(name)).sort();
-            if (validSheets.length === 0) continue;
-            
-            // 取最新日期的工作表
-            const latestSheet = validSheets[validSheets.length - 1];
-            const sheet = workbook.Sheets[latestSheet];
-            const rawData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-            
-            if (rawData.length < 2) continue;
-            
-            // 第一列是欄位名稱
-            const headerRow = rawData[0];
-            const colMap = {};
-            for (let i = 0; i < headerRow.length; i++) {
-                if (headerRow[i]) colMap[String(headerRow[i]).trim()] = i;
+    // 嘗試從快取讀取
+    try {
+        const cached = localStorage.getItem(CACHE_KEY);
+        if (cached) {
+            const { data, timestamp, version } = JSON.parse(cached);
+            if (version === '3.97' && Date.now() - timestamp < CACHE_EXPIRY && Object.keys(data).length > 0) {
+                window.cbCallOptionData.data = data;
+                window.cbCallOptionData.loaded = true;
+                window.cbCallOptionData.loading = false;
+                console.log(`✅ 強制贖回從快取載入: ${Object.keys(data).length} 檔, ${Date.now() - startTime}ms`);
+                return;
             }
-            
-            console.log(`📊 CB_kanban_${year} 欄位:`, Object.keys(colMap).join(', '));
-            
-            // Excel 日期序號轉字串
-            const excelDateToStr = (val) => {
-                if (val === undefined || val === null || val === '' || val === 0) return '';
-                if (typeof val === 'string' && val.includes('/')) return val;
-                const num = parseFloat(val);
-                if (isNaN(num) || num < 1000) return '';
-                const date = new Date((num - 25569) * 86400 * 1000);
-                return `${date.getFullYear()}/${String(date.getMonth()+1).padStart(2,'0')}/${String(date.getDate()).padStart(2,'0')}`;
-            };
-            
-            // 處理資料列（從第2列開始）
-            for (let i = 1; i < rawData.length; i++) {
-                const row = rawData[i];
-                if (!row || !row[colMap['債券代碼']]) continue;
-                
-                const codeRaw = row[colMap['債券代碼']];
-                const code = String(codeRaw).replace(/\.0*$/, '').trim();
-                if (!code) continue;
-                
-                // 讀取強制贖回欄位
-                const callStartDate = excelDateToStr(row[colMap['強制贖回起日']]);
-                const callEndDate = excelDateToStr(row[colMap['強制贖回迄日']]);
-                const callPriceRaw = row[colMap['強制贖回價格']];
-                const callPrice = (callPriceRaw && callPriceRaw !== 0) ? String(callPriceRaw) : '';
-                const delistDate = excelDateToStr(row[colMap['終止櫃檯買賣日']]);
-                
-                // 只存有資料的，且不覆蓋已有的資料（優先保留較新年份）
-                if ((callStartDate || callEndDate || callPrice || delistDate) && !allData[code]) {
-                    allData[code] = { callStartDate, callEndDate, callPrice, delistDate, dataYear: year };
-                }
-            }
-            console.log(`✅ CB_kanban_${year} 強贖資料載入完成，目前共 ${Object.keys(allData).length} 檔`);
-        } catch (err) {
-            console.warn(`⚠️ CB_kanban_${year} 載入失敗:`, err.message);
         }
+    } catch (e) {
+        console.warn('快取讀取失敗:', e.message);
     }
     
+    // 快取無效，從檔案載入
+    const allData = {};
+    
+    // 先載入最新年份
+    await loadCallOptionYear(2025, allData);
+    
+    // 標記初步完成
     window.cbCallOptionData.data = allData;
     window.cbCallOptionData.loaded = true;
     window.cbCallOptionData.loading = false;
-    console.log(`✅ 強制贖回資料載入完成: ${Object.keys(allData).length} 檔有資料`);
+    
+    console.log(`✅ 強制贖回快速載入: ${Object.keys(allData).length} 檔, ${Date.now() - startTime}ms`);
+    
+    // 背景載入其他年份並更新快取
+    setTimeout(async () => {
+        await loadCallOptionRemainingYears(allData);
+        // 存入快取
+        try {
+            localStorage.setItem(CACHE_KEY, JSON.stringify({
+                data: allData,
+                timestamp: Date.now(),
+                version: '3.97'
+            }));
+            console.log('💾 強制贖回資料已快取');
+        } catch (e) {
+            console.warn('快取儲存失敗:', e.message);
+        }
+    }, 300);
+}
+
+/**
+ * 載入單一年份的強制贖回資料（只讀A、J-M欄）
+ */
+async function loadCallOptionYear(year, allData) {
+    const filename = `data/kanban/CB_kanban_${year}.xlsx`;
+    try {
+        const response = await fetch(filename);
+        if (!response.ok) return false;
+        
+        const arrayBuffer = await response.arrayBuffer();
+        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+        
+        // 取最新日期的工作表
+        const validSheets = workbook.SheetNames.filter(name => /^\d{8}$/.test(name)).sort();
+        if (validSheets.length === 0) return false;
+        
+        const sheet = workbook.Sheets[validSheets[validSheets.length - 1]];
+        const rawData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+        if (rawData.length < 2) return false;
+        
+        // 欄位映射
+        const headerRow = rawData[0];
+        const colMap = {};
+        for (let i = 0; i < headerRow.length; i++) {
+            if (headerRow[i]) colMap[String(headerRow[i]).trim()] = i;
+        }
+        
+        // Excel 日期轉換
+        const excelDateToStr = (val) => {
+            if (!val || val === 0) return '';
+            if (typeof val === 'string' && val.includes('/')) return val;
+            const num = parseFloat(val);
+            if (isNaN(num) || num < 1000) return '';
+            const d = new Date((num - 25569) * 86400 * 1000);
+            return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+        };
+        
+        // 處理資料
+        let addedCount = 0;
+        for (let i = 1; i < rawData.length; i++) {
+            const row = rawData[i];
+            if (!row || !row[colMap['債券代碼']]) continue;
+            
+            const code = String(row[colMap['債券代碼']]).replace(/\.0*$/, '').trim();
+            if (!code || allData[code]) continue;
+            
+            const callStartDate = excelDateToStr(row[colMap['強制贖回起日']]);
+            const callEndDate = excelDateToStr(row[colMap['強制贖回迄日']]);
+            const callPriceRaw = row[colMap['強制贖回價格']];
+            const callPrice = (callPriceRaw && callPriceRaw !== 0) ? String(callPriceRaw) : '';
+            const delistDate = excelDateToStr(row[colMap['終止櫃檯買賣日']]);
+            
+            if (callStartDate || callEndDate || callPrice || delistDate) {
+                allData[code] = { callStartDate, callEndDate, callPrice, delistDate, dataYear: year };
+                addedCount++;
+            }
+        }
+        
+        window.cbCallOptionData.loadedYears.push(year);
+        if (addedCount > 0) console.log(`📊 CB_kanban_${year}: +${addedCount} 檔`);
+        return true;
+    } catch (err) {
+        return false;
+    }
+}
+
+/**
+ * 背景載入剩餘年份
+ */
+async function loadCallOptionRemainingYears(allData) {
+    const years = [2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017];
+    for (const year of years) {
+        if (!window.cbCallOptionData.loadedYears.includes(year)) {
+            await loadCallOptionYear(year, allData);
+        }
+    }
+    console.log(`✅ 強制贖回完整載入: ${Object.keys(allData).length} 檔`);
+}
+
+/**
+ * 系統初始化時預載入強制贖回資料（背景執行）
+ */
+function preloadCallOptionData() {
+    setTimeout(() => {
+        if (!window.cbCallOptionData.loaded && !window.cbCallOptionData.loading) {
+            console.log('🔄 預載入強制贖回資料...');
+            loadCBCallOptionData();
+        }
+    }, 2000); // 延遲2秒，等主要資料載入完成
 }
 
 /**
@@ -17258,16 +17331,24 @@ function renderBasicInfoBalance(cbCode, container) {
             </div>
             ` : ''}
             
-            <!-- v3.97-zs-al: 轉換走勢/表格切換標籤，新增時間區間選擇 -->
+            <!-- v3.97-zs-at: 週餘額/月餘額切換標籤 -->
             <div style="margin-bottom:15px;">
                 <div style="display:flex; gap:5px; margin-bottom:12px; align-items:center; flex-wrap:wrap;">
-                    <button type="button" class="balance-sub-tab active" data-tab="convChart" onclick="switchBalanceSubTab('${searchCode}', 'convChart', this)" 
-                            style="padding:8px 16px; border:none; background:#00838f; color:white; border-radius:6px 6px 0 0; cursor:pointer; font-size:13px; font-weight:bold;">
-                        📈 轉換走勢圖
+                    <button type="button" class="balance-sub-tab active" data-tab="weekChart" onclick="switchBalanceSubTab('${searchCode}', 'weekChart', this)" 
+                            style="padding:8px 14px; border:none; background:#00838f; color:white; border-radius:6px 6px 0 0; cursor:pointer; font-size:13px; font-weight:bold;">
+                        📈 週走勢
                     </button>
-                    <button type="button" class="balance-sub-tab" data-tab="convTable" onclick="switchBalanceSubTab('${searchCode}', 'convTable', this)"
-                            style="padding:8px 16px; border:none; background:#b2ebf2; color:#00838f; border-radius:6px 6px 0 0; cursor:pointer; font-size:13px;">
-                        📋 轉換記錄表
+                    <button type="button" class="balance-sub-tab" data-tab="weekTable" onclick="switchBalanceSubTab('${searchCode}', 'weekTable', this)"
+                            style="padding:8px 14px; border:none; background:#b2ebf2; color:#00838f; border-radius:6px 6px 0 0; cursor:pointer; font-size:13px;">
+                        📋 週記錄
+                    </button>
+                    <button type="button" class="balance-sub-tab" data-tab="monthChart" onclick="switchBalanceSubTab('${searchCode}', 'monthChart', this)"
+                            style="padding:8px 14px; border:none; background:#b2ebf2; color:#00838f; border-radius:6px 6px 0 0; cursor:pointer; font-size:13px;">
+                        📊 月走勢
+                    </button>
+                    <button type="button" class="balance-sub-tab" data-tab="monthTable" onclick="switchBalanceSubTab('${searchCode}', 'monthTable', this)"
+                            style="padding:8px 14px; border:none; background:#b2ebf2; color:#00838f; border-radius:6px 6px 0 0; cursor:pointer; font-size:13px;">
+                        📑 月記錄
                     </button>
                     <div style="margin-left:auto;">
                         <select id="balancePeriod_${searchCode}" onchange="updateBalancePeriod('${searchCode}')" 
@@ -17282,9 +17363,12 @@ function renderBasicInfoBalance(cbCode, container) {
                         </select>
                     </div>
                 </div>
+                <div style="font-size:11px; color:#888; margin-bottom:8px; padding-left:5px;">
+                    💡 週餘額來自元大資料(每週更新)，月餘額來自CB_kanban(每月更新)
+                </div>
                 <div id="balanceSubContent_${searchCode}" style="background:white; padding:18px; border-radius:0 10px 10px 10px; min-height:200px;">
                     <div style="text-align:center; color:#888; padding:40px;">
-                        📊 載入轉換走勢資料中...
+                        📊 載入週餘額走勢資料中...
                     </div>
                 </div>
             </div>
@@ -17299,11 +17383,11 @@ function renderBasicInfoBalance(cbCode, container) {
     
     container.innerHTML = html;
     
-    // v3.97-zs-al: 自動載入轉換走勢圖
-    console.log('[renderBasicInfoBalance] 設定 setTimeout 呼叫 renderConversionChart, searchCode:', searchCode);
+    // v3.97-zs-at: 自動載入週餘額走勢圖
+    console.log('[renderBasicInfoBalance] 設定 setTimeout 呼叫 renderWeeklyChart, searchCode:', searchCode);
     setTimeout(() => {
-        console.log('[renderBasicInfoBalance] setTimeout 執行中，呼叫 renderConversionChart');
-        renderConversionChart(searchCode);
+        console.log('[renderBasicInfoBalance] setTimeout 執行中，呼叫 renderWeeklyChart');
+        renderWeeklyChart(searchCode);
     }, 100);
 }
 
@@ -17315,27 +17399,37 @@ function updateBalancePeriod(cbCode) {
     const container = document.getElementById(`balanceSubContent_${cbCode}`);
     if (!container) return;
     
-    const activeTab = container.closest('.balance-sub-tab')?.dataset?.tab || 'convChart';
-    const tabButtons = document.querySelectorAll(`.balance-sub-tab[data-tab]`);
-    let currentTab = 'convChart';
-    
     // 從按鈕找當前標籤
-    tabButtons.forEach(btn => {
-        if (btn.classList.contains('active') && btn.closest(`[id*="${cbCode}"]`)) {
+    const tabButtons = container.parentElement?.querySelectorAll('.balance-sub-tab');
+    let currentTab = 'weekChart';
+    
+    tabButtons?.forEach(btn => {
+        if (btn.classList.contains('active')) {
             currentTab = btn.dataset.tab;
         }
     });
     
-    // 根據當前標籤重新渲染
-    if (currentTab === 'convChart') {
-        renderConversionChart(cbCode);
-    } else {
-        renderConversionTable(cbCode);
+    // v3.97-zs-at: 根據當前標籤重新渲染
+    switch(currentTab) {
+        case 'weekChart':
+            renderWeeklyChart(cbCode);
+            break;
+        case 'weekTable':
+            renderWeeklyTable(cbCode);
+            break;
+        case 'monthChart':
+            renderConversionChart(cbCode);
+            break;
+        case 'monthTable':
+            renderConversionTable(cbCode);
+            break;
+        default:
+            renderWeeklyChart(cbCode);
     }
 }
 
 /**
- * v3.97-zs-aj 新增：切換餘額子標籤
+ * v3.97-zs-at 修改：切換餘額子標籤（週/月走勢圖/記錄表）
  */
 function switchBalanceSubTab(cbCode, tabType, btnElement) {
     // 更新按鈕樣式
@@ -17355,11 +17449,291 @@ function switchBalanceSubTab(cbCode, tabType, btnElement) {
     });
     
     // 渲染對應內容
-    if (tabType === 'convChart') {
-        renderConversionChart(cbCode);
-    } else if (tabType === 'convTable') {
-        renderConversionTable(cbCode);
+    switch(tabType) {
+        case 'weekChart':
+            renderWeeklyChart(cbCode);
+            break;
+        case 'weekTable':
+            renderWeeklyTable(cbCode);
+            break;
+        case 'monthChart':
+            renderConversionChart(cbCode);
+            break;
+        case 'monthTable':
+            renderConversionTable(cbCode);
+            break;
     }
+}
+
+/**
+ * v3.97-zs-at 新增：渲染週餘額走勢圖
+ */
+async function renderWeeklyChart(cbCode) {
+    const container = document.getElementById(`balanceSubContent_${cbCode}`);
+    if (!container) return;
+    
+    const searchCode = String(cbCode).trim();
+    
+    // 確保週餘額資料已載入
+    if (!window.weeklyBalanceData.loaded && !window.weeklyBalanceData.loading) {
+        container.innerHTML = `<div style="text-align:center; padding:40px; color:#666;">
+            <div style="font-size:24px; margin-bottom:10px;">⏳</div>
+            <div>載入週餘額資料中...</div>
+        </div>`;
+        
+        loadWeeklyBalanceData().then(() => {
+            if (window.currentBasicInfoTab === 'balance') {
+                renderWeeklyChart(cbCode);
+            }
+        });
+        return;
+    }
+    
+    if (window.weeklyBalanceData.loading) {
+        container.innerHTML = `<div style="text-align:center; padding:40px; color:#666;">
+            <div style="font-size:24px; margin-bottom:10px;">⏳</div>
+            <div>週餘額資料載入中...</div>
+        </div>`;
+        
+        const checkLoading = setInterval(() => {
+            if (!window.weeklyBalanceData.loading) {
+                clearInterval(checkLoading);
+                if (window.currentBasicInfoTab === 'balance') {
+                    renderWeeklyChart(cbCode);
+                }
+            }
+        }, 200);
+        return;
+    }
+    
+    // 取得時間區間
+    const periodSelect = document.getElementById(`balancePeriod_${searchCode}`);
+    const period = periodSelect?.value || '180';
+    
+    // 取得週餘額資料
+    let allData = window.weeklyBalanceData.data[searchCode] || [];
+    
+    if (allData.length === 0) {
+        container.innerHTML = `
+            <div style="text-align:center; color:#888; padding:40px;">
+                <div style="font-size:32px; margin-bottom:10px;">📊</div>
+                <div>尚無週餘額資料</div>
+                <div style="font-size:12px; margin-top:8px;">元大資料中未找到 ${searchCode} 的歷史週餘額</div>
+            </div>
+        `;
+        return;
+    }
+    
+    // 過濾時間區間
+    let filteredData = allData;
+    if (period !== 'all') {
+        const days = parseInt(period);
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - days);
+        filteredData = allData.filter(d => {
+            const dDate = new Date(d.date.replace(/\//g, '-'));
+            return dDate >= cutoffDate;
+        });
+    }
+    
+    if (filteredData.length === 0) filteredData = allData;
+    
+    // 時間區間文字
+    const periodTexts = { '30': '1個月', '90': '3個月', '180': '6個月', '365': '1年', '730': '2年', '1095': '3年', 'all': '全部' };
+    const periodText = periodTexts[period] || period;
+    
+    // 計算Y軸範圍（±5%）
+    const balances = filteredData.map(d => d.balanceShares);
+    const minBalance = Math.min(...balances);
+    const maxBalance = Math.max(...balances);
+    const range = maxBalance - minBalance;
+    const yMin = range > 0 ? Math.max(0, minBalance - range * 0.1) : minBalance * 0.95;
+    const yMax = range > 0 ? maxBalance + range * 0.1 : maxBalance * 1.05;
+    
+    // 繪製走勢圖
+    const chartId = `weeklyChart_${searchCode}_${Date.now()}`;
+    const chartHtml = `
+        <div style="text-align:center; margin-bottom:12px; font-size:14px; color:#666;">
+            📈 ${periodText}週餘額走勢（資料來源：元大週報）
+        </div>
+        <canvas id="${chartId}" style="width:100%; height:280px;"></canvas>
+        <div style="text-align:center; font-size:12px; color:#888; margin-top:10px;">
+            共 ${filteredData.length} 週資料 | 單位：張
+        </div>
+    `;
+    
+    container.innerHTML = chartHtml;
+    
+    // 使用 Chart.js 繪製
+    setTimeout(() => {
+        const ctx = document.getElementById(chartId)?.getContext('2d');
+        if (!ctx) return;
+        
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: filteredData.map(d => d.date),
+                datasets: [{
+                    label: '週餘額(張)',
+                    data: filteredData.map(d => d.balanceShares),
+                    borderColor: '#1976d2',
+                    backgroundColor: 'rgba(25, 118, 210, 0.1)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: filteredData.length > 50 ? 0 : 3,
+                    pointHoverRadius: 5
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (ctx) => `餘額: ${formatNumber(ctx.raw)} 張`
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: { maxTicksLimit: 8, maxRotation: 45 }
+                    },
+                    y: {
+                        min: Math.floor(yMin),
+                        max: Math.ceil(yMax),
+                        ticks: {
+                            callback: (v) => formatNumber(v)
+                        }
+                    }
+                }
+            }
+        });
+    }, 50);
+}
+
+/**
+ * v3.97-zs-at 新增：渲染週餘額記錄表
+ */
+async function renderWeeklyTable(cbCode) {
+    const container = document.getElementById(`balanceSubContent_${cbCode}`);
+    if (!container) return;
+    
+    const searchCode = String(cbCode).trim();
+    
+    // 確保資料載入
+    if (!window.weeklyBalanceData.loaded && !window.weeklyBalanceData.loading) {
+        container.innerHTML = `<div style="text-align:center; padding:40px; color:#666;">⏳ 載入週餘額資料中...</div>`;
+        loadWeeklyBalanceData().then(() => {
+            if (window.currentBasicInfoTab === 'balance') renderWeeklyTable(cbCode);
+        });
+        return;
+    }
+    
+    if (window.weeklyBalanceData.loading) {
+        container.innerHTML = `<div style="text-align:center; padding:40px; color:#666;">⏳ 週餘額資料載入中...</div>`;
+        const check = setInterval(() => {
+            if (!window.weeklyBalanceData.loading) {
+                clearInterval(check);
+                if (window.currentBasicInfoTab === 'balance') renderWeeklyTable(cbCode);
+            }
+        }, 200);
+        return;
+    }
+    
+    // 取得時間區間
+    const periodSelect = document.getElementById(`balancePeriod_${searchCode}`);
+    const period = periodSelect?.value || '180';
+    
+    let allData = window.weeklyBalanceData.data[searchCode] || [];
+    
+    if (allData.length === 0) {
+        container.innerHTML = `
+            <div style="text-align:center; color:#888; padding:40px;">
+                <div style="font-size:32px; margin-bottom:10px;">📋</div>
+                <div>尚無週餘額記錄</div>
+            </div>
+        `;
+        return;
+    }
+    
+    // 過濾時間
+    let filteredData = allData;
+    if (period !== 'all') {
+        const days = parseInt(period);
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - days);
+        filteredData = allData.filter(d => new Date(d.date.replace(/\//g, '-')) >= cutoff);
+    }
+    if (filteredData.length === 0) filteredData = allData;
+    
+    // 倒序（最新在前）
+    const displayData = [...filteredData].reverse();
+    
+    // 取得發行總額
+    let totalIssue = 0;
+    const sheet08Row = window.sheet08Data?.find(r => String(r['代號']).trim() === searchCode);
+    if (sheet08Row) {
+        totalIssue = (parseFloat(sheet08Row['實際發行總額(百萬)']) || 0) * 10; // 百萬×10=張
+    }
+    
+    const periodTexts = { '30': '1個月', '90': '3個月', '180': '6個月', '365': '1年', '730': '2年', '1095': '3年', 'all': '全部' };
+    
+    let tableHtml = `
+        <div style="text-align:center; margin-bottom:12px; font-size:14px; color:#666;">
+            📋 ${periodTexts[period] || period}週餘額變化記錄
+        </div>
+        <div style="max-height:350px; overflow-y:auto;">
+            <table style="width:100%; border-collapse:collapse; font-size:13px;">
+                <thead style="position:sticky; top:0; background:#1976d2; color:white;">
+                    <tr>
+                        <th style="padding:10px 6px; text-align:center;">日期</th>
+                        <th style="padding:10px 6px; text-align:right;">本週餘額</th>
+                        <th style="padding:10px 6px; text-align:right;">上週餘額</th>
+                        <th style="padding:10px 6px; text-align:right;">增減數額</th>
+                        <th style="padding:10px 6px; text-align:right;">增減比率</th>
+                        <th style="padding:10px 6px; text-align:right;">剩餘比率</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    displayData.forEach((d, i) => {
+        const bgColor = i % 2 === 0 ? '#f5f5f5' : 'white';
+        const thisWeek = d.balanceShares;
+        const prevData = displayData[i + 1];
+        const lastWeek = prevData?.balanceShares || thisWeek;
+        const change = thisWeek - lastWeek;
+        const changeRate = lastWeek > 0 ? (change / lastWeek) * 100 : 0;
+        const remainRate = totalIssue > 0 ? (thisWeek / totalIssue) * 100 : 100;
+        const changeColor = change < 0 ? '#2e7d32' : change > 0 ? '#d32f2f' : '#666';
+        
+        tableHtml += `
+            <tr style="background:${bgColor};">
+                <td style="padding:8px 6px; text-align:center; color:#666;">${d.date}</td>
+                <td style="padding:8px 6px; text-align:right; font-weight:bold; color:#1976d2;">${formatNumber(thisWeek)}</td>
+                <td style="padding:8px 6px; text-align:right; color:#666;">${formatNumber(lastWeek)}</td>
+                <td style="padding:8px 6px; text-align:right; color:${changeColor}; font-weight:bold;">
+                    ${change !== 0 ? (change > 0 ? '+' : '') + formatNumber(change) : '0'}
+                </td>
+                <td style="padding:8px 6px; text-align:right; color:${changeColor};">
+                    ${changeRate !== 0 ? (changeRate > 0 ? '+' : '') + changeRate.toFixed(2) + '%' : '0%'}
+                </td>
+                <td style="padding:8px 6px; text-align:right; color:#1565c0;">${remainRate.toFixed(1)}%</td>
+            </tr>
+        `;
+    });
+    
+    tableHtml += `
+                </tbody>
+            </table>
+        </div>
+        <div style="text-align:center; font-size:12px; color:#888; margin-top:10px;">
+            顯示 ${displayData.length} 週資料 | 單位：張
+        </div>
+    `;
+    
+    container.innerHTML = tableHtml;
 }
 
 /**
@@ -17500,7 +17874,20 @@ async function renderConversionChart(cbCode) {
     
     const maxBalance = Math.max(...balances);
     const minBalance = Math.min(...balances);
-    const range = maxBalance - minBalance || maxBalance * 0.1 || 1;
+    
+    // v3.97-zs-at: Y軸範圍改為數據±5%，確保沒變化時也有合理顯示
+    let yMin, yMax;
+    if (maxBalance === minBalance) {
+        // 數據完全相同，顯示±5%範圍
+        yMin = minBalance * 0.95;
+        yMax = maxBalance * 1.05;
+    } else {
+        // 有變化，在數據範圍基礎上擴展10%
+        const dataRange = maxBalance - minBalance;
+        yMin = Math.max(0, minBalance - dataRange * 0.1);
+        yMax = maxBalance + dataRange * 0.1;
+    }
+    const range = yMax - yMin || 1;
     
     // 生成SVG走勢圖
     const width = 650;
@@ -17517,7 +17904,7 @@ async function renderConversionChart(cbCode) {
         if (balance <= 0) return;
         
         const x = padding + (validPoints / Math.max(filteredData.length - 1, 1)) * chartWidth;
-        const y = padding + chartHeight - ((balance - minBalance) / range) * chartHeight;
+        const y = padding + chartHeight - ((balance - yMin) / range) * chartHeight;
         if (validPoints === 0) {
             pathD += `M ${x} ${y}`;
         } else {
@@ -17568,7 +17955,7 @@ async function renderConversionChart(cbCode) {
             <rect x="${padding}" y="${padding}" width="${chartWidth}" height="${chartHeight}" fill="#fafafa" stroke="#e0e0e0"/>
             ${[0, 0.25, 0.5, 0.75, 1].map(ratio => {
                 const y = padding + chartHeight * (1 - ratio);
-                const val = (minBalance + range * ratio).toFixed(2);
+                const val = (yMin + range * ratio).toFixed(2);
                 return `<line x1="${padding}" y1="${y}" x2="${width - padding}" y2="${y}" stroke="#e0e0e0" stroke-dasharray="3,3"/>
                         <text x="${padding - 5}" y="${y + 4}" text-anchor="end" font-size="11" fill="#888">${val}</text>`;
             }).join('')}
@@ -17577,8 +17964,8 @@ async function renderConversionChart(cbCode) {
             <path d="${pathD}" fill="none" stroke="#00838f" stroke-width="2.5"/>
             
             <!-- 起點終點標記 -->
-            ${firstBalance > 0 ? `<circle cx="${padding}" cy="${padding + chartHeight - ((firstBalance - minBalance) / range) * chartHeight}" r="5" fill="#1976d2"/>` : ''}
-            ${lastBalance > 0 ? `<circle cx="${width - padding}" cy="${padding + chartHeight - ((lastBalance - minBalance) / range) * chartHeight}" r="5" fill="${trendColor}"/>` : ''}
+            ${firstBalance > 0 ? `<circle cx="${padding}" cy="${padding + chartHeight - ((firstBalance - yMin) / range) * chartHeight}" r="5" fill="#1976d2"/>` : ''}
+            ${lastBalance > 0 ? `<circle cx="${width - padding}" cy="${padding + chartHeight - ((lastBalance - yMin) / range) * chartHeight}" r="5" fill="${trendColor}"/>` : ''}
             
             <!-- Y軸標題 -->
             <text x="15" y="${height / 2}" text-anchor="middle" font-size="12" fill="#666" transform="rotate(-90, 15, ${height / 2})">餘額(億元)</text>
@@ -18012,6 +18399,109 @@ window.yuantaHistoryData = {
     loading: false,
     data: {}  // { cbCode: { 最新一筆的完整資料 } }
 };
+
+// v3.97-zs-at 新增：週餘額時間序列資料
+window.weeklyBalanceData = {
+    loaded: false,
+    loading: false,
+    data: {}  // { cbCode: [{ date, balance, ... }, ...] }
+};
+
+/**
+ * v3.97-zs-at 新增：載入週餘額時間序列
+ * 從 yuanta_data1.xlsx 和 yuanta_data2.xlsx 的 S 欄「最新餘額(百萬)」
+ */
+async function loadWeeklyBalanceData() {
+    if (window.weeklyBalanceData.loaded || window.weeklyBalanceData.loading) return;
+    window.weeklyBalanceData.loading = true;
+    
+    console.log('📊 開始載入週餘額時間序列...');
+    const startTime = Date.now();
+    
+    const allData = {};
+    const files = ['data/kanban/yuanta_data2.xlsx', 'data/kanban/yuanta_data1.xlsx'];
+    
+    for (const filename of files) {
+        try {
+            const response = await fetch(filename);
+            if (!response.ok) continue;
+            
+            const workbook = XLSX.read(await response.arrayBuffer(), { type: 'array' });
+            
+            // 取得所有日期工作表（民國年 YYYMMDD 格式）
+            const validSheets = workbook.SheetNames.filter(name => /^\d{7}$/.test(name)).sort();
+            
+            for (const sheetName of validSheets) {
+                const sheet = workbook.Sheets[sheetName];
+                const rawData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+                if (rawData.length < 2) continue;
+                
+                // 找出欄位位置
+                const headers = rawData[0];
+                let codeIdx = -1, balanceIdx = -1, nameIdx = -1;
+                
+                headers.forEach((h, idx) => {
+                    const normalized = String(h || '').replace(/^\d{6,7}/, '').trim();
+                    if (normalized === '代號') codeIdx = idx;
+                    if (normalized === '最新餘額(百萬)' || normalized === '最新餘額') balanceIdx = idx;
+                    if (normalized === '名稱') nameIdx = idx;
+                });
+                
+                if (codeIdx < 0 || balanceIdx < 0) continue;
+                
+                // 民國年轉西元年
+                const rocYear = parseInt(sheetName.substring(0, 3));
+                const month = sheetName.substring(3, 5);
+                const day = sheetName.substring(5, 7);
+                const westYear = rocYear + 1911;
+                const dateStr = `${westYear}/${month}/${day}`;
+                const dateNum = parseInt(`${westYear}${month}${day}`);
+                
+                // 處理每一列
+                for (let i = 1; i < rawData.length; i++) {
+                    const row = rawData[i];
+                    const code = String(row[codeIdx] || '').trim();
+                    if (!code) continue;
+                    
+                    const balanceRaw = parseFloat(row[balanceIdx]) || 0;
+                    if (balanceRaw <= 0) continue;
+                    
+                    // 百萬轉億元
+                    const balance = balanceRaw / 100;
+                    // 百萬轉張數（1張=10萬，所以百萬×10=張數）
+                    const balanceShares = Math.round(balanceRaw * 10);
+                    
+                    if (!allData[code]) allData[code] = [];
+                    
+                    // 檢查是否已有該日期資料
+                    const existing = allData[code].find(d => d.dateNum === dateNum);
+                    if (!existing) {
+                        allData[code].push({
+                            date: dateStr,
+                            dateNum: dateNum,
+                            balance: balance,
+                            balanceShares: balanceShares
+                        });
+                    }
+                }
+            }
+        } catch (err) {
+            console.warn(`載入 ${filename} 週餘額失敗:`, err.message);
+        }
+    }
+    
+    // 排序每個CB的時間序列
+    for (const code of Object.keys(allData)) {
+        allData[code].sort((a, b) => a.dateNum - b.dateNum);
+    }
+    
+    window.weeklyBalanceData.data = allData;
+    window.weeklyBalanceData.loaded = true;
+    window.weeklyBalanceData.loading = false;
+    
+    const totalRecords = Object.values(allData).reduce((sum, arr) => sum + arr.length, 0);
+    console.log(`✅ 週餘額載入完成: ${Object.keys(allData).length} 檔CB, ${totalRecords} 筆週資料, ${Date.now() - startTime}ms`);
+}
 
 /**
  * v3.97z-s 載入元大歷史基本資料
@@ -19397,6 +19887,8 @@ window.addEventListener('DOMContentLoaded', function() {
     loadStatistics();
     initResizer();
     // v3.73 修正：initQuickSelect 移到 initializeUI 中，確保資料已載入
+    // v3.97-zs-at：預載入強制贖回資料（背景執行）
+    preloadCallOptionData();
 });
 </script>
 

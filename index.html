@@ -16338,7 +16338,7 @@ async function renderBasicInfoTermination(cbCode, container) {
             <div>載入 kanban 資料中...</div>
         </div>`;
         try {
-            await loadKanbanExcelData();
+            await loadAllKanbanData();
         } catch (err) {
             console.error('載入 kanbanData 失敗:', err);
         }
@@ -16584,57 +16584,106 @@ function renderBasicInfoAuction(cbCode, container) {
     // v3.97-zs-ag: 取得名稱
     const cbName = data['名稱'] || '';
     
+    // v3.97-zs-ag: 取得額外欄位
+    const pricingPremium = data['訂價溢價率'] || data['訂價溢價'] || null;
+    const qualifiedCount = data['合格件數'] || data['合格標單'] || null;
+    const bidShares = data['投標張數'] || data['投標總張數'] || null;
+    const bidMultiple = data['投標倍數'] || null;
+    const avgBidShares = data['投標均張'] || data['平均投標張數'] || null;
+    
     const html = `
         <div style="background:linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); padding:25px; border-radius:12px;">
             ${renderTabHeader('競拍資料', '🎯', '#2e7d32', completeness.percentage, statusLabel, cbCode, cbName)}
-            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:15px;">
-                <div style="background:white; padding:18px 12px; border-radius:10px; text-align:center;">
-                    <div style="font-size:13px; color:#666; margin-bottom:8px;">開標日期</div>
-                    <div style="font-size:18px; font-weight:bold; color:#2e7d32;">${formatDate(data['開標日期'])}</div>
+            
+            <!-- 第一區：基本競拍資訊 -->
+            <div style="background:white; padding:18px; border-radius:10px; margin-bottom:15px; border-left:5px solid #4caf50;">
+                <div style="font-weight:bold; color:#2e7d32; margin-bottom:15px; font-size:15px;">📅 競拍基本資訊</div>
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:12px;">
+                    <div style="text-align:center; padding:12px; background:#e8f5e9; border-radius:8px;">
+                        <div style="font-size:12px; color:#666; margin-bottom:6px;">開標日期</div>
+                        <div style="font-size:16px; font-weight:bold; color:#2e7d32;">${formatDate(data['開標日期'])}</div>
+                    </div>
+                    <div style="text-align:center; padding:12px; background:#e8f5e9; border-radius:8px;">
+                        <div style="font-size:12px; color:#666; margin-bottom:6px;">截標日</div>
+                        <div style="font-size:16px; font-weight:bold;">${formatDate(data['截標日'])}</div>
+                    </div>
+                    <div style="text-align:center; padding:12px; background:#e8f5e9; border-radius:8px;">
+                        <div style="font-size:12px; color:#666; margin-bottom:6px;">競拍張數</div>
+                        <div style="font-size:16px; font-weight:bold;">${formatNumber(data['競拍張數'])}張</div>
+                    </div>
+                    <div style="text-align:center; padding:12px; background:#e8f5e9; border-radius:8px;">
+                        <div style="font-size:12px; color:#666; margin-bottom:6px;">底標價</div>
+                        <div style="font-size:16px; font-weight:bold; color:#c62828;">${data['底標價'] || '-'}元</div>
+                    </div>
                 </div>
-                <div style="background:white; padding:18px 12px; border-radius:10px; text-align:center;">
-                    <div style="font-size:13px; color:#666; margin-bottom:8px;">截標日</div>
-                    <div style="font-size:18px; font-weight:bold;">${formatDate(data['截標日'])}</div>
+            </div>
+            
+            <!-- 第二區：價格資訊 -->
+            <div style="background:white; padding:18px; border-radius:10px; margin-bottom:15px; border-left:5px solid #1976d2;">
+                <div style="font-weight:bold; color:#1565c0; margin-bottom:15px; font-size:15px;">💰 價格資訊</div>
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:12px;">
+                    <div style="text-align:center; padding:12px; background:#e3f2fd; border-radius:8px;">
+                        <div style="font-size:12px; color:#666; margin-bottom:6px;">截標收盤價</div>
+                        <div style="font-size:16px; font-weight:bold;">${data['截標收盤'] || '-'}元</div>
+                    </div>
+                    <div style="text-align:center; padding:12px; background:#e3f2fd; border-radius:8px;">
+                        <div style="font-size:12px; color:#666; margin-bottom:6px;">轉換價</div>
+                        <div style="font-size:16px; font-weight:bold;">${data['轉換價'] || '-'}元</div>
+                    </div>
+                    <div style="text-align:center; padding:12px; background:#e3f2fd; border-radius:8px;">
+                        <div style="font-size:12px; color:#666; margin-bottom:6px;">理論價</div>
+                        <div style="font-size:16px; font-weight:bold; color:#1976d2;">${data['理論價'] ? parseFloat(data['理論價']).toFixed(2) : '-'}元</div>
+                    </div>
+                    <div style="text-align:center; padding:12px; background:#fff3e0; border-radius:8px;">
+                        <div style="font-size:12px; color:#666; margin-bottom:6px;">訂價溢價率</div>
+                        <div style="font-size:16px; font-weight:bold; color:#e65100;">${pricingPremium ? (parseFloat(pricingPremium) * 100).toFixed(2) + '%' : '-'}</div>
+                    </div>
                 </div>
-                <div style="background:white; padding:18px 12px; border-radius:10px; text-align:center;">
-                    <div style="font-size:13px; color:#666; margin-bottom:8px;">競拍張數</div>
-                    <div style="font-size:18px; font-weight:bold;">${formatNumber(data['競拍張數'])}張</div>
+            </div>
+            
+            <!-- 第三區：得標結果（重點） -->
+            <div style="background:white; padding:18px; border-radius:10px; margin-bottom:15px; border-left:5px solid #ff9800;">
+                <div style="font-weight:bold; color:#e65100; margin-bottom:15px; font-size:15px;">🏆 得標結果</div>
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:12px;">
+                    <div style="text-align:center; padding:15px; background:#e8f5e9; border-radius:10px; border:3px solid #4caf50;">
+                        <div style="font-size:13px; color:#666; margin-bottom:8px;">最低得標價</div>
+                        <div style="font-size:24px; font-weight:bold; color:#2e7d32;">${data['最低得標'] || '-'}元</div>
+                    </div>
+                    <div style="text-align:center; padding:15px; background:#e8f5e9; border-radius:10px;">
+                        <div style="font-size:13px; color:#666; margin-bottom:8px;">最低溢價</div>
+                        <div style="font-size:18px; font-weight:bold; color:#2e7d32;">${data['最低溢價'] ? (data['最低溢價'] * 100).toFixed(2) + '%' : '-'}</div>
+                    </div>
+                    <div style="text-align:center; padding:15px; background:#fff3e0; border-radius:10px; border:3px solid #ff9800;">
+                        <div style="font-size:13px; color:#666; margin-bottom:8px;">平均得標價</div>
+                        <div style="font-size:24px; font-weight:bold; color:#e65100;">${data['平均得標'] || '-'}元</div>
+                    </div>
+                    <div style="text-align:center; padding:15px; background:#fff3e0; border-radius:10px;">
+                        <div style="font-size:13px; color:#666; margin-bottom:8px;">平均溢價</div>
+                        <div style="font-size:18px; font-weight:bold; color:#e65100;">${data['平均溢價'] ? (data['平均溢價'] * 100).toFixed(2) + '%' : '-'}</div>
+                    </div>
                 </div>
-                <div style="background:white; padding:18px 12px; border-radius:10px; text-align:center;">
-                    <div style="font-size:13px; color:#666; margin-bottom:8px;">底標價</div>
-                    <div style="font-size:18px; font-weight:bold; color:#c62828;">${data['底標價'] || '-'}元</div>
-                </div>
-                <div style="background:white; padding:18px 12px; border-radius:10px; text-align:center;">
-                    <div style="font-size:13px; color:#666; margin-bottom:8px;">截標收盤價</div>
-                    <div style="font-size:18px; font-weight:bold;">${data['截標收盤'] || '-'}元</div>
-                </div>
-                <div style="background:white; padding:18px 12px; border-radius:10px; text-align:center;">
-                    <div style="font-size:13px; color:#666; margin-bottom:8px;">轉換價</div>
-                    <div style="font-size:18px; font-weight:bold;">${data['轉換價'] || '-'}元</div>
-                </div>
-                <div style="background:white; padding:18px 12px; border-radius:10px; text-align:center;">
-                    <div style="font-size:13px; color:#666; margin-bottom:8px;">理論價</div>
-                    <div style="font-size:18px; font-weight:bold; color:#1976d2;">${data['理論價'] ? parseFloat(data['理論價']).toFixed(2) : '-'}元</div>
-                </div>
-                <div style="background:white; padding:18px 12px; border-radius:10px; text-align:center; border:3px solid #4caf50;">
-                    <div style="font-size:13px; color:#666; margin-bottom:8px;">最低得標</div>
-                    <div style="font-size:22px; font-weight:bold; color:#2e7d32;">${data['最低得標'] || '-'}元</div>
-                </div>
-                <div style="background:white; padding:18px 12px; border-radius:10px; text-align:center;">
-                    <div style="font-size:13px; color:#666; margin-bottom:8px;">最低溢價</div>
-                    <div style="font-size:18px; font-weight:bold; color:#e65100;">${data['最低溢價'] ? (data['最低溢價'] * 100).toFixed(2) + '%' : '-'}</div>
-                </div>
-                <div style="background:white; padding:18px 12px; border-radius:10px; text-align:center; border:3px solid #ff9800;">
-                    <div style="font-size:13px; color:#666; margin-bottom:8px;">平均得標</div>
-                    <div style="font-size:22px; font-weight:bold; color:#e65100;">${data['平均得標'] || '-'}元</div>
-                </div>
-                <div style="background:white; padding:18px 12px; border-radius:10px; text-align:center;">
-                    <div style="font-size:13px; color:#666; margin-bottom:8px;">平均溢價</div>
-                    <div style="font-size:18px; font-weight:bold;">${data['平均溢價'] ? (data['平均溢價'] * 100).toFixed(2) + '%' : '-'}</div>
-                </div>
-                <div style="background:white; padding:18px 12px; border-radius:10px; text-align:center;">
-                    <div style="font-size:13px; color:#666; margin-bottom:8px;">投標倍數</div>
-                    <div style="font-size:18px; font-weight:bold; color:#7b1fa2;">${data['投標倍數'] ? data['投標倍數'].toFixed(2) + 'x' : '-'}</div>
+            </div>
+            
+            <!-- 第四區：投標統計 -->
+            <div style="background:white; padding:18px; border-radius:10px; border-left:5px solid #9c27b0;">
+                <div style="font-weight:bold; color:#7b1fa2; margin-bottom:15px; font-size:15px;">📊 投標統計</div>
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:12px;">
+                    <div style="text-align:center; padding:12px; background:#f3e5f5; border-radius:8px;">
+                        <div style="font-size:12px; color:#666; margin-bottom:6px;">合格件數</div>
+                        <div style="font-size:18px; font-weight:bold; color:#7b1fa2;">${qualifiedCount ? formatNumber(qualifiedCount) + '件' : '-'}</div>
+                    </div>
+                    <div style="text-align:center; padding:12px; background:#f3e5f5; border-radius:8px;">
+                        <div style="font-size:12px; color:#666; margin-bottom:6px;">投標張數</div>
+                        <div style="font-size:18px; font-weight:bold; color:#7b1fa2;">${bidShares ? formatNumber(bidShares) + '張' : '-'}</div>
+                    </div>
+                    <div style="text-align:center; padding:12px; background:#f3e5f5; border-radius:8px; border:2px solid #9c27b0;">
+                        <div style="font-size:12px; color:#666; margin-bottom:6px;">投標倍數</div>
+                        <div style="font-size:20px; font-weight:bold; color:#7b1fa2;">${bidMultiple ? parseFloat(bidMultiple).toFixed(2) + 'x' : '-'}</div>
+                    </div>
+                    <div style="text-align:center; padding:12px; background:#f3e5f5; border-radius:8px;">
+                        <div style="font-size:12px; color:#666; margin-bottom:6px;">投標均張</div>
+                        <div style="font-size:18px; font-weight:bold; color:#7b1fa2;">${avgBidShares ? parseFloat(avgBidShares).toFixed(1) + '張' : '-'}</div>
+                    </div>
                 </div>
             </div>
         </div>

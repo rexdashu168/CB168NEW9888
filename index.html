@@ -16359,21 +16359,16 @@ async function loadCBCallOptionData() {
             const sheet = workbook.Sheets[latestSheet];
             const rawData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
             
-            // 找 HEADER 列
-            let headerIdx = -1;
-            for (let i = 0; i < Math.min(10, rawData.length); i++) {
-                if (rawData[i] && rawData[i][0] === 'HEADER') {
-                    headerIdx = i;
-                    break;
-                }
-            }
-            if (headerIdx === -1) continue;
+            if (rawData.length < 2) continue;
             
-            const headerRow = rawData[headerIdx];
+            // 第一列是欄位名稱
+            const headerRow = rawData[0];
             const colMap = {};
             for (let i = 0; i < headerRow.length; i++) {
-                if (headerRow[i]) colMap[headerRow[i]] = i;
+                if (headerRow[i]) colMap[String(headerRow[i]).trim()] = i;
             }
+            
+            console.log(`📊 CB_kanban_${year} 欄位:`, Object.keys(colMap).join(', '));
             
             // Excel 日期序號轉字串
             const excelDateToStr = (val) => {
@@ -16385,28 +16380,28 @@ async function loadCBCallOptionData() {
                 return `${date.getFullYear()}/${String(date.getMonth()+1).padStart(2,'0')}/${String(date.getDate()).padStart(2,'0')}`;
             };
             
-            // 處理資料列
-            for (let i = headerIdx + 1; i < rawData.length; i++) {
+            // 處理資料列（從第2列開始）
+            for (let i = 1; i < rawData.length; i++) {
                 const row = rawData[i];
-                if (!row || row[0] !== 'BODY') continue;
+                if (!row || !row[colMap['債券代碼']]) continue;
                 
                 const codeRaw = row[colMap['債券代碼']];
-                if (!codeRaw) continue;
                 const code = String(codeRaw).replace(/\.0*$/, '').trim();
+                if (!code) continue;
                 
-                // 讀取 J-M 欄
+                // 讀取強制贖回欄位
                 const callStartDate = excelDateToStr(row[colMap['強制贖回起日']]);
                 const callEndDate = excelDateToStr(row[colMap['強制贖回迄日']]);
                 const callPriceRaw = row[colMap['強制贖回價格']];
                 const callPrice = (callPriceRaw && callPriceRaw !== 0) ? String(callPriceRaw) : '';
                 const delistDate = excelDateToStr(row[colMap['終止櫃檯買賣日']]);
                 
-                // 只存有資料的，且不覆蓋已有的資料
+                // 只存有資料的，且不覆蓋已有的資料（優先保留較新年份）
                 if ((callStartDate || callEndDate || callPrice || delistDate) && !allData[code]) {
                     allData[code] = { callStartDate, callEndDate, callPrice, delistDate, dataYear: year };
                 }
             }
-            console.log(`✅ CB_kanban_${year} 強贖資料載入完成`);
+            console.log(`✅ CB_kanban_${year} 強贖資料載入完成，目前共 ${Object.keys(allData).length} 檔`);
         } catch (err) {
             console.warn(`⚠️ CB_kanban_${year} 載入失敗:`, err.message);
         }

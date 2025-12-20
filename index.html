@@ -16328,12 +16328,119 @@ function renderBasicInfoPutback(cbCode, container) {
  * v3.97-zs-ag 修正：從 kanbanData 讀取強制贖回資料
  */
 /**
- * v3.97-zs-ag 新增：強制贖回標籤頁
- * 資料來源：CB_kanban_YYYY.xlsx 的 J-M 欄
- * J欄: 強制贖回起日, K欄: 強制贖回迄日, L欄: 強制贖回價格, M欄: 終止櫃檯買賣日
+ * v3.97-zs-ah 新增：強制贖回資料載入
+ * 專門從 CB_kanban_YYYY.xlsx 讀取 A欄(代號) + J-M欄(強制贖回資料)
+ * 這是獨立的載入函數，不與其他資料混用
  */
-function renderBasicInfoCallOption(cbCode, container) {
+window.cbCallOptionData = { loaded: false, loading: false, data: {} };
+
+async function loadCBCallOptionData() {
+    if (window.cbCallOptionData.loaded || window.cbCallOptionData.loading) return;
+    window.cbCallOptionData.loading = true;
+    
+    const years = [2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017];
+    const allData = {};
+    
+    for (const year of years) {
+        const filename = `data/kanban/CB_kanban_${year}.xlsx`;
+        try {
+            const response = await fetch(filename);
+            if (!response.ok) continue;
+            
+            const arrayBuffer = await response.arrayBuffer();
+            const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+            
+            // 取所有日期工作表
+            const validSheets = workbook.SheetNames.filter(name => /^\d{8}$/.test(name)).sort();
+            if (validSheets.length === 0) continue;
+            
+            // 取最新日期的工作表
+            const latestSheet = validSheets[validSheets.length - 1];
+            const sheet = workbook.Sheets[latestSheet];
+            const rawData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            
+            // 找 HEADER 列
+            let headerIdx = -1;
+            for (let i = 0; i < Math.min(10, rawData.length); i++) {
+                if (rawData[i] && rawData[i][0] === 'HEADER') {
+                    headerIdx = i;
+                    break;
+                }
+            }
+            if (headerIdx === -1) continue;
+            
+            const headerRow = rawData[headerIdx];
+            const colMap = {};
+            for (let i = 0; i < headerRow.length; i++) {
+                if (headerRow[i]) colMap[headerRow[i]] = i;
+            }
+            
+            // Excel 日期序號轉字串
+            const excelDateToStr = (val) => {
+                if (val === undefined || val === null || val === '' || val === 0) return '';
+                if (typeof val === 'string' && val.includes('/')) return val;
+                const num = parseFloat(val);
+                if (isNaN(num) || num < 1000) return '';
+                const date = new Date((num - 25569) * 86400 * 1000);
+                return `${date.getFullYear()}/${String(date.getMonth()+1).padStart(2,'0')}/${String(date.getDate()).padStart(2,'0')}`;
+            };
+            
+            // 處理資料列
+            for (let i = headerIdx + 1; i < rawData.length; i++) {
+                const row = rawData[i];
+                if (!row || row[0] !== 'BODY') continue;
+                
+                const codeRaw = row[colMap['債券代碼']];
+                if (!codeRaw) continue;
+                const code = String(codeRaw).replace(/\.0*$/, '').trim();
+                
+                // 讀取 J-M 欄
+                const callStartDate = excelDateToStr(row[colMap['強制贖回起日']]);
+                const callEndDate = excelDateToStr(row[colMap['強制贖回迄日']]);
+                const callPriceRaw = row[colMap['強制贖回價格']];
+                const callPrice = (callPriceRaw && callPriceRaw !== 0) ? String(callPriceRaw) : '';
+                const delistDate = excelDateToStr(row[colMap['終止櫃檯買賣日']]);
+                
+                // 只存有資料的，且不覆蓋已有的資料
+                if ((callStartDate || callEndDate || callPrice || delistDate) && !allData[code]) {
+                    allData[code] = { callStartDate, callEndDate, callPrice, delistDate, dataYear: year };
+                }
+            }
+            console.log(`✅ CB_kanban_${year} 強贖資料載入完成`);
+        } catch (err) {
+            console.warn(`⚠️ CB_kanban_${year} 載入失敗:`, err.message);
+        }
+    }
+    
+    window.cbCallOptionData.data = allData;
+    window.cbCallOptionData.loaded = true;
+    window.cbCallOptionData.loading = false;
+    console.log(`✅ 強制贖回資料載入完成: ${Object.keys(allData).length} 檔有資料`);
+}
+
+/**
+ * v3.97-zs-ah 新增：強制贖回標籤頁
+ * 資料來源：CB_kanban_YYYY.xlsx 的 J-M 欄
+ */
+async function renderBasicInfoCallOption(cbCode, container) {
     const searchCode = String(cbCode).replace(/\.0*$/, '').trim();
+    
+    // 載入強制贖回資料（獨立載入）
+    if (!window.cbCallOptionData.loaded && !window.cbCallOptionData.loading) {
+        container.innerHTML = `<div style="text-align:center; padding:40px; color:#666;">
+            <div style="font-size:24px; margin-bottom:10px;">⏳</div>
+            <div>載入 CB_kanban 強制贖回資料中...</div>
+        </div>`;
+        await loadCBCallOptionData();
+    } else if (window.cbCallOptionData.loading) {
+        container.innerHTML = `<div style="text-align:center; padding:40px; color:#666;">
+            <div style="font-size:24px; margin-bottom:10px;">⏳</div>
+            <div>等待資料載入完成...</div>
+        </div>`;
+        while (window.cbCallOptionData.loading) {
+            await new Promise(r => setTimeout(r, 100));
+        }
+    }
     
     // 從 sheet08 取得名稱
     let cbName = '';
@@ -16346,36 +16453,15 @@ function renderBasicInfoCallOption(cbCode, container) {
     const isListed = window.cbDatabase?.listedCodes?.has(searchCode) || false;
     const statusLabel = isListed ? '🟢 掛牌中' : '⚫ 已下市';
     
-    // 從 kanbanData 讀取強制贖回資料
-    let callStartDate = '-';
-    let callEndDate = '-';
-    let callPrice = '-';
-    let delistDate = '-';
-    let dataDate = '';
-    let hasData = false;
+    // 從獨立的 cbCallOptionData 讀取
+    const data = window.cbCallOptionData.data[searchCode];
+    const callStartDate = data?.callStartDate || '-';
+    const callEndDate = data?.callEndDate || '-';
+    const callPrice = data?.callPrice || '-';
+    const delistDate = data?.delistDate || '-';
+    const hasData = !!data;
     
-    if (window.kanbanData?.loaded && window.kanbanData.data) {
-        const timeSeries = window.kanbanData.data[searchCode];
-        if (timeSeries && timeSeries.length > 0) {
-            // 取最新一筆有強贖資料的記錄
-            for (let i = timeSeries.length - 1; i >= 0; i--) {
-                const record = timeSeries[i];
-                if (record.callStartDate || record.callEndDate || record.callPrice || record.delistDate) {
-                    callStartDate = record.callStartDate || '-';
-                    callEndDate = record.callEndDate || '-';
-                    callPrice = record.callPrice || '-';
-                    delistDate = record.delistDate || '-';
-                    dataDate = record.date || '';
-                    hasData = true;
-                    break;
-                }
-            }
-            // 如果沒有強贖資料，用最新一筆的日期
-            if (!hasData && timeSeries.length > 0) {
-                dataDate = timeSeries[timeSeries.length - 1].date || '';
-            }
-        }
-    }
+    console.log('[renderBasicInfoCallOption]', searchCode, ':', data || '無資料');
     
     // 判斷是否有強制贖回條款
     const hasCallOption = callStartDate !== '-' || callEndDate !== '-' || 
@@ -16396,8 +16482,8 @@ function renderBasicInfoCallOption(cbCode, container) {
             
             <!-- 資料來源說明 -->
             <div style="background:white; padding:15px; border-radius:8px; margin-bottom:18px; font-size:13px; color:#666;">
-                📊 資料來源：CB_kanban Excel (J-M欄)
-                ${dataDate ? `<span style="margin-left:15px;">📅 資料日期：${dataDate}</span>` : ''}
+                📊 資料來源：CB_kanban_YYYY.xlsx (J-M欄)
+                ${data?.dataYear ? `<span style="margin-left:15px;">📅 資料年份：${data.dataYear}</span>` : ''}
             </div>
             
             <!-- 強制贖回資料 -->
@@ -16407,27 +16493,20 @@ function renderBasicInfoCallOption(cbCode, container) {
                 </div>
                 
                 <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:15px;">
-                    <!-- 強制贖回起日 -->
                     <div style="text-align:center; padding:15px; background:#fce4ec; border-radius:10px;">
                         <div style="font-size:13px; color:#888; margin-bottom:8px;">強制贖回起日</div>
                         <div style="font-size:18px; font-weight:bold; color:#c2185b;">${callStartDate}</div>
                     </div>
-                    
-                    <!-- 強制贖回迄日 -->
                     <div style="text-align:center; padding:15px; background:#fce4ec; border-radius:10px;">
                         <div style="font-size:13px; color:#888; margin-bottom:8px;">強制贖回迄日</div>
                         <div style="font-size:18px; font-weight:bold; color:#c2185b;">${callEndDate}</div>
                     </div>
-                    
-                    <!-- 強制贖回價格 -->
                     <div style="text-align:center; padding:15px; background:#e8f5e9; border-radius:10px;">
                         <div style="font-size:13px; color:#888; margin-bottom:8px;">強制贖回價格</div>
                         <div style="font-size:20px; font-weight:bold; color:#2e7d32;">
                             ${callPrice !== '-' && parseFloat(callPrice) > 0 ? callPrice + ' 元' : '-'}
                         </div>
                     </div>
-                    
-                    <!-- 終止櫃檯買賣日 -->
                     <div style="text-align:center; padding:15px; background:${isDelisted ? '#ffebee' : '#fce4ec'}; border-radius:10px;">
                         <div style="font-size:13px; color:#888; margin-bottom:8px;">終止櫃檯買賣日</div>
                         <div style="font-size:18px; font-weight:bold; color:${isDelisted ? '#d32f2f' : '#c2185b'};">${delistDate}</div>
@@ -16449,7 +16528,7 @@ function renderBasicInfoCallOption(cbCode, container) {
             
             ${!hasData ? `
             <div style="margin-top:18px; padding:15px; background:#fff8e1; border-radius:8px; font-size:14px; color:#f57c00; text-align:center;">
-                ⚠️ 此CB在 kanban 資料中無強制贖回紀錄
+                ⚠️ 此CB在 CB_kanban 資料中無強制贖回紀錄
             </div>
             ` : ''}
         </div>

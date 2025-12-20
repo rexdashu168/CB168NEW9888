@@ -17292,7 +17292,9 @@ function renderBasicInfoBalance(cbCode, container) {
     container.innerHTML = html;
     
     // v3.97-zs-al: 自動載入轉換走勢圖
+    console.log('[renderBasicInfoBalance] 設定 setTimeout 呼叫 renderConversionChart, searchCode:', searchCode);
     setTimeout(() => {
+        console.log('[renderBasicInfoBalance] setTimeout 執行中，呼叫 renderConversionChart');
         renderConversionChart(searchCode);
     }, 100);
 }
@@ -17356,13 +17358,20 @@ function switchBalanceSubTab(cbCode, tabType, btnElement) {
  * v3.97-zs-al 修改：渲染轉換走勢圖（加入時間區間選擇）
  */
 async function renderConversionChart(cbCode) {
+    console.log('[renderConversionChart] 開始執行, cbCode:', cbCode);
+    
     const container = document.getElementById(`balanceSubContent_${cbCode}`);
-    if (!container) return;
+    if (!container) {
+        console.log('[renderConversionChart] 找不到容器 balanceSubContent_' + cbCode);
+        return;
+    }
     
     const searchCode = String(cbCode).trim();
+    console.log('[renderConversionChart] searchCode:', searchCode);
     
     // v3.97-zs-am: 確保 kanbanData 已載入
     if (!window.kanbanData.loaded && !window.kanbanData.loading) {
+        console.log('[renderConversionChart] kanbanData 未載入，開始載入...');
         container.innerHTML = `<div style="text-align:center; padding:40px; color:#666;">
             <div style="font-size:24px; margin-bottom:10px;">⏳</div>
             <div>首次載入 CB_kanban 歷史資料中...</div>
@@ -17376,19 +17385,33 @@ async function renderConversionChart(cbCode) {
         await new Promise(r => setTimeout(r, 100));
     }
     
+    console.log('[renderConversionChart] kanbanData 載入狀態:', window.kanbanData.loaded, '共', Object.keys(window.kanbanData.data).length, '檔CB');
+    
     // 取得時間區間設定
     const periodSelect = document.getElementById(`balancePeriod_${searchCode}`);
     const period = periodSelect?.value || '180';
     
     // 從 kanbanData 取得時間序列資料（O欄：上月底發行餘額）
     let allData = window.kanbanData.data[searchCode] || [];
+    console.log('[renderConversionChart] 查詢', searchCode, '直接匹配筆數:', allData.length);
     
     // 如果找不到，嘗試純數字格式
     if (allData.length === 0) {
         const numCode = parseInt(searchCode, 10);
         if (!isNaN(numCode)) {
             allData = window.kanbanData.data[String(numCode)] || [];
+            console.log('[renderConversionChart] 嘗試數字格式', numCode, '筆數:', allData.length);
         }
+    }
+    
+    // 除錯：列出 kanbanData 中的部分 key
+    if (allData.length === 0) {
+        const allKeys = Object.keys(window.kanbanData.data);
+        console.log('[renderConversionChart] kanbanData 中共有', allKeys.length, '檔CB');
+        console.log('[renderConversionChart] 前20個CB代號:', allKeys.slice(0, 20));
+        // 檢查是否有包含 searchCode 的 key
+        const matchingKeys = allKeys.filter(k => k.includes(searchCode.slice(-4)));
+        console.log('[renderConversionChart] 可能匹配的key:', matchingKeys);
     }
     
     if (allData.length === 0) {
@@ -17401,6 +17424,8 @@ async function renderConversionChart(cbCode) {
         `;
         return;
     }
+    
+    console.log('[renderConversionChart] 找到', allData.length, '筆資料，開始繪製');
     
     // 根據時間區間過濾資料
     let filteredData = allData;
@@ -17529,8 +17554,13 @@ async function renderConversionChart(cbCode) {
  * v3.97-zs-al 修改：渲染轉換記錄表（加入時間區間選擇）
  */
 async function renderConversionTable(cbCode) {
+    console.log('[renderConversionTable] 開始執行, cbCode:', cbCode);
+    
     const container = document.getElementById(`balanceSubContent_${cbCode}`);
-    if (!container) return;
+    if (!container) {
+        console.log('[renderConversionTable] 找不到容器');
+        return;
+    }
     
     const searchCode = String(cbCode).trim();
     
@@ -17548,18 +17578,22 @@ async function renderConversionTable(cbCode) {
         await new Promise(r => setTimeout(r, 100));
     }
     
+    console.log('[renderConversionTable] kanbanData 載入狀態:', window.kanbanData.loaded);
+    
     // 取得時間區間設定
     const periodSelect = document.getElementById(`balancePeriod_${searchCode}`);
     const period = periodSelect?.value || '180';
     
     // 從 kanbanData 取得時間序列資料
     let allData = window.kanbanData.data[searchCode] || [];
+    console.log('[renderConversionTable] 查詢', searchCode, '直接匹配筆數:', allData.length);
     
     // 如果找不到，嘗試純數字格式
     if (allData.length === 0) {
         const numCode = parseInt(searchCode, 10);
         if (!isNaN(numCode)) {
             allData = window.kanbanData.data[String(numCode)] || [];
+            console.log('[renderConversionTable] 嘗試數字格式', numCode, '筆數:', allData.length);
         }
     }
     
@@ -17573,6 +17607,8 @@ async function renderConversionTable(cbCode) {
         `;
         return;
     }
+    
+    console.log('[renderConversionTable] 找到', allData.length, '筆資料');
     
     // 根據時間區間過濾資料
     let filteredData = allData;
@@ -18138,79 +18174,59 @@ async function loadAllKanbanData() {
                 
                 for (const sheetName of validSheets) {
                     const sheet = workbook.Sheets[sheetName];
-                    const rawData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
                     
-                    // 找到 HEADER 列確定欄位位置
-                    let headerRow = null;
-                    let headerIdx = -1;
-                    for (let i = 0; i < Math.min(10, rawData.length); i++) {
-                        if (rawData[i] && rawData[i][0] === 'HEADER') {
-                            headerRow = rawData[i];
-                            headerIdx = i;
-                            break;
-                        }
-                    }
+                    // v3.97-zs-ap: 改用標準 Excel 格式讀取（第一列標題，第二列開始資料）
+                    const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: '' });
                     
-                    if (!headerRow) continue;
-                    
-                    // 建立欄位索引映射
-                    const colMap = {};
-                    for (let i = 1; i < headerRow.length; i++) {
-                        const colName = headerRow[i];
-                        if (colName) colMap[colName] = i;
-                    }
+                    if (jsonData.length === 0) continue;
                     
                     // 日期格式轉換 (YYYYMMDD -> YYYY/MM/DD)
                     const dateStr = `${sheetName.substring(0,4)}/${sheetName.substring(4,6)}/${sheetName.substring(6,8)}`;
                     const dateNum = parseInt(sheetName);
                     allDates.add(dateStr);
                     
-                    // 處理 BODY 資料列
-                    for (let i = headerIdx + 1; i < rawData.length; i++) {
-                        const row = rawData[i];
-                        if (!row || row[0] !== 'BODY') continue;
-                        
-                        // 取得 CB 代碼，處理各種格式（數字、字串、帶小數點等）
-                        let cbCodeRaw = row[colMap['債券代碼']];
+                    // Excel 日期序號轉換函數
+                    const excelDateToStr = (val) => {
+                        if (val === undefined || val === null || val === '' || val === 0) return '';
+                        if (typeof val === 'string' && val.includes('/')) return val;
+                        const num = parseFloat(val);
+                        if (isNaN(num) || num < 1000) return String(val);
+                        const date = new Date((num - 25569) * 86400 * 1000);
+                        const y = date.getFullYear();
+                        const m = String(date.getMonth() + 1).padStart(2, '0');
+                        const d = String(date.getDate()).padStart(2, '0');
+                        return `${y}/${m}/${d}`;
+                    };
+                    
+                    // 處理每一列資料
+                    for (const row of jsonData) {
+                        // 取得 CB 代碼 - 嘗試多種可能的欄位名稱
+                        let cbCodeRaw = row['債券代碼'] || row['代碼'] || row['代號'] || row['債券簡稱'];
                         if (cbCodeRaw === undefined || cbCodeRaw === null || cbCodeRaw === '') continue;
-                        // 統一轉成純數字字串（去掉小數點、空格等）
-                        const cbCode = String(cbCodeRaw).replace(/\.0*$/, '').trim();
-                        if (!cbCode || cbCode === 'NaN') continue;
                         
-                        // 提取數值
-                        const stockPrice = parseFloat(row[colMap['轉換標的股票價格']]) || 0;
-                        const cbPrice = parseFloat(row[colMap['轉債參考價格']]) || 0;
-                        const convPrice = parseFloat(row[colMap['轉換價格']]) || 0;
-                        const balanceRaw = parseFloat(row[colMap['上月底發行餘額']]) || 0;
+                        // 如果是債券簡稱格式（如「波力三KY」），跳過，改用代碼
+                        if (typeof cbCodeRaw === 'string' && /[A-Za-z\u4e00-\u9fa5]/.test(cbCodeRaw)) {
+                            // 嘗試從其他欄位取得代碼
+                            continue;
+                        }
+                        
+                        // 統一轉成純數字字串
+                        const cbCode = String(cbCodeRaw).replace(/\.0*$/, '').trim();
+                        if (!cbCode || cbCode === 'NaN' || !/^\d+$/.test(cbCode)) continue;
+                        
+                        // 提取數值 - 使用截圖中的實際欄位名稱
+                        const stockPrice = parseFloat(row['轉換標的股票價格'] || row['轉換標的的股票價格']) || 0;
+                        const cbPrice = parseFloat(row['轉債參考價格']) || 0;
+                        const convPrice = parseFloat(row['轉換價格']) || 0;
+                        const balanceRaw = parseFloat(row['上月底發行餘額']) || 0;
                         const balance = balanceRaw / 100000000; // 轉為億元
                         
-                        // v3.97-zs-ag: 提取強制贖回相關欄位
-                        // 注意：0 也是有效值，不能用 || '' 過濾
-                        let callStartDateRaw = row[colMap['強制贖回起日']];
-                        let callEndDateRaw = row[colMap['強制贖回迄日']];
-                        let callPriceVal = row[colMap['強制贖回價格']];
-                        let delistDateRaw = row[colMap['終止櫃檯買賣日']];
-                        
-                        // Excel 日期序號轉換函數
-                        const excelDateToStr = (val) => {
-                            if (val === undefined || val === null || val === '' || val === 0) return '';
-                            // 如果已經是字串格式的日期，直接返回
-                            if (typeof val === 'string' && val.includes('/')) return val;
-                            // 如果是數字（Excel序號），轉換
-                            const num = parseFloat(val);
-                            if (isNaN(num) || num < 1000) return String(val);
-                            // Excel 序號轉日期 (Excel基準日是1900/1/1，但有bug要-2)
-                            const date = new Date((num - 25569) * 86400 * 1000);
-                            const y = date.getFullYear();
-                            const m = String(date.getMonth() + 1).padStart(2, '0');
-                            const d = String(date.getDate()).padStart(2, '0');
-                            return `${y}/${m}/${d}`;
-                        };
-                        
-                        const callStartDate = excelDateToStr(callStartDateRaw);
-                        const callEndDate = excelDateToStr(callEndDateRaw);
-                        const callPrice = (callPriceVal !== undefined && callPriceVal !== null && callPriceVal !== 0) ? String(callPriceVal) : '';
-                        const delistDate = excelDateToStr(delistDateRaw);
+                        // 強制贖回相關欄位
+                        const callStartDate = excelDateToStr(row['強制贖回起日']);
+                        const callEndDate = excelDateToStr(row['強制贖回迄日']);
+                        const callPriceVal = row['強制贖回價格'];
+                        const callPrice = (callPriceVal !== undefined && callPriceVal !== null && callPriceVal !== '' && callPriceVal !== 0) ? String(callPriceVal) : '';
+                        const delistDate = excelDateToStr(row['終止櫃檯買賣日']);
                         
                         // 計算轉換價值和溢價率
                         const convValue = convPrice > 0 ? (stockPrice / convPrice * 100) : 0;
@@ -18227,7 +18243,6 @@ async function loadAllKanbanData() {
                             convValue,
                             premium,
                             balance,
-                            // v3.97-zs-ag: 強制贖回相關欄位
                             callStartDate,
                             callEndDate,
                             callPrice,

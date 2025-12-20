@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97-zs-aw (週走勢SVG+月記錄每月一筆)</title>
+<title>AI智能可轉債競拍系統 v3.97-zs-ay (訂價溢價率+提早下市天數+智能搜尋)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <!-- v3.97-zs-ae: 改用 CB_kanban_YYYY.xlsx 載入時間序列資料，取代 kanban_data.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -2674,18 +2674,29 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
         </div>
         <div class="right-section-content collapsed" id="priceTrendSection">
             
-            <!-- CB選擇器（價格走勢用） -->
-            <div style="margin-bottom:15px; padding:10px; background:#f5f5f5; border-radius:8px;">
-                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                    <label style="font-weight:bold; color:#333;">🔍 選擇可轉債：</label>
-                    <input type="text" id="priceTrendCBInput" placeholder="輸入代號快速搜尋..." 
-                           oninput="filterPriceTrendCBList(this.value)"
-                           onkeypress="if(event.key==='Enter') searchPriceTrendCB(this.value)"
-                           style="width:140px; padding:8px 12px; border:2px solid #1976d2; border-radius:6px; font-size:14px;">
-                    <select id="priceTrendCBSelect" onchange="loadPriceTrend(this.value)" style="flex:1; min-width:200px; padding:8px 12px; border:2px solid #388e3c; border-radius:6px; font-size:14px;">
-                        <option value="">-- 請選擇CB代號 --</option>
+            <!-- CB選擇器（價格走勢用）- v3.97-zs-ax: 參考基本資料查詢區設計 -->
+            <div style="margin-bottom:15px; padding:15px; background:#f5f5f5; border-radius:8px;">
+                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">
+                    <label style="font-weight:bold; color:#333; white-space:nowrap;">🔍 快速搜尋：</label>
+                    <div style="flex:1; min-width:200px; max-width:350px; position:relative;">
+                        <input type="text" id="priceTrendSearch" 
+                               placeholder="輸入代號(如2383)或名稱(如台光電)..." 
+                               oninput="smartSearchPriceTrend(this.value)"
+                               onkeydown="handlePriceTrendSearchKey(event)"
+                               autocomplete="off"
+                               style="width:100%; padding:8px 12px; border:2px solid #9c27b0; border-radius:6px; font-size:14px; font-weight:600;">
+                        <!-- 搜尋結果下拉框 -->
+                        <div id="priceTrendSearchResults" style="display:none; position:absolute; top:100%; left:0; right:0; max-height:300px; overflow-y:auto; background:white; border:2px solid #9c27b0; border-top:none; border-radius:0 0 6px 6px; z-index:1000; box-shadow:0 4px 12px rgba(0,0,0,0.15);"></div>
+                    </div>
+                    <button type="button" onclick="clearPriceTrendSearch()" style="padding:8px 12px; background:#9e9e9e; color:white; border:none; border-radius:6px; cursor:pointer; font-size:12px;">
+                        ✕ 清除
+                    </button>
+                    <span style="color:#ccc;">│</span>
+                    <label style="font-weight:bold; color:#666; font-size:12px; white-space:nowrap;">📋 或從清單：</label>
+                    <select id="priceTrendCBSelect" onchange="loadPriceTrend(this.value)" style="flex:1; min-width:180px; max-width:280px; padding:8px 10px; border:2px solid #7b1fa2; border-radius:6px; font-size:13px;">
+                        <option value="">-- 請選擇CB --</option>
                     </select>
-                    <select id="priceTrendPeriod" onchange="updatePriceTrendPeriod()" style="padding:8px 12px; border:1px solid #ccc; border-radius:6px;">
+                    <select id="priceTrendPeriod" onchange="updatePriceTrendPeriod()" style="padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px;">
                         <option value="30">1月</option>
                         <option value="90" selected>3月</option>
                         <option value="180">6月</option>
@@ -12054,6 +12065,61 @@ window.BROKER_MULT_TABLE = {
     '群益證券': { avgMult: 1.95, avgPrice: 104.18, avgPremium: 4.7, count: 9 }
 };
 
+// v3.97-zs-aw: 券商代號對照表（代號 → 名稱）
+window.BROKER_CODE_MAP = {
+    '920T': '統一', '9200': '統一',
+    '930T': '凱基', '9300': '凱基', 
+    '940T': '元大', '9400': '元大',
+    '950T': '富邦', '9500': '富邦',
+    '960T': '日盛', '9600': '日盛',
+    '970T': '國泰', '9700': '國泰',
+    '980T': '玉山', '9800': '玉山',
+    '990T': '永豐金', '9900': '永豐金',
+    '9A0T': '兆豐', '9A00': '兆豐',
+    '9B0T': '台新', '9B00': '台新',
+    '9C0T': '中信', '9C00': '中信',
+    '9D0T': '群益', '9D00': '群益',
+    '9E0T': '第一金', '9E00': '第一金',
+    '9F0T': '合庫', '9F00': '合庫',
+    '9G0T': '華南永昌', '9G00': '華南永昌',
+    '9H0T': '元富', '9H00': '元富',
+    '9I0T': '台灣', '9I00': '台灣',
+    '9J0T': '國票', '9J00': '國票',
+    '9K0T': '宏遠', '9K00': '宏遠',
+    '9L0T': '康和', '9L00': '康和',
+    '9M0T': '美林', '9M00': '美林',
+    '9N0T': '大華', '9N00': '大華',
+    '9P0T': '福邦', '9P00': '福邦',
+    '9Q0T': '致和', '9Q00': '致和',
+    '9R0T': '大眾', '9R00': '大眾',
+    '9S0T': '光和', '9S00': '光和',
+    '9T0T': '亞東', '9T00': '亞東',
+    '9U0T': '新光', '9U00': '新光',
+    '9V0T': '土銀', '9V00': '土銀',
+    '9W0T': '彰銀', '9W00': '彰銀',
+    '9X0T': '台銀', '9X00': '台銀',
+    '9Y0T': '臺企銀', '9Y00': '臺企銀',
+    '9Z0T': '陽信', '9Z00': '陽信'
+};
+
+/**
+ * v3.97-zs-aw: 將券商代號轉換為名稱
+ */
+function convertBrokerCodeToName(brokerValue) {
+    if (!brokerValue || brokerValue === '-') return '-';
+    
+    const code = String(brokerValue).trim().toUpperCase();
+    
+    // 如果是代號格式（4碼），轉換為名稱
+    if (window.BROKER_CODE_MAP[code]) {
+        return window.BROKER_CODE_MAP[code];
+    }
+    
+    // 如果已經是名稱，直接處理
+    // 移除「證券」等後綴，只保留前4個字
+    return brokerValue.replace(/證券.*$/, '').substring(0, 4);
+}
+
 // 整體統計數據
 window.OVERALL_STATS = {
     avgBidMult: 2.98,
@@ -15819,14 +15885,21 @@ function renderBasicInfoOverview(cbCode, container) {
     const issuePrice = sheet01Row?.['發行價格'] || data['底標價'] || '100';
     
     // 訂價溢價率 (01工作表 Q欄)
-    const pricingPremium = sheet01Row?.['訂價溢價率'] || data['訂價溢價率'] || data['定價溢價率'] || '';
-    
-    // 發行券商 - 只取前4位代碼
-    let brokerDisplay = data['發行券商'] || sheet01Row?.['發行券商'] || '-';
-    if (brokerDisplay && brokerDisplay !== '-') {
-        // 移除「證券」等後綴，只保留前4個字
-        brokerDisplay = brokerDisplay.replace(/證券.*$/, '').substring(0, 4);
+    let pricingPremiumRaw = sheet01Row?.['訂價溢價率'] || data['訂價溢價率'] || data['定價溢價率'] || '';
+    // v3.97-zs-ax: 修正格式 - 如果是小數格式（如1.0442），轉為百分比格式（104.42）
+    let pricingPremium = '';
+    if (pricingPremiumRaw) {
+        const val = parseFloat(pricingPremiumRaw);
+        if (!isNaN(val)) {
+            // 如果值小於10，可能是小數格式（1.0442代表104.42%）
+            // 如果值大於10，可能已經是百分比格式（104.42代表104.42%）
+            pricingPremium = val < 10 ? (val * 100).toFixed(2) : val.toFixed(2);
+        }
     }
+    
+    // v3.97-zs-aw: 發行券商 - 使用代號對照表轉換
+    const brokerRaw = data['發行券商'] || sheet01Row?.['發行券商'] || '-';
+    const brokerDisplay = convertBrokerCodeToName(brokerRaw);
     
     // 發行規模（億）
     const issueSizeBillion = issueSize > 0 ? (issueSize / 100).toFixed(2) : '-';
@@ -16697,6 +16770,57 @@ async function renderBasicInfoCallOption(cbCode, container) {
                           (callPrice !== '-' && parseFloat(callPrice) > 0);
     const isDelisted = delistDate !== '-';
     
+    // v3.97-zs-ax: 計算提早下市天數
+    let earlyDelistDays = '';
+    if (isDelisted) {
+        // 取得到期日
+        let maturityDateStr = '';
+        // 從 sheet08Data 取得到期日
+        if (window.sheet08Data?.length > 0) {
+            const row = window.sheet08Data.find(r => String(r['代號']).trim() === searchCode);
+            if (row) maturityDateStr = row['到期日'] || '';
+        }
+        // 從 sheet01Data 補充
+        if (!maturityDateStr && window.sheet01Data?.length > 0) {
+            const row = window.sheet01Data.find(r => String(r['CB代號']).trim() === searchCode);
+            if (row) maturityDateStr = row['到期日期'] || '';
+        }
+        // 從 yuantaHistoryData 補充
+        if (!maturityDateStr && window.yuantaHistoryData?.loaded) {
+            const row = window.yuantaHistoryData.data[searchCode];
+            if (row) maturityDateStr = row['到期日'] || '';
+        }
+        
+        // 計算天數差
+        if (maturityDateStr && delistDate) {
+            try {
+                const parseDate = (str) => {
+                    if (!str) return null;
+                    if (typeof str === 'number') {
+                        return new Date((str - 25569) * 86400 * 1000);
+                    }
+                    const cleaned = String(str).replace(/\//g, '-');
+                    return new Date(cleaned);
+                };
+                
+                const maturityDate = parseDate(maturityDateStr);
+                const delistDateObj = parseDate(delistDate);
+                
+                if (maturityDate && delistDateObj && !isNaN(maturityDate.getTime()) && !isNaN(delistDateObj.getTime())) {
+                    const diffMs = maturityDate.getTime() - delistDateObj.getTime();
+                    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+                    if (diffDays > 0) {
+                        earlyDelistDays = `（距到期日提早 ${diffDays} 天下市）`;
+                    } else if (diffDays < 0) {
+                        earlyDelistDays = `（超過到期日 ${Math.abs(diffDays)} 天）`;
+                    }
+                }
+            } catch (e) {
+                console.warn('計算提早下市天數失敗:', e);
+            }
+        }
+    }
+    
     // 計算資料完整度
     let filledCount = 0;
     if (callStartDate !== '-') filledCount++;
@@ -16768,7 +16892,7 @@ async function renderBasicInfoCallOption(cbCode, container) {
                 
                 ${isDelisted ? `
                 <div style="margin-top:12px; padding:12px 15px; background:#ffebee; border-radius:8px; font-size:14px; color:#c62828; border-left:3px solid #ef5350;">
-                    <strong>📌 已終止：</strong>此CB已於 ${delistDate} 終止櫃檯買賣。
+                    <strong>📌 已終止：</strong>此CB已於 ${delistDate} 終止櫃檯買賣。${earlyDelistDays ? `<span style="color:#7b1fa2; font-weight:bold;">${earlyDelistDays}</span>` : ''}
                 </div>
                 ` : ''}
             </div>
@@ -18247,97 +18371,216 @@ function initPriceTrendCBOptions() {
 }
 
 /**
- * 篩選價格走勢CB列表（即時篩選）
+ * v3.97-zs-ax: 智能搜尋價格走勢CB（參考基本資料查詢區設計）
  */
-function filterPriceTrendCBList(keyword) {
-    const select = document.getElementById('priceTrendCBSelect');
-    if (!select || isAutoSelecting) return;
+function smartSearchPriceTrend(keyword) {
+    const resultsDiv = document.getElementById('priceTrendSearchResults');
+    if (!resultsDiv) return;
+    
+    const kw = keyword.trim().toLowerCase();
+    
+    if (!kw || kw.length < 1) {
+        resultsDiv.style.display = 'none';
+        return;
+    }
     
     // 確保已初始化選項列表
     if (priceTrendCBOptions.length === 0) {
         initPriceTrendCBOptions();
     }
     
-    const kw = keyword.trim().toLowerCase();
+    // 使用基本資料查詢的資料庫
+    const db = window.basicInfoDB || { allCB: [] };
+    let results = [];
     
-    // 清空現有選項（保留第一個）
-    select.innerHTML = '<option value="">-- 請選擇CB代號 --</option>';
-    
-    // 篩選並重建選項
-    let matchedValue = '';
-    priceTrendCBOptions.forEach(opt => {
-        const text = opt.textContent.toLowerCase();
-        const value = opt.value.toLowerCase();
-        if (!kw || text.includes(kw) || value.includes(kw)) {
-            const newOpt = opt.cloneNode(true);
-            select.appendChild(newOpt);
-            if (!matchedValue) matchedValue = opt.value;
+    // 搜尋邏輯：代號前綴匹配 > 名稱包含 > 股票代號匹配
+    db.allCB.forEach(cb => {
+        const code = (cb.code || '').toLowerCase();
+        const name = (cb.name || '').toLowerCase();
+        const stockCode = (cb.stockCode || '').toLowerCase();
+        
+        let score = 0;
+        if (code.startsWith(kw)) score = 100;
+        else if (code.includes(kw)) score = 80;
+        else if (stockCode.startsWith(kw)) score = 70;
+        else if (name.includes(kw)) score = 50;
+        
+        if (score > 0) {
+            results.push({ ...cb, score });
         }
     });
     
-    // 如果只剩一個選項且有關鍵字，自動選擇
-    if (kw && select.options.length === 2) {
-        isAutoSelecting = true;
-        select.selectedIndex = 1;
-        const selectedValue = select.value;
-        loadPriceTrend(selectedValue);
-        // 載入後恢復所有選項並清空輸入框
-        setTimeout(() => {
-            const input = document.getElementById('priceTrendCBInput');
-            if (input) input.value = '';
-            // 恢復所有選項
-            select.innerHTML = '<option value="">-- 請選擇CB代號 --</option>';
-            priceTrendCBOptions.forEach(opt => {
-                select.appendChild(opt.cloneNode(true));
-            });
-            select.value = selectedValue;
-            isAutoSelecting = false;
-        }, 100);
+    // 排序：分數高 > 代號小
+    results.sort((a, b) => b.score - a.score || a.code.localeCompare(b.code));
+    results = results.slice(0, 15); // 最多顯示15筆
+    
+    if (results.length === 0) {
+        resultsDiv.innerHTML = '<div style="padding:10px; color:#999; text-align:center;">找不到符合的CB</div>';
+        resultsDiv.style.display = 'block';
+        return;
+    }
+    
+    // 建立結果列表
+    let html = '';
+    results.forEach((cb, idx) => {
+        const statusIcon = cb.isListed ? '🟢' : '⚫';
+        const typeLabel = cb.type === '競拍' ? '<span style="color:#2e7d32; font-size:10px;">競拍</span>' : '<span style="color:#1976d2; font-size:10px;">詢圈</span>';
+        html += `
+            <div class="price-trend-search-item" data-code="${cb.code}" data-index="${idx}"
+                 style="padding:10px 12px; cursor:pointer; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;"
+                 onmouseover="this.style.background='#f3e5f5'" 
+                 onmouseout="this.style.background='white'"
+                 onclick="selectPriceTrendFromSearch('${cb.code}')">
+                <div>
+                    <span style="font-weight:bold; color:#7b1fa2;">${cb.code}</span>
+                    <span style="margin-left:8px; color:#333;">${cb.name || ''}</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    ${typeLabel}
+                    <span>${statusIcon}</span>
+                </div>
+            </div>
+        `;
+    });
+    
+    resultsDiv.innerHTML = html;
+    resultsDiv.style.display = 'block';
+    window.priceTrendSearchIndex = 0;
+    highlightPriceTrendSearchItem(0);
+}
+
+/**
+ * v3.97-zs-ax: 高亮選中的搜尋項目
+ */
+function highlightPriceTrendSearchItem(index) {
+    const items = document.querySelectorAll('.price-trend-search-item');
+    items.forEach((item, i) => {
+        item.style.background = i === index ? '#f3e5f5' : 'white';
+    });
+}
+
+/**
+ * v3.97-zs-ax: 處理價格走勢搜尋框的鍵盤事件
+ */
+function handlePriceTrendSearchKey(event) {
+    const resultsDiv = document.getElementById('priceTrendSearchResults');
+    const items = document.querySelectorAll('.price-trend-search-item');
+    
+    if (!resultsDiv || resultsDiv.style.display === 'none' || items.length === 0) {
+        if (event.key === 'Enter') {
+            const input = document.getElementById('priceTrendSearch');
+            if (input && input.value.trim()) {
+                searchPriceTrendCBDirect(input.value.trim());
+            }
+        }
+        return;
+    }
+    
+    let idx = window.priceTrendSearchIndex || 0;
+    
+    if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        idx = Math.min(idx + 1, items.length - 1);
+        window.priceTrendSearchIndex = idx;
+        highlightPriceTrendSearchItem(idx);
+        items[idx].scrollIntoView({ block: 'nearest' });
+    } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        idx = Math.max(idx - 1, 0);
+        window.priceTrendSearchIndex = idx;
+        highlightPriceTrendSearchItem(idx);
+        items[idx].scrollIntoView({ block: 'nearest' });
+    } else if (event.key === 'Enter') {
+        event.preventDefault();
+        const selectedItem = items[idx];
+        if (selectedItem) {
+            const code = selectedItem.dataset.code;
+            selectPriceTrendFromSearch(code);
+        }
+    } else if (event.key === 'Escape') {
+        resultsDiv.style.display = 'none';
     }
 }
 
 /**
- * 搜尋價格走勢CB（按Enter直接載入）
+ * v3.97-zs-ax: 從搜尋結果選擇CB
  */
-function searchPriceTrendCB(keyword) {
-    const kw = keyword.trim();
-    if (!kw) return;
+function selectPriceTrendFromSearch(cbCode) {
+    const resultsDiv = document.getElementById('priceTrendSearchResults');
+    const input = document.getElementById('priceTrendSearch');
+    const select = document.getElementById('priceTrendCBSelect');
     
-    // 確保已初始化選項列表
-    if (priceTrendCBOptions.length === 0) {
-        initPriceTrendCBOptions();
+    if (resultsDiv) resultsDiv.style.display = 'none';
+    
+    // 更新下拉選單
+    if (select) {
+        select.value = cbCode;
     }
+    
+    // 更新輸入框顯示
+    if (input) {
+        const db = window.basicInfoDB || { allCB: [] };
+        const cb = db.allCB.find(c => c.code === cbCode);
+        input.value = cb ? `${cbCode} ${cb.name}` : cbCode;
+    }
+    
+    // 載入價格走勢
+    loadPriceTrend(cbCode);
+}
+
+/**
+ * v3.97-zs-ax: 直接搜尋CB（Enter鍵）
+ */
+function searchPriceTrendCBDirect(keyword) {
+    const db = window.basicInfoDB || { allCB: [] };
+    const kw = keyword.toLowerCase();
     
     // 精確匹配代號
-    const exactMatch = priceTrendCBOptions.find(opt => 
-        opt.value === kw || opt.value.startsWith(kw)
-    );
+    let match = db.allCB.find(cb => cb.code.toLowerCase() === kw);
     
-    const select = document.getElementById('priceTrendCBSelect');
-    const input = document.getElementById('priceTrendCBInput');
+    // 前綴匹配
+    if (!match) {
+        match = db.allCB.find(cb => cb.code.toLowerCase().startsWith(kw));
+    }
     
-    // 恢復所有選項
-    select.innerHTML = '<option value="">-- 請選擇CB代號 --</option>';
-    priceTrendCBOptions.forEach(opt => {
-        select.appendChild(opt.cloneNode(true));
-    });
+    // 名稱匹配
+    if (!match) {
+        match = db.allCB.find(cb => (cb.name || '').toLowerCase().includes(kw));
+    }
     
-    if (exactMatch) {
-        select.value = exactMatch.value;
-        loadPriceTrend(exactMatch.value);
-        if (input) input.value = '';
-    } else {
-        // 模糊匹配
-        const fuzzyMatch = priceTrendCBOptions.find(opt => 
-            opt.textContent.toLowerCase().includes(kw.toLowerCase())
-        );
-        if (fuzzyMatch) {
-            select.value = fuzzyMatch.value;
-            loadPriceTrend(fuzzyMatch.value);
-            if (input) input.value = '';
-        }
+    if (match) {
+        selectPriceTrendFromSearch(match.code);
     }
 }
+
+/**
+ * v3.97-zs-ax: 清除價格走勢搜尋
+ */
+function clearPriceTrendSearch() {
+    const input = document.getElementById('priceTrendSearch');
+    const resultsDiv = document.getElementById('priceTrendSearchResults');
+    const select = document.getElementById('priceTrendCBSelect');
+    
+    if (input) input.value = '';
+    if (resultsDiv) resultsDiv.style.display = 'none';
+    if (select) select.selectedIndex = 0;
+    
+    // 清空內容區
+    document.getElementById('priceTrendContent').innerHTML = `
+        <div style="text-align:center; color:#999; padding:40px;">
+            👆 請先選擇一檔可轉債查看價格走勢
+        </div>
+    `;
+}
+
+// 點擊其他地方關閉搜尋結果
+document.addEventListener('click', function(e) {
+    const resultsDiv = document.getElementById('priceTrendSearchResults');
+    const input = document.getElementById('priceTrendSearch');
+    if (resultsDiv && input && !resultsDiv.contains(e.target) && e.target !== input) {
+        resultsDiv.style.display = 'none';
+    }
+});
 
 /**
  * 載入價格走勢資料

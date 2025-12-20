@@ -14747,6 +14747,7 @@ window.cbDatabase = {
 // 篩選後的CB清單
 let filteredCBList = [];
 let currentBasicInfoCB = null;
+window.currentBasicInfoTab = 'overview'; // v3.97-zs-aq: 追蹤當前標籤
 let currentPriceTrendCB = null;
 
 /**
@@ -15330,6 +15331,9 @@ function loadBasicInfo(cbCode) {
  */
 function showBasicInfoTab(tabName, event) {
     console.log('[showBasicInfoTab] 開始執行, tabName:', tabName);
+    
+    // v3.97-zs-aq: 追蹤當前標籤（用於非同步函數檢查）
+    window.currentBasicInfoTab = tabName;
     
     // 更新標籤狀態
     document.querySelectorAll('.basic-info-tab').forEach(tab => tab.classList.remove('active'));
@@ -17369,23 +17373,56 @@ async function renderConversionChart(cbCode) {
     const searchCode = String(cbCode).trim();
     console.log('[renderConversionChart] searchCode:', searchCode);
     
-    // v3.97-zs-am: 確保 kanbanData 已載入
+    // v3.97-zs-aq: 記錄開始時的標籤狀態
+    const startTab = window.currentBasicInfoTab;
+    
+    // v3.97-zs-am: 確保 kanbanData 已載入（非阻塞方式）
     if (!window.kanbanData.loaded && !window.kanbanData.loading) {
         console.log('[renderConversionChart] kanbanData 未載入，開始載入...');
         container.innerHTML = `<div style="text-align:center; padding:40px; color:#666;">
             <div style="font-size:24px; margin-bottom:10px;">⏳</div>
             <div>首次載入 CB_kanban 歷史資料中...</div>
-            <div style="font-size:12px; margin-top:8px; color:#888;">請稍候，這可能需要幾秒鐘</div>
+            <div style="font-size:12px; margin-top:8px; color:#888;">請稍候，可切換其他標籤</div>
         </div>`;
-        await loadAllKanbanData();
+        
+        // 非阻塞載入：不等待，讓載入在背景進行
+        loadAllKanbanData().then(() => {
+            // 載入完成後，如果還在餘額變化標籤才重新渲染
+            if (window.currentBasicInfoTab === 'balance') {
+                renderConversionChart(cbCode);
+            }
+        });
+        return; // 先返回，讓用戶可以切換標籤
     }
     
-    // 等待載入完成
-    while (window.kanbanData.loading) {
-        await new Promise(r => setTimeout(r, 100));
+    // 如果正在載入中，顯示等待訊息但不阻塞
+    if (window.kanbanData.loading) {
+        container.innerHTML = `<div style="text-align:center; padding:40px; color:#666;">
+            <div style="font-size:24px; margin-bottom:10px;">⏳</div>
+            <div>CB_kanban 資料載入中...</div>
+            <div style="font-size:12px; margin-top:8px; color:#888;">請稍候，可切換其他標籤</div>
+        </div>`;
+        
+        // 設定輪詢檢查
+        const checkLoading = setInterval(() => {
+            if (!window.kanbanData.loading) {
+                clearInterval(checkLoading);
+                // 載入完成後，如果還在餘額變化標籤才重新渲染
+                if (window.currentBasicInfoTab === 'balance') {
+                    renderConversionChart(cbCode);
+                }
+            }
+        }, 200);
+        return;
     }
     
     console.log('[renderConversionChart] kanbanData 載入狀態:', window.kanbanData.loaded, '共', Object.keys(window.kanbanData.data).length, '檔CB');
+    
+    // v3.97-zs-aq: 再次檢查標籤狀態，如果已切換則不繼續
+    if (window.currentBasicInfoTab !== 'balance') {
+        console.log('[renderConversionChart] 標籤已切換，停止渲染');
+        return;
+    }
     
     // 取得時間區間設定
     const periodSelect = document.getElementById(`balancePeriod_${searchCode}`);
@@ -17564,21 +17601,46 @@ async function renderConversionTable(cbCode) {
     
     const searchCode = String(cbCode).trim();
     
-    // v3.97-zs-am: 確保 kanbanData 已載入
+    // v3.97-zs-aq: 非阻塞載入方式
     if (!window.kanbanData.loaded && !window.kanbanData.loading) {
         container.innerHTML = `<div style="text-align:center; padding:40px; color:#666;">
             <div style="font-size:24px; margin-bottom:10px;">⏳</div>
             <div>首次載入 CB_kanban 歷史資料中...</div>
+            <div style="font-size:12px; margin-top:8px; color:#888;">請稍候，可切換其他標籤</div>
         </div>`;
-        await loadAllKanbanData();
+        
+        loadAllKanbanData().then(() => {
+            if (window.currentBasicInfoTab === 'balance') {
+                renderConversionTable(cbCode);
+            }
+        });
+        return;
     }
     
-    // 等待載入完成
-    while (window.kanbanData.loading) {
-        await new Promise(r => setTimeout(r, 100));
+    if (window.kanbanData.loading) {
+        container.innerHTML = `<div style="text-align:center; padding:40px; color:#666;">
+            <div style="font-size:24px; margin-bottom:10px;">⏳</div>
+            <div>CB_kanban 資料載入中...</div>
+        </div>`;
+        
+        const checkLoading = setInterval(() => {
+            if (!window.kanbanData.loading) {
+                clearInterval(checkLoading);
+                if (window.currentBasicInfoTab === 'balance') {
+                    renderConversionTable(cbCode);
+                }
+            }
+        }, 200);
+        return;
     }
     
     console.log('[renderConversionTable] kanbanData 載入狀態:', window.kanbanData.loaded);
+    
+    // 再次檢查標籤狀態
+    if (window.currentBasicInfoTab !== 'balance') {
+        console.log('[renderConversionTable] 標籤已切換，停止渲染');
+        return;
+    }
     
     // 取得時間區間設定
     const periodSelect = document.getElementById(`balancePeriod_${searchCode}`);

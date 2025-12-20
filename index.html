@@ -3380,6 +3380,7 @@ async function loadStatistics() {
         const sheetCBClose = getSheetData(['09_', '09', '每週日行情']); // v3.62 新增：CB收盤價
         const sheetBalance = getSheetData(['10_', '10', '每週餘額']); // v3.97z-s 新增
         const sheetIndustry = getSheetData(['16_', '16', '產業分類']); // v3.72 新增：產業分類對照表
+        const sheetSuspend = getSheetData(['13_', '13', '停止轉換', '暫停轉換']); // v3.97-zs-aj 新增：暫停轉換資訊
         
         // v3.97-zs-ag: 抓取 sheet10 (餘額表) 的 H1 日期
         window.sheet10Date = null;
@@ -3415,6 +3416,7 @@ async function loadStatistics() {
         window.sheet08Data = sheetListed || [];
         window.sheet09Data = sheetCBClose || [];
         window.sheet10Data = sheetBalance || [];
+        window.sheet13Data = sheetSuspend || []; // v3.97-zs-aj 新增：暫停轉換資訊
         console.log('📋 基本資料工作表已載入:');
         console.log('   01(基本):', window.sheet01Data.length, '筆');
         console.log('   02(時程):', window.sheet02Data.length, '筆');
@@ -16169,6 +16171,12 @@ function renderBasicInfoSchedule(cbCode, container) {
         sheet01Row = window.sheet01Data.find(r => String(r['CB代號']).trim() === searchCode);
     }
     
+    // v3.97-zs-aj: 從13工作表取得暫停轉換資訊
+    let suspendData = null;
+    if (window.sheet13Data && window.sheet13Data.length > 0) {
+        suspendData = window.sheet13Data.find(r => String(r['代號'] || r['CB代號']).trim() === searchCode);
+    }
+    
     if (!scheduleData && !sheet08Row && !auctionData && !sheet01Row) {
         container.innerHTML = `<div style="color:#999; padding:20px; text-align:center;">⚠️ 找不到 ${cbCode} 的發行時程資料</div>`;
         return;
@@ -16200,75 +16208,81 @@ function renderBasicInfoSchedule(cbCode, container) {
     // v3.97-zs-ag: 取得名稱
     const cbName = getValue(scheduleData?.['名稱'], sheet08Row?.['名稱'], auctionData?.['名稱']);
     
+    // v3.97-zs-aj: 暫停轉換資訊處理
+    let suspendHtml = '';
+    const suspendStart = suspendData?.['暫停轉換起日'] || suspendData?.['停止轉換起日'] || sheet08Row?.['停止受理轉換登記日期起'];
+    const suspendEnd = suspendData?.['暫停轉換迄日'] || suspendData?.['停止轉換迄日'] || sheet08Row?.['停止受理轉換登記日期訖'];
+    
+    if (suspendStart || suspendEnd) {
+        suspendHtml = `
+            <div style="background:rgba(255,193,7,0.2); padding:15px; border-radius:10px; border-left:4px solid #ffc107; margin-bottom:18px;">
+                <div style="font-size:14px; color:#666; margin-bottom:8px;">⚠️ 暫停轉換資訊</div>
+                <div style="font-size:15px; color:#f57c00; font-weight:bold;">
+                    ${formatDate(suspendStart)} ~ ${formatDate(suspendEnd)}
+                </div>
+                ${suspendData?.['暫停轉換原因'] ? `<div style="font-size:13px; color:#888; margin-top:6px;">原因：${suspendData['暫停轉換原因']}</div>` : ''}
+            </div>
+        `;
+    }
+    
     const html = `
         <div style="background:linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); padding:25px; border-radius:12px;">
             ${renderTabHeader('發行時程', '📅', '#1565c0', completeness.percentage, statusLabel, cbCode, cbName)}
             
-            <!-- 重要日期時間軸 -->
-            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:12px; margin-bottom:18px;">
+            <!-- 重要日期時間軸 - v3.97-zs-aj 統一方塊大小 -->
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:12px; margin-bottom:18px;">
                 <div style="background:white; padding:15px 10px; border-radius:10px; text-align:center; border-left:4px solid #9c27b0;">
-                    <div style="font-size:14px; color:#666; margin-bottom:6px;">董事會公告</div>
-                    <div style="font-size:16px; font-weight:bold; color:#9c27b0;">${formatDate(getValue(scheduleData?.['董事會公告']))}</div>
+                    <div style="font-size:13px; color:#666; margin-bottom:6px;">董事會公告</div>
+                    <div style="font-size:15px; font-weight:bold; color:#9c27b0;">${formatDate(getValue(scheduleData?.['董事會公告']))}</div>
                 </div>
                 <div style="background:white; padding:15px 10px; border-radius:10px; text-align:center; border-left:4px solid #673ab7;">
-                    <div style="font-size:14px; color:#666; margin-bottom:6px;">送件日期</div>
-                    <div style="font-size:16px; font-weight:bold; color:#673ab7;">${formatDate(getValue(scheduleData?.['送件日期']))}</div>
+                    <div style="font-size:13px; color:#666; margin-bottom:6px;">送件日期</div>
+                    <div style="font-size:15px; font-weight:bold; color:#673ab7;">${formatDate(getValue(scheduleData?.['送件日期']))}</div>
                 </div>
                 <div style="background:white; padding:15px 10px; border-radius:10px; text-align:center; border-left:4px solid #3f51b5;">
-                    <div style="font-size:14px; color:#666; margin-bottom:6px;">生效日期</div>
-                    <div style="font-size:16px; font-weight:bold; color:#3f51b5;">${formatDate(getValue(scheduleData?.['生效日期']))}</div>
+                    <div style="font-size:13px; color:#666; margin-bottom:6px;">生效日期</div>
+                    <div style="font-size:15px; font-weight:bold; color:#3f51b5;">${formatDate(getValue(scheduleData?.['生效日期']))}</div>
                 </div>
                 <div style="background:white; padding:15px 10px; border-radius:10px; text-align:center; border-left:4px solid #2196f3;">
-                    <div style="font-size:14px; color:#666; margin-bottom:6px;">詢圈/競拍日</div>
-                    <div style="font-size:16px; font-weight:bold; color:#2196f3;">${getValue(scheduleData?.['詢圈競拍日期'], formatDate(auctionData?.['截標日']))}</div>
+                    <div style="font-size:13px; color:#666; margin-bottom:6px;">詢圈/競拍日</div>
+                    <div style="font-size:15px; font-weight:bold; color:#2196f3;">${getValue(scheduleData?.['詢圈競拍日期'], formatDate(auctionData?.['截標日']))}</div>
                 </div>
                 <div style="background:white; padding:15px 10px; border-radius:10px; text-align:center; border-left:4px solid #009688;">
-                    <div style="font-size:14px; color:#666; margin-bottom:6px;">代收價款公告</div>
-                    <div style="font-size:16px; font-weight:bold; color:#009688;">${formatDate(getValue(scheduleData?.['代收價款公告']))}</div>
+                    <div style="font-size:13px; color:#666; margin-bottom:6px;">代收價款公告</div>
+                    <div style="font-size:15px; font-weight:bold; color:#009688;">${formatDate(getValue(scheduleData?.['代收價款公告']))}</div>
                 </div>
                 <div style="background:white; padding:15px 10px; border-radius:10px; text-align:center; border-left:4px solid #4caf50;">
-                    <div style="font-size:14px; color:#666; margin-bottom:6px;">掛牌日期</div>
-                    <div style="font-size:16px; font-weight:bold; color:#4caf50;">${formatDate(getValue(scheduleData?.['掛牌日期'], sheet08Row?.['掛牌日期'], auctionData?.['掛牌日期'], sheet01Row?.['掛牌日期']))}</div>
+                    <div style="font-size:13px; color:#666; margin-bottom:6px;">掛牌日期</div>
+                    <div style="font-size:15px; font-weight:bold; color:#4caf50;">${formatDate(getValue(scheduleData?.['掛牌日期'], sheet08Row?.['掛牌日期'], auctionData?.['掛牌日期'], sheet01Row?.['掛牌日期']))}</div>
                 </div>
             </div>
             
-            <!-- 轉換期間與到期資訊 - v3.97-zs-ag 調整順序 -->
-            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; margin-bottom:18px;">
-                <div style="background:rgba(255,255,255,0.9); padding:15px; border-radius:10px;">
-                    <div style="font-size:14px; color:#666; margin-bottom:8px;">📅 到期日期</div>
-                    <div style="font-size:16px; font-weight:bold; color:#d32f2f;">
-                        ${formatDate(getValue(scheduleData?.['到期日期'], sheet08Row?.['到期日'], auctionData?.['到期日期'], sheet01Row?.['到期日期']))}
-                    </div>
+            <!-- 到期與轉換資訊 - v3.97-zs-aj 統一方塊大小，轉換期間拆成兩個 -->
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:12px; margin-bottom:18px;">
+                <div style="background:white; padding:15px 10px; border-radius:10px; text-align:center; border-left:4px solid #d32f2f;">
+                    <div style="font-size:13px; color:#666; margin-bottom:6px;">到期日期</div>
+                    <div style="font-size:15px; font-weight:bold; color:#d32f2f;">${formatDate(getValue(scheduleData?.['到期日期'], sheet08Row?.['到期日'], auctionData?.['到期日期'], sheet01Row?.['到期日期']))}</div>
                 </div>
-                <div style="background:rgba(255,255,255,0.9); padding:15px; border-radius:10px;">
-                    <div style="font-size:14px; color:#666; margin-bottom:8px;">🔧 CBAS拆解日</div>
-                    <div style="font-size:15px; color:#333; font-weight:600;">
-                        ${formatDate(getValue(scheduleData?.['CBAS拆解日']))}
-                    </div>
+                <div style="background:white; padding:15px 10px; border-radius:10px; text-align:center; border-left:4px solid #7b1fa2;">
+                    <div style="font-size:13px; color:#666; margin-bottom:6px;">發行年期</div>
+                    <div style="font-size:15px; font-weight:bold; color:#7b1fa2;">${getValue(sheet08Row?.['還本年限'], auctionData?.['年期'], sheet01Row?.['發行年期'])} 年</div>
                 </div>
-                <div style="background:rgba(255,255,255,0.9); padding:15px; border-radius:10px;">
-                    <div style="font-size:14px; color:#666; margin-bottom:8px;">📆 發行年期</div>
-                    <div style="font-size:16px; font-weight:bold; color:#7b1fa2;">
-                        ${getValue(sheet08Row?.['還本年限'], auctionData?.['年期'], sheet01Row?.['發行年期'])} 年
-                    </div>
+                <div style="background:white; padding:15px 10px; border-radius:10px; text-align:center; border-left:4px solid #ff5722;">
+                    <div style="font-size:13px; color:#666; margin-bottom:6px;">CBAS拆解日</div>
+                    <div style="font-size:15px; font-weight:bold; color:#ff5722;">${formatDate(getValue(scheduleData?.['CBAS拆解日']))}</div>
                 </div>
-                <div style="background:rgba(255,255,255,0.9); padding:15px; border-radius:10px;">
-                    <div style="font-size:14px; color:#666; margin-bottom:8px;">🔄 轉換期間</div>
-                    <div style="font-size:15px; color:#333; font-weight:600;">
-                        ${formatDate(getValue(sheet08Row?.['轉換日期起']))} ~ ${formatDate(getValue(sheet08Row?.['轉換日期迄']))}
-                    </div>
+                <div style="background:white; padding:15px 10px; border-radius:10px; text-align:center; border-left:4px solid #00bcd4;">
+                    <div style="font-size:13px; color:#666; margin-bottom:6px;">轉換開始</div>
+                    <div style="font-size:15px; font-weight:bold; color:#00bcd4;">${formatDate(getValue(sheet08Row?.['轉換日期起']))}</div>
+                </div>
+                <div style="background:white; padding:15px 10px; border-radius:10px; text-align:center; border-left:4px solid #795548;">
+                    <div style="font-size:13px; color:#666; margin-bottom:6px;">轉換結束</div>
+                    <div style="font-size:15px; font-weight:bold; color:#795548;">${formatDate(getValue(sheet08Row?.['轉換日期迄']))}</div>
                 </div>
             </div>
             
-            <!-- 停止轉換登記 -->
-            ${sheet08Row?.['停止受理轉換登記日期起'] ? `
-            <div style="background:rgba(255,193,7,0.2); padding:15px; border-radius:10px; border-left:4px solid #ffc107;">
-                <div style="font-size:14px; color:#666; margin-bottom:6px;">⚠️ 停止受理轉換登記期間</div>
-                <div style="font-size:15px; color:#f57c00; font-weight:bold;">
-                    ${formatDate(sheet08Row['停止受理轉換登記日期起'])} ~ ${formatDate(sheet08Row['停止受理轉換登記日期訖'])}
-                </div>
-            </div>
-            ` : ''}
+            <!-- v3.97-zs-aj: 暫停轉換資訊 -->
+            ${suspendHtml}
         </div>
     `;
     
@@ -16611,8 +16625,26 @@ async function renderBasicInfoCallOption(cbCode, container) {
         <div style="background:linear-gradient(135deg, #fce4ec 0%, #f8bbd9 100%); padding:25px; border-radius:12px;">
             ${renderTabHeader('強制贖回', '🔔', '#c2185b', completeness, statusLabel, cbCode, cbName)}
             
+            <!-- v3.97-zs-aj 新增：公司可贖回條件說明 -->
+            <div style="background:white; padding:18px; border-radius:10px; margin-bottom:18px; border-left:5px solid #7b1fa2;">
+                <div style="font-size:15px; color:#7b1fa2; margin-bottom:12px; font-weight:bold;">📋 公司可贖回條件 (一般條款)</div>
+                <div style="font-size:14px; color:#333; line-height:1.8;">
+                    <div style="display:flex; align-items:flex-start; margin-bottom:8px;">
+                        <span style="background:#7b1fa2; color:white; padding:2px 8px; border-radius:4px; font-size:12px; margin-right:10px;">1</span>
+                        <span>流通在外餘額低於原發行總額之 <strong style="color:#c62828;">10%</strong></span>
+                    </div>
+                    <div style="display:flex; align-items:flex-start;">
+                        <span style="background:#7b1fa2; color:white; padding:2px 8px; border-radius:4px; font-size:12px; margin-right:10px;">2</span>
+                        <span>收盤價連續 <strong style="color:#c62828;">30個營業日</strong> 超過當時轉換價格達 <strong style="color:#c62828;">30%</strong>（即轉換價×130%）</span>
+                    </div>
+                </div>
+                <div style="margin-top:12px; font-size:12px; color:#888; background:#f5f5f5; padding:10px; border-radius:6px;">
+                    💡 各發行公司條款可能略有不同，實際以公開說明書為準
+                </div>
+            </div>
+            
             <!-- 資料來源說明 -->
-            <div style="background:white; padding:15px; border-radius:8px; margin-bottom:18px; font-size:13px; color:#666;">
+            <div style="background:white; padding:12px 15px; border-radius:8px; margin-bottom:18px; font-size:13px; color:#666;">
                 📊 資料來源：CB_kanban_YYYY.xlsx (J-M欄)
                 ${data?.dataYear ? `<span style="margin-left:15px;">📅 資料年份：${data.dataYear}</span>` : ''}
             </div>
@@ -16646,7 +16678,7 @@ async function renderBasicInfoCallOption(cbCode, container) {
                 
                 ${hasCallOption ? `
                 <div style="margin-top:18px; padding:12px 15px; background:#fff3e0; border-radius:8px; font-size:14px; color:#e65100; border-left:3px solid #ff9800;">
-                    <strong>⚠️ 注意：</strong>此CB設有強制贖回條款。當股價連續30個營業日收盤價達轉換價130%以上時，發行公司可能執行強制贖回。
+                    <strong>⚠️ 投資提醒：</strong>當股價觸及強制贖回條件時，發行公司可能執行強制贖回，屆時CB持有人需在期限內轉換或以贖回價賣回。
                 </div>
                 ` : ''}
                 
@@ -16924,11 +16956,11 @@ function renderBasicInfoQuote(cbCode, container) {
                     </div>
                     <div style="background:rgba(255,255,255,0.9); padding:15px; border-radius:8px; text-align:center;">
                         <div style="font-size:13px; color:#666; margin-bottom:6px;">YTM</div>
-                        <div style="font-size:18px; font-weight:bold;">${quoteData['YTM'] ? parseFloat(quoteData['YTM']).toFixed(2) : '-'}%</div>
+                        <div style="font-size:18px; font-weight:bold; color:#1976d2;">${quoteData['YTM'] ? parseFloat(quoteData['YTM']).toFixed(2) + '%' : '-'}</div>
                     </div>
                     <div style="background:rgba(255,255,255,0.9); padding:15px; border-radius:8px; text-align:center;">
                         <div style="font-size:13px; color:#666; margin-bottom:6px;">YTP</div>
-                        <div style="font-size:18px; font-weight:bold;">${quoteData['YTP'] ? parseFloat(quoteData['YTP']).toFixed(2) : '-'}%</div>
+                        <div style="font-size:18px; font-weight:bold; color:#e65100;">${quoteData['YTP'] ? parseFloat(quoteData['YTP']).toFixed(2) + '%' : '-'}</div>
                     </div>
                     <div style="background:rgba(255,255,255,0.9); padding:15px; border-radius:8px; text-align:center;">
                         <div style="font-size:13px; color:#666; margin-bottom:6px;">TCRI</div>
@@ -17218,22 +17250,23 @@ function renderBasicInfoBalance(cbCode, container) {
             </div>
             ` : ''}
             
-            <!-- 發行資訊 -->
-            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:12px;">
-                <div style="background:#f3e5f5; padding:15px; border-radius:8px; text-align:center; border:1px solid #e1bee7;">
-                    <div style="font-size:13px; color:#666; margin-bottom:6px;">發行券商</div>
-                    <div style="font-size:15px; font-weight:bold; color:#7b1fa2;">${getValue(sheet08Row?.['承銷機構'], auctionData?.['發行券商']) || '-'}</div>
+            <!-- v3.97-zs-aj: 轉換走勢/表格切換標籤 -->
+            <div style="margin-bottom:15px;">
+                <div style="display:flex; gap:5px; margin-bottom:12px;">
+                    <button type="button" class="balance-sub-tab active" data-tab="convChart" onclick="switchBalanceSubTab('${searchCode}', 'convChart', this)" 
+                            style="padding:8px 16px; border:none; background:#00838f; color:white; border-radius:6px 6px 0 0; cursor:pointer; font-size:13px; font-weight:bold;">
+                        📈 轉換走勢圖
+                    </button>
+                    <button type="button" class="balance-sub-tab" data-tab="convTable" onclick="switchBalanceSubTab('${searchCode}', 'convTable', this)"
+                            style="padding:8px 16px; border:none; background:#b2ebf2; color:#00838f; border-radius:6px 6px 0 0; cursor:pointer; font-size:13px;">
+                        📋 轉換記錄表
+                    </button>
                 </div>
-                ${auctionData ? `
-                <div style="background:#e8f5e9; padding:15px; border-radius:8px; text-align:center; border:1px solid #c8e6c9;">
-                    <div style="font-size:13px; color:#666; margin-bottom:6px;">競拍張數</div>
-                    <div style="font-size:15px; font-weight:bold;">${formatNumber(auctionData['競拍張數'])} 張</div>
+                <div id="balanceSubContent_${searchCode}" style="background:white; padding:18px; border-radius:0 10px 10px 10px; min-height:200px;">
+                    <div style="text-align:center; color:#888; padding:40px;">
+                        📊 載入轉換走勢資料中...
+                    </div>
                 </div>
-                <div style="background:#fff3e0; padding:15px; border-radius:8px; text-align:center; border:1px solid #ffe0b2;">
-                    <div style="font-size:13px; color:#666; margin-bottom:6px;">投標倍數</div>
-                    <div style="font-size:15px; font-weight:bold; color:#e65100;">${auctionData['投標倍數'] ? auctionData['投標倍數'].toFixed(2) + 'x' : '-'}</div>
-                </div>
-                ` : ''}
             </div>
             
             ${!isListed ? `
@@ -17245,6 +17278,200 @@ function renderBasicInfoBalance(cbCode, container) {
     `;
     
     container.innerHTML = html;
+    
+    // v3.97-zs-aj: 自動載入轉換走勢圖
+    setTimeout(() => {
+        renderConversionChart(searchCode);
+    }, 100);
+}
+
+/**
+ * v3.97-zs-aj 新增：切換餘額子標籤
+ */
+function switchBalanceSubTab(cbCode, tabType, btnElement) {
+    // 更新按鈕樣式
+    const buttons = btnElement.parentElement.querySelectorAll('.balance-sub-tab');
+    buttons.forEach(btn => {
+        if (btn === btnElement) {
+            btn.style.background = '#00838f';
+            btn.style.color = 'white';
+            btn.style.fontWeight = 'bold';
+            btn.classList.add('active');
+        } else {
+            btn.style.background = '#b2ebf2';
+            btn.style.color = '#00838f';
+            btn.style.fontWeight = 'normal';
+            btn.classList.remove('active');
+        }
+    });
+    
+    // 渲染對應內容
+    if (tabType === 'convChart') {
+        renderConversionChart(cbCode);
+    } else if (tabType === 'convTable') {
+        renderConversionTable(cbCode);
+    }
+}
+
+/**
+ * v3.97-zs-aj 新增：渲染轉換走勢圖
+ */
+function renderConversionChart(cbCode) {
+    const container = document.getElementById(`balanceSubContent_${cbCode}`);
+    if (!container) return;
+    
+    const searchCode = String(cbCode).trim();
+    
+    // 從 kanbanData 取得時間序列資料
+    let conversionData = [];
+    if (window.kanbanData?.loaded && window.kanbanData.data[searchCode]) {
+        conversionData = window.kanbanData.data[searchCode];
+    }
+    
+    if (conversionData.length === 0) {
+        container.innerHTML = `
+            <div style="text-align:center; color:#888; padding:40px;">
+                <div style="font-size:32px; margin-bottom:10px;">📊</div>
+                <div>尚無轉換走勢資料</div>
+                <div style="font-size:12px; margin-top:8px;">需載入 CB_kanban 時間序列資料</div>
+            </div>
+        `;
+        return;
+    }
+    
+    // 取最近30筆資料
+    const recentData = conversionData.slice(-30);
+    
+    // 計算最大最小值
+    const balances = recentData.map(d => d.balance || 0).filter(v => v > 0);
+    const maxBalance = Math.max(...balances);
+    const minBalance = Math.min(...balances);
+    const range = maxBalance - minBalance || 1;
+    
+    // 生成SVG走勢圖
+    const width = 600;
+    const height = 200;
+    const padding = 40;
+    const chartWidth = width - padding * 2;
+    const chartHeight = height - padding * 2;
+    
+    // 生成路徑
+    let pathD = '';
+    recentData.forEach((d, i) => {
+        const x = padding + (i / (recentData.length - 1)) * chartWidth;
+        const balance = d.balance || 0;
+        const y = padding + chartHeight - ((balance - minBalance) / range) * chartHeight;
+        if (i === 0) {
+            pathD += `M ${x} ${y}`;
+        } else {
+            pathD += ` L ${x} ${y}`;
+        }
+    });
+    
+    // 計算轉換趨勢
+    const firstBalance = recentData[0]?.balance || 0;
+    const lastBalance = recentData[recentData.length - 1]?.balance || 0;
+    const changeAmount = lastBalance - firstBalance;
+    const changeRatio = firstBalance > 0 ? ((changeAmount / firstBalance) * 100).toFixed(2) : 0;
+    const trendColor = changeAmount <= 0 ? '#2e7d32' : '#d32f2f';
+    const trendIcon = changeAmount <= 0 ? '📉' : '📈';
+    
+    container.innerHTML = `
+        <div style="text-align:center; margin-bottom:15px;">
+            <span style="font-size:14px; color:#666;">最近 ${recentData.length} 期餘額變化</span>
+            <span style="margin-left:15px; color:${trendColor}; font-weight:bold;">
+                ${trendIcon} ${changeAmount > 0 ? '+' : ''}${formatNumber(changeAmount)} 張 (${changeRatio}%)
+            </span>
+        </div>
+        <svg width="100%" viewBox="0 0 ${width} ${height}" style="max-width:600px; display:block; margin:0 auto;">
+            <!-- 背景網格 -->
+            <line x1="${padding}" y1="${padding}" x2="${padding}" y2="${height - padding}" stroke="#e0e0e0" stroke-width="1"/>
+            <line x1="${padding}" y1="${height - padding}" x2="${width - padding}" y2="${height - padding}" stroke="#e0e0e0" stroke-width="1"/>
+            
+            <!-- Y軸標籤 -->
+            <text x="${padding - 5}" y="${padding + 5}" text-anchor="end" font-size="11" fill="#888">${formatNumber(maxBalance)}</text>
+            <text x="${padding - 5}" y="${height - padding + 5}" text-anchor="end" font-size="11" fill="#888">${formatNumber(minBalance)}</text>
+            
+            <!-- 走勢線 -->
+            <path d="${pathD}" fill="none" stroke="#00838f" stroke-width="2.5"/>
+            
+            <!-- 起點終點標記 -->
+            <circle cx="${padding}" cy="${padding + chartHeight - ((firstBalance - minBalance) / range) * chartHeight}" r="4" fill="#1976d2"/>
+            <circle cx="${width - padding}" cy="${padding + chartHeight - ((lastBalance - minBalance) / range) * chartHeight}" r="4" fill="${trendColor}"/>
+        </svg>
+        <div style="display:flex; justify-content:space-between; font-size:12px; color:#888; margin-top:10px; padding:0 40px;">
+            <span>${recentData[0]?.date || ''}</span>
+            <span>${recentData[recentData.length - 1]?.date || ''}</span>
+        </div>
+    `;
+}
+
+/**
+ * v3.97-zs-aj 新增：渲染轉換記錄表
+ */
+function renderConversionTable(cbCode) {
+    const container = document.getElementById(`balanceSubContent_${cbCode}`);
+    if (!container) return;
+    
+    const searchCode = String(cbCode).trim();
+    
+    // 從 kanbanData 取得時間序列資料
+    let conversionData = [];
+    if (window.kanbanData?.loaded && window.kanbanData.data[searchCode]) {
+        conversionData = window.kanbanData.data[searchCode];
+    }
+    
+    if (conversionData.length === 0) {
+        container.innerHTML = `
+            <div style="text-align:center; color:#888; padding:40px;">
+                <div style="font-size:32px; margin-bottom:10px;">📋</div>
+                <div>尚無轉換記錄資料</div>
+            </div>
+        `;
+        return;
+    }
+    
+    // 取最近20筆，倒序顯示
+    const recentData = conversionData.slice(-20).reverse();
+    
+    let tableHtml = `
+        <div style="max-height:350px; overflow-y:auto;">
+            <table style="width:100%; border-collapse:collapse; font-size:13px;">
+                <thead style="position:sticky; top:0; background:#00838f; color:white;">
+                    <tr>
+                        <th style="padding:10px 8px; text-align:center;">日期</th>
+                        <th style="padding:10px 8px; text-align:right;">流通餘額</th>
+                        <th style="padding:10px 8px; text-align:right;">轉換價</th>
+                        <th style="padding:10px 8px; text-align:right;">CB價格</th>
+                        <th style="padding:10px 8px; text-align:right;">股價</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    recentData.forEach((d, i) => {
+        const bgColor = i % 2 === 0 ? '#f5f5f5' : 'white';
+        tableHtml += `
+            <tr style="background:${bgColor};">
+                <td style="padding:8px; text-align:center; color:#666;">${d.date || '-'}</td>
+                <td style="padding:8px; text-align:right; font-weight:bold;">${d.balance ? formatNumber(d.balance) : '-'}</td>
+                <td style="padding:8px; text-align:right;">${d.convPrice ? d.convPrice.toFixed(2) : '-'}</td>
+                <td style="padding:8px; text-align:right; color:#2e7d32;">${d.cbPrice ? d.cbPrice.toFixed(2) : '-'}</td>
+                <td style="padding:8px; text-align:right; color:#1976d2;">${d.stockPrice ? d.stockPrice.toFixed(2) : '-'}</td>
+            </tr>
+        `;
+    });
+    
+    tableHtml += `
+                </tbody>
+            </table>
+        </div>
+        <div style="text-align:center; font-size:12px; color:#888; margin-top:10px;">
+            顯示最近 ${recentData.length} 期資料
+        </div>
+    `;
+    
+    container.innerHTML = tableHtml;
 }
 
 // ==================== v3.97z-s 新增：價格走勢分析模組 ====================

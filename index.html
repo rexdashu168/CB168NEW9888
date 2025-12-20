@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97-zs-az (融資融券整合)</title>
+<title>AI智能可轉債競拍系統 v3.97-zs-bb (融資融券路徑修正+月記錄整合)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <!-- v3.97-zs-ae: 改用 CB_kanban_YYYY.xlsx 載入時間序列資料，取代 kanban_data.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -12065,54 +12065,72 @@ window.BROKER_MULT_TABLE = {
     '群益證券': { avgMult: 1.95, avgPrice: 104.18, avgPremium: 4.7, count: 9 }
 };
 
-// v3.97-zs-aw: 券商代號對照表（代號 → 名稱）
+// v3.97-zs-ba: 券商代號對照表（代號 → 名稱）- 同時支援大小寫
 window.BROKER_CODE_MAP = {
-    '920T': '統一', '9200': '統一',
-    '930T': '凱基', '9300': '凱基', 
-    '940T': '元大', '9400': '元大',
-    '950T': '富邦', '9500': '富邦',
-    '960T': '日盛', '9600': '日盛',
-    '970T': '國泰', '9700': '國泰',
-    '980T': '玉山', '9800': '玉山',
-    '990T': '永豐金', '9900': '永豐金',
-    '9A0T': '兆豐', '9A00': '兆豐',
-    '9B0T': '台新', '9B00': '台新',
-    '9C0T': '中信', '9C00': '中信',
-    '9D0T': '群益', '9D00': '群益',
-    '9E0T': '第一金', '9E00': '第一金',
-    '9F0T': '合庫', '9F00': '合庫',
-    '9G0T': '華南永昌', '9G00': '華南永昌',
-    '9H0T': '元富', '9H00': '元富',
-    '9I0T': '台灣', '9I00': '台灣',
-    '9J0T': '國票', '9J00': '國票',
-    '9K0T': '宏遠', '9K00': '宏遠',
-    '9L0T': '康和', '9L00': '康和',
-    '9M0T': '美林', '9M00': '美林',
-    '9N0T': '大華', '9N00': '大華',
-    '9P0T': '福邦', '9P00': '福邦',
-    '9Q0T': '致和', '9Q00': '致和',
-    '9R0T': '大眾', '9R00': '大眾',
-    '9S0T': '光和', '9S00': '光和',
-    '9T0T': '亞東', '9T00': '亞東',
-    '9U0T': '新光', '9U00': '新光',
-    '9V0T': '土銀', '9V00': '土銀',
-    '9W0T': '彰銀', '9W00': '彰銀',
-    '9X0T': '台銀', '9X00': '台銀',
-    '9Y0T': '臺企銀', '9Y00': '臺企銀',
-    '9Z0T': '陽信', '9Z00': '陽信'
+    '920T': '統一', '9200': '統一', '920t': '統一',
+    '930T': '凱基', '9300': '凱基', '930t': '凱基',
+    '940T': '元大', '9400': '元大', '940t': '元大',
+    '950T': '富邦', '9500': '富邦', '950t': '富邦',
+    '960T': '日盛', '9600': '日盛', '960t': '日盛',
+    '970T': '國泰', '9700': '國泰', '970t': '國泰',
+    '980T': '玉山', '9800': '玉山', '980t': '玉山',
+    '990T': '永豐金', '9900': '永豐金', '990t': '永豐金',
+    '9A0T': '兆豐', '9A00': '兆豐', '9a0t': '兆豐', '9a0T': '兆豐', '9A0t': '兆豐',
+    '9B0T': '台新', '9B00': '台新', '9b0t': '台新', '9b0T': '台新',
+    '9C0T': '中信', '9C00': '中信', '9c0t': '中信', '9c0T': '中信',
+    '9D0T': '群益', '9D00': '群益', '9d0t': '群益', '9d0T': '群益',
+    '9E0T': '第一金', '9E00': '第一金', '9e0t': '第一金', '9e0T': '第一金',
+    '9F0T': '合庫', '9F00': '合庫', '9f0t': '合庫', '9f0T': '合庫',
+    '9G0T': '華南永昌', '9G00': '華南永昌', '9g0t': '華南永昌', '9g0T': '華南永昌',
+    '9H0T': '元富', '9H00': '元富', '9h0t': '元富', '9h0T': '元富',
+    '9I0T': '台灣', '9I00': '台灣', '9i0t': '台灣', '9i0T': '台灣',
+    '9J0T': '國票', '9J00': '國票', '9j0t': '國票', '9j0T': '國票',
+    '9K0T': '宏遠', '9K00': '宏遠', '9k0t': '宏遠', '9k0T': '宏遠',
+    '9L0T': '康和', '9L00': '康和', '9l0t': '康和', '9l0T': '康和',
+    '9M0T': '美林', '9M00': '美林', '9m0t': '美林', '9m0T': '美林',
+    '9N0T': '大華', '9N00': '大華', '9n0t': '大華', '9n0T': '大華',
+    '9P0T': '福邦', '9P00': '福邦', '9p0t': '福邦', '9p0T': '福邦',
+    '9Q0T': '致和', '9Q00': '致和', '9q0t': '致和', '9q0T': '致和',
+    '9R0T': '大眾', '9R00': '大眾', '9r0t': '大眾', '9r0T': '大眾',
+    '9S0T': '光和', '9S00': '光和', '9s0t': '光和', '9s0T': '光和',
+    '9T0T': '亞東', '9T00': '亞東', '9t0t': '亞東', '9t0T': '亞東',
+    '9U0T': '新光', '9U00': '新光', '9u0t': '新光', '9u0T': '新光',
+    '9V0T': '土銀', '9V00': '土銀', '9v0t': '土銀', '9v0T': '土銀',
+    '9W0T': '彰銀', '9W00': '彰銀', '9w0t': '彰銀', '9w0T': '彰銀',
+    '9X0T': '台銀', '9X00': '台銀', '9x0t': '台銀', '9x0T': '台銀',
+    '9Y0T': '臺企銀', '9Y00': '臺企銀', '9y0t': '臺企銀', '9y0T': '臺企銀',
+    '9Z0T': '陽信', '9Z00': '陽信', '9z0t': '陽信', '9z0T': '陽信'
 };
 
 /**
- * v3.97-zs-aw: 將券商代號轉換為名稱
+ * v3.97-zs-ba: 將券商代號轉換為名稱（增強版）
  */
 function convertBrokerCodeToName(brokerValue) {
     if (!brokerValue || brokerValue === '-') return '-';
     
-    const code = String(brokerValue).trim().toUpperCase();
+    let code = String(brokerValue).trim();
     
-    // 如果是代號格式（4碼），轉換為名稱
+    // 嘗試直接匹配（區分大小寫）
     if (window.BROKER_CODE_MAP[code]) {
         return window.BROKER_CODE_MAP[code];
+    }
+    
+    // 嘗試大寫匹配
+    const upperCode = code.toUpperCase();
+    if (window.BROKER_CODE_MAP[upperCode]) {
+        return window.BROKER_CODE_MAP[upperCode];
+    }
+    
+    // 嘗試去除空格後匹配
+    const noSpaceCode = code.replace(/\s/g, '').toUpperCase();
+    if (window.BROKER_CODE_MAP[noSpaceCode]) {
+        return window.BROKER_CODE_MAP[noSpaceCode];
+    }
+    
+    // 如果是4碼但不在對照表中，可能是新的代號，顯示原值
+    if (/^[0-9A-Za-z]{4}$/.test(noSpaceCode)) {
+        console.warn(`未知券商代號: ${code}`);
+        return code;
     }
     
     // 如果已經是名稱，直接處理
@@ -15897,9 +15915,10 @@ function renderBasicInfoOverview(cbCode, container) {
         }
     }
     
-    // v3.97-zs-aw: 發行券商 - 使用代號對照表轉換
+    // v3.97-zs-ba: 承銷商 - 使用代號對照表轉換
     const brokerRaw = data['發行券商'] || sheet01Row?.['發行券商'] || '-';
     const brokerDisplay = convertBrokerCodeToName(brokerRaw);
+    console.log('[承銷商轉換]', searchCode, '原始:', brokerRaw, '→ 轉換後:', brokerDisplay);
     
     // 發行規模（億）
     const issueSizeBillion = issueSize > 0 ? (issueSize / 100).toFixed(2) : '-';
@@ -16133,7 +16152,7 @@ function renderBasicInfoOverview(cbCode, container) {
                     <tr><td style="color:#666; padding:6px 0;">訂價溢價率</td><td style="font-weight:600; padding:6px 0; text-align:right; color:${pricingPremium && parseFloat(pricingPremium) > 0 ? '#c62828' : '#2e7d32'};">${pricingPremium ? pricingPremium + '%' : '-'}</td></tr>
                     <tr><td style="color:#666; padding:6px 0;">發行年期</td><td style="font-weight:600; padding:6px 0; text-align:right;">${data['年期'] || '-'}年</td></tr>
                     <tr><td style="color:#666; padding:6px 0;">剩餘年期</td><td style="color:${remainYears !== null && remainYears < 1 ? '#c62828' : '#2e7d32'}; font-weight:bold; padding:6px 0; text-align:right;">${remainYearsDisplay}</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">發行券商</td><td style="font-weight:600; padding:6px 0; text-align:right;">${brokerDisplay}</td></tr>
+                    <tr><td style="color:#666; padding:6px 0;">承銷商</td><td style="font-weight:600; padding:6px 0; text-align:right;">${brokerDisplay}</td></tr>
                 </table>
             </div>
             
@@ -18318,21 +18337,34 @@ async function renderConversionTable(cbCode) {
     };
     const periodText = periodTexts[period] || period;
     
-    // v3.97-zs-aw: 月餘額記錄表（欄位改為本月/上月）
+    // v3.97-zs-bb: 同時載入融資融券資料
+    if (!window.marginData.loaded && !window.marginData.loading) {
+        loadMarginData(); // 背景載入，不阻塞
+    }
+    
+    // v3.97-zs-bb: 取得股票代號以查詢融資融券
+    const stockCode = getStockCodeFromCB(searchCode);
+    const hasMarginData = window.marginData.loaded && stockCode && window.marginData.data[stockCode];
+    
+    // v3.97-zs-bb: 月餘額記錄表（加入融資融券欄位）
     let tableHtml = `
         <div style="text-align:center; margin-bottom:12px; font-size:14px; color:#666;">
             📑 ${periodText}月餘額變化記錄
+            ${stockCode ? `<span style="font-size:12px; color:#888;">（股票代號：${stockCode}）</span>` : ''}
         </div>
-        <div style="max-height:350px; overflow-y:auto;">
-            <table style="width:100%; border-collapse:collapse; font-size:13px;">
+        <div style="max-height:400px; overflow-y:auto; overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse; font-size:12px; min-width:900px;">
                 <thead style="position:sticky; top:0; background:#00838f; color:white;">
                     <tr>
-                        <th style="padding:10px 6px; text-align:center;">月份</th>
-                        <th style="padding:10px 6px; text-align:right;">本月餘額</th>
-                        <th style="padding:10px 6px; text-align:right;">上月餘額</th>
-                        <th style="padding:10px 6px; text-align:right;">增減數額</th>
-                        <th style="padding:10px 6px; text-align:right;">增減比率</th>
-                        <th style="padding:10px 6px; text-align:right;">剩餘比率</th>
+                        <th style="padding:8px 4px; text-align:center; white-space:nowrap;">月份</th>
+                        <th style="padding:8px 4px; text-align:right; white-space:nowrap; border-right:2px solid rgba(255,255,255,0.3);">CB餘額</th>
+                        <th style="padding:8px 4px; text-align:right; white-space:nowrap;">CB增減</th>
+                        <th style="padding:8px 4px; text-align:right; white-space:nowrap; border-right:2px solid rgba(255,255,255,0.3);">剩餘%</th>
+                        <th style="padding:8px 4px; text-align:right; white-space:nowrap; background:#c62828;">融資餘額</th>
+                        <th style="padding:8px 4px; text-align:right; white-space:nowrap; background:#c62828; border-right:2px solid rgba(255,255,255,0.3);">融資增減</th>
+                        <th style="padding:8px 4px; text-align:right; white-space:nowrap; background:#2e7d32;">融券餘額</th>
+                        <th style="padding:8px 4px; text-align:right; white-space:nowrap; background:#2e7d32;">融券增減</th>
+                        <th style="padding:8px 4px; text-align:right; white-space:nowrap; background:#2e7d32;">券償</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -18352,7 +18384,6 @@ async function renderConversionTable(cbCode) {
         
         // 增減數額和比率
         const changeShares = thisMonthShares - lastMonthShares;
-        const changeRate = lastMonthShares > 0 ? ((changeShares / lastMonthShares) * 100) : 0;
         
         // 剩餘比率
         const remainRate = totalIssue > 0 ? ((thisMonthBalance / totalIssue) * 100) : 100;
@@ -18363,18 +18394,40 @@ async function renderConversionTable(cbCode) {
         // 顯示年月
         const displayMonth = d.date ? d.date.substring(0, 7) : '-';
         
+        // v3.97-zs-bb: 取得該月底的融資融券資料
+        let marginBalance = '-', marginChange = '-', shortBalance = '-', shortChange = '-', shortCover = '-';
+        let marginChangeColor = '#666', shortChangeColor = '#666';
+        
+        if (hasMarginData && d.date) {
+            const marginInfo = getMarginDataForDate(stockCode, d.date);
+            if (marginInfo) {
+                marginBalance = formatNumber(marginInfo.marginBalance);
+                marginChange = marginInfo.marginChange;
+                shortBalance = formatNumber(marginInfo.shortBalance);
+                shortChange = marginInfo.shortChange;
+                shortCover = formatNumber(marginInfo.shortCover);
+                
+                marginChangeColor = marginInfo.marginChange > 0 ? '#c62828' : marginInfo.marginChange < 0 ? '#2e7d32' : '#666';
+                shortChangeColor = marginInfo.shortChange > 0 ? '#c62828' : marginInfo.shortChange < 0 ? '#2e7d32' : '#666';
+                
+                marginChange = marginInfo.marginChange !== 0 ? (marginInfo.marginChange > 0 ? '+' : '') + formatNumber(marginInfo.marginChange) : '0';
+                shortChange = marginInfo.shortChange !== 0 ? (marginInfo.shortChange > 0 ? '+' : '') + formatNumber(marginInfo.shortChange) : '0';
+            }
+        }
+        
         tableHtml += `
             <tr style="background:${bgColor};">
-                <td style="padding:8px 6px; text-align:center; color:#666;">${displayMonth}</td>
-                <td style="padding:8px 6px; text-align:right; font-weight:bold; color:#00838f;">${formatNumber(thisMonthShares)}</td>
-                <td style="padding:8px 6px; text-align:right; color:#666;">${formatNumber(lastMonthShares)}</td>
-                <td style="padding:8px 6px; text-align:right; color:${changeColor}; font-weight:bold;">
+                <td style="padding:6px 4px; text-align:center; color:#666; white-space:nowrap;">${displayMonth}</td>
+                <td style="padding:6px 4px; text-align:right; font-weight:bold; color:#00838f; border-right:1px solid #e0e0e0;">${formatNumber(thisMonthShares)}</td>
+                <td style="padding:6px 4px; text-align:right; color:${changeColor}; font-weight:bold;">
                     ${changeShares !== 0 ? (changeShares > 0 ? '+' : '') + formatNumber(changeShares) : '0'}
                 </td>
-                <td style="padding:8px 6px; text-align:right; color:${changeColor};">
-                    ${changeRate !== 0 ? (changeRate > 0 ? '+' : '') + changeRate.toFixed(2) + '%' : '0%'}
-                </td>
-                <td style="padding:8px 6px; text-align:right; color:#1976d2;">${remainRate.toFixed(1)}%</td>
+                <td style="padding:6px 4px; text-align:right; color:#1976d2; border-right:1px solid #e0e0e0;">${remainRate.toFixed(1)}%</td>
+                <td style="padding:6px 4px; text-align:right; color:#c62828; font-weight:500;">${marginBalance}</td>
+                <td style="padding:6px 4px; text-align:right; color:${marginChangeColor}; border-right:1px solid #e0e0e0;">${marginChange}</td>
+                <td style="padding:6px 4px; text-align:right; color:#2e7d32; font-weight:500;">${shortBalance}</td>
+                <td style="padding:6px 4px; text-align:right; color:${shortChangeColor};">${shortChange}</td>
+                <td style="padding:6px 4px; text-align:right; color:#7b1fa2;">${shortCover}</td>
             </tr>
         `;
     });
@@ -18383,8 +18436,10 @@ async function renderConversionTable(cbCode) {
                 </tbody>
             </table>
         </div>
-        <div style="text-align:center; font-size:12px; color:#888; margin-top:10px;">
-            顯示 ${displayData.length} 個月資料 | 單位：張（1張=10萬元）
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; color:#888; margin-top:10px; flex-wrap:wrap; gap:8px;">
+            <span>顯示 ${displayData.length} 個月資料</span>
+            <span>CB單位：張 | 融資融券單位：張</span>
+            ${!hasMarginData ? '<span style="color:#f57c00;">⚠️ 融資融券資料載入中或無對應股票</span>' : ''}
         </div>
     `;
     
@@ -18767,85 +18822,89 @@ async function loadMarginData() {
     const startTime = Date.now();
     
     const allData = {};
-    const files = [
-        { path: 'data/margin/tpxlending_2025_stock_only.xlsx', cols: { margin: '融資餘額', short: '融券餘額', cover: '現券償還' } },
-        { path: 'data/margin/otclending_2025_stock_only.xlsx', cols: { margin: '資餘額', short: '券餘額', cover: '券償' } }
+    
+    // v3.97-zs-bb: 修正路徑為 data/loan/，載入多年度資料
+    const years = ['2025', '2024', '2023', '2022', '2021', '2020', '2019', '2018', '2017'];
+    const fileConfigs = [
+        { prefix: 'data/loan/tpxlending_', cols: { margin: '融資餘額', short: '融券餘額', cover: '現券償還' } },
+        { prefix: 'data/loan/otclending_', cols: { margin: '資餘額', short: '券餘額', cover: '券償' } }
     ];
     
-    for (const file of files) {
-        try {
-            const response = await fetch(file.path);
-            if (!response.ok) {
-                console.warn(`融資融券檔案不存在: ${file.path}`);
-                continue;
-            }
-            
-            const workbook = XLSX.read(await response.arrayBuffer(), { type: 'array' });
-            
-            // 取得所有日期工作表（YYYYMMDD格式）
-            const validSheets = workbook.SheetNames.filter(name => /^\d{8}$/.test(name)).sort();
-            console.log(`📈 ${file.path}: ${validSheets.length} 個交易日`);
-            
-            for (const sheetName of validSheets) {
-                const sheet = workbook.Sheets[sheetName];
-                const rawData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-                if (rawData.length < 2) continue;
+    for (const config of fileConfigs) {
+        for (const year of years) {
+            const filePath = `${config.prefix}${year}_stock_only.xlsx`;
+            try {
+                const response = await fetch(filePath);
+                if (!response.ok) continue;
                 
-                // 找出欄位位置
-                const headers = rawData[0];
-                let codeIdx = -1, marginIdx = -1, shortIdx = -1, coverIdx = -1;
+                const workbook = XLSX.read(await response.arrayBuffer(), { type: 'array' });
                 
-                headers.forEach((h, idx) => {
-                    const col = String(h || '').trim();
-                    if (col === '代號') codeIdx = idx;
-                    if (col === file.cols.margin) marginIdx = idx;
-                    if (col === file.cols.short) shortIdx = idx;
-                    if (col === file.cols.cover) coverIdx = idx;
-                });
+                // 取得所有日期工作表（YYYYMMDD格式）
+                const validSheets = workbook.SheetNames.filter(name => /^\d{8}$/.test(name)).sort();
                 
-                if (codeIdx < 0) continue;
-                
-                // 轉換日期格式
-                const dateStr = `${sheetName.substring(0, 4)}/${sheetName.substring(4, 6)}/${sheetName.substring(6, 8)}`;
-                
-                // 處理每一列
-                for (let i = 1; i < rawData.length; i++) {
-                    const row = rawData[i];
-                    const code = String(row[codeIdx] || '').trim();
-                    if (!code) continue;
+                for (const sheetName of validSheets) {
+                    const sheet = workbook.Sheets[sheetName];
+                    const rawData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+                    if (rawData.length < 2) continue;
                     
-                    const marginBalance = parseInt(row[marginIdx]) || 0;
-                    const shortBalance = parseInt(row[shortIdx]) || 0;
-                    const shortCover = parseInt(row[coverIdx]) || 0;
+                    // 找出欄位位置
+                    const headers = rawData[0];
+                    let codeIdx = -1, marginIdx = -1, shortIdx = -1, coverIdx = -1;
                     
-                    if (!allData[code]) allData[code] = {};
+                    headers.forEach((h, idx) => {
+                        const col = String(h || '').trim();
+                        if (col === '代號') codeIdx = idx;
+                        if (col === config.cols.margin) marginIdx = idx;
+                        if (col === config.cols.short) shortIdx = idx;
+                        if (col === config.cols.cover) coverIdx = idx;
+                    });
                     
-                    allData[code][dateStr] = {
-                        marginBalance,
-                        shortBalance,
-                        shortCover
-                    };
-                }
-            }
-            
-            // 計算每日增減（需要前一日資料）
-            for (const code of Object.keys(allData)) {
-                const dates = Object.keys(allData[code]).sort();
-                for (let i = 0; i < dates.length; i++) {
-                    const today = allData[code][dates[i]];
-                    if (i > 0) {
-                        const yesterday = allData[code][dates[i - 1]];
-                        today.marginChange = today.marginBalance - yesterday.marginBalance;
-                        today.shortChange = today.shortBalance - yesterday.shortBalance;
-                    } else {
-                        today.marginChange = 0;
-                        today.shortChange = 0;
+                    if (codeIdx < 0) continue;
+                    
+                    // 轉換日期格式
+                    const dateStr = `${sheetName.substring(0, 4)}/${sheetName.substring(4, 6)}/${sheetName.substring(6, 8)}`;
+                    
+                    // 處理每一列
+                    for (let i = 1; i < rawData.length; i++) {
+                        const row = rawData[i];
+                        const code = String(row[codeIdx] || '').trim();
+                        if (!code) continue;
+                        
+                        const marginBalance = parseInt(row[marginIdx]) || 0;
+                        const shortBalance = parseInt(row[shortIdx]) || 0;
+                        const shortCover = parseInt(row[coverIdx]) || 0;
+                        
+                        if (!allData[code]) allData[code] = {};
+                        
+                        allData[code][dateStr] = {
+                            marginBalance,
+                            shortBalance,
+                            shortCover
+                        };
                     }
                 }
+                
+                console.log(`📈 載入 ${filePath}: ${validSheets.length} 個交易日`);
+                
+            } catch (err) {
+                // 檔案不存在就跳過
             }
-            
-        } catch (err) {
-            console.warn(`載入 ${file.path} 失敗:`, err.message);
+        }
+    }
+    
+    // 計算每日增減（需要前一日資料）
+    for (const code of Object.keys(allData)) {
+        const dates = Object.keys(allData[code]).sort();
+        for (let i = 0; i < dates.length; i++) {
+            const today = allData[code][dates[i]];
+            if (i > 0) {
+                const yesterday = allData[code][dates[i - 1]];
+                today.marginChange = today.marginBalance - yesterday.marginBalance;
+                today.shortChange = today.shortBalance - yesterday.shortBalance;
+            } else {
+                today.marginChange = 0;
+                today.shortChange = 0;
+            }
         }
     }
     

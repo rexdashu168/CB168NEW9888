@@ -3384,6 +3384,27 @@ async function loadStatistics() {
         const sheetBalance = getSheetData(['10_', '10', '每週餘額']); // v3.97z-s 新增
         const sheetIndustry = getSheetData(['16_', '16', '產業分類']); // v3.72 新增：產業分類對照表
         
+        // v3.97-zs-ag: 抓取 sheet10 (餘額表) 的 H1 日期
+        window.sheet10Date = null;
+        const sheet10Name = workbook.SheetNames.find(x => x.startsWith('10_') || x.includes('每週餘額'));
+        if (sheet10Name) {
+            const sheet10 = workbook.Sheets[sheet10Name];
+            const h1Cell = sheet10['H1'];
+            if (h1Cell) {
+                // 處理日期格式 (可能是數字或字串)
+                if (typeof h1Cell.v === 'number') {
+                    // Excel 日期數字轉換
+                    const excelDate = new Date((h1Cell.v - 25569) * 86400 * 1000);
+                    window.sheet10Date = excelDate.toISOString().split('T')[0].replace(/-/g, '/');
+                } else if (h1Cell.w) {
+                    window.sheet10Date = h1Cell.w; // 使用格式化後的值
+                } else {
+                    window.sheet10Date = String(h1Cell.v);
+                }
+                console.log('📅 餘額表資料日期 (H1):', window.sheet10Date);
+            }
+        }
+        
         if (!sheetAuction || sheetAuction.length === 0) throw new Error("找不到競拍資料分頁");
         
         // v3.81 新增：保存競拍數據供KNN超級預測引擎使用
@@ -15947,7 +15968,7 @@ function renderBasicInfoOverview(cbCode, container) {
                         </td>
                     </tr>
                     ` : ''}
-                    <tr><td style="color:#666; padding:6px 0;">強贖觸發價 <span style="font-size:10px; color:#999;">(收盤價連續30個營業日超過當時轉換價格達30%)</span></td><td style="color:#9c27b0; font-weight:bold; padding:6px 0; text-align:right;">${callTrigger130}元</td></tr>
+                    <tr><td style="color:#666; padding:6px 0;">強贖觸發價</td><td style="color:#9c27b0; font-weight:bold; padding:6px 0; text-align:right;">${callTrigger130}元 <span style="font-size:11px; color:#888;">(130%)</span></td></tr>
                     <tr><td style="color:#666; padding:6px 0;">轉換比例</td><td style="font-weight:600; padding:6px 0; text-align:right;">${convRatio} 股</td></tr>
                     <tr><td style="color:#666; padding:6px 0;">股票最新市價</td><td style="font-weight:bold; color:#1976d2; padding:6px 0; text-align:right;">${latestStockPrice > 0 ? latestStockPrice.toFixed(2) + '元' : '-'}</td></tr>
                     <tr><td style="color:#666; padding:6px 0;">理論價 <span style="font-size:10px; color:#999;">((市價÷轉換價)×100)</span></td><td style="color:#e65100; font-weight:bold; padding:6px 0; text-align:right;">${theoreticalPrice ? theoreticalPrice + '元' : '-'}</td></tr>
@@ -15960,20 +15981,6 @@ function renderBasicInfoOverview(cbCode, container) {
                     </tr>
                 </table>
                 ${kanbanDate ? `<div style="text-align:right; font-size:11px; color:#999; margin-top:8px;">📅 資料日期: ${kanbanDate}</div>` : ''}
-            </div>
-            
-            <!-- 掛牌表現卡 -->
-            <div style="background:#e0f7fa; padding:20px; border-radius:12px; border-left:5px solid #00bcd4;">
-                <div style="font-weight:bold; color:#00838f; margin-bottom:12px; font-size:15px;">📊 掛牌表現</div>
-                <table style="width:100%; font-size:15px; line-height:1.9;">
-                    <tr><td style="color:#666; width:40%; padding:6px 0;">掛牌日期</td><td style="padding:6px 0; font-weight:600; text-align:right;">${formatDate(data['掛牌日期'])}</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">到期日期</td><td style="padding:6px 0; font-weight:600; text-align:right;">${formatDate(data['到期日期'])}</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">距到期天數</td><td style="color:${daysToMaturity !== null && daysToMaturity < 365 ? '#c62828' : '#2e7d32'}; font-weight:bold; padding:6px 0; text-align:right;">${daysToMaturity !== null ? (daysToMaturity > 0 ? formatNumber(daysToMaturity) + ' 天' : '已到期') : '-'}</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">掛牌最高</td><td style="font-weight:bold; color:#c62828; padding:6px 0; font-size:16px; text-align:right;">${data['掛牌最高'] || '-'}元</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">掛牌最低</td><td style="font-weight:bold; color:#2e7d32; padding:6px 0; font-size:16px; text-align:right;">${data['掛牌最低'] || '-'}元</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">到期還本價</td><td style="padding:6px 0; font-weight:600; text-align:right;">${data['到期還本價格'] || '-'}元</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">交易狀態</td><td style="color:${isListed ? '#2e7d32' : '#666'}; padding:6px 0; font-weight:600; text-align:right;">${isListed ? '🟢 掛牌中' : '⚫ 已下市'}</td></tr>
-                </table>
             </div>
         </div>
         
@@ -16088,18 +16095,18 @@ function renderBasicInfoSchedule(cbCode, container) {
                 </div>
             </div>
             
-            <!-- 轉換期間與到期資訊 -->
+            <!-- 轉換期間與到期資訊 - v3.97-zs-ag 調整順序 -->
             <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; margin-bottom:18px;">
-                <div style="background:rgba(255,255,255,0.9); padding:15px; border-radius:10px;">
-                    <div style="font-size:14px; color:#666; margin-bottom:8px;">🔄 轉換期間</div>
-                    <div style="font-size:15px; color:#333; font-weight:600;">
-                        ${formatDate(getValue(sheet08Row?.['轉換日期起']))} ~ ${formatDate(getValue(sheet08Row?.['轉換日期迄']))}
-                    </div>
-                </div>
                 <div style="background:rgba(255,255,255,0.9); padding:15px; border-radius:10px;">
                     <div style="font-size:14px; color:#666; margin-bottom:8px;">📅 到期日期</div>
                     <div style="font-size:16px; font-weight:bold; color:#d32f2f;">
                         ${formatDate(getValue(scheduleData?.['到期日期'], sheet08Row?.['到期日'], auctionData?.['到期日期'], sheet01Row?.['到期日期']))}
+                    </div>
+                </div>
+                <div style="background:rgba(255,255,255,0.9); padding:15px; border-radius:10px;">
+                    <div style="font-size:14px; color:#666; margin-bottom:8px;">🔧 CBAS拆解日</div>
+                    <div style="font-size:15px; color:#333; font-weight:600;">
+                        ${formatDate(getValue(scheduleData?.['CBAS拆解日']))}
                     </div>
                 </div>
                 <div style="background:rgba(255,255,255,0.9); padding:15px; border-radius:10px;">
@@ -16109,9 +16116,9 @@ function renderBasicInfoSchedule(cbCode, container) {
                     </div>
                 </div>
                 <div style="background:rgba(255,255,255,0.9); padding:15px; border-radius:10px;">
-                    <div style="font-size:14px; color:#666; margin-bottom:8px;">🔧 CBAS拆解日</div>
+                    <div style="font-size:14px; color:#666; margin-bottom:8px;">🔄 轉換期間</div>
                     <div style="font-size:15px; color:#333; font-weight:600;">
-                        ${formatDate(getValue(scheduleData?.['CBAS拆解日']))}
+                        ${formatDate(getValue(sheet08Row?.['轉換日期起']))} ~ ${formatDate(getValue(sheet08Row?.['轉換日期迄']))}
                     </div>
                 </div>
             </div>
@@ -16205,16 +16212,35 @@ function renderBasicInfoPutback(cbCode, container) {
                 <div style="font-size:16px; color:#2e7d32; margin-bottom:8px; font-weight:bold;">👤 投資人賣回條款 (Investor Put Option)</div>
                 <div style="font-size:14px; color:#888; margin-bottom:15px;">投資人有權利在賣回的時間依發行鎖定的價格及利率賣回給公司，公司無條件給付利息及本金</div>
                 
-                <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:12px; margin-bottom:12px;">
-                    <div style="text-align:center; padding:12px; background:#e8f5e9; border-radius:8px; border:1px solid #a5d6a7;">
-                        <div style="font-size:13px; color:#888; margin-bottom:6px;">賣回日期1</div>
-                        <div style="font-size:16px; font-weight:bold; color:#2e7d32;">${formatDate(getValue(putbackData?.['賣回日期1']))}</div>
-                    </div>
-                    <div style="text-align:center; padding:12px; background:#e8f5e9; border-radius:8px; border:1px solid #a5d6a7;">
-                        <div style="font-size:13px; color:#888; margin-bottom:6px;">賣回日期2</div>
-                        <div style="font-size:16px; font-weight:bold; color:#2e7d32;">${formatDate(getValue(putbackData?.['賣回日期2']))}</div>
-                    </div>
-                </div>
+                ${(() => {
+                    // 計算各賣回日距今天數
+                    const today = new Date();
+                    const parseDateVal = (val) => {
+                        if (!val || val === '-') return null;
+                        if (typeof val === 'number') return new Date((val - 25569) * 86400 * 1000);
+                        const d = new Date(val);
+                        return isNaN(d.getTime()) ? null : d;
+                    };
+                    const pd1 = parseDateVal(getValue(putbackData?.['賣回日期1']));
+                    const pd2 = parseDateVal(getValue(putbackData?.['賣回日期2']));
+                    const days1 = pd1 ? Math.ceil((pd1 - today) / (24*60*60*1000)) : null;
+                    const days2 = pd2 ? Math.ceil((pd2 - today) / (24*60*60*1000)) : null;
+                    const days1Text = days1 !== null ? (days1 > 0 ? '餘' + days1 + '天' : '已過期') : '';
+                    const days2Text = days2 !== null ? (days2 > 0 ? '餘' + days2 + '天' : '已過期') : '';
+                    
+                    return '<div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:12px; margin-bottom:12px;">' +
+                        '<div style="text-align:center; padding:12px; background:#e8f5e9; border-radius:8px; border:1px solid #a5d6a7;">' +
+                            '<div style="font-size:13px; color:#888; margin-bottom:6px;">賣回日期1</div>' +
+                            '<div style="font-size:16px; font-weight:bold; color:#2e7d32;">' + formatDate(getValue(putbackData?.['賣回日期1'])) + '</div>' +
+                            (days1Text ? '<div style="font-size:12px; color:' + (days1 > 0 ? '#ff9800' : '#999') + '; margin-top:4px;">' + days1Text + '</div>' : '') +
+                        '</div>' +
+                        '<div style="text-align:center; padding:12px; background:#e8f5e9; border-radius:8px; border:1px solid #a5d6a7;">' +
+                            '<div style="font-size:13px; color:#888; margin-bottom:6px;">賣回日期2</div>' +
+                            '<div style="font-size:16px; font-weight:bold; color:#2e7d32;">' + formatDate(getValue(putbackData?.['賣回日期2'])) + '</div>' +
+                            (days2Text ? '<div style="font-size:12px; color:' + (days2 > 0 ? '#ff9800' : '#999') + '; margin-top:4px;">' + days2Text + '</div>' : '') +
+                        '</div>' +
+                    '</div>';
+                })()}
                 
                 <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:12px;">
                     <div style="text-align:center; padding:12px; background:#e8f5e9; border-radius:8px; border:1px solid #a5d6a7;">
@@ -16258,40 +16284,6 @@ function renderBasicInfoPutback(cbCode, container) {
                     return '';
                 })()}
             </div>
-            
-            <!-- 發行人提前償還（從08工作表）-->
-            ${sheet08Row ? `
-            <div style="background:white; padding:18px; border-radius:10px; margin-bottom:18px; border-left:5px solid #9c27b0;">
-                <div style="font-size:15px; color:#555; margin-bottom:12px; font-weight:bold;">🏢 發行人提前償還權</div>
-                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:15px;">
-                    <div style="text-align:center; padding:12px; background:#f3e5f5; border-radius:8px; border:1px solid #e1bee7;">
-                        <div style="font-size:14px; color:#666; margin-bottom:6px;">提前償還條件</div>
-                        <div style="font-size:15px; color:#333; font-weight:600;">${getValue(sheet08Row['提前償還日'])}</div>
-                    </div>
-                    <div style="text-align:center; padding:12px; background:#f3e5f5; border-radius:8px; border:1px solid #e1bee7;">
-                        <div style="font-size:14px; color:#666; margin-bottom:6px;">最近提前償還日</div>
-                        <div style="font-size:16px; font-weight:bold; color:#9c27b0;">${formatDate(getValue(sheet08Row['最近提前償還日']))}</div>
-                    </div>
-                    <div style="text-align:center; padding:12px; background:#f3e5f5; border-radius:8px; border:1px solid #e1bee7;">
-                        <div style="font-size:14px; color:#666; margin-bottom:6px;">最近提前償還價格</div>
-                        <div style="font-size:16px; font-weight:bold; color:#e65100;">${getValue(sheet08Row['最近提前償還價格'])} 元</div>
-                    </div>
-                </div>
-                
-                <!-- 各期提前償還明細 -->
-                ${sheet08Row['提前償還日1'] ? `
-                <div style="margin-top:15px; padding-top:15px; border-top:1px dashed #ddd;">
-                    <div style="font-size:14px; color:#666; margin-bottom:10px;">各期提前償還價格</div>
-                    <div style="display:flex; flex-wrap:wrap; gap:10px;">
-                        ${sheet08Row['提前償還日1'] ? `<span style="background:#f3e5f5; padding:6px 12px; border-radius:6px; font-size:14px;">第1期 ${formatDate(sheet08Row['提前償還日1'])} @ ${sheet08Row['提前償還價格1']}元</span>` : ''}
-                        ${sheet08Row['提前償還日2'] ? `<span style="background:#f3e5f5; padding:6px 12px; border-radius:6px; font-size:14px;">第2期 ${formatDate(sheet08Row['提前償還日2'])} @ ${sheet08Row['提前償還價格2']}元</span>` : ''}
-                        ${sheet08Row['提前償還日3'] ? `<span style="background:#f3e5f5; padding:6px 12px; border-radius:6px; font-size:14px;">第3期 ${formatDate(sheet08Row['提前償還日3'])} @ ${sheet08Row['提前償還價格3']}元</span>` : ''}
-                        ${sheet08Row['提前償還日4'] ? `<span style="background:#f3e5f5; padding:6px 12px; border-radius:6px; font-size:14px;">第4期 ${formatDate(sheet08Row['提前償還日4'])} @ ${sheet08Row['提前償還價格4']}元</span>` : ''}
-                    </div>
-                </div>
-                ` : ''}
-            </div>
-            ` : ''}
             
             <!-- 到期還本與擔保 -->
             <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:15px;">
@@ -16516,75 +16508,7 @@ async function renderBasicInfoTermination(cbCode, container) {
                 ` : ''}
             </div>
             
-            <!-- 賣回權資訊 -->
-            ${hasPutback ? `
-            <div style="background:white; padding:20px; border-radius:12px; margin-bottom:18px; border-left:5px solid #ff9800;">
-                <div style="font-size:16px; color:#555; margin-bottom:12px; font-weight:bold;">📋 投資人賣回權</div>
-                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:15px;">
-                    <div style="text-align:center; padding:12px; background:#fff3e0; border-radius:8px; border:1px solid #ffe0b2;">
-                        <div style="font-size:13px; color:#888; margin-bottom:8px;">賣回權起日</div>
-                        <div style="font-size:16px; font-weight:bold; color:#f57c00;">${formatDate(putbackStartDate)}</div>
-                    </div>
-                    <div style="text-align:center; padding:12px; background:#fff3e0; border-radius:8px; border:1px solid #ffe0b2;">
-                        <div style="font-size:13px; color:#888; margin-bottom:8px;">賣回權迄日</div>
-                        <div style="font-size:16px; font-weight:bold; color:#f57c00;">${formatDate(putbackEndDate)}</div>
-                    </div>
-                    <div style="text-align:center; padding:12px; background:#fff3e0; border-radius:8px; border:1px solid #ffe0b2;">
-                        <div style="font-size:13px; color:#888; margin-bottom:8px;">賣回價格</div>
-                        <div style="font-size:18px; font-weight:bold; color:#e65100;">${putbackPrice !== '-' ? putbackPrice + ' 元' : '-'}</div>
-                    </div>
-                </div>
-            </div>
-            ` : ''}
-            
-            <!-- 轉換期間 -->
-            <div style="background:white; padding:20px; border-radius:12px; margin-bottom:18px; border-left:5px solid #9c27b0;">
-                <div style="font-size:16px; color:#555; margin-bottom:12px; font-weight:bold;">🔄 轉換期間</div>
-                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:15px;">
-                    <div style="text-align:center; padding:12px; background:#f3e5f5; border-radius:8px; border:1px solid #e1bee7;">
-                        <div style="font-size:13px; color:#888; margin-bottom:8px;">轉換起日</div>
-                        <div style="font-size:16px; font-weight:bold; color:#7b1fa2;">${formatDate(convStartDate)}</div>
-                    </div>
-                    <div style="text-align:center; padding:12px; background:#f3e5f5; border-radius:8px; border:1px solid #e1bee7;">
-                        <div style="font-size:13px; color:#888; margin-bottom:8px;">轉換迄日</div>
-                        <div style="font-size:16px; font-weight:bold; color:#7b1fa2;">${formatDate(convEndDate)}</div>
-                    </div>
-                    <div style="text-align:center; padding:12px; background:#f3e5f5; border-radius:8px; border:1px solid #e1bee7;">
-                        <div style="font-size:13px; color:#888; margin-bottom:8px;">轉換價格</div>
-                        <div style="font-size:18px; font-weight:bold; color:#7b1fa2;">${convPrice !== '-' ? convPrice + ' 元' : '-'}</div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- 發行餘額資訊 -->
-            <div style="background:white; padding:20px; border-radius:12px; border-left:5px solid #1976d2;">
-                <div style="font-size:16px; color:#555; margin-bottom:12px; font-weight:bold;">💰 發行餘額狀況</div>
-                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:15px;">
-                    <div style="text-align:center; padding:12px; background:#e3f2fd; border-radius:8px; border:1px solid #bbdefb;">
-                        <div style="font-size:13px; color:#888; margin-bottom:8px;">原始發行額</div>
-                        <div style="font-size:18px; font-weight:bold; color:#1976d2;">${originalAmount !== '-' ? (parseFloat(originalAmount) / 100).toFixed(2) + ' 億' : '-'}</div>
-                        <div style="font-size:12px; color:#888; margin-top:4px;">${originalAmount !== '-' ? formatNumber(parseFloat(originalAmount) * 10) + '張' : '-'}</div>
-                    </div>
-                    <div style="text-align:center; padding:12px; background:#e3f2fd; border-radius:8px; border:1px solid #bbdefb;">
-                        <div style="font-size:13px; color:#888; margin-bottom:8px;">最新流通餘額</div>
-                        <div style="font-size:18px; font-weight:bold; color:#e65100;">${remainingAmount !== '-' ? (parseFloat(remainingAmount) / 100).toFixed(2) + ' 億' : '-'}</div>
-                        <div style="font-size:12px; color:#888; margin-top:4px;">${remainingAmount !== '-' ? formatNumber(parseFloat(remainingAmount) * 10) + '張' : '-'}</div>
-                    </div>
-                    <div style="text-align:center; padding:12px; background:#e8f5e9; border-radius:8px; border:1px solid #a5d6a7;">
-                        <div style="font-size:13px; color:#888; margin-bottom:8px;">已轉換比例/張數</div>
-                        <div style="font-size:18px; font-weight:bold; color:#2e7d32;">${conversionRatio !== '-' ? conversionRatio + '%' : '-'}</div>
-                        <div style="font-size:12px; color:#888; margin-top:4px;">${originalAmount !== '-' && remainingAmount !== '-' ? formatNumber((parseFloat(originalAmount) - parseFloat(remainingAmount)) * 10) + '張' : '-'}</div>
-                    </div>
-                </div>
-                
-                ${conversionRatio !== '-' && parseFloat(conversionRatio) > 80 ? `
-                <div style="margin-top:15px; padding:12px 15px; background:#fff3e0; border-radius:8px; font-size:14px; color:#e65100;">
-                    <strong>📊 提示：</strong>此CB已有 ${conversionRatio}% 被轉換或贖回，流通在外籌碼較少，可能影響流動性。
-                </div>
-                ` : ''}
-            </div>
-            
-            ${!yuantaRow && !sheet08Row ? `
+            ${!kanbanRow && !yuantaRow && !sheet08Row ? `
             <div style="margin-top:18px; padding:15px; background:#fff8e1; border-radius:8px; font-size:14px; color:#f57c00; text-align:center;">
                 ⚠️ 此CB在 kanban 資料中查無紀錄，可能已下市或尚未收錄
             </div>
@@ -17023,7 +16947,10 @@ function renderBasicInfoBalance(cbCode, container) {
             
             <!-- v3.97-zs-ag 優化：發行餘額狀況區塊 -->
             <div style="background:white; padding:20px; border-radius:12px; margin-bottom:18px; border-left:5px solid #1976d2;">
-                <div style="text-align:center; font-weight:bold; color:#1565c0; margin-bottom:18px; font-size:17px;">💰 發行餘額狀況</div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
+                    <div style="font-weight:bold; color:#1565c0; font-size:17px;">💰 發行餘額狀況</div>
+                    ${window.sheet10Date ? `<div style="font-size:12px; color:#888;">📅 資料日期: ${window.sheet10Date}</div>` : ''}
+                </div>
                 
                 <!-- 三個主要數據方塊 -->
                 <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:15px; margin-bottom:15px;">
@@ -17649,11 +17576,18 @@ async function loadAllKanbanData() {
                         const balanceRaw = parseFloat(row[colMap['上月底發行餘額']]) || 0;
                         const balance = balanceRaw / 100000000; // 轉為億元
                         
-                        // v3.97-zs-ag: 提取強制贖回相關欄位 (J-M欄)
-                        const callStartDate = row[colMap['強制贖回起日']] || '';
-                        const callEndDate = row[colMap['強制贖回迄日']] || '';
-                        const callPrice = row[colMap['強制贖回價格']] || '';
-                        const delistDate = row[colMap['終止櫃檯買賣日']] || '';
+                        // v3.97-zs-ag: 提取強制贖回相關欄位 (J-M欄 = 索引9-12)
+                        // 優先用欄位名稱，備用直接用欄位索引
+                        const callStartDate = row[colMap['強制贖回起日']] || row[9] || '';
+                        const callEndDate = row[colMap['強制贖回迄日']] || row[10] || '';
+                        const callPrice = row[colMap['強制贖回價格']] || row[11] || '';
+                        const delistDate = row[colMap['終止櫃檯買賣日']] || row[12] || '';
+                        
+                        // 首次載入時 log 欄位映射，幫助 debug
+                        if (totalRecords === 0 && Object.keys(colMap).length > 0) {
+                            console.log('📊 Kanban 欄位映射:', Object.keys(colMap).join(', '));
+                            console.log('📊 J-M欄(索引9-12):', row[9], row[10], row[11], row[12]);
+                        }
                         
                         // 計算轉換價值和溢價率
                         const convValue = convPrice > 0 ? (stockPrice / convPrice * 100) : 0;

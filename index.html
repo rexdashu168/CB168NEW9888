@@ -16061,7 +16061,6 @@ function renderBasicInfoOverview(cbCode, container) {
                     <tr><td style="color:#666; padding:6px 0;">發行年期</td><td style="font-weight:600; padding:6px 0; text-align:right;">${data['年期'] || '-'}年</td></tr>
                     <tr><td style="color:#666; padding:6px 0;">剩餘年期</td><td style="color:${remainYears !== null && remainYears < 1 ? '#c62828' : '#2e7d32'}; font-weight:bold; padding:6px 0; text-align:right;">${remainYearsDisplay}</td></tr>
                     <tr><td style="color:#666; padding:6px 0;">發行券商</td><td style="font-weight:600; padding:6px 0; text-align:right;">${brokerDisplay}</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">資金用途</td><td style="font-weight:600; padding:6px 0; text-align:right; font-size:13px;">${fundUsage}</td></tr>
                 </table>
             </div>
             
@@ -16104,6 +16103,14 @@ function renderBasicInfoOverview(cbCode, container) {
                 ${kanbanDate ? `<div style="text-align:right; font-size:11px; color:#999; margin-top:8px;">📅 資料日期: ${kanbanDate}</div>` : ''}
             </div>
         </div>
+        
+        <!-- v3.97-zs-ar 新增：資金用途獨立方塊（放在產業資訊前面）-->
+        ${fundUsage && fundUsage !== '-' ? `
+        <div style="margin-top:18px; background:rgba(255,152,0,0.1); padding:15px 18px; border-radius:10px; border-left:4px solid #ff9800;">
+            <div style="font-size:14px; color:#666; margin-bottom:8px;">💵 資金用途</div>
+            <div style="font-size:15px; color:#333; font-weight:600; line-height:1.6;">${fundUsage}</div>
+        </div>
+        ` : ''}
         
         <!-- v3.97-zs-ai 新增：產業資訊方塊 -->
         ${industryPosition ? `
@@ -16261,19 +16268,19 @@ function renderBasicInfoSchedule(cbCode, container) {
                 </div>
             </div>
             
-            <!-- 到期與轉換資訊 - v3.97-zs-aj 統一方塊大小，轉換期間拆成兩個 -->
+            <!-- 到期與轉換資訊 - v3.97-zs-ar 調整順序：CBAS拆解日在到期日後面 -->
             <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:12px; margin-bottom:18px;">
                 <div style="background:white; padding:15px 10px; border-radius:10px; text-align:center; border-left:4px solid #d32f2f;">
                     <div style="font-size:13px; color:#666; margin-bottom:6px;">到期日期</div>
                     <div style="font-size:15px; font-weight:bold; color:#d32f2f;">${formatDate(getValue(scheduleData?.['到期日期'], sheet08Row?.['到期日'], auctionData?.['到期日期'], sheet01Row?.['到期日期']))}</div>
                 </div>
-                <div style="background:white; padding:15px 10px; border-radius:10px; text-align:center; border-left:4px solid #7b1fa2;">
-                    <div style="font-size:13px; color:#666; margin-bottom:6px;">發行年期</div>
-                    <div style="font-size:15px; font-weight:bold; color:#7b1fa2;">${getValue(sheet08Row?.['還本年限'], auctionData?.['年期'], sheet01Row?.['發行年期'])} 年</div>
-                </div>
                 <div style="background:white; padding:15px 10px; border-radius:10px; text-align:center; border-left:4px solid #ff5722;">
                     <div style="font-size:13px; color:#666; margin-bottom:6px;">CBAS拆解日</div>
                     <div style="font-size:15px; font-weight:bold; color:#ff5722;">${formatDate(getValue(scheduleData?.['CBAS拆解日']))}</div>
+                </div>
+                <div style="background:white; padding:15px 10px; border-radius:10px; text-align:center; border-left:4px solid #7b1fa2;">
+                    <div style="font-size:13px; color:#666; margin-bottom:6px;">發行年期</div>
+                    <div style="font-size:15px; font-weight:bold; color:#7b1fa2;">${getValue(sheet08Row?.['還本年限'], auctionData?.['年期'], sheet01Row?.['發行年期'])} 年</div>
                 </div>
                 <div style="background:white; padding:15px 10px; border-radius:10px; text-align:center; border-left:4px solid #00bcd4;">
                     <div style="font-size:13px; color:#666; margin-bottom:6px;">轉換開始</div>
@@ -16749,11 +16756,8 @@ function renderBasicInfoAuction(cbCode, container) {
                         詢圈發行由承銷商向特定法人詢價圈購，<br>
                         不經由公開競標程序。
                     </div>
-                    <div style="margin-top:20px; padding:15px; background:rgba(255,255,255,0.8); border-radius:6px;">
-                        <div style="font-size:12px; color:#666;">💡 提示</div>
-                        <div style="font-size:13px; color:#333; margin-top:5px;">
-                            可切換至「基本資料」或「發行時程」查看其他發行條件
-                        </div>
+                    <div style="margin-top:20px; padding:12px 15px; background:rgba(255,255,255,0.8); border-radius:6px;">
+                        <div style="font-size:13px; color:#666;">💡 提示：可切換至「基本資料」或「發行時程」查看其他發行條件</div>
                     </div>
                 </div>
             </div>`;

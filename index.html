@@ -4,9 +4,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97-zs-ad (終止狀態kanban欄位修正)</title>
+<title>AI智能可轉債競拍系統 v3.97-zs-ae (改用Excel載入kanban資料)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
-<!-- v3.97-zs-f: kanban_data.js 改為延遲載入，不阻塞頁面 -->
+<!-- v3.97-zs-ae: 改用 CB_kanban_YYYY.xlsx 載入時間序列資料，取代 kanban_data.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
 <style>
@@ -1794,7 +1794,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 <div class="container" style="display: none;">
     <div class="header">
         <h1>🤖 AI智能可轉債競拍系統</h1>
-        <span class="version-badge">v3.97-zs-ad 終止狀態kanban修正</span>
+        <span class="version-badge">v3.97-zs-ae Excel載入kanban</span>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -16723,7 +16723,8 @@ async function loadKanbanAndRender(cbCode, tabName, period, container) {
                     <div style="font-size:12px; margin-top:10px; color:#aaa;">
                         可能原因：<br>
                         • 新發行的CB，尚無歷史行情<br>
-                        • 已下市較久的CB，不在kanban資料中
+                        • 已下市較久的CB，不在 CB_kanban Excel 資料中<br>
+                        • data/kanban/ 資料夾未放置 CB_kanban_YYYY.xlsx 檔案
                     </div>
                     <div style="margin-top:15px;">
                         <button onclick="showPriceTrendTab('cbas')" 
@@ -16762,89 +16763,135 @@ async function loadKanbanAndRender(cbCode, tabName, period, container) {
 
 /**
  * 載入所有kanban資料
- * v3.97-zs-f: 延遲載入 - 只在需要時才載入 14MB 的資料檔
+ * v3.97-zs-ae: 改用 CB_kanban_YYYY.xlsx 讀取，取代 kanban_data.js
  */
 async function loadAllKanbanData() {
     if (window.kanbanData.loaded || window.kanbanData.loading) return;
     window.kanbanData.loading = true;
     
-    console.log('📦 載入 kanban 資料...');
+    console.log('📦 載入 kanban Excel 資料...');
     const startTime = Date.now();
     
     // 顯示載入進度
     const container = document.getElementById('priceTrendContent');
-    if (container) {
-        container.innerHTML = `<div style="text-align:center; padding:40px; color:#666;">
-            <div style="font-size:24px; margin-bottom:10px;">⏳</div>
-            <div>載入歷史資料中...</div>
-            <div style="margin-top:10px; font-size:12px; color:#999;">首次載入約需 3-5 秒</div>
-        </div>`;
-    }
+    const updateProgress = (msg) => {
+        if (container) {
+            container.innerHTML = `<div style="text-align:center; padding:40px; color:#666;">
+                <div style="font-size:24px; margin-bottom:10px;">⏳</div>
+                <div>${msg}</div>
+                <div style="margin-top:10px; font-size:12px; color:#999;">首次載入約需 10-20 秒</div>
+            </div>`;
+        }
+    };
+    
+    updateProgress('載入歷史資料中...');
     
     try {
-        // 如果尚未載入，動態載入 kanban_data.js
-        if (!window.KANBAN_DATA) {
-            console.log('📥 動態載入 kanban_data.js...');
-            await new Promise((resolve, reject) => {
-                const script = document.createElement('script');
-                script.src = 'data/kanban_data.js';
-                script.onload = () => {
-                    console.log('✅ kanban_data.js 載入完成');
-                    resolve();
-                };
-                script.onerror = () => reject(new Error('無法載入 kanban_data.js'));
-                document.head.appendChild(script);
-            });
-        }
-        
-        // 檢查資料是否存在
-        if (!window.KANBAN_DATA) {
-            console.warn('⚠️ window.KANBAN_DATA 未載入');
-            window.kanbanData.loading = false;
-            return;
-        }
-        
-        // 轉換格式：從壓縮陣列格式轉為物件格式
-        // 壓縮格式: [日期, 股價*10, CB價*10, 轉換價*10, 餘額千萬]
         const allData = {};
         const allDates = new Set();
         let totalRecords = 0;
+        let loadedFiles = 0;
         
-        for (const cbCode in window.KANBAN_DATA) {
-            const rawData = window.KANBAN_DATA[cbCode];
-            if (!rawData || !Array.isArray(rawData)) continue;
+        // 定義要載入的年份 (從新到舊)
+        const years = [2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017];
+        const totalFiles = years.length;
+        
+        for (const year of years) {
+            const filename = `data/kanban/CB_kanban_${year}.xlsx`;
+            updateProgress(`載入 ${year} 年資料... (${loadedFiles}/${totalFiles})`);
             
-            allData[cbCode] = rawData.map(arr => {
-                const dateNum = arr[0];
-                const dateStr = String(dateNum);
-                const year = dateStr.substring(0, 4);
-                const month = dateStr.substring(4, 6);
-                const day = dateStr.substring(6, 8);
-                const dateFormatted = `${year}/${month}/${day}`;
+            try {
+                const response = await fetch(filename);
+                if (!response.ok) {
+                    console.warn(`⚠️ 找不到 ${filename}，跳過`);
+                    loadedFiles++;
+                    continue;
+                }
                 
-                allDates.add(dateFormatted);
+                const arrayBuffer = await response.arrayBuffer();
+                const workbook = XLSX.read(arrayBuffer, { type: 'array' });
                 
-                const stockPrice = arr[1] / 10;
-                const cbPrice = arr[2] / 10;
-                const convPrice = arr[3] / 10;
-                const balance = arr[4] / 10; // 億元
+                // 過濾出有效的日期工作表 (YYYYMMDD 格式)
+                const validSheets = workbook.SheetNames.filter(name => /^\d{8}$/.test(name));
+                console.log(`📂 ${year}: ${validSheets.length} 個交易日`);
                 
-                const convValue = convPrice > 0 ? (stockPrice / convPrice * 100) : 0;
-                const premium = convValue > 0 && cbPrice > 0 ? ((cbPrice - convValue) / convValue * 100) : 0;
+                for (const sheetName of validSheets) {
+                    const sheet = workbook.Sheets[sheetName];
+                    const rawData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+                    
+                    // 找到 HEADER 列確定欄位位置
+                    let headerRow = null;
+                    let headerIdx = -1;
+                    for (let i = 0; i < Math.min(10, rawData.length); i++) {
+                        if (rawData[i] && rawData[i][0] === 'HEADER') {
+                            headerRow = rawData[i];
+                            headerIdx = i;
+                            break;
+                        }
+                    }
+                    
+                    if (!headerRow) continue;
+                    
+                    // 建立欄位索引映射
+                    const colMap = {};
+                    for (let i = 1; i < headerRow.length; i++) {
+                        const colName = headerRow[i];
+                        if (colName) colMap[colName] = i;
+                    }
+                    
+                    // 日期格式轉換 (YYYYMMDD -> YYYY/MM/DD)
+                    const dateStr = `${sheetName.substring(0,4)}/${sheetName.substring(4,6)}/${sheetName.substring(6,8)}`;
+                    const dateNum = parseInt(sheetName);
+                    allDates.add(dateStr);
+                    
+                    // 處理 BODY 資料列
+                    for (let i = headerIdx + 1; i < rawData.length; i++) {
+                        const row = rawData[i];
+                        if (!row || row[0] !== 'BODY') continue;
+                        
+                        const cbCode = String(row[colMap['債券代碼']] || '').trim();
+                        if (!cbCode) continue;
+                        
+                        // 提取數值
+                        const stockPrice = parseFloat(row[colMap['轉換標的股票價格']]) || 0;
+                        const cbPrice = parseFloat(row[colMap['轉債參考價格']]) || 0;
+                        const convPrice = parseFloat(row[colMap['轉換價格']]) || 0;
+                        const balanceRaw = parseFloat(row[colMap['上月底發行餘額']]) || 0;
+                        const balance = balanceRaw / 100000000; // 轉為億元
+                        
+                        // 計算轉換價值和溢價率
+                        const convValue = convPrice > 0 ? (stockPrice / convPrice * 100) : 0;
+                        const premium = convValue > 0 && cbPrice > 0 ? ((cbPrice - convValue) / convValue * 100) : 0;
+                        
+                        // 加入時間序列
+                        if (!allData[cbCode]) allData[cbCode] = [];
+                        allData[cbCode].push({
+                            date: dateStr,
+                            dateNum: dateNum,
+                            stockPrice,
+                            cbPrice,
+                            convPrice,
+                            convValue,
+                            premium,
+                            balance
+                        });
+                        
+                        totalRecords++;
+                    }
+                }
                 
-                return {
-                    date: dateFormatted,
-                    dateNum: dateNum,
-                    stockPrice,
-                    cbPrice,
-                    convPrice,
-                    convValue,
-                    premium,
-                    balance
-                };
-            });
-            
-            totalRecords += allData[cbCode].length;
+                loadedFiles++;
+                console.log(`✅ ${year} 載入完成`);
+                
+            } catch (err) {
+                console.warn(`⚠️ 載入 ${filename} 失敗:`, err.message);
+                loadedFiles++;
+            }
+        }
+        
+        // 對每檔 CB 的時間序列按日期排序
+        for (const cbCode in allData) {
+            allData[cbCode].sort((a, b) => a.dateNum - b.dateNum);
         }
         
         window.kanbanData.data = allData;
@@ -16852,14 +16899,15 @@ async function loadAllKanbanData() {
         window.kanbanData.loaded = true;
         
         const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
-        console.log(`✅ Kanban 載入完成: ${Object.keys(allData).length} 檔 CB, ${totalRecords.toLocaleString()} 筆, ${elapsed}秒`);
+        console.log(`✅ Kanban Excel 載入完成: ${Object.keys(allData).length} 檔 CB, ${totalRecords.toLocaleString()} 筆, ${elapsed}秒`);
         
     } catch (err) {
-        console.error('❌ 載入 kanban 資料失敗:', err);
+        console.error('❌ 載入 kanban Excel 資料失敗:', err);
         if (container) {
             container.innerHTML = `<div style="text-align:center; padding:40px; color:#e74c3c;">
                 <div style="font-size:24px; margin-bottom:10px;">❌</div>
-                <div>載入失敗，請重新整理頁面</div>
+                <div>載入失敗: ${err.message}</div>
+                <div style="margin-top:10px; font-size:12px;">請確認 data/kanban/ 資料夾中有 CB_kanban_YYYY.xlsx 檔案</div>
             </div>`;
         }
     } finally {

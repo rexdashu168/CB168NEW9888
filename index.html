@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97-zs-ae (改用Excel載入kanban資料)</title>
+<title>AI智能可轉債競拍系統 v3.97-zs-af (資料完整度顯示)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <!-- v3.97-zs-ae: 改用 CB_kanban_YYYY.xlsx 載入時間序列資料，取代 kanban_data.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -1794,7 +1794,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 <div class="container" style="display: none;">
     <div class="header">
         <h1>🤖 AI智能可轉債競拍系統</h1>
-        <span class="version-badge">v3.97-zs-ae Excel載入kanban</span>
+        <span class="version-badge">v3.97-zs-af 資料完整度顯示</span>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -2572,8 +2572,27 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
             
             <!-- CB選擇器 -->
             <div style="margin-bottom:15px; padding:15px; background:#f5f5f5; border-radius:8px;">
+                <!-- 智能搜尋區域 -->
                 <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">
-                    <label style="font-weight:bold; color:#333;">🔍 選擇可轉債：</label>
+                    <label style="font-weight:bold; color:#333;">🔍 快速搜尋：</label>
+                    <div style="flex:1; min-width:250px; position:relative;">
+                        <input type="text" id="basicInfoSearch" 
+                               placeholder="輸入代號(如2383)或名稱(如台光電)..." 
+                               oninput="smartSearchBasicInfo(this.value)"
+                               onkeydown="handleBasicInfoSearchKey(event)"
+                               autocomplete="off"
+                               style="width:100%; padding:10px 12px; border:2px solid #ff9800; border-radius:6px; font-size:14px; font-weight:600;">
+                        <!-- 搜尋結果下拉框 -->
+                        <div id="basicInfoSearchResults" style="display:none; position:absolute; top:100%; left:0; right:0; max-height:300px; overflow-y:auto; background:white; border:2px solid #ff9800; border-top:none; border-radius:0 0 6px 6px; z-index:1000; box-shadow:0 4px 12px rgba(0,0,0,0.15);"></div>
+                    </div>
+                    <button type="button" onclick="clearBasicInfoSearch()" style="padding:10px 15px; background:#9e9e9e; color:white; border:none; border-radius:6px; cursor:pointer; font-size:13px;">
+                        ✕ 清除
+                    </button>
+                </div>
+                
+                <!-- 下拉選單（保留原有功能）-->
+                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">
+                    <label style="font-weight:bold; color:#666; font-size:13px;">📋 或從清單選擇：</label>
                     <select id="basicInfoCBSelect" onchange="loadBasicInfo(this.value)" style="flex:1; min-width:200px; padding:8px 12px; border:2px solid #1976d2; border-radius:6px; font-size:14px;">
                         <option value="">-- 請選擇或輸入CB代號 --</option>
                     </select>
@@ -2617,6 +2636,15 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
                 <div style="margin-top:8px; font-size:12px; color:#666; display:flex; justify-content:space-between; align-items:center;">
                     <span id="basicInfoStatus">提示：可從左側競拍清單點選標的，或直接從下拉選單選擇</span>
                     <span id="cbListCount" style="font-size:11px; color:#999;"></span>
+                </div>
+                
+                <!-- 符號說明 -->
+                <div style="margin-top:10px; padding:8px 12px; background:#e3f2fd; border-radius:6px; display:flex; gap:20px; flex-wrap:wrap; align-items:center;">
+                    <span style="font-size:12px; font-weight:bold; color:#1976d2;">📖 符號說明：</span>
+                    <span style="font-size:12px; color:#333;">🟢 掛牌中</span>
+                    <span style="font-size:12px; color:#333;">⚫ 已下市</span>
+                    <span style="font-size:12px; color:#333;">🎯 競拍發行</span>
+                    <span style="font-size:12px; color:#333;">📋 詢圈發行</span>
                 </div>
             </div>
             
@@ -14707,6 +14735,19 @@ function initBasicInfoModule() {
     console.log('初始化基本資料查詢模組...');
     buildCBDatabase();
     populateBasicInfoCBList();
+    
+    // v3.97-zs-ae: 點擊搜尋區域外部時關閉搜尋結果
+    document.addEventListener('click', function(e) {
+        const searchInput = document.getElementById('basicInfoSearch');
+        const resultsContainer = document.getElementById('basicInfoSearchResults');
+        
+        if (searchInput && resultsContainer) {
+            // 檢查點擊是否在搜尋框或結果框內
+            if (!searchInput.contains(e.target) && !resultsContainer.contains(e.target)) {
+                resultsContainer.style.display = 'none';
+            }
+        }
+    });
 }
 
 /**
@@ -14828,6 +14869,183 @@ function buildCBDatabase() {
     db.allCB = Array.from(cbMap.values());
     
     console.log(`CB資料庫建立完成: 總計 ${db.allCB.length} 檔, 競拍 ${db.auctionCodes.size} 檔, 掛牌中 ${db.listedCodes.size} 檔`);
+}
+
+/**
+ * v3.97-zs-ae 新增：智能搜尋基本資料
+ * 支援代號搜尋（如 2383 顯示所有台光電CB）和名稱搜尋（如「台光電」）
+ */
+function smartSearchBasicInfo(keyword) {
+    const resultsContainer = document.getElementById('basicInfoSearchResults');
+    if (!resultsContainer) return;
+    
+    // 清空或隱藏結果
+    if (!keyword || keyword.trim() === '') {
+        resultsContainer.style.display = 'none';
+        resultsContainer.innerHTML = '';
+        return;
+    }
+    
+    const searchTerm = keyword.trim();
+    const db = window.cbDatabase;
+    
+    if (!db || !db.allCB || db.allCB.length === 0) {
+        resultsContainer.innerHTML = '<div style="padding:15px; color:#999; text-align:center;">資料庫尚未載入</div>';
+        resultsContainer.style.display = 'block';
+        return;
+    }
+    
+    // 智能搜尋邏輯
+    let matches = [];
+    const isNumeric = /^\d+$/.test(searchTerm);
+    
+    if (isNumeric) {
+        // 數字搜尋模式
+        if (searchTerm.length <= 4) {
+            // 短代號（如 2383）：搜尋母股代號開頭的所有 CB
+            // CB 代號格式：母股代號(4碼) + 期次(1碼)，如 23837 = 台光電七
+            matches = db.allCB.filter(cb => {
+                const cbCode = String(cb.code);
+                // 檢查 CB 代號是否以此數字開頭
+                return cbCode.startsWith(searchTerm);
+            });
+        } else {
+            // 長代號（如 23837）：精確或前綴匹配
+            matches = db.allCB.filter(cb => {
+                const cbCode = String(cb.code);
+                return cbCode === searchTerm || cbCode.startsWith(searchTerm);
+            });
+        }
+    } else {
+        // 文字搜尋模式（名稱搜尋）
+        const searchLower = searchTerm.toLowerCase();
+        matches = db.allCB.filter(cb => {
+            const name = (cb.name || '').toLowerCase();
+            return name.includes(searchLower);
+        });
+    }
+    
+    // 排序結果（依代號倒序，最新的在前）
+    matches.sort((a, b) => String(b.code).localeCompare(String(a.code)));
+    
+    // 顯示結果
+    if (matches.length === 0) {
+        resultsContainer.innerHTML = `
+            <div style="padding:15px; color:#999; text-align:center;">
+                找不到符合「${searchTerm}」的可轉債
+            </div>`;
+        resultsContainer.style.display = 'block';
+        return;
+    }
+    
+    // 限制顯示數量
+    const maxDisplay = 20;
+    const displayMatches = matches.slice(0, maxDisplay);
+    
+    let html = '';
+    displayMatches.forEach((cb, idx) => {
+        const statusIcon = cb.isListed ? '🟢' : '⚫';
+        const methodIcon = cb.isAuction ? '🎯' : '📋';
+        const bgColor = idx % 2 === 0 ? '#fff' : '#f9f9f9';
+        
+        html += `
+            <div onclick="selectBasicInfoCB('${cb.code}')" 
+                 style="padding:10px 15px; cursor:pointer; border-bottom:1px solid #eee; background:${bgColor}; transition:background 0.2s;"
+                 onmouseover="this.style.background='#fff3e0'" 
+                 onmouseout="this.style.background='${bgColor}'">
+                <div style="font-weight:bold; color:#333;">
+                    ${statusIcon}${methodIcon} ${cb.code} ${cb.name}
+                </div>
+                <div style="font-size:11px; color:#888; margin-top:2px;">
+                    ${cb.isAuction ? '競拍發行' : '詢圈發行'} │ ${cb.isListed ? '掛牌中' : '已下市'}
+                </div>
+            </div>`;
+    });
+    
+    // 如果結果超過限制，顯示提示
+    if (matches.length > maxDisplay) {
+        html += `
+            <div style="padding:10px 15px; color:#666; background:#f5f5f5; text-align:center; font-size:12px;">
+                還有 ${matches.length - maxDisplay} 筆結果，請輸入更精確的關鍵字
+            </div>`;
+    }
+    
+    // 顯示匹配數量提示
+    html = `
+        <div style="padding:8px 15px; background:#ff9800; color:white; font-size:12px; font-weight:bold;">
+            找到 ${matches.length} 檔符合的可轉債
+        </div>` + html;
+    
+    resultsContainer.innerHTML = html;
+    resultsContainer.style.display = 'block';
+}
+
+/**
+ * 選擇搜尋結果中的CB
+ */
+function selectBasicInfoCB(cbCode) {
+    // 隱藏搜尋結果
+    const resultsContainer = document.getElementById('basicInfoSearchResults');
+    if (resultsContainer) {
+        resultsContainer.style.display = 'none';
+    }
+    
+    // 更新搜尋框顯示
+    const searchInput = document.getElementById('basicInfoSearch');
+    if (searchInput) {
+        const db = window.cbDatabase;
+        const cb = db.allCB.find(c => c.code === cbCode);
+        if (cb) {
+            searchInput.value = `${cbCode} ${cb.name}`;
+        } else {
+            searchInput.value = cbCode;
+        }
+    }
+    
+    // 同步更新下拉選單
+    const select = document.getElementById('basicInfoCBSelect');
+    if (select) {
+        select.value = cbCode;
+    }
+    
+    // 載入基本資料
+    loadBasicInfo(cbCode);
+}
+
+/**
+ * 處理搜尋框鍵盤事件
+ */
+function handleBasicInfoSearchKey(event) {
+    const resultsContainer = document.getElementById('basicInfoSearchResults');
+    
+    if (event.key === 'Escape') {
+        // ESC 鍵關閉搜尋結果
+        if (resultsContainer) {
+            resultsContainer.style.display = 'none';
+        }
+    } else if (event.key === 'Enter') {
+        // Enter 鍵選擇第一筆結果
+        const firstResult = resultsContainer?.querySelector('div[onclick]');
+        if (firstResult) {
+            firstResult.click();
+        }
+    }
+}
+
+/**
+ * 清除搜尋
+ */
+function clearBasicInfoSearch() {
+    const searchInput = document.getElementById('basicInfoSearch');
+    const resultsContainer = document.getElementById('basicInfoSearchResults');
+    
+    if (searchInput) {
+        searchInput.value = '';
+    }
+    if (resultsContainer) {
+        resultsContainer.style.display = 'none';
+        resultsContainer.innerHTML = '';
+    }
 }
 
 /**
@@ -15043,6 +15261,79 @@ function showBasicInfoTab(tabName, event) {
         console.error('[showBasicInfoTab] 錯誤:', e);
         content.innerHTML = `<div style="color:#c62828; padding:20px;">❌ 載入錯誤: ${e.message}</div>`;
     }
+}
+
+/**
+ * v3.97-zs-af 新增：計算資料完整度
+ * @param {Object} data - 資料物件
+ * @param {Array} requiredFields - 必要欄位列表
+ * @returns {Object} { percentage: number, filled: number, total: number }
+ */
+function calculateDataCompleteness(data, requiredFields) {
+    if (!data || !requiredFields || requiredFields.length === 0) {
+        return { percentage: 0, filled: 0, total: requiredFields?.length || 0 };
+    }
+    
+    let filled = 0;
+    for (const field of requiredFields) {
+        const value = data[field];
+        if (value !== null && value !== undefined && value !== '' && value !== '-') {
+            filled++;
+        }
+    }
+    
+    const percentage = Math.round((filled / requiredFields.length) * 100);
+    return { percentage, filled, total: requiredFields.length };
+}
+
+/**
+ * v3.97-zs-af 新增：生成資料完整度標籤HTML
+ * @param {number} percentage - 完整度百分比
+ * @returns {string} HTML字串
+ */
+function getCompletenessHTML(percentage) {
+    let bgColor, textColor, icon;
+    
+    if (percentage >= 80) {
+        bgColor = '#e8f5e9';
+        textColor = '#2e7d32';
+        icon = '✅';
+    } else if (percentage >= 50) {
+        bgColor = '#fff3e0';
+        textColor = '#e65100';
+        icon = '⚠️';
+    } else {
+        bgColor = '#ffebee';
+        textColor = '#c62828';
+        icon = '❌';
+    }
+    
+    return `<span style="display:inline-flex; align-items:center; gap:4px; padding:3px 10px; background:${bgColor}; color:${textColor}; border-radius:12px; font-size:12px; font-weight:bold; margin-left:10px;">
+        ${icon} ${percentage}%
+    </span>`;
+}
+
+/**
+ * v3.97-zs-af 新增：生成標題區域HTML（含完整度）
+ * @param {string} title - 標題文字
+ * @param {string} icon - 圖示emoji
+ * @param {string} color - 主色
+ * @param {number} percentage - 完整度百分比
+ * @param {string} statusTag - 狀態標籤（掛牌中/已下市）
+ * @returns {string} HTML字串
+ */
+function renderTabHeader(title, icon, color, percentage, statusTag = '') {
+    const completenessHTML = percentage !== null ? getCompletenessHTML(percentage) : '';
+    const statusHTML = statusTag ? `<span style="font-size:12px; padding:4px 10px; border-radius:12px; background:${statusTag.includes('掛牌中') ? '#e8f5e9' : '#f5f5f5'}; color:${statusTag.includes('掛牌中') ? '#2e7d32' : '#666'};">${statusTag}</span>` : '';
+    
+    return `
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+                <span style="font-weight:bold; color:${color}; font-size:16px;">${icon} ${title}</span>
+                ${completenessHTML}
+            </div>
+            ${statusHTML}
+        </div>`;
 }
 
 /**
@@ -15308,8 +15599,13 @@ function renderBasicInfoOverview(cbCode, container) {
     
     document.getElementById('basicInfoStatus').innerHTML = `✅ 已載入 ${cbCode} │ ${methodLabel} │ ${statusLabel} │ <span style="font-size:11px; color:#666;">${sourceLabel}</span>`;
     
+    // v3.97-zs-af: 計算資料完整度
+    const overviewFields = ['CB代號', '名稱', '股票代號', '產業分類', '信用評等', '擔保', '發行規模', '底標價', '年期', '發行券商', '轉換價', '掛牌日期', '到期日期'];
+    const completeness = calculateDataCompleteness(data, overviewFields);
+    
     // 建立資訊卡片 - v3.97-zs-aa 字體統一優化
     const html = `
+        ${renderTabHeader('基本資料總覽', '📋', '#1976d2', completeness.percentage, statusLabel)}
         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:18px;">
             <!-- 基本資訊卡 -->
             <div style="background:#e3f2fd; padding:20px; border-radius:12px; border-left:5px solid #1976d2;">
@@ -15447,9 +15743,25 @@ function renderBasicInfoSchedule(cbCode, container) {
         return '-';
     };
     
+    // v3.97-zs-af: 計算資料完整度
+    const scheduleFields = ['董事會公告', '送件日期', '生效日期', '詢圈競拍日期', '代收價款公告', '掛牌日期', '到期日期'];
+    const mergedData = {
+        '董事會公告': getValue(scheduleData?.['董事會公告']),
+        '送件日期': getValue(scheduleData?.['送件日期']),
+        '生效日期': getValue(scheduleData?.['生效日期']),
+        '詢圈競拍日期': getValue(scheduleData?.['詢圈競拍日期'], auctionData?.['截標日']),
+        '代收價款公告': getValue(scheduleData?.['代收價款公告']),
+        '掛牌日期': getValue(scheduleData?.['掛牌日期'], sheet08Row?.['掛牌日期'], auctionData?.['掛牌日期'], sheet01Row?.['掛牌日期']),
+        '到期日期': getValue(scheduleData?.['到期日期'], sheet08Row?.['到期日'], auctionData?.['到期日期'], sheet01Row?.['到期日期'])
+    };
+    const completeness = calculateDataCompleteness(mergedData, scheduleFields);
+    const isListed = window.cbDatabase?.listedCodes?.has(searchCode);
+    const statusLabel = isListed ? '🟢 掛牌中' : '⚫ 已下市';
+    
     const html = `
         <div style="background:linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); padding:25px; border-radius:12px;">
-            <div style="font-weight:bold; color:#1565c0; margin-bottom:18px; font-size:18px;">📅 ${cbCode} ${getValue(scheduleData?.['名稱'], sheet08Row?.['名稱'], auctionData?.['名稱'])} 發行時程</div>
+            ${renderTabHeader('發行時程', '📅', '#1565c0', completeness.percentage, statusLabel)}
+            <div style="font-weight:bold; color:#1565c0; margin-bottom:18px; font-size:16px;">${cbCode} ${getValue(scheduleData?.['名稱'], sheet08Row?.['名稱'], auctionData?.['名稱'])}</div>
             
             <!-- 重要日期時間軸 -->
             <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:12px; margin-bottom:18px;">
@@ -15570,9 +15882,24 @@ function renderBasicInfoPutback(cbCode, container) {
     const guaranteeColor = isGuaranteed ? '#2e7d32' : '#757575';
     const guaranteeIcon = isGuaranteed ? '🛡️' : '📝';
     
+    // v3.97-zs-af: 計算資料完整度
+    const putbackFields = ['投資人提前賣回', '賣回日期1', '賣回日期2', '到期價格', '到期殖利率', '擔保'];
+    const mergedPutback = {
+        '投資人提前賣回': getValue(putbackData?.['投資人提前賣回']),
+        '賣回日期1': getValue(putbackData?.['賣回日期1']),
+        '賣回日期2': getValue(putbackData?.['賣回日期2']),
+        '到期價格': getValue(sheet08Row?.['到期價格'], sheet01Row?.['到期還本價格']),
+        '到期殖利率': getValue(sheet08Row?.['到期殖利率']),
+        '擔保': guaranteeRaw
+    };
+    const completeness = calculateDataCompleteness(mergedPutback, putbackFields);
+    const isListed = window.cbDatabase?.listedCodes?.has(searchCode);
+    const statusLabel = isListed ? '🟢 掛牌中' : '⚫ 已下市';
+    
     const html = `
         <div style="background:linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); padding:25px; border-radius:12px;">
-            <div style="font-weight:bold; color:#e65100; margin-bottom:18px; font-size:18px;">💰 ${cbCode} ${getValue(putbackData?.['名稱'], sheet08Row?.['名稱'])} 賣回條件</div>
+            ${renderTabHeader('賣回條件', '💰', '#e65100', completeness.percentage, statusLabel)}
+            <div style="font-weight:bold; color:#e65100; margin-bottom:18px; font-size:16px;">${cbCode} ${getValue(putbackData?.['名稱'], sheet08Row?.['名稱'])}</div>
             
             <!-- 投資人賣回權 -->
             <div style="background:white; padding:18px; border-radius:10px; margin-bottom:18px; border-left:5px solid #ff9800;">
@@ -15779,9 +16106,24 @@ async function renderBasicInfoTermination(cbCode, container) {
         terminationIcon = '⚠️';
     }
     
+    // v3.97-zs-af: 計算資料完整度
+    const terminationFields = ['強制贖回起日', '強制贖回迄日', '強制贖回價格', '轉換起日', '轉換迄日', '原始發行額', '最新餘額'];
+    const mergedTermination = {
+        '強制贖回起日': callStartDate,
+        '強制贖回迄日': callEndDate,
+        '強制贖回價格': callPrice,
+        '轉換起日': convStartDate,
+        '轉換迄日': convEndDate,
+        '原始發行額': originalAmount,
+        '最新餘額': remainingAmount
+    };
+    const completeness = calculateDataCompleteness(mergedTermination, terminationFields);
+    const statusLabel = isDelisted ? '⚫ 已下市' : '🟢 掛牌中';
+    
     const html = `
         <div style="background:linear-gradient(135deg, #eceff1 0%, #cfd8dc 100%); padding:25px; border-radius:12px;">
-            <div style="font-weight:bold; color:#455a64; margin-bottom:18px; font-size:18px;">📌 ${cbCode} ${cbName} 終止狀態</div>
+            ${renderTabHeader('終止狀態', '📌', '#455a64', completeness.percentage, statusLabel)}
+            <div style="font-weight:bold; color:#455a64; margin-bottom:18px; font-size:16px;">${cbCode} ${cbName}</div>
             
             <!-- 當前狀態 -->
             <div style="background:white; padding:20px; border-radius:12px; margin-bottom:18px; border-left:5px solid ${terminationColor};">
@@ -15922,28 +16264,39 @@ function renderBasicInfoAuction(cbCode, container) {
     
     if (!data || !isAuction) {
         // 詢圈發行 - 顯示說明
+        const isListed = window.cbDatabase?.listedCodes?.has(searchCode);
+        const statusLabel = isListed ? '🟢 掛牌中' : '⚫ 已下市';
         container.innerHTML = `
-            <div style="background:linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); padding:25px; border-radius:8px; text-align:center;">
-                <div style="font-size:48px; margin-bottom:15px;">📋</div>
-                <div style="font-weight:bold; color:#1976d2; font-size:18px; margin-bottom:10px;">本檔為詢圈發行</div>
-                <div style="color:#666; font-size:14px; line-height:1.8;">
-                    ${cbCode} 採用詢圈方式發行，無公開競拍資料。<br>
-                    詢圈發行由承銷商向特定法人詢價圈購，<br>
-                    不經由公開競標程序。
-                </div>
-                <div style="margin-top:20px; padding:15px; background:rgba(255,255,255,0.8); border-radius:6px;">
-                    <div style="font-size:12px; color:#666;">💡 提示</div>
-                    <div style="font-size:13px; color:#333; margin-top:5px;">
-                        可切換至「基本資料」或「發行時程」查看其他發行條件
+            <div style="background:linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); padding:25px; border-radius:8px;">
+                ${renderTabHeader('競拍資料', '🎯', '#1976d2', 0, statusLabel)}
+                <div style="text-align:center; margin-top:20px;">
+                    <div style="font-size:48px; margin-bottom:15px;">📋</div>
+                    <div style="font-weight:bold; color:#1976d2; font-size:18px; margin-bottom:10px;">本檔為詢圈發行</div>
+                    <div style="color:#666; font-size:14px; line-height:1.8;">
+                        ${cbCode} 採用詢圈方式發行，無公開競拍資料。<br>
+                        詢圈發行由承銷商向特定法人詢價圈購，<br>
+                        不經由公開競標程序。
+                    </div>
+                    <div style="margin-top:20px; padding:15px; background:rgba(255,255,255,0.8); border-radius:6px;">
+                        <div style="font-size:12px; color:#666;">💡 提示</div>
+                        <div style="font-size:13px; color:#333; margin-top:5px;">
+                            可切換至「基本資料」或「發行時程」查看其他發行條件
+                        </div>
                     </div>
                 </div>
             </div>`;
         return;
     }
     
+    // v3.97-zs-af: 計算資料完整度
+    const auctionFields = ['開標日期', '截標日', '競拍張數', '底標價', '截標收盤', '轉換價', '理論價', '最低得標', '平均得標', '投標倍數'];
+    const completeness = calculateDataCompleteness(data, auctionFields);
+    const isListed = window.cbDatabase?.listedCodes?.has(searchCode);
+    const statusLabel = isListed ? '🟢 掛牌中' : '⚫ 已下市';
+    
     const html = `
         <div style="background:linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); padding:25px; border-radius:12px;">
-            <div style="font-weight:bold; color:#2e7d32; margin-bottom:18px; font-size:18px;">🎯 ${cbCode} 競拍資料</div>
+            ${renderTabHeader('競拍資料', '🎯', '#2e7d32', completeness.percentage, statusLabel)}
             <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:15px;">
                 <div style="background:white; padding:18px 12px; border-radius:10px; text-align:center;">
                     <div style="font-size:13px; color:#666; margin-bottom:8px;">開標日期</div>
@@ -16040,12 +16393,13 @@ function renderBasicInfoQuote(cbCode, container) {
         const premiumColor = premium >= 0 ? '#d32f2f' : '#2e7d32';
         const premiumSign = premium >= 0 ? '+' : '';
         
+        // v3.97-zs-af: 計算資料完整度
+        const quoteFields = ['CB收盤價', '股價', '轉換價格', '轉換價值', '溢(折)價%', '成交量', 'YTM', 'YTP', 'TCRI'];
+        const completeness = calculateDataCompleteness(quoteData, quoteFields);
+        
         const html = `
             <div style="background:linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); padding:25px; border-radius:12px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                    <div style="font-weight:bold; color:#2e7d32; font-size:18px;">📊 ${cbCode} ${quoteData['名稱  '] || ''} 最新行情</div>
-                    <div style="font-size:13px; color:#666; background:white; padding:6px 12px; border-radius:6px;">🟢 掛牌中</div>
-                </div>
+                ${renderTabHeader('最新行情', '📊', '#2e7d32', completeness.percentage, '🟢 掛牌中')}
                 
                 <!-- 主要報價 - v3.97-zs-z 字體優化 -->
                 <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:12px; margin-bottom:18px;">
@@ -16134,12 +16488,14 @@ function renderBasicInfoQuote(cbCode, container) {
         const theoPrice = parseFloat(auctionData['理論價']) || 0;
         const convValue = convPrice > 0 ? (stockPrice / convPrice * 100) : 0;
         
+        // v3.97-zs-af: 計算資料完整度
+        const auctionQuoteFields = ['截標收盤', '轉換價', '理論價', '最低得標', '平均得標'];
+        const completeness = calculateDataCompleteness(auctionData, auctionQuoteFields);
+        const statusLabel = isListed ? '🟢 掛牌中(無即時報價)' : '⚫ 已下市';
+        
         const html = `
             <div style="background:linear-gradient(135deg, #fce4ec 0%, #f8bbd9 100%); padding:25px; border-radius:12px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
-                    <div style="font-weight:bold; color:#c2185b; font-size:18px;">📊 ${cbCode} 截標日行情</div>
-                    <div style="font-size:13px; color:#666; background:white; padding:6px 12px; border-radius:6px;">⚫ ${isListed ? '掛牌中(無即時報價)' : '已下市'}</div>
-                </div>
+                ${renderTabHeader('截標日行情', '📊', '#c2185b', completeness.percentage, statusLabel)}
                 <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:15px;">
                     <div style="background:white; padding:18px 12px; border-radius:10px; text-align:center;">
                         <div style="font-size:13px; color:#666; margin-bottom:8px;">截標日股價</div>
@@ -16252,14 +16608,21 @@ function renderBasicInfoBalance(cbCode, container) {
     const weekChangeColor = weekChange > 0 ? '#d32f2f' : weekChange < 0 ? '#2e7d32' : '#666';
     const weekChangeSign = weekChange > 0 ? '+' : '';
     
+    // v3.97-zs-af: 計算資料完整度
+    const balanceFields = ['發行規模', '最新餘額', '剩餘比率', '流通張數', '發行總量'];
+    const mergedBalance = {
+        '發行規模': issueSize,
+        '最新餘額': latestBalance,
+        '剩餘比率': remainRatio,
+        '流通張數': outstandingShares,
+        '發行總量': totalShares
+    };
+    const completeness = calculateDataCompleteness(mergedBalance, balanceFields);
+    const statusLabel = isListed ? '🟢 掛牌中' : '⚫ 已下市';
+    
     const html = `
         <div style="background:linear-gradient(135deg, #e0f7fa 0%, #b2ebf2 100%); padding:25px; border-radius:12px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
-                <div style="font-weight:bold; color:#00838f; font-size:18px;">📈 ${cbCode} 餘額變化</div>
-                <div style="font-size:13px; color:#666; background:white; padding:6px 12px; border-radius:6px;">
-                    ${isListed ? '🟢 掛牌中' : '⚫ 已下市'}
-                </div>
-            </div>
+            ${renderTabHeader('餘額變化', '📈', '#00838f', completeness.percentage, statusLabel)}
             
             <!-- 主要餘額資訊 -->
             <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:15px; margin-bottom:18px;">

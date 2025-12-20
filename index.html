@@ -17250,9 +17250,9 @@ function renderBasicInfoBalance(cbCode, container) {
             </div>
             ` : ''}
             
-            <!-- v3.97-zs-aj: 轉換走勢/表格切換標籤 -->
+            <!-- v3.97-zs-al: 轉換走勢/表格切換標籤，新增時間區間選擇 -->
             <div style="margin-bottom:15px;">
-                <div style="display:flex; gap:5px; margin-bottom:12px;">
+                <div style="display:flex; gap:5px; margin-bottom:12px; align-items:center; flex-wrap:wrap;">
                     <button type="button" class="balance-sub-tab active" data-tab="convChart" onclick="switchBalanceSubTab('${searchCode}', 'convChart', this)" 
                             style="padding:8px 16px; border:none; background:#00838f; color:white; border-radius:6px 6px 0 0; cursor:pointer; font-size:13px; font-weight:bold;">
                         📈 轉換走勢圖
@@ -17261,6 +17261,18 @@ function renderBasicInfoBalance(cbCode, container) {
                             style="padding:8px 16px; border:none; background:#b2ebf2; color:#00838f; border-radius:6px 6px 0 0; cursor:pointer; font-size:13px;">
                         📋 轉換記錄表
                     </button>
+                    <div style="margin-left:auto;">
+                        <select id="balancePeriod_${searchCode}" onchange="updateBalancePeriod('${searchCode}')" 
+                                style="padding:6px 10px; border:1px solid #00838f; border-radius:6px; font-size:13px; color:#00838f;">
+                            <option value="30">1個月</option>
+                            <option value="90">3個月</option>
+                            <option value="180" selected>6個月</option>
+                            <option value="365">1年</option>
+                            <option value="730">2年</option>
+                            <option value="1095">3年</option>
+                            <option value="all">全部</option>
+                        </select>
+                    </div>
                 </div>
                 <div id="balanceSubContent_${searchCode}" style="background:white; padding:18px; border-radius:0 10px 10px 10px; min-height:200px;">
                     <div style="text-align:center; color:#888; padding:40px;">
@@ -17279,10 +17291,37 @@ function renderBasicInfoBalance(cbCode, container) {
     
     container.innerHTML = html;
     
-    // v3.97-zs-aj: 自動載入轉換走勢圖
+    // v3.97-zs-al: 自動載入轉換走勢圖
     setTimeout(() => {
         renderConversionChart(searchCode);
     }, 100);
+}
+
+/**
+ * v3.97-zs-al 新增：更新餘額時間區間
+ */
+function updateBalancePeriod(cbCode) {
+    // 找到當前活動的標籤
+    const container = document.getElementById(`balanceSubContent_${cbCode}`);
+    if (!container) return;
+    
+    const activeTab = container.closest('.balance-sub-tab')?.dataset?.tab || 'convChart';
+    const tabButtons = document.querySelectorAll(`.balance-sub-tab[data-tab]`);
+    let currentTab = 'convChart';
+    
+    // 從按鈕找當前標籤
+    tabButtons.forEach(btn => {
+        if (btn.classList.contains('active') && btn.closest(`[id*="${cbCode}"]`)) {
+            currentTab = btn.dataset.tab;
+        }
+    });
+    
+    // 根據當前標籤重新渲染
+    if (currentTab === 'convChart') {
+        renderConversionChart(cbCode);
+    } else {
+        renderConversionTable(cbCode);
+    }
 }
 
 /**
@@ -17314,7 +17353,7 @@ function switchBalanceSubTab(cbCode, tabType, btnElement) {
 }
 
 /**
- * v3.97-zs-aj 新增：渲染轉換走勢圖
+ * v3.97-zs-al 修改：渲染轉換走勢圖（加入時間區間選擇）
  */
 function renderConversionChart(cbCode) {
     const container = document.getElementById(`balanceSubContent_${cbCode}`);
@@ -17322,13 +17361,17 @@ function renderConversionChart(cbCode) {
     
     const searchCode = String(cbCode).trim();
     
-    // 從 kanbanData 取得時間序列資料
-    let conversionData = [];
+    // 取得時間區間設定
+    const periodSelect = document.getElementById(`balancePeriod_${searchCode}`);
+    const period = periodSelect?.value || '180';
+    
+    // 從 kanbanData 取得時間序列資料（O欄：上月底發行餘額）
+    let allData = [];
     if (window.kanbanData?.loaded && window.kanbanData.data[searchCode]) {
-        conversionData = window.kanbanData.data[searchCode];
+        allData = window.kanbanData.data[searchCode];
     }
     
-    if (conversionData.length === 0) {
+    if (allData.length === 0) {
         container.innerHTML = `
             <div style="text-align:center; color:#888; padding:40px;">
                 <div style="font-size:32px; margin-bottom:10px;">📊</div>
@@ -17339,75 +17382,131 @@ function renderConversionChart(cbCode) {
         return;
     }
     
-    // 取最近30筆資料
-    const recentData = conversionData.slice(-30);
+    // 根據時間區間過濾資料
+    let filteredData = allData;
+    if (period !== 'all') {
+        const days = parseInt(period);
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - days);
+        filteredData = allData.filter(d => {
+            if (!d.date) return false;
+            const dDate = new Date(d.date.replace(/\//g, '-'));
+            return dDate >= cutoffDate;
+        });
+    }
     
-    // 計算最大最小值
-    const balances = recentData.map(d => d.balance || 0).filter(v => v > 0);
+    // 如果過濾後沒資料，使用全部
+    if (filteredData.length === 0) {
+        filteredData = allData;
+    }
+    
+    // 計算最大最小值（balance 單位是億元）
+    const balances = filteredData.map(d => d.balance || 0).filter(v => v > 0);
+    if (balances.length === 0) {
+        container.innerHTML = `
+            <div style="text-align:center; color:#888; padding:40px;">
+                <div style="font-size:32px; margin-bottom:10px;">📊</div>
+                <div>選定區間內無餘額資料</div>
+            </div>
+        `;
+        return;
+    }
+    
     const maxBalance = Math.max(...balances);
     const minBalance = Math.min(...balances);
-    const range = maxBalance - minBalance || 1;
+    const range = maxBalance - minBalance || maxBalance * 0.1 || 1;
     
     // 生成SVG走勢圖
-    const width = 600;
-    const height = 200;
-    const padding = 40;
+    const width = 650;
+    const height = 220;
+    const padding = 50;
     const chartWidth = width - padding * 2;
     const chartHeight = height - padding * 2;
     
     // 生成路徑
     let pathD = '';
-    recentData.forEach((d, i) => {
-        const x = padding + (i / (recentData.length - 1)) * chartWidth;
+    let validPoints = 0;
+    filteredData.forEach((d, i) => {
         const balance = d.balance || 0;
+        if (balance <= 0) return;
+        
+        const x = padding + (validPoints / Math.max(filteredData.length - 1, 1)) * chartWidth;
         const y = padding + chartHeight - ((balance - minBalance) / range) * chartHeight;
-        if (i === 0) {
+        if (validPoints === 0) {
             pathD += `M ${x} ${y}`;
         } else {
             pathD += ` L ${x} ${y}`;
         }
+        validPoints++;
     });
     
     // 計算轉換趨勢
-    const firstBalance = recentData[0]?.balance || 0;
-    const lastBalance = recentData[recentData.length - 1]?.balance || 0;
+    const firstBalance = filteredData[0]?.balance || 0;
+    const lastBalance = filteredData[filteredData.length - 1]?.balance || 0;
     const changeAmount = lastBalance - firstBalance;
     const changeRatio = firstBalance > 0 ? ((changeAmount / firstBalance) * 100).toFixed(2) : 0;
     const trendColor = changeAmount <= 0 ? '#2e7d32' : '#d32f2f';
-    const trendIcon = changeAmount <= 0 ? '📉' : '📈';
+    const trendIcon = changeAmount <= 0 ? '📉 減少' : '📈 增加';
+    const trendText = changeAmount <= 0 ? '(籌碼收斂中)' : '(籌碼增加中)';
+    
+    // 時間區間文字
+    const periodTexts = {
+        '30': '1個月', '90': '3個月', '180': '6個月',
+        '365': '1年', '730': '2年', '1095': '3年', 'all': '全部'
+    };
+    const periodText = periodTexts[period] || period;
     
     container.innerHTML = `
         <div style="text-align:center; margin-bottom:15px;">
-            <span style="font-size:14px; color:#666;">最近 ${recentData.length} 期餘額變化</span>
-            <span style="margin-left:15px; color:${trendColor}; font-weight:bold;">
-                ${trendIcon} ${changeAmount > 0 ? '+' : ''}${formatNumber(changeAmount)} 張 (${changeRatio}%)
-            </span>
+            <span style="font-size:14px; color:#666;">📊 ${periodText}餘額走勢（資料來源：CB_kanban O欄「上月底發行餘額」）</span>
         </div>
-        <svg width="100%" viewBox="0 0 ${width} ${height}" style="max-width:600px; display:block; margin:0 auto;">
+        <div style="display:flex; justify-content:space-around; margin-bottom:15px; padding:10px; background:#f5f5f5; border-radius:8px;">
+            <div style="text-align:center;">
+                <div style="font-size:12px; color:#888;">期初餘額</div>
+                <div style="font-size:16px; font-weight:bold; color:#1976d2;">${firstBalance.toFixed(2)} 億</div>
+            </div>
+            <div style="text-align:center;">
+                <div style="font-size:12px; color:#888;">期末餘額</div>
+                <div style="font-size:16px; font-weight:bold; color:#e65100;">${lastBalance.toFixed(2)} 億</div>
+            </div>
+            <div style="text-align:center;">
+                <div style="font-size:12px; color:#888;">變化</div>
+                <div style="font-size:16px; font-weight:bold; color:${trendColor};">
+                    ${trendIcon} ${Math.abs(changeAmount).toFixed(2)} 億 (${changeRatio}%)
+                </div>
+                <div style="font-size:11px; color:${trendColor};">${trendText}</div>
+            </div>
+        </div>
+        <svg width="100%" viewBox="0 0 ${width} ${height}" style="max-width:650px; display:block; margin:0 auto;">
             <!-- 背景網格 -->
-            <line x1="${padding}" y1="${padding}" x2="${padding}" y2="${height - padding}" stroke="#e0e0e0" stroke-width="1"/>
-            <line x1="${padding}" y1="${height - padding}" x2="${width - padding}" y2="${height - padding}" stroke="#e0e0e0" stroke-width="1"/>
-            
-            <!-- Y軸標籤 -->
-            <text x="${padding - 5}" y="${padding + 5}" text-anchor="end" font-size="11" fill="#888">${formatNumber(maxBalance)}</text>
-            <text x="${padding - 5}" y="${height - padding + 5}" text-anchor="end" font-size="11" fill="#888">${formatNumber(minBalance)}</text>
+            <rect x="${padding}" y="${padding}" width="${chartWidth}" height="${chartHeight}" fill="#fafafa" stroke="#e0e0e0"/>
+            ${[0, 0.25, 0.5, 0.75, 1].map(ratio => {
+                const y = padding + chartHeight * (1 - ratio);
+                const val = (minBalance + range * ratio).toFixed(2);
+                return `<line x1="${padding}" y1="${y}" x2="${width - padding}" y2="${y}" stroke="#e0e0e0" stroke-dasharray="3,3"/>
+                        <text x="${padding - 5}" y="${y + 4}" text-anchor="end" font-size="11" fill="#888">${val}</text>`;
+            }).join('')}
             
             <!-- 走勢線 -->
             <path d="${pathD}" fill="none" stroke="#00838f" stroke-width="2.5"/>
             
             <!-- 起點終點標記 -->
-            <circle cx="${padding}" cy="${padding + chartHeight - ((firstBalance - minBalance) / range) * chartHeight}" r="4" fill="#1976d2"/>
-            <circle cx="${width - padding}" cy="${padding + chartHeight - ((lastBalance - minBalance) / range) * chartHeight}" r="4" fill="${trendColor}"/>
+            ${firstBalance > 0 ? `<circle cx="${padding}" cy="${padding + chartHeight - ((firstBalance - minBalance) / range) * chartHeight}" r="5" fill="#1976d2"/>` : ''}
+            ${lastBalance > 0 ? `<circle cx="${width - padding}" cy="${padding + chartHeight - ((lastBalance - minBalance) / range) * chartHeight}" r="5" fill="${trendColor}"/>` : ''}
+            
+            <!-- Y軸標題 -->
+            <text x="15" y="${height / 2}" text-anchor="middle" font-size="12" fill="#666" transform="rotate(-90, 15, ${height / 2})">餘額(億元)</text>
         </svg>
-        <div style="display:flex; justify-content:space-between; font-size:12px; color:#888; margin-top:10px; padding:0 40px;">
-            <span>${recentData[0]?.date || ''}</span>
-            <span>${recentData[recentData.length - 1]?.date || ''}</span>
+        <div style="display:flex; justify-content:space-between; font-size:12px; color:#888; margin-top:10px; padding:0 50px;">
+            <span>${filteredData[0]?.date || ''}</span>
+            <span>共 ${filteredData.length} 期資料</span>
+            <span>${filteredData[filteredData.length - 1]?.date || ''}</span>
         </div>
     `;
 }
 
 /**
- * v3.97-zs-aj 新增：渲染轉換記錄表
+ * v3.97-zs-al 修改：渲染轉換記錄表（加入時間區間選擇）
  */
 function renderConversionTable(cbCode) {
     const container = document.getElementById(`balanceSubContent_${cbCode}`);
@@ -17415,13 +17514,17 @@ function renderConversionTable(cbCode) {
     
     const searchCode = String(cbCode).trim();
     
+    // 取得時間區間設定
+    const periodSelect = document.getElementById(`balancePeriod_${searchCode}`);
+    const period = periodSelect?.value || '180';
+    
     // 從 kanbanData 取得時間序列資料
-    let conversionData = [];
+    let allData = [];
     if (window.kanbanData?.loaded && window.kanbanData.data[searchCode]) {
-        conversionData = window.kanbanData.data[searchCode];
+        allData = window.kanbanData.data[searchCode];
     }
     
-    if (conversionData.length === 0) {
+    if (allData.length === 0) {
         container.innerHTML = `
             <div style="text-align:center; color:#888; padding:40px;">
                 <div style="font-size:32px; margin-bottom:10px;">📋</div>
@@ -17431,33 +17534,64 @@ function renderConversionTable(cbCode) {
         return;
     }
     
-    // 取最近20筆，倒序顯示
-    const recentData = conversionData.slice(-20).reverse();
+    // 根據時間區間過濾資料
+    let filteredData = allData;
+    if (period !== 'all') {
+        const days = parseInt(period);
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - days);
+        filteredData = allData.filter(d => {
+            if (!d.date) return false;
+            const dDate = new Date(d.date.replace(/\//g, '-'));
+            return dDate >= cutoffDate;
+        });
+    }
+    
+    // 如果過濾後沒資料，使用全部
+    if (filteredData.length === 0) {
+        filteredData = allData;
+    }
+    
+    // 倒序顯示（最新在前）
+    const displayData = [...filteredData].reverse();
+    
+    // 時間區間文字
+    const periodTexts = {
+        '30': '1個月', '90': '3個月', '180': '6個月',
+        '365': '1年', '730': '2年', '1095': '3年', 'all': '全部'
+    };
+    const periodText = periodTexts[period] || period;
     
     let tableHtml = `
+        <div style="text-align:center; margin-bottom:12px; font-size:14px; color:#666;">
+            📋 ${periodText}轉換記錄（資料來源：CB_kanban O欄「上月底發行餘額」）
+        </div>
         <div style="max-height:350px; overflow-y:auto;">
             <table style="width:100%; border-collapse:collapse; font-size:13px;">
                 <thead style="position:sticky; top:0; background:#00838f; color:white;">
                     <tr>
                         <th style="padding:10px 8px; text-align:center;">日期</th>
-                        <th style="padding:10px 8px; text-align:right;">流通餘額</th>
+                        <th style="padding:10px 8px; text-align:right;">發行餘額(億)</th>
                         <th style="padding:10px 8px; text-align:right;">轉換價</th>
                         <th style="padding:10px 8px; text-align:right;">CB價格</th>
                         <th style="padding:10px 8px; text-align:right;">股價</th>
+                        <th style="padding:10px 8px; text-align:right;">溢價率</th>
                     </tr>
                 </thead>
                 <tbody>
     `;
     
-    recentData.forEach((d, i) => {
+    displayData.forEach((d, i) => {
         const bgColor = i % 2 === 0 ? '#f5f5f5' : 'white';
+        const premiumColor = d.premium > 0 ? '#d32f2f' : d.premium < 0 ? '#2e7d32' : '#666';
         tableHtml += `
             <tr style="background:${bgColor};">
                 <td style="padding:8px; text-align:center; color:#666;">${d.date || '-'}</td>
-                <td style="padding:8px; text-align:right; font-weight:bold;">${d.balance ? formatNumber(d.balance) : '-'}</td>
+                <td style="padding:8px; text-align:right; font-weight:bold; color:#00838f;">${d.balance ? d.balance.toFixed(2) : '-'}</td>
                 <td style="padding:8px; text-align:right;">${d.convPrice ? d.convPrice.toFixed(2) : '-'}</td>
                 <td style="padding:8px; text-align:right; color:#2e7d32;">${d.cbPrice ? d.cbPrice.toFixed(2) : '-'}</td>
                 <td style="padding:8px; text-align:right; color:#1976d2;">${d.stockPrice ? d.stockPrice.toFixed(2) : '-'}</td>
+                <td style="padding:8px; text-align:right; color:${premiumColor};">${d.premium ? (d.premium > 0 ? '+' : '') + d.premium.toFixed(2) + '%' : '-'}</td>
             </tr>
         `;
     });
@@ -17467,7 +17601,7 @@ function renderConversionTable(cbCode) {
             </table>
         </div>
         <div style="text-align:center; font-size:12px; color:#888; margin-top:10px;">
-            顯示最近 ${recentData.length} 期資料
+            顯示 ${displayData.length} 期資料
         </div>
     `;
     

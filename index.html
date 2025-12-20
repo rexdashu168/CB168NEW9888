@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97-zs-af (資料完整度顯示)</title>
+<title>AI智能可轉債競拍系統 v3.97-zs-ag (標題統一+產業資訊+靠右對齊)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <!-- v3.97-zs-ae: 改用 CB_kanban_YYYY.xlsx 載入時間序列資料，取代 kanban_data.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -1794,7 +1794,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 <div class="container" style="display: none;">
     <div class="header">
         <h1>🤖 AI智能可轉債競拍系統</h1>
-        <span class="version-badge">v3.97-zs-af 資料完整度顯示</span>
+        <span class="version-badge">v3.97-zs-ag 標題+產業+對齊</span>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -15315,21 +15315,27 @@ function getCompletenessHTML(percentage) {
 
 /**
  * v3.97-zs-af 新增：生成標題區域HTML（含完整度）
+ * v3.97-zs-ag 修改：增加 cbCode 和 cbName 參數，統一標題格式
  * @param {string} title - 標題文字
  * @param {string} icon - 圖示emoji
  * @param {string} color - 主色
  * @param {number} percentage - 完整度百分比
  * @param {string} statusTag - 狀態標籤（掛牌中/已下市）
+ * @param {string} cbCode - CB代號
+ * @param {string} cbName - CB名稱
  * @returns {string} HTML字串
  */
-function renderTabHeader(title, icon, color, percentage, statusTag = '') {
+function renderTabHeader(title, icon, color, percentage, statusTag = '', cbCode = '', cbName = '') {
     const completenessHTML = percentage !== null ? getCompletenessHTML(percentage) : '';
     const statusHTML = statusTag ? `<span style="font-size:12px; padding:4px 10px; border-radius:12px; background:${statusTag.includes('掛牌中') ? '#e8f5e9' : '#f5f5f5'}; color:${statusTag.includes('掛牌中') ? '#2e7d32' : '#666'};">${statusTag}</span>` : '';
+    
+    // v3.97-zs-ag: 統一標題格式「📅 代號 名稱 標題」
+    const fullTitle = cbCode ? `${icon} ${cbCode} ${cbName || ''} ${title}` : `${icon} ${title}`;
     
     return `
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
             <div style="display:flex; align-items:center; gap:8px;">
-                <span style="font-weight:bold; color:${color}; font-size:16px;">${icon} ${title}</span>
+                <span style="font-weight:bold; color:${color}; font-size:16px;">${fullTitle}</span>
                 ${completenessHTML}
             </div>
             ${statusHTML}
@@ -15603,90 +15609,201 @@ function renderBasicInfoOverview(cbCode, container) {
     const overviewFields = ['CB代號', '名稱', '股票代號', '產業分類', '信用評等', '擔保', '發行規模', '底標價', '年期', '發行券商', '轉換價', '掛牌日期', '到期日期'];
     const completeness = calculateDataCompleteness(data, overviewFields);
     
-    // 建立資訊卡片 - v3.97-zs-aa 字體統一優化
+    // v3.97-zs-ag: 取得名稱用於標題
+    const cbName = data['名稱'] || '';
+    
+    // v3.97-zs-ag: 取得產業相關資訊
+    let industryInfo = data['產業分類'] || '-';
+    let industryPosition = data['產業地位'] || '';
+    
+    // 從01工作表補充產業地位資料
+    if (!industryPosition && window.sheet01Data && window.sheet01Data.length > 0) {
+        const sheet01Row = window.sheet01Data.find(r => String(r['CB代號']).trim() === searchCode);
+        if (sheet01Row) {
+            industryPosition = sheet01Row['產業地位'] || '';
+            if (!industryInfo || industryInfo === '-') {
+                industryInfo = sheet01Row['產業分類'] || '-';
+            }
+        }
+    }
+    
+    // 從16工作表(industryMap)補充產業分類
+    const stockCode = data['股票代號'] || '';
+    if ((!industryInfo || industryInfo === '-') && stockCode && window.industryMap) {
+        industryInfo = window.industryMap[stockCode] || industryInfo;
+    }
+    
+    // ========== v3.97-zs-ag 新增：更多計算欄位 ==========
+    // 距到期天數
+    let daysToMaturity = null;
+    if (maturityDate && !isNaN(maturityDate.getTime())) {
+        const diffMs = maturityDate.getTime() - today.getTime();
+        daysToMaturity = Math.ceil(diffMs / (24 * 60 * 60 * 1000));
+    }
+    
+    // 發行金額（億）
+    const issueAmountBillion = issueSize > 0 ? (issueSize / 100).toFixed(2) : '-';
+    
+    // 定價溢價率
+    const pricingPremium = data['訂價溢價率'] || data['定價溢價率'] || '';
+    
+    // 轉換比例 (每張CB可換多少股票)
+    const convRatio = convPrice > 0 ? (100000 / convPrice).toFixed(2) : '-';
+    
+    // 約可轉換股票張數 (發行規模 ÷ 轉換價 × 1000)
+    const stockSharesApprox = (issueSize > 0 && convPrice > 0) ? Math.round(issueSize * 1000000 / convPrice / 1000) : null;
+    
+    // 股本（股數）
+    const stockCapital = parseFloat(data['股本(億)']) || 0;
+    const stockCapitalShares = stockCapital > 0 ? stockCapital * 100000000 : 0; // 億 → 股
+    
+    // 佔股本比例
+    const capitalRatio = (stockSharesApprox && stockCapitalShares > 0) ? ((stockSharesApprox * 1000 / stockCapitalShares) * 100).toFixed(2) : null;
+    
+    // 從09工作表取得最新行情
+    let currentCBPrice = null;
+    let currentStockPrice = null;
+    let currentPremium = null;
+    let currentConvValue = null;
+    if (quoteData09) {
+        currentCBPrice = parseFloat(quoteData09['CB收盤價']) || null;
+        currentStockPrice = parseFloat(quoteData09['股價']) || null;
+        currentConvValue = parseFloat(quoteData09['轉換價值']) || null;
+        currentPremium = parseFloat(quoteData09['溢(折)價%']) || null;
+    }
+    
+    // 建立資訊卡片 - v3.97-zs-ag 靠右對齊 + 統一標題 + 更多計算欄位
     const html = `
-        ${renderTabHeader('基本資料總覽', '📋', '#1976d2', completeness.percentage, statusLabel)}
+        ${renderTabHeader('基本資料', '📋', '#1976d2', completeness.percentage, statusLabel, cbCode, cbName)}
         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:18px;">
-            <!-- 基本資訊卡 -->
+            <!-- 可轉債發行資訊卡 -->
             <div style="background:#e3f2fd; padding:20px; border-radius:12px; border-left:5px solid #1976d2;">
-                <div style="font-weight:bold; color:#1565c0; margin-bottom:15px; font-size:16px;">📋 基本資訊</div>
+                <div style="font-weight:bold; color:#1565c0; margin-bottom:15px; font-size:16px;">📋 可轉債發行資訊</div>
                 <table style="width:100%; font-size:15px; line-height:1.9;">
-                    <tr><td style="color:#666; width:40%; padding:6px 0;">代號</td><td style="font-weight:600; padding:6px 0;">${data['CB代號'] || cbCode}</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">名稱</td><td style="font-weight:600; padding:6px 0;">${data['名稱'] || '-'}</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">轉換標的</td><td style="font-weight:600; padding:6px 0;">${data['股票代號'] || '-'}</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">產業分類</td><td style="font-weight:600; padding:6px 0;">${data['產業分類'] || '-'}</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">信用評等</td><td style="font-weight:600; padding:6px 0;">TCRI ${data['信用評等'] || data['TCRI'] || '-'}</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">擔保情形</td><td style="font-weight:600; padding:6px 0;">${data['擔保'] || '-'}</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">發行方式</td><td style="color:${isAuction ? '#e65100' : '#1565c0'}; font-weight:bold; padding:6px 0;">${isAuction ? '🎯 競拍' : '📋 詢圈'}</td></tr>
+                    <tr><td style="color:#666; width:40%; padding:6px 0;">代號/名稱</td><td style="font-weight:600; padding:6px 0; text-align:right;">${data['CB代號'] || cbCode} ${data['名稱'] || ''}</td></tr>
+                    <tr><td style="color:#666; padding:6px 0;">發行面額</td><td style="font-weight:600; padding:6px 0; text-align:right;">100,000元</td></tr>
+                    <tr><td style="color:#666; padding:6px 0;">發行價格</td><td style="font-weight:600; padding:6px 0; text-align:right;">${data['底標價'] || '100'}元</td></tr>
+                    <tr><td style="color:#666; padding:6px 0;">發行金額</td><td style="font-weight:600; padding:6px 0; text-align:right;">${issueAmountBillion}億 <span style="font-size:12px; color:#888;">(${formatNumber(totalShares)}張)</span></td></tr>
+                    <tr><td style="color:#666; padding:6px 0;">發行年期</td><td style="font-weight:600; padding:6px 0; text-align:right;">${data['年期'] || '-'}年</td></tr>
+                    <tr><td style="color:#666; padding:6px 0;">發行券商</td><td style="font-weight:600; padding:6px 0; font-size:14px; text-align:right;">${data['發行券商'] || '-'}</td></tr>
+                    <tr><td style="color:#666; padding:6px 0;">發行方式</td><td style="color:${isAuction ? '#e65100' : '#1565c0'}; font-weight:bold; padding:6px 0; text-align:right;">${isAuction ? '🎯 競拍' : '📋 詢圈'}</td></tr>
                 </table>
             </div>
             
-            <!-- 發行條件卡 -->
-            <div style="background:#fff3e0; padding:20px; border-radius:12px; border-left:5px solid #ff9800;">
-                <div style="font-weight:bold; color:#e65100; margin-bottom:15px; font-size:16px;">💰 發行條件</div>
-                <table style="width:100%; font-size:15px; line-height:1.9;">
-                    <tr><td style="color:#666; width:40%; padding:6px 0;">發行規模</td><td style="font-weight:600; padding:6px 0;">${formatNumber(data['發行規模'])} 百萬</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">底標價</td><td style="font-weight:600; padding:6px 0;">${data['底標價'] || '100'}元</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">發行年期</td><td style="font-weight:600; padding:6px 0;">${data['年期'] || '-'}年</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">剩餘年期</td><td style="color:${remainYears !== null && remainYears < 1 ? '#c62828' : '#2e7d32'}; font-weight:bold; padding:6px 0;">${remainYearsDisplay}</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">發行券商</td><td style="font-weight:600; padding:6px 0; font-size:14px;">${data['發行券商'] || '-'}</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">股本規模</td><td style="font-weight:600; padding:6px 0;">${formatNumber(data['股本(億)'])} 億</td></tr>
-                </table>
-            </div>
-            
-            <!-- 轉換資訊卡 -->
+            <!-- 轉換條件卡 -->
             <div style="background:#e8f5e9; padding:20px; border-radius:12px; border-left:5px solid #4caf50;">
-                <div style="font-weight:bold; color:#2e7d32; margin-bottom:15px; font-size:16px;">🔄 轉換資訊</div>
+                <div style="font-weight:bold; color:#2e7d32; margin-bottom:15px; font-size:16px;">🔄 轉換條件</div>
                 <table style="width:100%; font-size:15px; line-height:1.9;">
-                    <tr><td style="color:#666; width:40%; padding:6px 0;">轉換價</td><td style="font-weight:bold; color:#c62828; padding:6px 0; font-size:16px;">${convPrice || '-'}元</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">強贖觸發價</td><td style="color:#9c27b0; font-weight:bold; padding:6px 0;">${callTrigger130}元 <span style="font-size:12px; color:#999;">(130%)</span></td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">每張可換股數</td><td style="font-weight:600; padding:6px 0;">${sharesPerBond} 股</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">截標收盤價</td><td style="font-weight:600; padding:6px 0;">${data['截標收盤'] || '-'}元</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">理論價</td><td style="color:#1976d2; font-weight:bold; padding:6px 0;">${data['理論價'] ? parseFloat(data['理論價']).toFixed(2) : '-'}元</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">年化波動</td><td style="font-weight:600; padding:6px 0;">${data['年化波動'] ? (data['年化波動'] * 100).toFixed(2) + '%' : '-'}</td></tr>
+                    <tr><td style="color:#666; width:40%; padding:6px 0;">發行轉換價</td><td style="font-weight:bold; color:#c62828; padding:6px 0; font-size:16px; text-align:right;">${convPrice || '-'}元</td></tr>
+                    ${pricingPremium ? `<tr><td style="color:#666; padding:6px 0;">定價溢價率</td><td style="font-weight:600; padding:6px 0; text-align:right;">${pricingPremium}%</td></tr>` : ''}
+                    <tr><td style="color:#666; padding:6px 0;">轉換比例</td><td style="font-weight:600; padding:6px 0; text-align:right;">${convRatio} 股/張</td></tr>
+                    <tr><td style="color:#666; padding:6px 0;">約股票張數</td><td style="font-weight:600; padding:6px 0; text-align:right;">${stockSharesApprox !== null ? formatNumber(stockSharesApprox) + ' 張' : '-'}</td></tr>
+                    ${capitalRatio ? `<tr><td style="color:#666; padding:6px 0;">佔股本%</td><td style="font-weight:600; padding:6px 0; text-align:right;">${capitalRatio}%</td></tr>` : ''}
+                    <tr><td style="color:#666; padding:6px 0;">股本規模</td><td style="font-weight:600; padding:6px 0; text-align:right;">${formatNumber(stockCapital)} 億</td></tr>
                 </table>
             </div>
             
-            <!-- 第四卡片：統一顯示掛牌表現（競拍結果已有獨立標籤） -->
-            <div style="background:#e0f7fa; padding:20px; border-radius:12px; border-left:5px solid #00bcd4;">
-                <div style="font-weight:bold; color:#00838f; margin-bottom:12px; font-size:15px;">📊 掛牌表現</div>
+            <!-- 時程與狀態卡 -->
+            <div style="background:#fff3e0; padding:20px; border-radius:12px; border-left:5px solid #ff9800;">
+                <div style="font-weight:bold; color:#e65100; margin-bottom:15px; font-size:16px;">📅 時程與狀態</div>
                 <table style="width:100%; font-size:15px; line-height:1.9;">
-                    <tr><td style="color:#666; width:40%; padding:6px 0;">掛牌日期</td><td style="padding:6px 0; font-weight:600;">${formatDate(data['掛牌日期'])}</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">到期日期</td><td style="padding:6px 0; font-weight:600;">${formatDate(data['到期日期'])}</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">掛牌最高</td><td style="font-weight:bold; color:#c62828; padding:6px 0; font-size:16px;">${data['掛牌最高'] || '-'}元</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">掛牌最低</td><td style="font-weight:bold; color:#2e7d32; padding:6px 0; font-size:16px;">${data['掛牌最低'] || '-'}元</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">到期還本價</td><td style="padding:6px 0; font-weight:600;">${data['到期還本價格'] || '-'}元</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">交易狀態</td><td style="color:${isListed ? '#2e7d32' : '#666'}; padding:6px 0; font-weight:600;">${isListed ? '🟢 掛牌中' : '⚫ 已下市'}</td></tr>
+                    <tr><td style="color:#666; width:40%; padding:6px 0;">掛牌日期</td><td style="padding:6px 0; font-weight:600; text-align:right;">${formatDate(data['掛牌日期'])}</td></tr>
+                    <tr><td style="color:#666; padding:6px 0;">到期日期</td><td style="padding:6px 0; font-weight:600; text-align:right;">${formatDate(data['到期日期'])}</td></tr>
+                    <tr><td style="color:#666; padding:6px 0;">距到期天數</td><td style="color:${daysToMaturity !== null && daysToMaturity < 365 ? '#c62828' : '#2e7d32'}; font-weight:bold; padding:6px 0; text-align:right;">${daysToMaturity !== null ? (daysToMaturity > 0 ? formatNumber(daysToMaturity) + ' 天' : '已到期') : '-'}</td></tr>
+                    <tr><td style="color:#666; padding:6px 0;">剩餘年期</td><td style="color:${remainYears !== null && remainYears < 1 ? '#c62828' : '#2e7d32'}; font-weight:bold; padding:6px 0; text-align:right;">${remainYearsDisplay}</td></tr>
+                    <tr><td style="color:#666; padding:6px 0;">到期還本價</td><td style="padding:6px 0; font-weight:600; text-align:right;">${data['到期還本價格'] || '-'}元</td></tr>
+                    <tr><td style="color:#666; padding:6px 0;">交易狀態</td><td style="color:${isListed ? '#2e7d32' : '#666'}; padding:6px 0; font-weight:600; text-align:right;">${isListed ? '🟢 掛牌中' : '⚫ 已下市'}</td></tr>
+                </table>
+            </div>
+            
+            <!-- 信用與擔保卡 -->
+            <div style="background:#e0f7fa; padding:20px; border-radius:12px; border-left:5px solid #00bcd4;">
+                <div style="font-weight:bold; color:#00838f; margin-bottom:12px; font-size:15px;">🛡️ 信用與表現</div>
+                <table style="width:100%; font-size:15px; line-height:1.9;">
+                    <tr><td style="color:#666; width:40%; padding:6px 0;">轉換標的</td><td style="font-weight:600; padding:6px 0; text-align:right;">${data['股票代號'] || '-'}</td></tr>
+                    <tr><td style="color:#666; padding:6px 0;">信用評等</td><td style="font-weight:600; padding:6px 0; text-align:right;">TCRI ${data['信用評等'] || data['TCRI'] || '-'}</td></tr>
+                    <tr><td style="color:#666; padding:6px 0;">擔保情形</td><td style="font-weight:600; padding:6px 0; text-align:right;">${data['擔保'] || '-'}</td></tr>
+                    <tr><td style="color:#666; padding:6px 0;">強贖觸發價</td><td style="color:#9c27b0; font-weight:bold; padding:6px 0; text-align:right;">${callTrigger130}元 <span style="font-size:12px; color:#999;">(130%)</span></td></tr>
+                    <tr><td style="color:#666; padding:6px 0;">掛牌最高</td><td style="font-weight:bold; color:#c62828; padding:6px 0; text-align:right;">${data['掛牌最高'] || '-'}元</td></tr>
+                    <tr><td style="color:#666; padding:6px 0;">掛牌最低</td><td style="font-weight:bold; color:#2e7d32; padding:6px 0; text-align:right;">${data['掛牌最低'] || '-'}元</td></tr>
                 </table>
             </div>
         </div>
         
-        <!-- v3.97z-s 新增：轉換進度區塊（僅掛牌中且有資料時顯示）-->
+        <!-- v3.97-zs-ag: 即時行情區（掛牌中才顯示） -->
+        ${isListed && (currentCBPrice || currentStockPrice) ? `
+        <div style="margin-top:18px; background:linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); padding:18px; border-radius:10px; border:1px solid #ffe082;">
+            <div style="font-weight:bold; color:#f57c00; margin-bottom:12px; font-size:15px;">📊 最新行情</div>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:12px;">
+                <div style="background:white; padding:12px; border-radius:8px; text-align:center; border:2px solid #ffa000;">
+                    <div style="font-size:13px; color:#666; margin-bottom:6px;">CB收盤價</div>
+                    <div style="font-size:20px; font-weight:bold; color:#f57c00;">${currentCBPrice || '-'}</div>
+                </div>
+                <div style="background:white; padding:12px; border-radius:8px; text-align:center;">
+                    <div style="font-size:13px; color:#666; margin-bottom:6px;">股票收盤</div>
+                    <div style="font-size:18px; font-weight:bold; color:#1976d2;">${currentStockPrice || '-'}</div>
+                </div>
+                <div style="background:white; padding:12px; border-radius:8px; text-align:center;">
+                    <div style="font-size:13px; color:#666; margin-bottom:6px;">轉換價值</div>
+                    <div style="font-size:18px; font-weight:bold; color:#7b1fa2;">${currentConvValue ? currentConvValue.toFixed(2) : '-'}</div>
+                </div>
+                <div style="background:white; padding:12px; border-radius:8px; text-align:center; border:2px solid ${currentPremium >= 0 ? '#d32f2f' : '#2e7d32'};">
+                    <div style="font-size:13px; color:#666; margin-bottom:6px;">溢(折)價%</div>
+                    <div style="font-size:18px; font-weight:bold; color:${currentPremium >= 0 ? '#d32f2f' : '#2e7d32'};">${currentPremium !== null ? (currentPremium >= 0 ? '+' : '') + currentPremium.toFixed(2) + '%' : '-'}</div>
+                </div>
+            </div>
+        </div>
+        ` : ''}
+        
+        <!-- v3.97-zs-ag 新增：產業資訊方塊 -->
+        ${(industryInfo && industryInfo !== '-') || industryPosition ? `
+        <div style="margin-top:18px; background:rgba(156,39,176,0.1); padding:15px 18px; border-radius:10px; border-left:4px solid #9c27b0;">
+            <div style="font-size:14px; color:#666; margin-bottom:8px;">🏭 產業資訊</div>
+            <div style="display:flex; flex-wrap:wrap; gap:20px; align-items:center;">
+                <div style="font-size:15px;">
+                    <strong style="color:#7b1fa2;">產業分類：</strong>
+                    <span style="color:#333; font-weight:600;">${industryInfo}</span>
+                </div>
+                ${industryPosition ? `
+                <div style="font-size:15px;">
+                    <strong style="color:#7b1fa2;">產業地位：</strong>
+                    <span style="color:#333; font-weight:600;">${industryPosition}</span>
+                </div>
+                ` : ''}
+            </div>
+        </div>
+        ` : ''}
+        
+        <!-- v3.97-zs-ag 新增：最新流通在外餘額區塊 -->
         ${isListed && (convertedRatio !== null || remainRatio !== null) ? `
         <div style="margin-top:18px; background:#e8f5e9; padding:18px; border-radius:10px; border:1px solid #c8e6c9;">
-            <div style="font-weight:bold; color:#2e7d32; margin-bottom:15px; font-size:15px;">📊 轉換進度</div>
+            <div style="font-weight:bold; color:#2e7d32; margin-bottom:15px; font-size:15px;">📈 最新流通在外餘額</div>
             <div style="display:flex; align-items:center; gap:20px; flex-wrap:wrap;">
                 <div style="flex:1; min-width:200px;">
                     <div style="display:flex; justify-content:space-between; font-size:14px; color:#666; margin-bottom:6px;">
                         <span>已轉換 <strong style="color:#2e7d32;">${convertedRatio || 0}%</strong></span>
-                        <span>剩餘 <strong style="color:#e65100;">${remainRatio !== null ? remainRatio.toFixed(2) : '-'}%</strong></span>
+                        <span>流通在外 <strong style="color:#e65100;">${remainRatio !== null ? remainRatio.toFixed(2) : '-'}%</strong></span>
                     </div>
                     <div style="background:#c8e6c9; height:16px; border-radius:8px; overflow:hidden;">
                         <div style="background:linear-gradient(90deg, #4caf50, #8bc34a); height:100%; width:${convertedRatio || 0}%; transition:width 0.3s;"></div>
                     </div>
                 </div>
-                <div style="display:flex; gap:20px; font-size:14px;">
+                <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; font-size:14px;">
                     <div style="text-align:center; padding:8px 12px; background:white; border-radius:8px;">
-                        <div style="color:#666; margin-bottom:4px;">發行張數</div>
-                        <div style="font-weight:bold; color:#1976d2; font-size:16px;">${formatNumber(totalShares)}</div>
+                        <div style="color:#666; margin-bottom:4px; font-size:12px;">目前餘額</div>
+                        <div style="font-weight:bold; color:#1976d2; font-size:15px;">${outstandingShares !== null ? formatNumber(outstandingShares) : '-'}張</div>
                     </div>
                     <div style="text-align:center; padding:8px 12px; background:white; border-radius:8px;">
-                        <div style="color:#666; margin-bottom:4px;">已轉換</div>
-                        <div style="font-weight:bold; color:#4caf50; font-size:16px;">${convertedShares !== null ? formatNumber(convertedShares) : '-'}</div>
+                        <div style="color:#666; margin-bottom:4px; font-size:12px;">約股票張數</div>
+                        <div style="font-weight:bold; color:#7b1fa2; font-size:15px;">${outstandingShares !== null && convPrice > 0 ? formatNumber(Math.round(outstandingShares * 100000 / convPrice / 1000)) : '-'}張</div>
                     </div>
                     <div style="text-align:center; padding:8px 12px; background:white; border-radius:8px;">
-                        <div style="color:#666; margin-bottom:4px;">剩餘張數</div>
-                        <div style="font-weight:bold; color:#e65100; font-size:16px;">${outstandingShares !== null ? formatNumber(outstandingShares) : '-'}</div>
+                        <div style="color:#666; margin-bottom:4px; font-size:12px;">已轉換張數</div>
+                        <div style="font-weight:bold; color:#4caf50; font-size:15px;">${convertedShares !== null ? formatNumber(convertedShares) : '-'}張</div>
+                    </div>
+                    <div style="text-align:center; padding:8px 12px; background:white; border-radius:8px;">
+                        <div style="color:#666; margin-bottom:4px; font-size:12px;">發行總量</div>
+                        <div style="font-weight:bold; color:#00838f; font-size:15px;">${formatNumber(totalShares)}張</div>
                     </div>
                 </div>
             </div>
@@ -15758,10 +15875,12 @@ function renderBasicInfoSchedule(cbCode, container) {
     const isListed = window.cbDatabase?.listedCodes?.has(searchCode);
     const statusLabel = isListed ? '🟢 掛牌中' : '⚫ 已下市';
     
+    // v3.97-zs-ag: 取得名稱
+    const cbName = getValue(scheduleData?.['名稱'], sheet08Row?.['名稱'], auctionData?.['名稱']);
+    
     const html = `
         <div style="background:linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); padding:25px; border-radius:12px;">
-            ${renderTabHeader('發行時程', '📅', '#1565c0', completeness.percentage, statusLabel)}
-            <div style="font-weight:bold; color:#1565c0; margin-bottom:18px; font-size:16px;">${cbCode} ${getValue(scheduleData?.['名稱'], sheet08Row?.['名稱'], auctionData?.['名稱'])}</div>
+            ${renderTabHeader('發行時程', '📅', '#1565c0', completeness.percentage, statusLabel, cbCode, cbName)}
             
             <!-- 重要日期時間軸 -->
             <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:12px; margin-bottom:18px;">
@@ -15896,10 +16015,12 @@ function renderBasicInfoPutback(cbCode, container) {
     const isListed = window.cbDatabase?.listedCodes?.has(searchCode);
     const statusLabel = isListed ? '🟢 掛牌中' : '⚫ 已下市';
     
+    // v3.97-zs-ag: 取得名稱
+    const cbName = getValue(putbackData?.['名稱'], sheet08Row?.['名稱']);
+    
     const html = `
         <div style="background:linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); padding:25px; border-radius:12px;">
-            ${renderTabHeader('賣回條件', '💰', '#e65100', completeness.percentage, statusLabel)}
-            <div style="font-weight:bold; color:#e65100; margin-bottom:18px; font-size:16px;">${cbCode} ${getValue(putbackData?.['名稱'], sheet08Row?.['名稱'])}</div>
+            ${renderTabHeader('賣回條件', '💰', '#e65100', completeness.percentage, statusLabel, cbCode, cbName)}
             
             <!-- 投資人賣回權 -->
             <div style="background:white; padding:18px; border-radius:10px; margin-bottom:18px; border-left:5px solid #ff9800;">
@@ -16122,8 +16243,7 @@ async function renderBasicInfoTermination(cbCode, container) {
     
     const html = `
         <div style="background:linear-gradient(135deg, #eceff1 0%, #cfd8dc 100%); padding:25px; border-radius:12px;">
-            ${renderTabHeader('終止狀態', '📌', '#455a64', completeness.percentage, statusLabel)}
-            <div style="font-weight:bold; color:#455a64; margin-bottom:18px; font-size:16px;">${cbCode} ${cbName}</div>
+            ${renderTabHeader('終止狀態', '📌', '#455a64', completeness.percentage, statusLabel, cbCode, cbName)}
             
             <!-- 當前狀態 -->
             <div style="background:white; padding:20px; border-radius:12px; margin-bottom:18px; border-left:5px solid ${terminationColor};">
@@ -16266,9 +16386,21 @@ function renderBasicInfoAuction(cbCode, container) {
         // 詢圈發行 - 顯示說明
         const isListed = window.cbDatabase?.listedCodes?.has(searchCode);
         const statusLabel = isListed ? '🟢 掛牌中' : '⚫ 已下市';
+        
+        // v3.97-zs-ag: 取得名稱
+        let cbName = '';
+        if (window.sheet08Data && window.sheet08Data.length > 0) {
+            const sheet08Row = window.sheet08Data.find(r => String(r['代號']).trim() === searchCode);
+            cbName = sheet08Row?.['名稱'] || '';
+        }
+        if (!cbName && window.sheet01Data && window.sheet01Data.length > 0) {
+            const sheet01Row = window.sheet01Data.find(r => String(r['CB代號']).trim() === searchCode);
+            cbName = sheet01Row?.['名稱'] || '';
+        }
+        
         container.innerHTML = `
             <div style="background:linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); padding:25px; border-radius:8px;">
-                ${renderTabHeader('競拍資料', '🎯', '#1976d2', 0, statusLabel)}
+                ${renderTabHeader('競拍資料', '🎯', '#1976d2', 0, statusLabel, cbCode, cbName)}
                 <div style="text-align:center; margin-top:20px;">
                     <div style="font-size:48px; margin-bottom:15px;">📋</div>
                     <div style="font-weight:bold; color:#1976d2; font-size:18px; margin-bottom:10px;">本檔為詢圈發行</div>
@@ -16294,9 +16426,12 @@ function renderBasicInfoAuction(cbCode, container) {
     const isListed = window.cbDatabase?.listedCodes?.has(searchCode);
     const statusLabel = isListed ? '🟢 掛牌中' : '⚫ 已下市';
     
+    // v3.97-zs-ag: 取得名稱
+    const cbName = data['名稱'] || '';
+    
     const html = `
         <div style="background:linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); padding:25px; border-radius:12px;">
-            ${renderTabHeader('競拍資料', '🎯', '#2e7d32', completeness.percentage, statusLabel)}
+            ${renderTabHeader('競拍資料', '🎯', '#2e7d32', completeness.percentage, statusLabel, cbCode, cbName)}
             <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:15px;">
                 <div style="background:white; padding:18px 12px; border-radius:10px; text-align:center;">
                     <div style="font-size:13px; color:#666; margin-bottom:8px;">開標日期</div>
@@ -16397,9 +16532,12 @@ function renderBasicInfoQuote(cbCode, container) {
         const quoteFields = ['CB收盤價', '股價', '轉換價格', '轉換價值', '溢(折)價%', '成交量', 'YTM', 'YTP', 'TCRI'];
         const completeness = calculateDataCompleteness(quoteData, quoteFields);
         
+        // v3.97-zs-ag: 取得名稱
+        const cbName = (quoteData['名稱  '] || quoteData['名稱'] || '').trim();
+        
         const html = `
             <div style="background:linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); padding:25px; border-radius:12px;">
-                ${renderTabHeader('最新行情', '📊', '#2e7d32', completeness.percentage, '🟢 掛牌中')}
+                ${renderTabHeader('最新行情', '📊', '#2e7d32', completeness.percentage, '🟢 掛牌中', cbCode, cbName)}
                 
                 <!-- 主要報價 - v3.97-zs-z 字體優化 -->
                 <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:12px; margin-bottom:18px;">
@@ -16493,9 +16631,12 @@ function renderBasicInfoQuote(cbCode, container) {
         const completeness = calculateDataCompleteness(auctionData, auctionQuoteFields);
         const statusLabel = isListed ? '🟢 掛牌中(無即時報價)' : '⚫ 已下市';
         
+        // v3.97-zs-ag: 取得名稱
+        const cbName = auctionData['名稱'] || '';
+        
         const html = `
             <div style="background:linear-gradient(135deg, #fce4ec 0%, #f8bbd9 100%); padding:25px; border-radius:12px;">
-                ${renderTabHeader('截標日行情', '📊', '#c2185b', completeness.percentage, statusLabel)}
+                ${renderTabHeader('截標日行情', '📊', '#c2185b', completeness.percentage, statusLabel, cbCode, cbName)}
                 <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:15px;">
                     <div style="background:white; padding:18px 12px; border-radius:10px; text-align:center;">
                         <div style="font-size:13px; color:#666; margin-bottom:8px;">截標日股價</div>
@@ -16531,13 +16672,24 @@ function renderBasicInfoQuote(cbCode, container) {
         return;
     }
     
-    // 詢圈發行，無行情資料
+    // 詢圈發行，無行情資料 - v3.97-zs-ag: 取得名稱
+    let cbNameInquiry = '';
+    if (sheet08Row) cbNameInquiry = sheet08Row['名稱'] || '';
+    if (!cbNameInquiry && window.sheet01Data && window.sheet01Data.length > 0) {
+        const sheet01Row = window.sheet01Data.find(r => String(r['CB代號']).trim() === searchCode);
+        cbNameInquiry = sheet01Row?.['名稱'] || '';
+    }
+    
     container.innerHTML = `
-        <div style="background:linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); padding:30px; border-radius:12px; text-align:center;">
-            <div style="font-size:56px; margin-bottom:18px;">📋</div>
-            <div style="font-weight:bold; color:#1976d2; font-size:20px; margin-bottom:12px;">${cbCode} 詢圈發行</div>
-            <div style="color:#666; font-size:15px;">無競拍截標日行情資料</div>
-            ${isListed ? `<div style="margin-top:12px; font-size:14px; color:#999;">如需最新報價，請確認09工作表已更新</div>` : ''}
+        <div style="background:linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); padding:30px; border-radius:12px;">
+            ${renderTabHeader('最新行情', '📊', '#1976d2', 0, isListed ? '🟢 掛牌中' : '⚫ 已下市', cbCode, cbNameInquiry)}
+            <div style="text-align:center; margin-top:15px;">
+                <div style="font-size:56px; margin-bottom:18px;">📋</div>
+                <div style="font-weight:bold; color:#1976d2; font-size:18px; margin-bottom:12px;">詢圈發行</div>
+                <div style="color:#666; font-size:15px;">無競拍截標日行情資料</div>
+                ${isListed ? `<div style="margin-top:12px; font-size:14px; color:#999;">如需最新報價，請確認09工作表已更新</div>` : ''}
+            </div>
+        </div>
         </div>
     `;
 }
@@ -16620,9 +16772,12 @@ function renderBasicInfoBalance(cbCode, container) {
     const completeness = calculateDataCompleteness(mergedBalance, balanceFields);
     const statusLabel = isListed ? '🟢 掛牌中' : '⚫ 已下市';
     
+    // v3.97-zs-ag: 取得名稱
+    const cbName = getValue(quoteData?.['名稱  '], quoteData?.['名稱'], balanceData?.['名稱'], sheet08Row?.['名稱'], auctionData?.['名稱']);
+    
     const html = `
         <div style="background:linear-gradient(135deg, #e0f7fa 0%, #b2ebf2 100%); padding:25px; border-radius:12px;">
-            ${renderTabHeader('餘額變化', '📈', '#00838f', completeness.percentage, statusLabel)}
+            ${renderTabHeader('餘額變化', '📈', '#00838f', completeness.percentage, statusLabel, cbCode, cbName)}
             
             <!-- 主要餘額資訊 -->
             <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:15px; margin-bottom:18px;">

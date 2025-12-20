@@ -3296,7 +3296,9 @@ function formatDate(dateVal) {
         return `${date.getFullYear()}/${(date.getMonth()+1).toString().padStart(2,'0')}/${date.getDate().toString().padStart(2,'0')}`;
     }
     if (typeof dateVal === 'string') {
-        return dateVal.replace(/-/g, '/');
+        // v3.97-zs-bg: 移除時間部分 (處理 "2024-07-19 00:00:00" 格式)
+        let dateOnly = dateVal.split(' ')[0];  // 取空格前的日期部分
+        return dateOnly.replace(/-/g, '/');
     }
     return dateVal;
 }
@@ -3382,7 +3384,7 @@ function parseCSVLine(line) {
 }
 
 /**
- * v3.97-zs-bg: 載入 CSV 並轉換為 JSON 陣列
+ * v3.97-zs-bg: 載入 CSV 並轉換為 JSON 陣列（優化版）
  * @param {string} csvPath - CSV 檔案路徑
  * @returns {Promise<Array>} - JSON 陣列
  */
@@ -3397,30 +3399,35 @@ async function loadCSV(csvPath) {
         
         // 解析標題列
         const headers = parseCSVLine(lines[0]);
-        const result = [];
+        const headerCount = headers.length;
+        const result = new Array(lines.length - 1);  // 預分配陣列大小
+        let resultIdx = 0;
         
         for (let i = 1; i < lines.length; i++) {
-            const line = lines[i].trim();
-            if (!line) continue;
+            const line = lines[i];
+            if (!line || line.length < 2) continue;
             
             const cols = parseCSVLine(line);
             const row = {};
-            headers.forEach((h, idx) => {
-                let val = cols[idx] || '';
-                // 嘗試轉換數字
-                if (val && !isNaN(val) && val !== '') {
-                    const num = parseFloat(val);
-                    if (!isNaN(num)) val = num;
+            for (let j = 0; j < headerCount; j++) {
+                let val = cols[j] || '';
+                // 嘗試轉換數字（跳過空值和純空白）
+                if (val && val.length > 0) {
+                    const trimVal = typeof val === 'string' ? val.trim() : val;
+                    if (trimVal && !isNaN(trimVal)) {
+                        const num = parseFloat(trimVal);
+                        if (!isNaN(num)) val = num;
+                    }
                 }
-                row[h.trim()] = val;
-            });
-            result.push(normalizeKeys(row));
+                row[headers[j].trim()] = val;
+            }
+            result[resultIdx++] = normalizeKeys(row);
         }
         
-        console.log(`✅ CSV 載入: ${csvPath} (${result.length} 筆)`);
+        // 移除未使用的陣列空間
+        result.length = resultIdx;
         return result;
     } catch (e) {
-        console.warn(`⚠️ CSV 載入失敗: ${csvPath}`, e.message);
         return null;
     }
 }
@@ -3465,71 +3472,71 @@ async function loadStatistics() {
             console.log('📁 使用 CSV 快速載入模式');
         }
         
-        // 載入各工作表資料 (檔名對應用戶實際的CSV命名)
-        const sheetAuction = useCSV 
-            ? testCSV  // 04_auction.csv 已經載入
-            : await loadExcelSheet(workbook, ['04_', '04', '所有CB競拍']);
-            
-        const sheetHighLow = useCSV 
-            ? await loadCSV(`${csvBasePath}00_CB_filter.csv`)
-            : await loadExcelSheet(workbook, ['00_', '00', '掛牌', '名稱過濾']);
-            
-        const sheetAllCB = useCSV 
-            ? await loadCSV(`${csvBasePath}01_basic.csv`)
-            : await loadExcelSheet(workbook, ['01_', '01', 'ALLCB基本']);
-            
-        const sheetSchedule = useCSV 
-            ? await loadCSV(`${csvBasePath}02_schedule.csv`)
-            : await loadExcelSheet(workbook, ['02_', 'ALLCB發行時程']);
-            
-        const sheetPutback = useCSV 
-            ? await loadCSV(`${csvBasePath}03_putback.csv`)
-            : await loadExcelSheet(workbook, ['03_', 'ALLCB賣回']);
-            
-        const sheetListed = useCSV 
-            ? await loadCSV(`${csvBasePath}08_weekly_basic.csv`)
-            : await loadExcelSheet(workbook, ['08_', '08']);
-            
-        const sheetPending = useCSV 
-            ? await loadCSV(`${csvBasePath}06_issue.csv`)
-            : await loadExcelSheet(workbook, ['06_', '06', '發行案件']);
-            
-        const sheetBoard = useCSV 
-            ? await loadCSV(`${csvBasePath}07_board.csv`)
-            : await loadExcelSheet(workbook, ['07_', '07', '董事會']);
-            
-        const sheetCBClose = useCSV 
-            ? await loadCSV(`${csvBasePath}09_weekly_quote.csv`)
-            : await loadExcelSheet(workbook, ['09_', '09', '每週日行情']);
-            
-        const sheetBalance = useCSV 
-            ? await loadCSV(`${csvBasePath}10_weekly_balance.csv`)
-            : await loadExcelSheet(workbook, ['10_', '10', '每週餘額']);
-            
-        const sheetIndustry = useCSV 
-            ? await loadCSV(`${csvBasePath}16_industry.csv`)
-            : await loadExcelSheet(workbook, ['16_', '16', '產業分類']);
-            
-        const sheetSuspend = useCSV 
-            ? await loadCSV(`${csvBasePath}13_stop_convert.csv`)
-            : await loadExcelSheet(workbook, ['13_', '13', '停止轉換', '暫停轉換']);
+        // v3.97-zs-bg: 使用 Promise.all 並行載入所有 CSV（大幅提升效能）
+        let sheetAuction, sheetHighLow, sheetAllCB, sheetSchedule, sheetPutback;
+        let sheetListed, sheetPending, sheetBoard, sheetCBClose, sheetBalance;
+        let sheetIndustry, sheetSuspend, sheetFilterRange, sheetCallExecute;
+        let sheetPriceAdjust, sheetCbasCalc;
         
-        // v3.97-zs-bg: 預留工作表載入（供日後擴充使用）
-        const sheetFilterRange = useCSV 
-            ? await loadCSV(`${csvBasePath}05_filter_range.csv`)
-            : await loadExcelSheet(workbook, ['05_', '05', '篩選範圍']);
+        if (useCSV) {
+            // 並行載入所有 CSV 檔案
+            const csvFiles = [
+                loadCSV(`${csvBasePath}00_CB_filter.csv`),      // 0
+                loadCSV(`${csvBasePath}01_basic.csv`),          // 1
+                loadCSV(`${csvBasePath}02_schedule.csv`),       // 2
+                loadCSV(`${csvBasePath}03_putback.csv`),        // 3
+                loadCSV(`${csvBasePath}06_issue.csv`),          // 4
+                loadCSV(`${csvBasePath}07_board.csv`),          // 5
+                loadCSV(`${csvBasePath}08_weekly_basic.csv`),   // 6
+                loadCSV(`${csvBasePath}09_weekly_quote.csv`),   // 7
+                loadCSV(`${csvBasePath}10_weekly_balance.csv`), // 8
+                loadCSV(`${csvBasePath}13_stop_convert.csv`),   // 9
+                loadCSV(`${csvBasePath}16_industry.csv`),       // 10
+                loadCSV(`${csvBasePath}05_filter_range.csv`),   // 11 (預留)
+                loadCSV(`${csvBasePath}12_call_execute.csv`),   // 12 (預留)
+                loadCSV(`${csvBasePath}14_price_adjust.csv`),   // 13 (預留)
+                loadCSV(`${csvBasePath}15_cbas_calc.csv`)       // 14 (預留)
+            ];
             
-        const sheetCallExecute = useCSV 
-            ? await loadCSV(`${csvBasePath}12_call_execute.csv`)
-            : await loadExcelSheet(workbook, ['12_', '12', '強制贖回']);
+            const results = await Promise.all(csvFiles);
             
-        const sheetPriceAdjust = useCSV 
-            ? await loadCSV(`${csvBasePath}14_price_adjust.csv`)
-            : await loadExcelSheet(workbook, ['14_', '14', '價格調整']);
+            sheetAuction = testCSV;  // 04_auction.csv 已經載入
+            sheetHighLow = results[0];
+            sheetAllCB = results[1];
+            sheetSchedule = results[2];
+            sheetPutback = results[3];
+            sheetPending = results[4];
+            sheetBoard = results[5];
+            sheetListed = results[6];
+            sheetCBClose = results[7];
+            sheetBalance = results[8];
+            sheetSuspend = results[9];
+            sheetIndustry = results[10];
+            sheetFilterRange = results[11];
+            sheetCallExecute = results[12];
+            sheetPriceAdjust = results[13];
+            sheetCbasCalc = results[14];
             
-        const sheetCbasCalc = useCSV 
-            ? await loadCSV(`${csvBasePath}15_cbas_calc.csv`)
-            : await loadExcelSheet(workbook, ['15_', '15', 'CBAS計算']);
+            console.log('✅ CSV 並行載入完成');
+        } else {
+            // Excel 模式：逐一載入
+            sheetAuction = await loadExcelSheet(workbook, ['04_', '04', '所有CB競拍']);
+            sheetHighLow = await loadExcelSheet(workbook, ['00_', '00', '掛牌', '名稱過濾']);
+            sheetAllCB = await loadExcelSheet(workbook, ['01_', '01', 'ALLCB基本']);
+            sheetSchedule = await loadExcelSheet(workbook, ['02_', 'ALLCB發行時程']);
+            sheetPutback = await loadExcelSheet(workbook, ['03_', 'ALLCB賣回']);
+            sheetListed = await loadExcelSheet(workbook, ['08_', '08']);
+            sheetPending = await loadExcelSheet(workbook, ['06_', '06', '發行案件']);
+            sheetBoard = await loadExcelSheet(workbook, ['07_', '07', '董事會']);
+            sheetCBClose = await loadExcelSheet(workbook, ['09_', '09', '每週日行情']);
+            sheetBalance = await loadExcelSheet(workbook, ['10_', '10', '每週餘額']);
+            sheetIndustry = await loadExcelSheet(workbook, ['16_', '16', '產業分類']);
+            sheetSuspend = await loadExcelSheet(workbook, ['13_', '13', '停止轉換', '暫停轉換']);
+            sheetFilterRange = await loadExcelSheet(workbook, ['05_', '05', '篩選範圍']);
+            sheetCallExecute = await loadExcelSheet(workbook, ['12_', '12', '強制贖回']);
+            sheetPriceAdjust = await loadExcelSheet(workbook, ['14_', '14', '價格調整']);
+            sheetCbasCalc = await loadExcelSheet(workbook, ['15_', '15', 'CBAS計算']);
+        }
         
         // v3.97-zs-ag: 抓取 sheet10 日期 (從 CSV 標題或 Excel H1)
         window.sheet10Date = null;

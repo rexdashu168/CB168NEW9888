@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97-zs-ay (訂價溢價率+提早下市天數+智能搜尋)</title>
+<title>AI智能可轉債競拍系統 v3.97-zs-az (融資融券整合)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <!-- v3.97-zs-ae: 改用 CB_kanban_YYYY.xlsx 載入時間序列資料，取代 kanban_data.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -17777,7 +17777,7 @@ async function renderWeeklyTable(cbCode) {
     
     const searchCode = String(cbCode).trim();
     
-    // 確保資料載入
+    // 確保週餘額資料載入
     if (!window.weeklyBalanceData.loaded && !window.weeklyBalanceData.loading) {
         container.innerHTML = `<div style="text-align:center; padding:40px; color:#666;">⏳ 載入週餘額資料中...</div>`;
         loadWeeklyBalanceData().then(() => {
@@ -17795,6 +17795,11 @@ async function renderWeeklyTable(cbCode) {
             }
         }, 200);
         return;
+    }
+    
+    // v3.97-zs-az: 同時載入融資融券資料
+    if (!window.marginData.loaded && !window.marginData.loading) {
+        loadMarginData(); // 背景載入，不阻塞
     }
     
     // 取得時間區間
@@ -17833,22 +17838,31 @@ async function renderWeeklyTable(cbCode) {
         totalIssue = (parseFloat(sheet08Row['實際發行總額(百萬)']) || 0) * 10; // 百萬×10=張
     }
     
+    // v3.97-zs-az: 取得股票代號以查詢融資融券
+    const stockCode = getStockCodeFromCB(searchCode);
+    const hasMarginData = window.marginData.loaded && stockCode && window.marginData.data[stockCode];
+    
     const periodTexts = { '30': '1個月', '90': '3個月', '180': '6個月', '365': '1年', '730': '2年', '1095': '3年', 'all': '全部' };
     
+    // v3.97-zs-az: 表格加入融資融券欄位
     let tableHtml = `
         <div style="text-align:center; margin-bottom:12px; font-size:14px; color:#666;">
             📋 ${periodTexts[period] || period}週餘額變化記錄
+            ${stockCode ? `<span style="font-size:12px; color:#888;">（股票代號：${stockCode}）</span>` : ''}
         </div>
-        <div style="max-height:350px; overflow-y:auto;">
-            <table style="width:100%; border-collapse:collapse; font-size:13px;">
+        <div style="max-height:400px; overflow-y:auto; overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse; font-size:12px; min-width:900px;">
                 <thead style="position:sticky; top:0; background:#1976d2; color:white;">
                     <tr>
-                        <th style="padding:10px 6px; text-align:center;">日期</th>
-                        <th style="padding:10px 6px; text-align:right;">本週餘額</th>
-                        <th style="padding:10px 6px; text-align:right;">上週餘額</th>
-                        <th style="padding:10px 6px; text-align:right;">增減數額</th>
-                        <th style="padding:10px 6px; text-align:right;">增減比率</th>
-                        <th style="padding:10px 6px; text-align:right;">剩餘比率</th>
+                        <th style="padding:8px 4px; text-align:center; white-space:nowrap;">日期</th>
+                        <th style="padding:8px 4px; text-align:right; white-space:nowrap; border-right:2px solid rgba(255,255,255,0.3);">CB餘額</th>
+                        <th style="padding:8px 4px; text-align:right; white-space:nowrap;">CB增減</th>
+                        <th style="padding:8px 4px; text-align:right; white-space:nowrap; border-right:2px solid rgba(255,255,255,0.3);">剩餘%</th>
+                        <th style="padding:8px 4px; text-align:right; white-space:nowrap; background:#c62828;">融資餘額</th>
+                        <th style="padding:8px 4px; text-align:right; white-space:nowrap; background:#c62828; border-right:2px solid rgba(255,255,255,0.3);">融資增減</th>
+                        <th style="padding:8px 4px; text-align:right; white-space:nowrap; background:#2e7d32;">融券餘額</th>
+                        <th style="padding:8px 4px; text-align:right; white-space:nowrap; background:#2e7d32;">融券增減</th>
+                        <th style="padding:8px 4px; text-align:right; white-space:nowrap; background:#2e7d32;">券償</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -17860,22 +17874,43 @@ async function renderWeeklyTable(cbCode) {
         const prevData = displayData[i + 1];
         const lastWeek = prevData?.balanceShares || thisWeek;
         const change = thisWeek - lastWeek;
-        const changeRate = lastWeek > 0 ? (change / lastWeek) * 100 : 0;
         const remainRate = totalIssue > 0 ? (thisWeek / totalIssue) * 100 : 100;
         const changeColor = change < 0 ? '#2e7d32' : change > 0 ? '#d32f2f' : '#666';
         
+        // v3.97-zs-az: 取得融資融券資料
+        let marginBalance = '-', marginChange = '-', shortBalance = '-', shortChange = '-', shortCover = '-';
+        let marginChangeColor = '#666', shortChangeColor = '#666';
+        
+        if (hasMarginData) {
+            const marginInfo = getMarginDataForDate(stockCode, d.date);
+            if (marginInfo) {
+                marginBalance = formatNumber(marginInfo.marginBalance);
+                marginChange = marginInfo.marginChange;
+                shortBalance = formatNumber(marginInfo.shortBalance);
+                shortChange = marginInfo.shortChange;
+                shortCover = formatNumber(marginInfo.shortCover);
+                
+                marginChangeColor = marginInfo.marginChange > 0 ? '#c62828' : marginInfo.marginChange < 0 ? '#2e7d32' : '#666';
+                shortChangeColor = marginInfo.shortChange > 0 ? '#c62828' : marginInfo.shortChange < 0 ? '#2e7d32' : '#666';
+                
+                marginChange = marginInfo.marginChange !== 0 ? (marginInfo.marginChange > 0 ? '+' : '') + formatNumber(marginInfo.marginChange) : '0';
+                shortChange = marginInfo.shortChange !== 0 ? (marginInfo.shortChange > 0 ? '+' : '') + formatNumber(marginInfo.shortChange) : '0';
+            }
+        }
+        
         tableHtml += `
             <tr style="background:${bgColor};">
-                <td style="padding:8px 6px; text-align:center; color:#666;">${d.date}</td>
-                <td style="padding:8px 6px; text-align:right; font-weight:bold; color:#1976d2;">${formatNumber(thisWeek)}</td>
-                <td style="padding:8px 6px; text-align:right; color:#666;">${formatNumber(lastWeek)}</td>
-                <td style="padding:8px 6px; text-align:right; color:${changeColor}; font-weight:bold;">
+                <td style="padding:6px 4px; text-align:center; color:#666; white-space:nowrap;">${d.date}</td>
+                <td style="padding:6px 4px; text-align:right; font-weight:bold; color:#1976d2; border-right:1px solid #e0e0e0;">${formatNumber(thisWeek)}</td>
+                <td style="padding:6px 4px; text-align:right; color:${changeColor}; font-weight:bold;">
                     ${change !== 0 ? (change > 0 ? '+' : '') + formatNumber(change) : '0'}
                 </td>
-                <td style="padding:8px 6px; text-align:right; color:${changeColor};">
-                    ${changeRate !== 0 ? (changeRate > 0 ? '+' : '') + changeRate.toFixed(2) + '%' : '0%'}
-                </td>
-                <td style="padding:8px 6px; text-align:right; color:#1565c0;">${remainRate.toFixed(1)}%</td>
+                <td style="padding:6px 4px; text-align:right; color:#1565c0; border-right:1px solid #e0e0e0;">${remainRate.toFixed(1)}%</td>
+                <td style="padding:6px 4px; text-align:right; color:#c62828; font-weight:500;">${marginBalance}</td>
+                <td style="padding:6px 4px; text-align:right; color:${marginChangeColor}; border-right:1px solid #e0e0e0;">${marginChange}</td>
+                <td style="padding:6px 4px; text-align:right; color:#2e7d32; font-weight:500;">${shortBalance}</td>
+                <td style="padding:6px 4px; text-align:right; color:${shortChangeColor};">${shortChange}</td>
+                <td style="padding:6px 4px; text-align:right; color:#7b1fa2;">${shortCover}</td>
             </tr>
         `;
     });
@@ -17884,8 +17919,10 @@ async function renderWeeklyTable(cbCode) {
                 </tbody>
             </table>
         </div>
-        <div style="text-align:center; font-size:12px; color:#888; margin-top:10px;">
-            顯示 ${displayData.length} 週資料 | 單位：張
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; color:#888; margin-top:10px; flex-wrap:wrap; gap:8px;">
+            <span>顯示 ${displayData.length} 週資料</span>
+            <span>CB單位：張 | 融資融券單位：張</span>
+            ${!hasMarginData ? '<span style="color:#f57c00;">⚠️ 融資融券資料載入中或無對應股票</span>' : ''}
         </div>
     `;
     
@@ -18710,6 +18747,178 @@ window.weeklyBalanceData = {
     loading: false,
     data: {}  // { cbCode: [{ date, balance, ... }, ...] }
 };
+
+// v3.97-zs-az 新增：融資融券資料
+window.marginData = {
+    loaded: false,
+    loading: false,
+    data: {}  // { stockCode: { date: { marginBalance, marginChange, shortBalance, shortChange, shortCover }, ... } }
+};
+
+/**
+ * v3.97-zs-az 新增：載入融資融券資料
+ * 從 tpxlending (上市) 和 otclending (上櫃) 檔案載入
+ */
+async function loadMarginData() {
+    if (window.marginData.loaded || window.marginData.loading) return;
+    window.marginData.loading = true;
+    
+    console.log('📊 開始載入融資融券資料...');
+    const startTime = Date.now();
+    
+    const allData = {};
+    const files = [
+        { path: 'data/margin/tpxlending_2025_stock_only.xlsx', cols: { margin: '融資餘額', short: '融券餘額', cover: '現券償還' } },
+        { path: 'data/margin/otclending_2025_stock_only.xlsx', cols: { margin: '資餘額', short: '券餘額', cover: '券償' } }
+    ];
+    
+    for (const file of files) {
+        try {
+            const response = await fetch(file.path);
+            if (!response.ok) {
+                console.warn(`融資融券檔案不存在: ${file.path}`);
+                continue;
+            }
+            
+            const workbook = XLSX.read(await response.arrayBuffer(), { type: 'array' });
+            
+            // 取得所有日期工作表（YYYYMMDD格式）
+            const validSheets = workbook.SheetNames.filter(name => /^\d{8}$/.test(name)).sort();
+            console.log(`📈 ${file.path}: ${validSheets.length} 個交易日`);
+            
+            for (const sheetName of validSheets) {
+                const sheet = workbook.Sheets[sheetName];
+                const rawData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+                if (rawData.length < 2) continue;
+                
+                // 找出欄位位置
+                const headers = rawData[0];
+                let codeIdx = -1, marginIdx = -1, shortIdx = -1, coverIdx = -1;
+                
+                headers.forEach((h, idx) => {
+                    const col = String(h || '').trim();
+                    if (col === '代號') codeIdx = idx;
+                    if (col === file.cols.margin) marginIdx = idx;
+                    if (col === file.cols.short) shortIdx = idx;
+                    if (col === file.cols.cover) coverIdx = idx;
+                });
+                
+                if (codeIdx < 0) continue;
+                
+                // 轉換日期格式
+                const dateStr = `${sheetName.substring(0, 4)}/${sheetName.substring(4, 6)}/${sheetName.substring(6, 8)}`;
+                
+                // 處理每一列
+                for (let i = 1; i < rawData.length; i++) {
+                    const row = rawData[i];
+                    const code = String(row[codeIdx] || '').trim();
+                    if (!code) continue;
+                    
+                    const marginBalance = parseInt(row[marginIdx]) || 0;
+                    const shortBalance = parseInt(row[shortIdx]) || 0;
+                    const shortCover = parseInt(row[coverIdx]) || 0;
+                    
+                    if (!allData[code]) allData[code] = {};
+                    
+                    allData[code][dateStr] = {
+                        marginBalance,
+                        shortBalance,
+                        shortCover
+                    };
+                }
+            }
+            
+            // 計算每日增減（需要前一日資料）
+            for (const code of Object.keys(allData)) {
+                const dates = Object.keys(allData[code]).sort();
+                for (let i = 0; i < dates.length; i++) {
+                    const today = allData[code][dates[i]];
+                    if (i > 0) {
+                        const yesterday = allData[code][dates[i - 1]];
+                        today.marginChange = today.marginBalance - yesterday.marginBalance;
+                        today.shortChange = today.shortBalance - yesterday.shortBalance;
+                    } else {
+                        today.marginChange = 0;
+                        today.shortChange = 0;
+                    }
+                }
+            }
+            
+        } catch (err) {
+            console.warn(`載入 ${file.path} 失敗:`, err.message);
+        }
+    }
+    
+    window.marginData.data = allData;
+    window.marginData.loaded = true;
+    window.marginData.loading = false;
+    
+    console.log(`✅ 融資融券載入完成: ${Object.keys(allData).length} 檔股票, ${Date.now() - startTime}ms`);
+}
+
+/**
+ * v3.97-zs-az: 取得CB對應的股票代號
+ */
+function getStockCodeFromCB(cbCode) {
+    const searchCode = String(cbCode).trim();
+    
+    // 從 sheet08Data 取得
+    if (window.sheet08Data?.length > 0) {
+        const row = window.sheet08Data.find(r => String(r['代號']).trim() === searchCode);
+        if (row) {
+            const stockCode = String(row['轉換標的代碼'] || row['股票代號'] || '').trim();
+            if (stockCode) return stockCode;
+        }
+    }
+    
+    // 從 auctionDataCache 取得
+    if (window.auctionDataCache?.length > 0) {
+        const row = window.auctionDataCache.find(r => String(r['CB代號']).trim() === searchCode);
+        if (row) {
+            const stockCode = String(row['股票代號'] || '').trim();
+            if (stockCode) return stockCode;
+        }
+    }
+    
+    // 從 cbDatabase 取得
+    if (window.cbDatabase?.allCB) {
+        const cb = window.cbDatabase.allCB.find(c => c.code === searchCode);
+        if (cb?.stockCode) return cb.stockCode;
+    }
+    
+    return null;
+}
+
+/**
+ * v3.97-zs-az: 取得指定股票在指定日期的融資融券資料
+ */
+function getMarginDataForDate(stockCode, dateStr) {
+    if (!window.marginData.loaded || !stockCode) return null;
+    
+    const stockData = window.marginData.data[stockCode];
+    if (!stockData) return null;
+    
+    // 直接匹配日期
+    if (stockData[dateStr]) return stockData[dateStr];
+    
+    // 找最接近的日期（週資料可能在假日，找最近的交易日）
+    const dates = Object.keys(stockData).sort();
+    const targetNum = parseInt(dateStr.replace(/\//g, ''));
+    
+    let closestDate = null;
+    let minDiff = Infinity;
+    
+    for (const d of dates) {
+        const dNum = parseInt(d.replace(/\//g, ''));
+        const diff = Math.abs(dNum - targetNum);
+        if (diff < minDiff && dNum <= targetNum) {
+            minDiff = diff;
+            closestDate = d;
+        }
+    }
+    
+    return closestDate ? stockData[closestDate] : null;
+}
 
 /**
  * v3.97-zs-at 新增：載入週餘額時間序列

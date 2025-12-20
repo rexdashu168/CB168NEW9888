@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97-zs-au (週/月餘額分開+Y軸優化)</title>
+<title>AI智能可轉債競拍系統 v3.97-zs-aw (週走勢SVG+月記錄每月一筆)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <!-- v3.97-zs-ae: 改用 CB_kanban_YYYY.xlsx 載入時間序列資料，取代 kanban_data.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -17542,74 +17542,106 @@ async function renderWeeklyChart(cbCode) {
     const periodTexts = { '30': '1個月', '90': '3個月', '180': '6個月', '365': '1年', '730': '2年', '1095': '3年', 'all': '全部' };
     const periodText = periodTexts[period] || period;
     
-    // 計算Y軸範圍（±5%）
-    const balances = filteredData.map(d => d.balanceShares);
+    // 計算Y軸範圍（數據±10%）
+    const balances = filteredData.map(d => d.balanceShares).filter(v => v > 0);
+    if (balances.length === 0) {
+        container.innerHTML = `<div style="text-align:center; color:#888; padding:40px;">選定區間內無餘額資料</div>`;
+        return;
+    }
+    
     const minBalance = Math.min(...balances);
     const maxBalance = Math.max(...balances);
-    const range = maxBalance - minBalance;
-    const yMin = range > 0 ? Math.max(0, minBalance - range * 0.1) : minBalance * 0.95;
-    const yMax = range > 0 ? maxBalance + range * 0.1 : maxBalance * 1.05;
+    let yMin, yMax;
+    if (maxBalance === minBalance) {
+        yMin = minBalance * 0.95;
+        yMax = maxBalance * 1.05;
+    } else {
+        const dataRange = maxBalance - minBalance;
+        yMin = Math.max(0, minBalance - dataRange * 0.1);
+        yMax = maxBalance + dataRange * 0.1;
+    }
+    const range = yMax - yMin || 1;
     
-    // 繪製走勢圖
-    const chartId = `weeklyChart_${searchCode}_${Date.now()}`;
-    const chartHtml = `
-        <div style="text-align:center; margin-bottom:12px; font-size:14px; color:#666;">
-            📈 ${periodText}週餘額走勢（資料來源：元大週報）
+    // SVG 尺寸
+    const width = 650;
+    const height = 220;
+    const padding = 55;
+    const chartWidth = width - padding * 2;
+    const chartHeight = height - padding * 2;
+    
+    // 生成路徑
+    let pathD = '';
+    let validPoints = 0;
+    filteredData.forEach((d, i) => {
+        const balance = d.balanceShares || 0;
+        if (balance <= 0) return;
+        
+        const x = padding + (validPoints / Math.max(filteredData.length - 1, 1)) * chartWidth;
+        const y = padding + chartHeight - ((balance - yMin) / range) * chartHeight;
+        if (validPoints === 0) {
+            pathD += `M ${x} ${y}`;
+        } else {
+            pathD += ` L ${x} ${y}`;
+        }
+        validPoints++;
+    });
+    
+    // 計算變化趨勢
+    const firstBalance = filteredData[0]?.balanceShares || 0;
+    const lastBalance = filteredData[filteredData.length - 1]?.balanceShares || 0;
+    const changeAmount = lastBalance - firstBalance;
+    const changeRatio = firstBalance > 0 ? ((changeAmount / firstBalance) * 100).toFixed(2) : 0;
+    const trendColor = changeAmount <= 0 ? '#2e7d32' : '#d32f2f';
+    const trendIcon = changeAmount <= 0 ? '📉 減少' : '📈 增加';
+    const trendText = changeAmount <= 0 ? '(籌碼收斂中)' : '(籌碼增加中)';
+    
+    container.innerHTML = `
+        <div style="text-align:center; margin-bottom:15px;">
+            <span style="font-size:14px; color:#666;">📈 ${periodText}週餘額走勢（資料來源：元大週報）</span>
         </div>
-        <canvas id="${chartId}" style="width:100%; height:280px;"></canvas>
-        <div style="text-align:center; font-size:12px; color:#888; margin-top:10px;">
-            共 ${filteredData.length} 週資料 | 單位：張
+        <div style="display:flex; justify-content:space-around; margin-bottom:15px; padding:10px; background:#f5f5f5; border-radius:8px;">
+            <div style="text-align:center;">
+                <div style="font-size:12px; color:#888;">期初餘額</div>
+                <div style="font-size:16px; font-weight:bold; color:#1976d2;">${formatNumber(firstBalance)} 張</div>
+            </div>
+            <div style="text-align:center;">
+                <div style="font-size:12px; color:#888;">期末餘額</div>
+                <div style="font-size:16px; font-weight:bold; color:#e65100;">${formatNumber(lastBalance)} 張</div>
+            </div>
+            <div style="text-align:center;">
+                <div style="font-size:12px; color:#888;">變化</div>
+                <div style="font-size:16px; font-weight:bold; color:${trendColor};">
+                    ${trendIcon} ${formatNumber(Math.abs(changeAmount))} 張 (${changeRatio}%)
+                </div>
+                <div style="font-size:11px; color:${trendColor};">${trendText}</div>
+            </div>
+        </div>
+        <svg width="100%" viewBox="0 0 ${width} ${height}" style="max-width:650px; display:block; margin:0 auto;">
+            <!-- 背景網格 -->
+            <rect x="${padding}" y="${padding}" width="${chartWidth}" height="${chartHeight}" fill="#fafafa" stroke="#e0e0e0"/>
+            ${[0, 0.25, 0.5, 0.75, 1].map(ratio => {
+                const y = padding + chartHeight * (1 - ratio);
+                const val = formatNumber(Math.round(yMin + range * ratio));
+                return `<line x1="${padding}" y1="${y}" x2="${width - padding}" y2="${y}" stroke="#e0e0e0" stroke-dasharray="3,3"/>
+                        <text x="${padding - 5}" y="${y + 4}" text-anchor="end" font-size="11" fill="#888">${val}</text>`;
+            }).join('')}
+            
+            <!-- 走勢線 -->
+            <path d="${pathD}" fill="none" stroke="#1976d2" stroke-width="2.5"/>
+            
+            <!-- 起點終點標記 -->
+            ${firstBalance > 0 ? `<circle cx="${padding}" cy="${padding + chartHeight - ((firstBalance - yMin) / range) * chartHeight}" r="5" fill="#1976d2"/>` : ''}
+            ${lastBalance > 0 ? `<circle cx="${width - padding}" cy="${padding + chartHeight - ((lastBalance - yMin) / range) * chartHeight}" r="5" fill="${trendColor}"/>` : ''}
+            
+            <!-- Y軸標題 -->
+            <text x="15" y="${height / 2}" text-anchor="middle" font-size="12" fill="#666" transform="rotate(-90, 15, ${height / 2})">餘額(張)</text>
+        </svg>
+        <div style="display:flex; justify-content:space-between; font-size:12px; color:#888; margin-top:10px; padding:0 55px;">
+            <span>${filteredData[0]?.date || ''}</span>
+            <span>共 ${filteredData.length} 週資料</span>
+            <span>${filteredData[filteredData.length - 1]?.date || ''}</span>
         </div>
     `;
-    
-    container.innerHTML = chartHtml;
-    
-    // 使用 Chart.js 繪製
-    setTimeout(() => {
-        const ctx = document.getElementById(chartId)?.getContext('2d');
-        if (!ctx) return;
-        
-        new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: filteredData.map(d => d.date),
-                datasets: [{
-                    label: '週餘額(張)',
-                    data: filteredData.map(d => d.balanceShares),
-                    borderColor: '#1976d2',
-                    backgroundColor: 'rgba(25, 118, 210, 0.1)',
-                    fill: true,
-                    tension: 0.3,
-                    pointRadius: filteredData.length > 50 ? 0 : 3,
-                    pointHoverRadius: 5
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        callbacks: {
-                            label: (ctx) => `餘額: ${formatNumber(ctx.raw)} 張`
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        ticks: { maxTicksLimit: 8, maxRotation: 45 }
-                    },
-                    y: {
-                        min: Math.floor(yMin),
-                        max: Math.ceil(yMax),
-                        ticks: {
-                            callback: (v) => formatNumber(v)
-                        }
-                    }
-                }
-            }
-        });
-    }, 50);
 }
 
 /**
@@ -17860,6 +17892,17 @@ async function renderConversionChart(cbCode) {
         filteredData = allData;
     }
     
+    // v3.97-zs-aw: 只保留每個月最後一筆資料
+    const monthlyData = {};
+    filteredData.forEach(d => {
+        if (!d.date) return;
+        const yearMonth = d.date.substring(0, 7);
+        if (!monthlyData[yearMonth] || d.date > monthlyData[yearMonth].date) {
+            monthlyData[yearMonth] = d;
+        }
+    });
+    filteredData = Object.values(monthlyData).sort((a, b) => a.date.localeCompare(b.date));
+    
     // 計算最大最小值（balance 單位是億元）
     const balances = filteredData.map(d => d.balance || 0).filter(v => v > 0);
     if (balances.length === 0) {
@@ -18089,8 +18132,23 @@ async function renderConversionTable(cbCode) {
         totalIssue = totalIssue / 100; // 轉為億元
     }
     
-    // 倒序顯示（最新在前），並計算增減
-    const displayData = [...filteredData].reverse();
+    // v3.97-zs-aw: 只保留每個月最後一筆資料
+    const monthlyData = {};
+    filteredData.forEach(d => {
+        if (!d.date) return;
+        // 取得年月 (YYYY/MM)
+        const yearMonth = d.date.substring(0, 7);
+        // 只保留該月最新的一筆（日期較大的）
+        if (!monthlyData[yearMonth] || d.date > monthlyData[yearMonth].date) {
+            monthlyData[yearMonth] = d;
+        }
+    });
+    
+    // 轉為陣列並按日期排序
+    const monthlyArray = Object.values(monthlyData).sort((a, b) => a.date.localeCompare(b.date));
+    
+    // 倒序顯示（最新在前）
+    const displayData = [...monthlyArray].reverse();
     
     // 時間區間文字
     const periodTexts = {
@@ -18099,18 +18157,18 @@ async function renderConversionTable(cbCode) {
     };
     const periodText = periodTexts[period] || period;
     
-    // v3.97-zs-ap: 改用新的欄位格式（本週餘額、上週餘額、增減數額、增減比率、剩餘比率）
+    // v3.97-zs-aw: 月餘額記錄表（欄位改為本月/上月）
     let tableHtml = `
         <div style="text-align:center; margin-bottom:12px; font-size:14px; color:#666;">
-            📋 ${periodText}餘額變化記錄
+            📑 ${periodText}月餘額變化記錄
         </div>
         <div style="max-height:350px; overflow-y:auto;">
             <table style="width:100%; border-collapse:collapse; font-size:13px;">
                 <thead style="position:sticky; top:0; background:#00838f; color:white;">
                     <tr>
-                        <th style="padding:10px 6px; text-align:center;">日期</th>
-                        <th style="padding:10px 6px; text-align:right;">本週餘額</th>
-                        <th style="padding:10px 6px; text-align:right;">上週餘額</th>
+                        <th style="padding:10px 6px; text-align:center;">月份</th>
+                        <th style="padding:10px 6px; text-align:right;">本月餘額</th>
+                        <th style="padding:10px 6px; text-align:right;">上月餘額</th>
                         <th style="padding:10px 6px; text-align:right;">增減數額</th>
                         <th style="padding:10px 6px; text-align:right;">增減比率</th>
                         <th style="padding:10px 6px; text-align:right;">剩餘比率</th>
@@ -18122,30 +18180,33 @@ async function renderConversionTable(cbCode) {
     displayData.forEach((d, i) => {
         const bgColor = i % 2 === 0 ? '#f5f5f5' : 'white';
         
-        // 本週餘額（億元轉張數：億元 × 10000 = 張）
-        const thisWeekBalance = d.balance || 0;
-        const thisWeekShares = Math.round(thisWeekBalance * 10000);
+        // 本月餘額（億元轉張數：億元 × 10000 = 張）
+        const thisMonthBalance = d.balance || 0;
+        const thisMonthShares = Math.round(thisMonthBalance * 10000);
         
-        // 上週餘額（取下一筆，因為是倒序排列）
+        // 上月餘額（取下一筆，因為是倒序排列）
         const prevData = displayData[i + 1];
-        const lastWeekBalance = prevData?.balance || thisWeekBalance;
-        const lastWeekShares = Math.round(lastWeekBalance * 10000);
+        const lastMonthBalance = prevData?.balance || thisMonthBalance;
+        const lastMonthShares = Math.round(lastMonthBalance * 10000);
         
         // 增減數額和比率
-        const changeShares = thisWeekShares - lastWeekShares;
-        const changeRate = lastWeekShares > 0 ? ((changeShares / lastWeekShares) * 100) : 0;
+        const changeShares = thisMonthShares - lastMonthShares;
+        const changeRate = lastMonthShares > 0 ? ((changeShares / lastMonthShares) * 100) : 0;
         
         // 剩餘比率
-        const remainRate = totalIssue > 0 ? ((thisWeekBalance / totalIssue) * 100) : 100;
+        const remainRate = totalIssue > 0 ? ((thisMonthBalance / totalIssue) * 100) : 100;
         
         // 顏色：減少為綠色（轉換中），增加為紅色
         const changeColor = changeShares < 0 ? '#2e7d32' : changeShares > 0 ? '#d32f2f' : '#666';
         
+        // 顯示年月
+        const displayMonth = d.date ? d.date.substring(0, 7) : '-';
+        
         tableHtml += `
             <tr style="background:${bgColor};">
-                <td style="padding:8px 6px; text-align:center; color:#666;">${d.date || '-'}</td>
-                <td style="padding:8px 6px; text-align:right; font-weight:bold; color:#00838f;">${formatNumber(thisWeekShares)}</td>
-                <td style="padding:8px 6px; text-align:right; color:#666;">${formatNumber(lastWeekShares)}</td>
+                <td style="padding:8px 6px; text-align:center; color:#666;">${displayMonth}</td>
+                <td style="padding:8px 6px; text-align:right; font-weight:bold; color:#00838f;">${formatNumber(thisMonthShares)}</td>
+                <td style="padding:8px 6px; text-align:right; color:#666;">${formatNumber(lastMonthShares)}</td>
                 <td style="padding:8px 6px; text-align:right; color:${changeColor}; font-weight:bold;">
                     ${changeShares !== 0 ? (changeShares > 0 ? '+' : '') + formatNumber(changeShares) : '0'}
                 </td>
@@ -18162,7 +18223,7 @@ async function renderConversionTable(cbCode) {
             </table>
         </div>
         <div style="text-align:center; font-size:12px; color:#888; margin-top:10px;">
-            顯示 ${displayData.length} 期資料 | 單位：張（1張=10萬元）
+            顯示 ${displayData.length} 個月資料 | 單位：張（1張=10萬元）
         </div>
     `;
     

@@ -15675,6 +15675,70 @@ function renderBasicInfoOverview(cbCode, container) {
     
     document.getElementById('basicInfoStatus').innerHTML = `✅ 已載入 ${cbCode} │ ${methodLabel} │ ${statusLabel} │ <span style="font-size:11px; color:#666;">${sourceLabel}</span>`;
     
+    // v3.97-zs-ag: 從 01 工作表取得補充資料
+    let sheet01Row = null;
+    if (window.sheet01Data && window.sheet01Data.length > 0) {
+        sheet01Row = window.sheet01Data.find(r => String(r['CB代號']).trim() === searchCode);
+    }
+    
+    // 信用評等 (01工作表 E欄)
+    const creditRating = sheet01Row?.['信用評等'] || data['信用評等'] || data['TCRI'] || '-';
+    
+    // 擔保情形 (01工作表 F欄)
+    const guarantee = sheet01Row?.['擔保'] || data['擔保'] || '-';
+    
+    // 發行價 (01工作表 O欄)
+    const issuePrice = sheet01Row?.['發行價格'] || data['底標價'] || '100';
+    
+    // 訂價溢價率 (01工作表 Q欄)
+    const pricingPremium = sheet01Row?.['訂價溢價率'] || data['訂價溢價率'] || data['定價溢價率'] || '';
+    
+    // 發行券商 - 只取前4位代碼
+    let brokerDisplay = data['發行券商'] || sheet01Row?.['發行券商'] || '-';
+    if (brokerDisplay && brokerDisplay !== '-') {
+        // 移除「證券」等後綴，只保留前4個字
+        brokerDisplay = brokerDisplay.replace(/證券.*$/, '').substring(0, 4);
+    }
+    
+    // 發行規模（億）
+    const issueSizeBillion = issueSize > 0 ? (issueSize / 100).toFixed(2) : '-';
+    
+    // v3.97-zs-ag: 從 kanban 取得股票最新市價和 CB 參考價格
+    let latestStockPrice = 0;  // kanban Q欄 - 轉換標的股票價格
+    let latestCBPrice = 0;     // kanban P欄 - 轉債參考價格
+    let kanbanDate = '';
+    
+    if (window.kanbanData?.loaded && window.kanbanData.data[searchCode]) {
+        const cbTimeSeries = window.kanbanData.data[searchCode];
+        if (cbTimeSeries && cbTimeSeries.length > 0) {
+            const latestRecord = cbTimeSeries[cbTimeSeries.length - 1];
+            if (latestRecord) {
+                latestStockPrice = latestRecord.stockPrice || 0;
+                latestCBPrice = latestRecord.cbPrice || 0;
+                kanbanDate = latestRecord.date || '';
+            }
+        }
+    }
+    
+    // 從 09 工作表補充（掛牌中CB）
+    if (!latestStockPrice && quoteData09) {
+        latestStockPrice = parseFloat(quoteData09['股價']) || 0;
+    }
+    if (!latestCBPrice && quoteData09) {
+        latestCBPrice = parseFloat(quoteData09['CB收盤價']) || 0;
+    }
+    
+    // 計算理論價 = 股票市價 / 轉換價 * 100
+    const theoreticalPrice = (latestStockPrice > 0 && convPrice > 0) 
+        ? (latestStockPrice / convPrice * 100).toFixed(2) 
+        : null;
+    
+    // 計算溢折價 = CB價格 / 理論價 - 1
+    let premiumDiscount = null;
+    if (latestCBPrice > 0 && theoreticalPrice && parseFloat(theoreticalPrice) > 0) {
+        premiumDiscount = ((latestCBPrice / parseFloat(theoreticalPrice) - 1) * 100).toFixed(2);
+    }
+    
     // v3.97-zs-af: 計算資料完整度
     const overviewFields = ['CB代號', '名稱', '股票代號', '產業分類', '信用評等', '擔保', '發行規模', '底標價', '年期', '發行券商', '轉換價', '掛牌日期', '到期日期'];
     const completeness = calculateDataCompleteness(data, overviewFields);
@@ -15840,27 +15904,26 @@ function renderBasicInfoOverview(cbCode, container) {
                     <tr><td style="color:#666; padding:6px 0;">名稱</td><td style="font-weight:600; padding:6px 0; text-align:right;">${data['名稱'] || '-'}</td></tr>
                     <tr><td style="color:#666; padding:6px 0;">轉換標的</td><td style="font-weight:600; padding:6px 0; text-align:right;">${data['股票代號'] || '-'}</td></tr>
                     <tr><td style="color:#666; padding:6px 0;">產業分類</td><td style="font-weight:600; padding:6px 0; text-align:right;">${industryInfo}</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">信用評等</td><td style="font-weight:600; padding:6px 0; text-align:right;">TCRI ${data['信用評等'] || data['TCRI'] || '-'}</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">擔保情形</td><td style="font-weight:600; padding:6px 0; text-align:right;">${data['擔保'] || '-'}</td></tr>
+                    <tr><td style="color:#666; padding:6px 0;">信用評等</td><td style="font-weight:600; padding:6px 0; text-align:right;">TCRI ${creditRating}</td></tr>
+                    <tr><td style="color:#666; padding:6px 0;">擔保情形</td><td style="font-weight:600; padding:6px 0; text-align:right;">${guarantee}</td></tr>
                     <tr><td style="color:#666; padding:6px 0;">發行方式</td><td style="color:${isAuction ? '#e65100' : '#1565c0'}; font-weight:bold; padding:6px 0; text-align:right;">${isAuction ? '🎯 競拍' : '📋 詢圈'}</td></tr>
                 </table>
             </div>
             
-            <!-- 發行條件卡 -->
+            <!-- 發行條件卡 - v3.97-zs-ag 優化：規模用億、發行價、訂價溢價率 -->
             <div style="background:#fff3e0; padding:20px; border-radius:12px; border-left:5px solid #ff9800;">
                 <div style="font-weight:bold; color:#e65100; margin-bottom:15px; font-size:16px;">💰 發行條件</div>
                 <table style="width:100%; font-size:15px; line-height:1.9;">
-                    <tr><td style="color:#666; width:40%; padding:6px 0;">發行規模</td><td style="font-weight:600; padding:6px 0; text-align:right;">${formatNumber(data['發行規模'])} 百萬</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">CB張數</td><td style="font-weight:600; padding:6px 0; text-align:right;">${formatNumber(totalShares)} 張</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">底標價</td><td style="font-weight:600; padding:6px 0; text-align:right;">${data['底標價'] || '100'}元</td></tr>
+                    <tr><td style="color:#666; width:40%; padding:6px 0;">發行規模</td><td style="font-weight:600; padding:6px 0; text-align:right;">${issueSizeBillion} 億 <span style="font-size:12px; color:#888;">(${formatNumber(totalShares)}張)</span></td></tr>
+                    <tr><td style="color:#666; padding:6px 0;">發行價</td><td style="font-weight:600; padding:6px 0; text-align:right;">${issuePrice}元</td></tr>
+                    <tr><td style="color:#666; padding:6px 0;">訂價溢價率</td><td style="font-weight:600; padding:6px 0; text-align:right; color:${pricingPremium && parseFloat(pricingPremium) > 0 ? '#c62828' : '#2e7d32'};">${pricingPremium ? pricingPremium + '%' : '-'}</td></tr>
                     <tr><td style="color:#666; padding:6px 0;">發行年期</td><td style="font-weight:600; padding:6px 0; text-align:right;">${data['年期'] || '-'}年</td></tr>
                     <tr><td style="color:#666; padding:6px 0;">剩餘年期</td><td style="color:${remainYears !== null && remainYears < 1 ? '#c62828' : '#2e7d32'}; font-weight:bold; padding:6px 0; text-align:right;">${remainYearsDisplay}</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">發行券商</td><td style="font-weight:600; padding:6px 0; font-size:14px; text-align:right;">${data['發行券商'] || '-'}</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">股本規模</td><td style="font-weight:600; padding:6px 0; text-align:right;">${formatNumber(data['股本(億)'])} 億</td></tr>
+                    <tr><td style="color:#666; padding:6px 0;">發行券商</td><td style="font-weight:600; padding:6px 0; text-align:right;">${brokerDisplay}</td></tr>
                 </table>
             </div>
             
-            <!-- 轉換資訊卡 - v3.97-zs-ag 優化轉換價格顯示 -->
+            <!-- 轉換資訊卡 - v3.97-zs-ag 優化：新增市價、理論價、CB參考價、溢折價 -->
             <div style="background:#e8f5e9; padding:20px; border-radius:12px; border-left:5px solid #4caf50;">
                 <div style="font-weight:bold; color:#2e7d32; margin-bottom:15px; font-size:16px;">🔄 轉換資訊</div>
                 <table style="width:100%; font-size:15px; line-height:1.9;">
@@ -15886,8 +15949,18 @@ function renderBasicInfoOverview(cbCode, container) {
                     ` : ''}
                     <tr><td style="color:#666; padding:6px 0;">強贖觸發價</td><td style="color:#9c27b0; font-weight:bold; padding:6px 0; text-align:right;">${callTrigger130}元 <span style="font-size:12px; color:#999;">(130%)</span></td></tr>
                     <tr><td style="color:#666; padding:6px 0;">轉換比例</td><td style="font-weight:600; padding:6px 0; text-align:right;">${convRatio} 股</td></tr>
-                    <tr><td style="color:#666; padding:6px 0;">理論價</td><td style="color:#1976d2; font-weight:bold; padding:6px 0; text-align:right;">${data['理論價'] ? parseFloat(data['理論價']).toFixed(2) : '-'}元</td></tr>
+                    <tr><td style="color:#666; padding:6px 0;">股票最新市價</td><td style="font-weight:bold; color:#1976d2; padding:6px 0; text-align:right;">${latestStockPrice > 0 ? latestStockPrice.toFixed(2) + '元' : '-'}</td></tr>
+                    <tr><td style="color:#666; padding:6px 0;">理論價</td><td style="color:#e65100; font-weight:bold; padding:6px 0; text-align:right;">${theoreticalPrice ? theoreticalPrice + '元' : '-'} <span style="font-size:11px; color:#888;">(市價÷轉換價×100)</span></td></tr>
+                    <tr><td style="color:#666; padding:6px 0;">CB參考價格</td><td style="font-weight:bold; color:#2e7d32; padding:6px 0; text-align:right;">${latestCBPrice > 0 ? latestCBPrice.toFixed(2) + '元' : '-'}</td></tr>
+                    <tr>
+                        <td style="color:#666; padding:6px 0;">溢折價率</td>
+                        <td style="font-weight:bold; padding:6px 0; text-align:right; color:${premiumDiscount !== null ? (parseFloat(premiumDiscount) > 0 ? '#c62828' : '#2e7d32') : '#666'};">
+                            ${premiumDiscount !== null ? (parseFloat(premiumDiscount) > 0 ? '+' : '') + premiumDiscount + '%' : '-'}
+                            <span style="font-size:11px; color:#888;">(CB價÷理論價-1)</span>
+                        </td>
+                    </tr>
                 </table>
+                ${kanbanDate ? `<div style="text-align:right; font-size:11px; color:#999; margin-top:8px;">📅 資料日期: ${kanbanDate}</div>` : ''}
             </div>
             
             <!-- 掛牌表現卡 -->

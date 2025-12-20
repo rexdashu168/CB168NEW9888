@@ -17355,20 +17355,40 @@ function switchBalanceSubTab(cbCode, tabType, btnElement) {
 /**
  * v3.97-zs-al 修改：渲染轉換走勢圖（加入時間區間選擇）
  */
-function renderConversionChart(cbCode) {
+async function renderConversionChart(cbCode) {
     const container = document.getElementById(`balanceSubContent_${cbCode}`);
     if (!container) return;
     
     const searchCode = String(cbCode).trim();
+    
+    // v3.97-zs-am: 確保 kanbanData 已載入
+    if (!window.kanbanData.loaded && !window.kanbanData.loading) {
+        container.innerHTML = `<div style="text-align:center; padding:40px; color:#666;">
+            <div style="font-size:24px; margin-bottom:10px;">⏳</div>
+            <div>首次載入 CB_kanban 歷史資料中...</div>
+            <div style="font-size:12px; margin-top:8px; color:#888;">請稍候，這可能需要幾秒鐘</div>
+        </div>`;
+        await loadAllKanbanData();
+    }
+    
+    // 等待載入完成
+    while (window.kanbanData.loading) {
+        await new Promise(r => setTimeout(r, 100));
+    }
     
     // 取得時間區間設定
     const periodSelect = document.getElementById(`balancePeriod_${searchCode}`);
     const period = periodSelect?.value || '180';
     
     // 從 kanbanData 取得時間序列資料（O欄：上月底發行餘額）
-    let allData = [];
-    if (window.kanbanData?.loaded && window.kanbanData.data[searchCode]) {
-        allData = window.kanbanData.data[searchCode];
+    let allData = window.kanbanData.data[searchCode] || [];
+    
+    // 如果找不到，嘗試純數字格式
+    if (allData.length === 0) {
+        const numCode = parseInt(searchCode, 10);
+        if (!isNaN(numCode)) {
+            allData = window.kanbanData.data[String(numCode)] || [];
+        }
     }
     
     if (allData.length === 0) {
@@ -17376,7 +17396,7 @@ function renderConversionChart(cbCode) {
             <div style="text-align:center; color:#888; padding:40px;">
                 <div style="font-size:32px; margin-bottom:10px;">📊</div>
                 <div>尚無轉換走勢資料</div>
-                <div style="font-size:12px; margin-top:8px;">需載入 CB_kanban 時間序列資料</div>
+                <div style="font-size:12px; margin-top:8px;">CB_kanban 中未找到 ${searchCode} 的歷史資料</div>
             </div>
         `;
         return;
@@ -17508,20 +17528,39 @@ function renderConversionChart(cbCode) {
 /**
  * v3.97-zs-al 修改：渲染轉換記錄表（加入時間區間選擇）
  */
-function renderConversionTable(cbCode) {
+async function renderConversionTable(cbCode) {
     const container = document.getElementById(`balanceSubContent_${cbCode}`);
     if (!container) return;
     
     const searchCode = String(cbCode).trim();
+    
+    // v3.97-zs-am: 確保 kanbanData 已載入
+    if (!window.kanbanData.loaded && !window.kanbanData.loading) {
+        container.innerHTML = `<div style="text-align:center; padding:40px; color:#666;">
+            <div style="font-size:24px; margin-bottom:10px;">⏳</div>
+            <div>首次載入 CB_kanban 歷史資料中...</div>
+        </div>`;
+        await loadAllKanbanData();
+    }
+    
+    // 等待載入完成
+    while (window.kanbanData.loading) {
+        await new Promise(r => setTimeout(r, 100));
+    }
     
     // 取得時間區間設定
     const periodSelect = document.getElementById(`balancePeriod_${searchCode}`);
     const period = periodSelect?.value || '180';
     
     // 從 kanbanData 取得時間序列資料
-    let allData = [];
-    if (window.kanbanData?.loaded && window.kanbanData.data[searchCode]) {
-        allData = window.kanbanData.data[searchCode];
+    let allData = window.kanbanData.data[searchCode] || [];
+    
+    // 如果找不到，嘗試純數字格式
+    if (allData.length === 0) {
+        const numCode = parseInt(searchCode, 10);
+        if (!isNaN(numCode)) {
+            allData = window.kanbanData.data[String(numCode)] || [];
+        }
     }
     
     if (allData.length === 0) {
@@ -17529,6 +17568,7 @@ function renderConversionTable(cbCode) {
             <div style="text-align:center; color:#888; padding:40px;">
                 <div style="font-size:32px; margin-bottom:10px;">📋</div>
                 <div>尚無轉換記錄資料</div>
+                <div style="font-size:12px; margin-top:8px;">CB_kanban 中未找到 ${searchCode} 的歷史資料</div>
             </div>
         `;
         return;

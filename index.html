@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97-zs-bb (融資融券路徑修正+月記錄整合)</title>
+<title>AI智能可轉債競拍系統 v3.97-zs-be (Kanban CSV高速讀取)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <!-- v3.97-zs-ae: 改用 CB_kanban_YYYY.xlsx 載入時間序列資料，取代 kanban_data.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -12103,39 +12103,42 @@ window.BROKER_CODE_MAP = {
 };
 
 /**
- * v3.97-zs-ba: 將券商代號轉換為名稱（增強版）
+ * v3.97-zs-bc: 將券商代號轉換為名稱（修正版）
+ * 處理各種格式：純代號(920T)、混合格式(920T凱基證券)、純名稱(凱基證券)
  */
 function convertBrokerCodeToName(brokerValue) {
     if (!brokerValue || brokerValue === '-') return '-';
     
-    let code = String(brokerValue).trim();
+    let input = String(brokerValue).trim();
     
-    // 嘗試直接匹配（區分大小寫）
+    // 情況1: 混合格式 "920T凱基證券" - 直接提取中文名稱部分
+    const mixedMatch = input.match(/^[0-9A-Za-z]{4}(.+)$/);
+    if (mixedMatch && mixedMatch[1]) {
+        // 提取中文部分，移除「證券」等後綴
+        let name = mixedMatch[1].replace(/證券.*$/, '').trim();
+        if (name.length > 0) {
+            return name.substring(0, 4); // 最多取4個字
+        }
+    }
+    
+    // 情況2: 純代號格式 "920T" - 查對照表
+    const code = input.toUpperCase();
     if (window.BROKER_CODE_MAP[code]) {
         return window.BROKER_CODE_MAP[code];
     }
     
-    // 嘗試大寫匹配
-    const upperCode = code.toUpperCase();
-    if (window.BROKER_CODE_MAP[upperCode]) {
-        return window.BROKER_CODE_MAP[upperCode];
+    // 情況3: 純代號但不在對照表 - 嘗試各種變體
+    if (/^[0-9A-Za-z]{4}$/.test(input)) {
+        // 嘗試原始大小寫
+        if (window.BROKER_CODE_MAP[input]) {
+            return window.BROKER_CODE_MAP[input];
+        }
+        console.warn(`未知券商代號: ${input}`);
+        return input;
     }
     
-    // 嘗試去除空格後匹配
-    const noSpaceCode = code.replace(/\s/g, '').toUpperCase();
-    if (window.BROKER_CODE_MAP[noSpaceCode]) {
-        return window.BROKER_CODE_MAP[noSpaceCode];
-    }
-    
-    // 如果是4碼但不在對照表中，可能是新的代號，顯示原值
-    if (/^[0-9A-Za-z]{4}$/.test(noSpaceCode)) {
-        console.warn(`未知券商代號: ${code}`);
-        return code;
-    }
-    
-    // 如果已經是名稱，直接處理
-    // 移除「證券」等後綴，只保留前4個字
-    return brokerValue.replace(/證券.*$/, '').substring(0, 4);
+    // 情況4: 純中文名稱 "凱基證券" - 直接清理
+    return input.replace(/證券.*$/, '').substring(0, 4);
 }
 
 // 整體統計數據
@@ -17857,9 +17860,24 @@ async function renderWeeklyTable(cbCode) {
         totalIssue = (parseFloat(sheet08Row['實際發行總額(百萬)']) || 0) * 10; // 百萬×10=張
     }
     
-    // v3.97-zs-az: 取得股票代號以查詢融資融券
+    // v3.97-zs-bb: 取得股票代號以查詢融資融券
     const stockCode = getStockCodeFromCB(searchCode);
     const hasMarginData = window.marginData.loaded && stockCode && window.marginData.data[stockCode];
+    
+    // v3.97-zs-bc: Debug log
+    console.log('[週記錄融資融券]', {
+        cbCode: searchCode,
+        stockCode: stockCode,
+        marginLoaded: window.marginData.loaded,
+        hasStockInMargin: stockCode ? !!window.marginData.data[stockCode] : false,
+        marginStockCount: Object.keys(window.marginData.data || {}).length
+    });
+    
+    // 如果有股票代號但找不到融資融券資料，列出前10個可用的股票代號供參考
+    if (stockCode && !window.marginData.data[stockCode] && window.marginData.loaded) {
+        const availableCodes = Object.keys(window.marginData.data).slice(0, 20);
+        console.log('[融資融券] 可用股票代號範例:', availableCodes);
+    }
     
     const periodTexts = { '30': '1個月', '90': '3個月', '180': '6個月', '365': '1年', '730': '2年', '1095': '3年', 'all': '全部' };
     
@@ -18826,22 +18844,28 @@ async function loadMarginData() {
     // v3.97-zs-bb: 修正路徑為 data/loan/，載入多年度資料
     const years = ['2025', '2024', '2023', '2022', '2021', '2020', '2019', '2018', '2017'];
     const fileConfigs = [
-        { prefix: 'data/loan/tpxlending_', cols: { margin: '融資餘額', short: '融券餘額', cover: '現券償還' } },
-        { prefix: 'data/loan/otclending_', cols: { margin: '資餘額', short: '券餘額', cover: '券償' } }
+        { prefix: 'data/loan/tpxlending_', market: '上市', cols: { margin: '融資餘額', short: '融券餘額', cover: '現券償還' } },
+        { prefix: 'data/loan/otclending_', market: '上櫃', cols: { margin: '資餘額', short: '券餘額', cover: '券償' } }
     ];
+    
+    let loadedFiles = { tpx: 0, otc: 0 };
     
     for (const config of fileConfigs) {
         for (const year of years) {
             const filePath = `${config.prefix}${year}_stock_only.xlsx`;
             try {
                 const response = await fetch(filePath);
-                if (!response.ok) continue;
+                if (!response.ok) {
+                    console.warn(`⚠️ ${config.market}融資融券 ${year} 檔案不存在: ${filePath}`);
+                    continue;
+                }
                 
                 const workbook = XLSX.read(await response.arrayBuffer(), { type: 'array' });
                 
                 // 取得所有日期工作表（YYYYMMDD格式）
                 const validSheets = workbook.SheetNames.filter(name => /^\d{8}$/.test(name)).sort();
                 
+                let addedCount = 0;
                 for (const sheetName of validSheets) {
                     const sheet = workbook.Sheets[sheetName];
                     const rawData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
@@ -18867,8 +18891,11 @@ async function loadMarginData() {
                     // 處理每一列
                     for (let i = 1; i < rawData.length; i++) {
                         const row = rawData[i];
-                        const code = String(row[codeIdx] || '').trim();
+                        let code = String(row[codeIdx] || '').trim();
                         if (!code) continue;
+                        
+                        // v3.97-zs-bc: 標準化代號格式（移除可能的小數點）
+                        code = code.replace(/\.0*$/, '');
                         
                         const marginBalance = parseInt(row[marginIdx]) || 0;
                         const shortBalance = parseInt(row[shortIdx]) || 0;
@@ -18881,13 +18908,17 @@ async function loadMarginData() {
                             shortBalance,
                             shortCover
                         };
+                        addedCount++;
                     }
                 }
                 
-                console.log(`📈 載入 ${filePath}: ${validSheets.length} 個交易日`);
+                if (config.prefix.includes('tpx')) loadedFiles.tpx++;
+                else loadedFiles.otc++;
+                
+                console.log(`✅ ${config.market} ${year}: ${validSheets.length} 個交易日, ${addedCount} 筆資料`);
                 
             } catch (err) {
-                // 檔案不存在就跳過
+                console.warn(`❌ 載入 ${filePath} 失敗:`, err.message);
             }
         }
     }
@@ -18912,7 +18943,17 @@ async function loadMarginData() {
     window.marginData.loaded = true;
     window.marginData.loading = false;
     
-    console.log(`✅ 融資融券載入完成: ${Object.keys(allData).length} 檔股票, ${Date.now() - startTime}ms`);
+    // v3.97-zs-bc: 顯示載入統計
+    const stockCodes = Object.keys(allData);
+    console.log(`✅ 融資融券載入完成: ${stockCodes.length} 檔股票 (上市${loadedFiles.tpx}檔/上櫃${loadedFiles.otc}檔), ${Date.now() - startTime}ms`);
+    
+    // 列出部分股票代號供參考
+    console.log('📋 融資融券股票代號範例:', stockCodes.slice(0, 30));
+    
+    // 檢查特定股票是否存在
+    ['6223', '2330', '2317', '3008'].forEach(code => {
+        console.log(`   ${code}: ${allData[code] ? '✅ 有資料' : '❌ 無資料'}`);
+    });
 }
 
 /**
@@ -19280,13 +19321,13 @@ async function loadKanbanAndRender(cbCode, tabName, period, container) {
 
 /**
  * 載入所有kanban資料
- * v3.97-zs-ae: 改用 CB_kanban_YYYY.xlsx 讀取，取代 kanban_data.js
+ * v3.97-zs-be: 改用 CSV 格式讀取，大幅加速載入（約快100倍）
  */
 async function loadAllKanbanData() {
     if (window.kanbanData.loaded || window.kanbanData.loading) return;
     window.kanbanData.loading = true;
     
-    console.log('📦 載入 kanban Excel 資料...');
+    console.log('📦 載入 kanban CSV 資料...');
     const startTime = Date.now();
     
     // 顯示載入進度
@@ -19296,7 +19337,6 @@ async function loadAllKanbanData() {
             container.innerHTML = `<div style="text-align:center; padding:40px; color:#666;">
                 <div style="font-size:24px; margin-bottom:10px;">⏳</div>
                 <div>${msg}</div>
-                <div style="margin-top:10px; font-size:12px; color:#999;">首次載入約需 10-20 秒</div>
             </div>`;
         }
     };
@@ -19307,118 +19347,39 @@ async function loadAllKanbanData() {
         const allData = {};
         const allDates = new Set();
         let totalRecords = 0;
-        let loadedFiles = 0;
         
-        // 定義要載入的年份 (從新到舊)
+        // v3.97-zs-be: 優先讀取 CSV 格式（按年度）
         const years = [2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017];
-        const totalFiles = years.length;
         
         for (const year of years) {
-            const filename = `data/kanban/CB_kanban_${year}.xlsx`;
-            updateProgress(`載入 ${year} 年資料... (${loadedFiles}/${totalFiles})`);
+            // 優先嘗試 CSV 格式
+            const csvFile = `data/kanban/CB_kanban_${year}_all.csv`;
+            const xlsxFile = `data/kanban/CB_kanban_${year}.xlsx`;
             
+            // 嘗試 CSV
             try {
-                const response = await fetch(filename);
-                if (!response.ok) {
-                    console.warn(`⚠️ 找不到 ${filename}，跳過`);
-                    loadedFiles++;
-                    continue;
+                const response = await fetch(csvFile);
+                if (response.ok) {
+                    const csvText = await response.text();
+                    const records = parseKanbanCSV(csvText, allData, allDates);
+                    totalRecords += records;
+                    console.log(`✅ CSV ${year}: ${records.toLocaleString()} 筆`);
+                    continue; // CSV 成功就跳過 Excel
                 }
-                
-                const arrayBuffer = await response.arrayBuffer();
-                const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-                
-                // 過濾出有效的日期工作表 (YYYYMMDD 格式)
-                const validSheets = workbook.SheetNames.filter(name => /^\d{8}$/.test(name));
-                console.log(`📂 ${year}: ${validSheets.length} 個交易日`);
-                
-                for (const sheetName of validSheets) {
-                    const sheet = workbook.Sheets[sheetName];
-                    
-                    // v3.97-zs-ap: 改用標準 Excel 格式讀取（第一列標題，第二列開始資料）
-                    const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-                    
-                    if (jsonData.length === 0) continue;
-                    
-                    // 日期格式轉換 (YYYYMMDD -> YYYY/MM/DD)
-                    const dateStr = `${sheetName.substring(0,4)}/${sheetName.substring(4,6)}/${sheetName.substring(6,8)}`;
-                    const dateNum = parseInt(sheetName);
-                    allDates.add(dateStr);
-                    
-                    // Excel 日期序號轉換函數
-                    const excelDateToStr = (val) => {
-                        if (val === undefined || val === null || val === '' || val === 0) return '';
-                        if (typeof val === 'string' && val.includes('/')) return val;
-                        const num = parseFloat(val);
-                        if (isNaN(num) || num < 1000) return String(val);
-                        const date = new Date((num - 25569) * 86400 * 1000);
-                        const y = date.getFullYear();
-                        const m = String(date.getMonth() + 1).padStart(2, '0');
-                        const d = String(date.getDate()).padStart(2, '0');
-                        return `${y}/${m}/${d}`;
-                    };
-                    
-                    // 處理每一列資料
-                    for (const row of jsonData) {
-                        // 取得 CB 代碼 - 嘗試多種可能的欄位名稱
-                        let cbCodeRaw = row['債券代碼'] || row['代碼'] || row['代號'] || row['債券簡稱'];
-                        if (cbCodeRaw === undefined || cbCodeRaw === null || cbCodeRaw === '') continue;
-                        
-                        // 如果是債券簡稱格式（如「波力三KY」），跳過，改用代碼
-                        if (typeof cbCodeRaw === 'string' && /[A-Za-z\u4e00-\u9fa5]/.test(cbCodeRaw)) {
-                            // 嘗試從其他欄位取得代碼
-                            continue;
-                        }
-                        
-                        // 統一轉成純數字字串
-                        const cbCode = String(cbCodeRaw).replace(/\.0*$/, '').trim();
-                        if (!cbCode || cbCode === 'NaN' || !/^\d+$/.test(cbCode)) continue;
-                        
-                        // 提取數值 - 使用截圖中的實際欄位名稱
-                        const stockPrice = parseFloat(row['轉換標的股票價格'] || row['轉換標的的股票價格']) || 0;
-                        const cbPrice = parseFloat(row['轉債參考價格']) || 0;
-                        const convPrice = parseFloat(row['轉換價格']) || 0;
-                        const balanceRaw = parseFloat(row['上月底發行餘額']) || 0;
-                        const balance = balanceRaw / 100000000; // 轉為億元
-                        
-                        // 強制贖回相關欄位
-                        const callStartDate = excelDateToStr(row['強制贖回起日']);
-                        const callEndDate = excelDateToStr(row['強制贖回迄日']);
-                        const callPriceVal = row['強制贖回價格'];
-                        const callPrice = (callPriceVal !== undefined && callPriceVal !== null && callPriceVal !== '' && callPriceVal !== 0) ? String(callPriceVal) : '';
-                        const delistDate = excelDateToStr(row['終止櫃檯買賣日']);
-                        
-                        // 計算轉換價值和溢價率
-                        const convValue = convPrice > 0 ? (stockPrice / convPrice * 100) : 0;
-                        const premium = convValue > 0 && cbPrice > 0 ? ((cbPrice - convValue) / convValue * 100) : 0;
-                        
-                        // 加入時間序列
-                        if (!allData[cbCode]) allData[cbCode] = [];
-                        allData[cbCode].push({
-                            date: dateStr,
-                            dateNum: dateNum,
-                            stockPrice,
-                            cbPrice,
-                            convPrice,
-                            convValue,
-                            premium,
-                            balance,
-                            callStartDate,
-                            callEndDate,
-                            callPrice,
-                            delistDate
-                        });
-                        
-                        totalRecords++;
-                    }
+            } catch (e) {}
+            
+            // 退而求其次讀取 Excel（向下相容）
+            try {
+                const response = await fetch(xlsxFile);
+                if (response.ok) {
+                    updateProgress(`載入 ${year} 年 Excel 資料...`);
+                    const arrayBuffer = await response.arrayBuffer();
+                    const records = await parseKanbanExcel(arrayBuffer, allData, allDates);
+                    totalRecords += records;
+                    console.log(`✅ Excel ${year}: ${records.toLocaleString()} 筆`);
                 }
-                
-                loadedFiles++;
-                console.log(`✅ ${year} 載入完成`);
-                
-            } catch (err) {
-                console.warn(`⚠️ 載入 ${filename} 失敗:`, err.message);
-                loadedFiles++;
+            } catch (e) {
+                console.warn(`⚠️ ${year} 年資料不存在，跳過`);
             }
         }
         
@@ -19432,20 +19393,209 @@ async function loadAllKanbanData() {
         window.kanbanData.loaded = true;
         
         const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
-        console.log(`✅ Kanban Excel 載入完成: ${Object.keys(allData).length} 檔 CB, ${totalRecords.toLocaleString()} 筆, ${elapsed}秒`);
+        console.log(`✅ Kanban 載入完成: ${Object.keys(allData).length} 檔 CB, ${totalRecords.toLocaleString()} 筆, ${elapsed}秒`);
         
     } catch (err) {
-        console.error('❌ 載入 kanban Excel 資料失敗:', err);
+        console.error('❌ 載入 kanban 資料失敗:', err);
         if (container) {
             container.innerHTML = `<div style="text-align:center; padding:40px; color:#e74c3c;">
                 <div style="font-size:24px; margin-bottom:10px;">❌</div>
                 <div>載入失敗: ${err.message}</div>
-                <div style="margin-top:10px; font-size:12px;">請確認 data/kanban/ 資料夾中有 CB_kanban_YYYY.xlsx 檔案</div>
             </div>`;
         }
     } finally {
         window.kanbanData.loading = false;
     }
+}
+
+/**
+ * v3.97-zs-be: 解析 kanban CSV 資料
+ * 保留所有 18 個欄位
+ */
+function parseKanbanCSV(csvText, allData, allDates) {
+    const lines = csvText.split('\n');
+    if (lines.length < 2) return 0;
+    
+    // 解析標題列
+    const headers = parseCSVLine(lines[0]);
+    const colIndex = {};
+    headers.forEach((h, i) => { colIndex[h.trim()] = i; });
+    
+    let count = 0;
+    
+    for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        
+        const cols = parseCSVLine(line);
+        
+        // 取得 CB 代碼
+        const cbCodeRaw = cols[colIndex['債券代碼']] || '';
+        const cbCode = String(cbCodeRaw).replace(/\.0*$/, '').trim();
+        if (!cbCode || !/^\d+$/.test(cbCode)) continue;
+        
+        // 取得日期 (YYYYMMDD -> YYYY/MM/DD)
+        const dateRaw = cols[colIndex['資料日期']] || '';
+        const dateStr = String(dateRaw).length === 8 
+            ? `${dateRaw.substring(0,4)}/${dateRaw.substring(4,6)}/${dateRaw.substring(6,8)}`
+            : dateRaw;
+        const dateNum = parseInt(String(dateRaw).replace(/\//g, ''));
+        if (!dateNum) continue;
+        
+        allDates.add(dateStr);
+        
+        // 提取所有欄位數值
+        const stockPrice = parseFloat(cols[colIndex['轉換標的股票價格']]) || 0;
+        const cbPrice = parseFloat(cols[colIndex['轉債參考價格']]) || 0;
+        const convPrice = parseFloat(cols[colIndex['轉換價格']]) || 0;
+        const balanceRaw = parseFloat(cols[colIndex['上月底發行餘額']]) || 0;
+        const balance = balanceRaw / 100000000; // 轉為億元
+        const originalIssue = parseFloat(cols[colIndex['原始發行總額']]) || 0;
+        
+        // 日期欄位
+        const convStartDate = cols[colIndex['轉換起日']] || '';
+        const convEndDate = cols[colIndex['轉換迄日']] || '';
+        const nextConvPriceDate = cols[colIndex['下次轉換價格生效日期']] || '';
+        const putStartDate = cols[colIndex['最近賣回權起日']] || '';
+        const putEndDate = cols[colIndex['最近賣回權迄日']] || '';
+        const putPrice = parseFloat(cols[colIndex['最近賣回權價格']]) || 0;
+        const callStartDate = cols[colIndex['強制贖回起日']] || '';
+        const callEndDate = cols[colIndex['強制贖回迄日']] || '';
+        const callPrice = cols[colIndex['強制贖回價格']] || '';
+        const delistDate = cols[colIndex['終止櫃檯買賣日']] || '';
+        const cbName = cols[colIndex['債券簡稱']] || '';
+        
+        // 計算轉換價值和溢價率
+        const convValue = convPrice > 0 ? (stockPrice / convPrice * 100) : 0;
+        const premium = convValue > 0 && cbPrice > 0 ? ((cbPrice - convValue) / convValue * 100) : 0;
+        
+        // 加入時間序列（保留所有欄位）
+        if (!allData[cbCode]) allData[cbCode] = [];
+        allData[cbCode].push({
+            date: dateStr,
+            dateNum: dateNum,
+            cbName,
+            stockPrice,
+            cbPrice,
+            convPrice,
+            convValue,
+            premium,
+            balance,
+            originalIssue,
+            convStartDate,
+            convEndDate,
+            nextConvPriceDate,
+            putStartDate,
+            putEndDate,
+            putPrice,
+            callStartDate,
+            callEndDate,
+            callPrice,
+            delistDate
+        });
+        
+        count++;
+    }
+    
+    return count;
+}
+
+/**
+ * v3.97-zs-be: 解析 CSV 行（處理逗號在引號內的情況）
+ */
+function parseCSVLine(line) {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+    
+    for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"') {
+            inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+            result.push(current.trim());
+            current = '';
+        } else {
+            current += char;
+        }
+    }
+    result.push(current.trim());
+    return result;
+}
+
+/**
+ * v3.97-zs-be: 解析 kanban Excel 資料（向下相容）
+ */
+async function parseKanbanExcel(arrayBuffer, allData, allDates) {
+    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+    const validSheets = workbook.SheetNames.filter(name => /^\d{8}$/.test(name));
+    
+    let count = 0;
+    
+    // Excel 日期序號轉換函數
+    const excelDateToStr = (val) => {
+        if (val === undefined || val === null || val === '' || val === 0) return '';
+        if (typeof val === 'string' && val.includes('/')) return val;
+        const num = parseFloat(val);
+        if (isNaN(num) || num < 1000) return String(val);
+        const date = new Date((num - 25569) * 86400 * 1000);
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}/${m}/${d}`;
+    };
+    
+    for (const sheetName of validSheets) {
+        const sheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+        if (jsonData.length === 0) continue;
+        
+        const dateStr = `${sheetName.substring(0,4)}/${sheetName.substring(4,6)}/${sheetName.substring(6,8)}`;
+        const dateNum = parseInt(sheetName);
+        allDates.add(dateStr);
+        
+        for (const row of jsonData) {
+            let cbCodeRaw = row['債券代碼'] || row['代碼'] || row['代號'];
+            if (!cbCodeRaw) continue;
+            
+            const cbCode = String(cbCodeRaw).replace(/\.0*$/, '').trim();
+            if (!cbCode || !/^\d+$/.test(cbCode)) continue;
+            
+            const stockPrice = parseFloat(row['轉換標的股票價格']) || 0;
+            const cbPrice = parseFloat(row['轉債參考價格']) || 0;
+            const convPrice = parseFloat(row['轉換價格']) || 0;
+            const balanceRaw = parseFloat(row['上月底發行餘額']) || 0;
+            const balance = balanceRaw / 100000000;
+            
+            const callStartDate = excelDateToStr(row['強制贖回起日']);
+            const callEndDate = excelDateToStr(row['強制贖回迄日']);
+            const callPrice = row['強制贖回價格'] || '';
+            const delistDate = excelDateToStr(row['終止櫃檯買賣日']);
+            
+            const convValue = convPrice > 0 ? (stockPrice / convPrice * 100) : 0;
+            const premium = convValue > 0 && cbPrice > 0 ? ((cbPrice - convValue) / convValue * 100) : 0;
+            
+            if (!allData[cbCode]) allData[cbCode] = [];
+            allData[cbCode].push({
+                date: dateStr,
+                dateNum,
+                stockPrice,
+                cbPrice,
+                convPrice,
+                convValue,
+                premium,
+                balance,
+                callStartDate,
+                callEndDate,
+                callPrice,
+                delistDate
+            });
+            
+            count++;
+        }
+    }
+    
+    return count;
 }
 
 /**

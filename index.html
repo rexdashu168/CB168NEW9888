@@ -4,8 +4,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97-as-bz (SQLite資料庫版)</title>
+<title>AI智能可轉債競拍系統 v3.97-as-ca (SQLite資料庫版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<!-- v3.97-as-ca: 改為從 data/00_cb/ 載入 CSV 檔案 -->
 <!-- v3.97-as-bz: 新增載入 12_call_execute.csv，修正強制贖回資料來源 -->
 <!-- v3.97-as-by: 修正強制贖回資料從 kanbanData 讀取，優化週餘額圖表尺寸 -->
 <!-- v3.97-as-bx: 程式碼清理，移除重複函數與未使用程式碼 -->
@@ -3473,65 +3474,102 @@ let totalAuctionCount = 0; // v3.81 動態競拍案例總數
 async function loadStatistics() {
     const loadingDiv = document.getElementById('loading');
     try {
-        const response = await fetch('00_CB.xlsx');
-        if (!response.ok) throw new Error("找不到 00_CB.xlsx");
-        const workbook = XLSX.read(await response.arrayBuffer(), { type: 'array' });
-
-        const getSheetData = (keywords) => {
-            // v3.97-zs-t: 改用更精確的匹配方式，優先匹配以關鍵字開頭的工作表
-            const n = workbook.SheetNames.find(x => {
-                return keywords.some(k => {
-                    // 優先匹配以 "XX_" 格式開頭的工作表
-                    if (k.endsWith('_')) {
-                        return x.startsWith(k);
-                    }
-                    // 精確匹配完整關鍵字
-                    return x.startsWith(k + '_') || x === k || x.includes(k);
-                });
-            });
-            if (!n) {
-                console.log(`⚠️ 找不到工作表: ${keywords.join(', ')}`);
-                return null;
+        // v3.97-as-ca: 從 data/00_cb/ 載入 CSV 檔案
+        
+        // 本地 CSV 行解析函數
+        const parseCSVLineLocal = (line) => {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    result.push(current.trim());
+                    current = '';
+                } else {
+                    current += char;
+                }
             }
-            console.log(`✅ 找到工作表: "${n}"`);
-            return XLSX.utils.sheet_to_json(workbook.Sheets[n]).map(row => normalizeKeys(row));
+            result.push(current.trim());
+            return result;
+        };
+        
+        const loadCSVFile = async (filename) => {
+            try {
+                const response = await fetch(`data/00_cb/${filename}`);
+                if (!response.ok) {
+                    console.log(`⚠️ 找不到 CSV: ${filename}`);
+                    return [];
+                }
+                const text = await response.text();
+                const lines = text.split('\n').filter(l => l.trim());
+                if (lines.length < 2) return [];
+                
+                const headers = parseCSVLineLocal(lines[0]);
+                const data = [];
+                for (let i = 1; i < lines.length; i++) {
+                    const cols = parseCSVLineLocal(lines[i]);
+                    const row = {};
+                    headers.forEach((h, idx) => {
+                        row[h.trim()] = cols[idx] || '';
+                    });
+                    data.push(normalizeKeys(row));
+                }
+                console.log(`✅ 載入 CSV: ${filename} (${data.length} 筆)`);
+                return data;
+            } catch (e) {
+                console.log(`⚠️ 載入 CSV 失敗: ${filename}`, e);
+                return [];
+            }
         };
 
-        const sheetAuction = getSheetData(['04_', '04', '所有CB競拍']);
-        const sheetHighLow = getSheetData(['00_', '00', '掛牌', '名稱過濾']);
-        const sheetAllCB = getSheetData(['01_', '01', 'ALLCB基本']);
-        const sheetSchedule = getSheetData(['02_', 'ALLCB發行時程']); // v3.97-zs-t 修正匹配
-        const sheetPutback = getSheetData(['03_', 'ALLCB賣回']); // v3.97-zs-t 修正匹配
-        const sheetListed = getSheetData(['08_', '08']); // 掛牌中清單
-        const sheetPending = getSheetData(['06_', '06', '發行案件']); // v3.59 新增：承銷進行中
-        const sheetBoard = getSheetData(['07_', '07', '董事會']); // v3.59 新增：董事會決議
-        const sheetCBClose = getSheetData(['09_', '09', '每週日行情']); // v3.62 新增：CB收盤價
-        const sheetBalance = getSheetData(['10_', '10', '每週餘額']); // v3.97z-s 新增
-        const sheetIndustry = getSheetData(['16_', '16', '產業分類']); // v3.72 新增：產業分類對照表
-        const sheetSuspend = getSheetData(['13_', '13', '停止轉換', '暫停轉換']); // v3.97-zs-aj 新增：暫停轉換資訊
-        const sheetCallExecute = getSheetData(['12_', '12', 'call_execute', '強制贖回']); // v3.97-as-bz 新增：強制贖回執行
+        // 並行載入所有 CSV 檔案
+        const [
+            sheetHighLow,      // 00_CB_filter.csv
+            sheetAllCB,        // 01_basic.csv
+            sheetSchedule,     // 02_schedule.csv
+            sheetPutback,      // 03_putback.csv
+            sheetAuction,      // 04_auction.csv
+            sheetPending,      // 06_issue.csv
+            sheetBoard,        // 07_board.csv
+            sheetListed,       // 08_weekly_basic.csv
+            sheetCBClose,      // 09_weekly_quote.csv
+            sheetBalance,      // 10_weekly_balance.csv
+            sheetCBAS,         // 11_cbas_quote.csv
+            sheetCallExecute,  // 12_call_execute.csv
+            sheetSuspend,      // 13_stop_convert.csv
+            sheetIndustry      // 16_industry.csv
+        ] = await Promise.all([
+            loadCSVFile('00_CB_filter.csv'),
+            loadCSVFile('01_basic.csv'),
+            loadCSVFile('02_schedule.csv'),
+            loadCSVFile('03_putback.csv'),
+            loadCSVFile('04_auction.csv'),
+            loadCSVFile('06_issue.csv'),
+            loadCSVFile('07_board.csv'),
+            loadCSVFile('08_weekly_basic.csv'),
+            loadCSVFile('09_weekly_quote.csv'),
+            loadCSVFile('10_weekly_balance.csv'),
+            loadCSVFile('11_cbas_quote.csv'),
+            loadCSVFile('12_call_execute.csv'),
+            loadCSVFile('13_stop_convert.csv'),
+            loadCSVFile('16_industry.csv')
+        ]);
 
-        // v3.97-zs-ag: 抓取 sheet10 (餘額表) 的 H1 日期
+        // v3.97-as-ca: sheet10Date 改為從第一筆資料讀取日期欄位
         window.sheet10Date = null;
-        const sheet10Name = workbook.SheetNames.find(x => x.startsWith('10_') || x.includes('每週餘額'));
-        if (sheet10Name) {
-            const sheet10 = workbook.Sheets[sheet10Name];
-            const h1Cell = sheet10['H1'];
-            if (h1Cell) {
-                // 處理日期格式 (可能是數字或字串)
-                if (typeof h1Cell.v === 'number') {
-                    // Excel 日期數字轉換
-                    const excelDate = new Date((h1Cell.v - 25569) * 86400 * 1000);
-                    window.sheet10Date = excelDate.toISOString().split('T')[0].replace(/-/g, '/');
-                } else if (h1Cell.w) {
-                    window.sheet10Date = h1Cell.w; // 使用格式化後的值
-                } else {
-                    window.sheet10Date = String(h1Cell.v);
-                }
+        if (sheetBalance && sheetBalance.length > 0) {
+            const firstRow = sheetBalance[0];
+            // 嘗試從欄位名稱中找日期，或從資料日期欄位讀取
+            const dateField = firstRow['資料日期'] || firstRow['日期'] || '';
+            if (dateField) {
+                window.sheet10Date = String(dateField).replace(/-/g, '/');
             }
         }
 
-        if (!sheetAuction || sheetAuction.length === 0) throw new Error("找不到競拍資料分頁");
+        if (!sheetAuction || sheetAuction.length === 0) throw new Error("找不到競拍資料 (04_auction.csv)");
 
         // v3.81 新增：保存競拍數據供KNN超級預測引擎使用
         window.auctionDataCache = sheetAuction;
@@ -4733,8 +4771,8 @@ async function loadStatistics() {
             console.log(`載入董事會決議: ${window.boardApprovalData.length} 筆, 總額 ${window.boardApprovalData.reduce((s,d)=>s+d.size,0).toFixed(1)} 億`);
         }
 
-        // v3.61 新增：讀取CBAS報價表 (工作表11)
-        const sheetCBAS = getSheetData(['11', 'CBAS報價']);
+        // v3.61 新增：讀取CBAS報價表 (11_cbas_quote.csv)
+        // sheetCBAS 已在上方 Promise.all 中載入
         window.cbasData = [];
         if (sheetCBAS && sheetCBAS.length > 0) {
             sheetCBAS.forEach(row => {

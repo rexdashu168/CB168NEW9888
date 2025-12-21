@@ -4,8 +4,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97-as-cc (SQLite資料庫版)</title>
+<title>AI智能可轉債競拍系統 v3.97-as-cd (SQLite資料庫版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<!-- v3.97-as-cd: 重新設計 CB 價格走勢和漲跌幅排行 UI，參考 Investing.com 風格 -->
 <!-- v3.97-as-cc: 漲跌幅排行改用 kanbanData 的 stockPrice（股票價格）-->
 <!-- v3.97-as-cb: 加入 CSV/Excel fallback 機制 -->
 <!-- v3.97-as-ca: 改為從 data/00_cb/ 載入 CSV 檔案 -->
@@ -1868,7 +1869,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.97-as-cc)...</div>
+    <div>🔄 系統啟動中 (v3.97-as-cd)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
@@ -2816,44 +2817,48 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 <div class="right-section section-ranking" style="margin-top:15px;">
     <div class="right-section-header collapsed" onclick="toggleRightSection('rankingSection', this)">
         <span style="font-size:18px;">🏆</span>
-        <span>五、漲跌幅排行</span>
-        <span style="font-size:11px; font-weight:normal; opacity:0.9;">（強弱勢標的篩選）</span>
+        <span>五、股票漲跌幅排行</span>
+        <span style="font-size:11px; font-weight:normal; opacity:0.9;">（標的股票強弱勢）</span>
         <span class="toggle-icon">▶</span>
     </div>
     <div class="right-section-content collapsed" id="rankingSection">
 
-        <!-- 時間區間選擇 -->
-        <div class="ranking-period-tabs">
-            <button type="button" class="ranking-period-tab active" onclick="showRankingPeriod(5, this)">5日</button>
-            <button type="button" class="ranking-period-tab" onclick="showRankingPeriod(10, this)">10日</button>
-            <button type="button" class="ranking-period-tab" onclick="showRankingPeriod(20, this)">20日</button>
-            <button type="button" class="ranking-period-tab" onclick="showRankingPeriod(60, this)">60日</button>
-            <button type="button" class="ranking-period-tab" onclick="showRankingPeriod(120, this)">120日</button>
-            <button type="button" class="ranking-period-tab" onclick="showRankingPeriod(250, this)">250日</button>
-            <button type="button" class="ranking-period-tab" onclick="showRankingPeriod('ytd', this)">今年</button>
-            <button type="button" class="ranking-period-tab" onclick="showRankingPeriod('all', this)">歷年</button>
-        </div>
+        <!-- v3.97-as-cd: 重新設計標籤和排序 -->
+        <div style="background:#fff; border-radius:12px; padding:16px; margin-bottom:16px; box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+            <!-- 時間區間選擇 -->
+            <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px;">
+                <button type="button" class="ranking-period-tab active" onclick="showRankingPeriod(5, this)" style="padding:10px 16px; border:none; border-radius:8px; background:#e91e63; color:white; cursor:pointer; font-weight:600; font-size:14px;">5日</button>
+                <button type="button" class="ranking-period-tab" onclick="showRankingPeriod(10, this)" style="padding:10px 16px; border:1px solid #ddd; border-radius:8px; background:#fff; color:#333; cursor:pointer; font-weight:500; font-size:14px;">10日</button>
+                <button type="button" class="ranking-period-tab" onclick="showRankingPeriod(20, this)" style="padding:10px 16px; border:1px solid #ddd; border-radius:8px; background:#fff; color:#333; cursor:pointer; font-weight:500; font-size:14px;">20日</button>
+                <button type="button" class="ranking-period-tab" onclick="showRankingPeriod(60, this)" style="padding:10px 16px; border:1px solid #ddd; border-radius:8px; background:#fff; color:#333; cursor:pointer; font-weight:500; font-size:14px;">60日</button>
+                <button type="button" class="ranking-period-tab" onclick="showRankingPeriod(120, this)" style="padding:10px 16px; border:1px solid #ddd; border-radius:8px; background:#fff; color:#333; cursor:pointer; font-weight:500; font-size:14px;">120日</button>
+                <button type="button" class="ranking-period-tab" onclick="showRankingPeriod('ytd', this)" style="padding:10px 16px; border:1px solid #ddd; border-radius:8px; background:#fff; color:#333; cursor:pointer; font-weight:500; font-size:14px;">今年</button>
+            </div>
 
-        <!-- 排序切換 -->
-        <div style="display:flex; gap:10px; align-items:center; margin-bottom:15px; padding:0 10px;">
-            <span style="font-weight:600; color:#666;">排序：</span>
-            <button type="button" id="rankSortUp" onclick="toggleRankingSort('up')"
-                style="padding:6px 16px; border:2px solid #c62828; border-radius:6px; background:#c62828; color:white; cursor:pointer; font-weight:600;">
-                📈 漲幅排行
-            </button>
-            <button type="button" id="rankSortDown" onclick="toggleRankingSort('down')"
-                style="padding:6px 16px; border:2px solid #2e7d32; border-radius:6px; background:white; color:#2e7d32; cursor:pointer; font-weight:600;">
-                📉 跌幅排行
-            </button>
-            <span style="flex:1;"></span>
-            <span id="rankingDataInfo" style="font-size:12px; color:#888;"></span>
+            <!-- 排序切換 -->
+            <div style="display:flex; gap:12px; align-items:center;">
+                <button type="button" id="rankSortUp" onclick="toggleRankingSort('up')"
+                    style="flex:1; padding:12px; border:2px solid #c62828; border-radius:8px; background:#c62828; color:white; cursor:pointer; font-weight:600; font-size:15px;">
+                    📈 漲幅榜
+                </button>
+                <button type="button" id="rankSortDown" onclick="toggleRankingSort('down')"
+                    style="flex:1; padding:12px; border:2px solid #2e7d32; border-radius:8px; background:white; color:#2e7d32; cursor:pointer; font-weight:600; font-size:15px;">
+                    📉 跌幅榜
+                </button>
+            </div>
         </div>
 
         <!-- 排行榜內容 -->
-        <div id="rankingContent" style="min-height:300px; padding:10px; background:#fafafa; border-radius:8px; border:1px solid #e0e0e0;">
-            <div style="text-align:center; color:#999; padding:40px;">
-                ⏳ 載入漲跌幅資料中...
+        <div id="rankingContent" style="min-height:300px;">
+            <div style="text-align:center; color:#999; padding:60px 20px; background:#fff; border-radius:12px;">
+                <div style="font-size:32px; margin-bottom:12px;">⏳</div>
+                <div style="font-size:15px;">點擊展開後自動載入資料...</div>
             </div>
+        </div>
+
+        <!-- 資料來源說明 -->
+        <div style="text-align:right; padding:8px; color:#999; font-size:12px;">
+            <span id="rankingDataInfo"></span> | 資料來源：CB_kanban
         </div>
 
     </div><!-- rankingSection結束 -->
@@ -18781,9 +18786,19 @@ let rankingDataCache = {};     // 快取計算結果
  * 切換漲跌幅排行時間區間
  */
 function showRankingPeriod(period, btn) {
-    // 更新標籤狀態
-    document.querySelectorAll('.ranking-period-tab').forEach(tab => tab.classList.remove('active'));
-    if (btn) btn.classList.add('active');
+    // v3.97-as-cd: 更新標籤樣式
+    document.querySelectorAll('.ranking-period-tab').forEach(tab => {
+        tab.style.background = '#fff';
+        tab.style.color = '#333';
+        tab.style.border = '1px solid #ddd';
+        tab.classList.remove('active');
+    });
+    if (btn) {
+        btn.style.background = '#e91e63';
+        btn.style.color = 'white';
+        btn.style.border = 'none';
+        btn.classList.add('active');
+    }
 
     currentRankingPeriod = period;
     renderRankingTable();
@@ -18997,22 +19012,18 @@ function renderRankingTable() {
 
     // 更新資訊
     if (infoSpan) {
-        infoSpan.textContent = `共 ${sortedData.length} 檔（股票漲跌幅）`;
+        infoSpan.textContent = `共 ${sortedData.length} 檔`;
     }
 
-    // 生成表格
+    // v3.97-as-cd: 重新設計表格，參考 Investing.com 風格
     let tableHTML = `
-        <div style="max-height:450px; overflow-y:auto;">
-            <table style="width:100%; border-collapse:collapse; font-size:13px; table-layout:fixed;">
-                <thead style="position:sticky; top:0; background:#e91e63; color:white;">
+        <div style="max-height:500px; overflow-y:auto; background:#fff; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+            <table style="width:100%; border-collapse:collapse; font-size:14px;">
+                <thead style="position:sticky; top:0; background:#f8f9fa; border-bottom:2px solid #e0e0e0;">
                     <tr>
-                        <th style="padding:10px 4px; text-align:center; font-weight:600; width:7%;">排名</th>
-                        <th style="padding:10px 4px; text-align:left; font-weight:600; width:24%;">CB名稱</th>
-                        <th style="padding:10px 4px; text-align:right; font-weight:600; width:14%;">最新股價</th>
-                        <th style="padding:10px 4px; text-align:right; font-weight:600; width:14%;">起始股價</th>
-                        <th style="padding:10px 4px; text-align:right; font-weight:600; width:12%;">漲跌</th>
-                        <th style="padding:10px 4px; text-align:right; font-weight:600; width:15%;">${periodText}幅</th>
-                        <th style="padding:10px 4px; text-align:right; font-weight:600; width:14%;">CB參考</th>
+                        <th style="padding:14px 8px; text-align:left; font-weight:600; color:#555; width:40%;">名稱</th>
+                        <th style="padding:14px 8px; text-align:right; font-weight:600; color:#555; width:25%;">股價</th>
+                        <th style="padding:14px 8px; text-align:right; font-weight:600; color:#555; width:35%;">${periodText}漲跌</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -19022,40 +19033,30 @@ function renderRankingTable() {
     const displayData = sortedData.slice(0, 50);
 
     displayData.forEach((item, i) => {
-        const bgColor = i % 2 === 0 ? '#fff' : '#f9f9f9';
-        const changeColor = item.change >= 0 ? '#c62828' : '#2e7d32';
-        const changeSign = item.change >= 0 ? '+' : '';
-        const percentSign = item.changePercent >= 0 ? '+' : '';
-
-        // 漲跌幅背景色
-        let percentBg = 'transparent';
-        if (item.changePercent >= 10) percentBg = 'rgba(198, 40, 40, 0.15)';
-        else if (item.changePercent <= -10) percentBg = 'rgba(46, 125, 50, 0.15)';
-
-        // CB參考價顯示
-        const cbPriceDisplay = item.latestCBPrice > 0 ? item.latestCBPrice.toFixed(1) : '-';
+        const isUp = item.changePercent >= 0;
+        const changeColor = isUp ? '#c62828' : '#2e7d32';
+        const percentSign = isUp ? '+' : '';
+        
+        // 漲跌幅背景色塊 - 參考 Investing.com
+        const percentBgColor = isUp ? '#ffebee' : '#e8f5e9';
+        const percentTextColor = isUp ? '#c62828' : '#2e7d32';
 
         tableHTML += `
-            <tr style="background:${bgColor}; cursor:pointer;" onclick="loadPriceTrendFromRanking('${item.cbCode}')">
-                <td style="padding:8px 4px; text-align:center; color:#888; font-weight:600;">${i + 1}</td>
-                <td style="padding:8px 4px; text-align:left;">
-                    <div style="font-weight:600; color:#333; font-size:12px;">${item.cbName}</div>
-                    <div style="font-size:10px; color:#888;">${item.cbCode}</div>
+            <tr style="border-bottom:1px solid #f0f0f0; cursor:pointer;" 
+                onmouseover="this.style.background='#f5f5f5'" 
+                onmouseout="this.style.background='white'"
+                onclick="loadPriceTrendFromRanking('${item.cbCode}')">
+                <td style="padding:14px 8px;">
+                    <div style="font-weight:600; color:#333; font-size:15px; margin-bottom:2px;">${item.cbName}</div>
+                    <div style="font-size:12px; color:#999;">${item.cbCode}</div>
                 </td>
-                <td style="padding:8px 4px; text-align:right; font-weight:700; color:#1976d2; font-size:13px;">
-                    ${item.latestPrice.toFixed(1)}
+                <td style="padding:14px 8px; text-align:right;">
+                    <div style="font-size:18px; font-weight:700; color:#333;">${item.latestPrice.toFixed(1)}</div>
                 </td>
-                <td style="padding:8px 4px; text-align:right; color:#666; font-size:12px;">
-                    ${item.startPrice.toFixed(1)}
-                </td>
-                <td style="padding:8px 4px; text-align:right; color:${changeColor}; font-weight:600; font-size:12px;">
-                    ${changeSign}${item.change.toFixed(1)}
-                </td>
-                <td style="padding:8px 4px; text-align:right; color:${changeColor}; font-weight:700; font-size:13px; background:${percentBg}; border-radius:4px;">
-                    ${percentSign}${item.changePercent.toFixed(1)}%
-                </td>
-                <td style="padding:8px 4px; text-align:right; color:#e91e63; font-size:12px;">
-                    ${cbPriceDisplay}
+                <td style="padding:14px 8px; text-align:right;">
+                    <div style="display:inline-block; padding:6px 12px; background:${percentBgColor}; border-radius:6px; min-width:80px;">
+                        <span style="font-size:16px; font-weight:700; color:${percentTextColor};">${percentSign}${item.changePercent.toFixed(1)}%</span>
+                    </div>
                 </td>
             </tr>
         `;
@@ -21686,38 +21687,42 @@ async function renderCBHistory(cbCode, container, period) {
                 </button>
             </div>
 
-            <!-- 統計摘要 - 分兩列顯示 -->
-            <div style="padding:12px; background:linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%); border-radius:10px; margin-bottom:12px;">
-                <!-- 第一列：最新價、最高價、最低價 -->
-                <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-bottom:10px;">
-                    <div style="text-align:center; padding:8px; background:rgba(255,255,255,0.6); border-radius:8px;">
-                        <div style="font-size:12px; color:#7b1fa2; font-weight:600;">最新價</div>
-                        <div style="font-size:20px; font-weight:700; color:#7b1fa2;">${stats.latestPrice.toFixed(2)}</div>
+            <!-- 統計摘要 - 重新設計參考 Investing.com 風格 -->
+            <div style="padding:16px; background:#fff; border-radius:12px; margin-bottom:16px; box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+                <!-- 最新價格突出顯示 -->
+                <div style="text-align:center; margin-bottom:16px; padding-bottom:16px; border-bottom:1px solid #eee;">
+                    <div style="font-size:13px; color:#666; margin-bottom:4px;">最新價</div>
+                    <div style="font-size:36px; font-weight:700; color:#7b1fa2;">${stats.latestPrice.toFixed(2)}</div>
+                </div>
+                
+                <!-- 高低價格 -->
+                <div style="display:flex; justify-content:space-around; margin-bottom:16px; padding-bottom:16px; border-bottom:1px solid #eee;">
+                    <div style="text-align:center;">
+                        <div style="font-size:12px; color:#888; margin-bottom:4px;">最高價</div>
+                        <div style="font-size:22px; font-weight:700; color:#c62828;">${stats.maxPrice.toFixed(2)}</div>
+                        <div style="font-size:11px; color:#aaa;">${maxPriceData?.date?.substring(5) || ''}</div>
                     </div>
-                    <div style="text-align:center; padding:8px; background:rgba(255,255,255,0.6); border-radius:8px;">
-                        <div style="font-size:12px; color:#c62828; font-weight:600;">最高價</div>
-                        <div style="font-size:18px; font-weight:700; color:#c62828;">${stats.maxPrice.toFixed(2)}</div>
-                        <div style="font-size:11px; color:#888;">${maxPriceData?.date?.substring(5) || ''}</div>
-                    </div>
-                    <div style="text-align:center; padding:8px; background:rgba(255,255,255,0.6); border-radius:8px;">
-                        <div style="font-size:12px; color:#2e7d32; font-weight:600;">最低價</div>
-                        <div style="font-size:18px; font-weight:700; color:#2e7d32;">${stats.minPrice.toFixed(2)}</div>
-                        <div style="font-size:11px; color:#888;">${minPriceData?.date?.substring(5) || ''}</div>
+                    <div style="width:1px; background:#eee;"></div>
+                    <div style="text-align:center;">
+                        <div style="font-size:12px; color:#888; margin-bottom:4px;">最低價</div>
+                        <div style="font-size:22px; font-weight:700; color:#2e7d32;">${stats.minPrice.toFixed(2)}</div>
+                        <div style="font-size:11px; color:#aaa;">${minPriceData?.date?.substring(5) || ''}</div>
                     </div>
                 </div>
-                <!-- 第二列：平均價、累計成交、日均量 -->
-                <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px;">
-                    <div style="text-align:center; padding:8px; background:rgba(255,255,255,0.6); border-radius:8px;">
-                        <div style="font-size:12px; color:#1565c0; font-weight:600;">平均價</div>
-                        <div style="font-size:18px; font-weight:700; color:#1565c0;">${stats.avgPrice.toFixed(2)}</div>
+                
+                <!-- 其他統計 -->
+                <div style="display:flex; justify-content:space-around;">
+                    <div style="text-align:center;">
+                        <div style="font-size:11px; color:#888;">平均價</div>
+                        <div style="font-size:16px; font-weight:600; color:#333;">${stats.avgPrice.toFixed(2)}</div>
                     </div>
-                    <div style="text-align:center; padding:8px; background:rgba(255,255,255,0.6); border-radius:8px;">
-                        <div style="font-size:12px; color:#666; font-weight:600;">累計成交</div>
-                        <div style="font-size:16px; font-weight:700; color:#333;">${formatNumber(stats.totalVolume)} 張</div>
+                    <div style="text-align:center;">
+                        <div style="font-size:11px; color:#888;">累計成交</div>
+                        <div style="font-size:16px; font-weight:600; color:#333;">${formatNumber(stats.totalVolume)} 張</div>
                     </div>
-                    <div style="text-align:center; padding:8px; background:rgba(255,255,255,0.6); border-radius:8px;">
-                        <div style="font-size:12px; color:#666; font-weight:600;">日均量</div>
-                        <div style="font-size:16px; font-weight:700; color:#333;">${formatNumber(stats.avgVolume)} 張</div>
+                    <div style="text-align:center;">
+                        <div style="font-size:11px; color:#888;">日均量</div>
+                        <div style="font-size:16px; font-weight:600; color:#333;">${formatNumber(stats.avgVolume)} 張</div>
                     </div>
                 </div>
             </div>
@@ -21929,3 +21934,4 @@ window.addEventListener('DOMContentLoaded', function() {
 
 </body>
 </html>
+```

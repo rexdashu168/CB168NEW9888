@@ -4,10 +4,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97-as-cj (SQLite資料庫版)</title>
+<title>AI智能可轉債競拍系統 v3.97-as-ck (SQLite資料庫版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<!-- v3.97-as-ck: 漲跌幅排行只顯示「掛牌中」或「今年有交易」的 CB -->
 <!-- v3.97-as-cj: 簡化 kanban 載入邏輯，直接載入 2023-2025 整個 DB -->
-<!-- v3.97-as-ci: 修正 loadKanbanData→loadAllKanbanData + 第四區塊活潑紫色漸層 -->
 <!-- v3.97-as-cb: 加入 CSV/Excel fallback 機制 -->
 <!-- v3.97-as-ca: 改為從 data/00_cb/ 載入 CSV 檔案 -->
 <!-- v3.97-as-bz: 新增載入 12_call_execute.csv，修正強制贖回資料來源 -->
@@ -1660,7 +1660,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.97-as-cj)...</div>
+    <div>🔄 系統啟動中 (v3.97-as-ck)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
@@ -18321,11 +18321,34 @@ function calculateRankingData(period) {
     // v3.97-as-cc: 改用 kanbanData 的 stockPrice（股票價格）
     const kanbanData = window.kanbanData?.data || {};
     const results = [];
+    
+    // v3.97-as-ck: 今年的起始日期（用於過濾「今年有交易過的 CB」）
+    const currentYear = new Date().getFullYear();
+    const ytdStartNum = currentYear * 10000 + 101; // 例如 20250101
 
     // 遍歷所有 CB
     for (const cbCode in kanbanData) {
         const priceHistory = kanbanData[cbCode];
         if (!priceHistory || priceHistory.length < 2) continue;
+
+        // v3.97-as-ck: 過濾條件
+        // 1. 目前掛牌中（在 listedSet 中）
+        // 2. 或者今年有資料（有 2025 年的交易記錄）
+        const isListed = listedSet.has(cbCode);
+        
+        // 檢查是否有今年的資料
+        const getDateNum = (dateStr) => {
+            if (!dateStr) return 0;
+            return parseInt(String(dateStr).replace(/[^\d]/g, '').slice(0, 8)) || 0;
+        };
+        
+        const hasThisYearData = priceHistory.some(d => {
+            const dateNum = getDateNum(d.date);
+            return dateNum >= ytdStartNum;
+        });
+        
+        // 如果不是掛牌中，也沒有今年的資料，就跳過
+        if (!isListed && !hasThisYearData) continue;
 
         // 按日期排序（確保最新在最後）
         const sortedHistory = [...priceHistory].sort((a, b) => {
@@ -18343,12 +18366,6 @@ function calculateRankingData(period) {
 
         if (!latestStockPrice || latestStockPrice <= 0) continue;
 
-        // 計算日期數字
-        const getDateNum = (dateStr) => {
-            if (!dateStr) return 0;
-            return parseInt(String(dateStr).replace(/[^\d]/g, '').slice(0, 8)) || 0;
-        };
-
         const latestDateNum = getDateNum(latestDate);
 
         // 根據期間找起始價格
@@ -18365,8 +18382,8 @@ function calculateRankingData(period) {
         } else if (period === 'ytd') {
             // 今年：從今年第一個交易日開始
             if (latestDateNum) {
-                const currentYear = String(latestDateNum).substring(0, 4);
-                const ytdStart = parseInt(currentYear + '0101');
+                const yearStr = String(latestDateNum).substring(0, 4);
+                const ytdStart = parseInt(yearStr + '0101');
 
                 // 找今年第一筆資料
                 for (let i = 0; i < sortedHistory.length; i++) {
@@ -18423,7 +18440,8 @@ function calculateRankingData(period) {
             startDate,
             change,
             changePercent,
-            dataCount
+            dataCount,
+            isListed  // v3.97-as-ck: 標記是否掛牌中
         });
     }
 
@@ -18491,9 +18509,10 @@ function renderRankingTable() {
     };
     const periodText = periodTexts[currentRankingPeriod] || currentRankingPeriod;
 
-    // 更新資訊
+    // 更新資訊 - v3.97-as-ck: 顯示掛牌中/今年有交易的數量
     if (infoSpan) {
-        infoSpan.textContent = `共 ${sortedData.length} 檔`;
+        const listedCount = sortedData.filter(d => d.isListed).length;
+        infoSpan.textContent = `掛牌中 ${listedCount} 檔，共 ${sortedData.length} 檔`;
     }
 
     // v3.97-as-cd: 重新設計表格，參考 Investing.com 風格
@@ -18521,6 +18540,9 @@ function renderRankingTable() {
         // 漲跌幅背景色塊 - 參考 Investing.com
         const percentBgColor = isUp ? '#ffebee' : '#e8f5e9';
         const percentTextColor = isUp ? '#c62828' : '#2e7d32';
+        
+        // v3.97-as-ck: 已下市標記
+        const delistedTag = item.isListed ? '' : '<span style="font-size:10px; color:#ff9800; margin-left:4px;">已下市</span>';
 
         tableHTML += `
             <tr style="border-bottom:1px solid #f0f0f0; cursor:pointer;" 
@@ -18528,7 +18550,7 @@ function renderRankingTable() {
                 onmouseout="this.style.background='white'"
                 onclick="loadPriceTrendFromRanking('${item.cbCode}')">
                 <td style="padding:14px 8px;">
-                    <div style="font-weight:600; color:#333; font-size:15px; margin-bottom:2px;">${item.cbName}</div>
+                    <div style="font-weight:600; color:#333; font-size:15px; margin-bottom:2px;">${item.cbName}${delistedTag}</div>
                     <div style="font-size:12px; color:#999;">${item.cbCode}</div>
                 </td>
                 <td style="padding:14px 8px; text-align:right;">

@@ -4,10 +4,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97-as-ci (SQLite資料庫版)</title>
+<title>AI智能可轉債競拍系統 v3.97-as-cj (SQLite資料庫版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<!-- v3.97-as-cj: 簡化 kanban 載入邏輯，直接載入 2023-2025 整個 DB -->
 <!-- v3.97-as-ci: 修正 loadKanbanData→loadAllKanbanData + 第四區塊活潑紫色漸層 -->
-<!-- v3.97-as-ch: 1.第四區塊UI參考第五區塊簡潔風格 2.Kanban只載入2025年資料加速 -->
 <!-- v3.97-as-cb: 加入 CSV/Excel fallback 機制 -->
 <!-- v3.97-as-ca: 改為從 data/00_cb/ 載入 CSV 檔案 -->
 <!-- v3.97-as-bz: 新增載入 12_call_execute.csv，修正強制贖回資料來源 -->
@@ -1660,7 +1660,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.97-as-ci)...</div>
+    <div>🔄 系統啟動中 (v3.97-as-cj)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
@@ -19343,14 +19343,15 @@ async function loadAllKanbanData(loadAll = false) {
         const allData = window.kanbanData.data || {};
         const allDates = new Set(window.kanbanData.dates || []);
 
-        // v3.97-as-ch: 預設只載入 2025 年資料（快速啟動）
-        // loadAll = true 時才載入全部歷史
+        // v3.97-as-cj: 簡化載入邏輯
+        // 預設載入 2023-2025 整個資料庫（不做 WHERE 過濾，資料庫本身已按年份分割）
+        // loadAll = true 時才載入更早期資料
         const dbFiles = loadAll ? [
-            { file: 'data/cb_kanban_2023_2025.db', label: '2023-2025', yearFilter: null },
-            { file: 'data/cb_kanban_2020_2022.db', label: '2020-2022', yearFilter: null },
-            { file: 'data/cb_kanban_2017_2019.db', label: '2017-2019', yearFilter: null }
+            { file: 'data/cb_kanban_2023_2025.db', label: '2023-2025' },
+            { file: 'data/cb_kanban_2020_2022.db', label: '2020-2022' },
+            { file: 'data/cb_kanban_2017_2019.db', label: '2017-2019' }
         ] : [
-            { file: 'data/cb_kanban_2023_2025.db', label: '2025', yearFilter: { min: 20250101, max: 20251231 } }  // 只載入 2025
+            { file: 'data/cb_kanban_2023_2025.db', label: '2023-2025' }  // 預設只載入這個
         ];
 
         for (const dbInfo of dbFiles) {
@@ -19358,21 +19359,21 @@ async function loadAllKanbanData(loadAll = false) {
 
             try {
                 const response = await fetch(dbInfo.file);
-                if (!response.ok) continue;
+                if (!response.ok) {
+                    console.warn(`無法載入 ${dbInfo.file}: ${response.status}`);
+                    continue;
+                }
 
                 const arrayBuffer = await response.arrayBuffer();
-                const db = new SQL.Database(new Uint8Array(arrayBuffer));
-
-                // v3.97-as-ci: 使用數字範圍過濾（date 是數字格式如 20250101）
-                const whereClause = dbInfo.yearFilter 
-                    ? `WHERE date >= ${dbInfo.yearFilter.min} AND date <= ${dbInfo.yearFilter.max}` 
-                    : '';
+                updateProgress(`解析 ${dbInfo.label} 資料...`);
                 
-                // 查詢資料
+                const db = new SQL.Database(new Uint8Array(arrayBuffer));
+                
+                // v3.97-as-cj: 直接查詢全部資料，不做 WHERE 過濾
                 const results = db.exec(`
                     SELECT date, code, name, conv_price, call_start, call_end,
                            call_price, delist_date, balance, cb_price, stock_price
-                    FROM kanban ${whereClause} ORDER BY code, date
+                    FROM kanban ORDER BY code, date
                 `);
 
                 if (results.length > 0) {

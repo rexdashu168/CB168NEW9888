@@ -4,8 +4,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97-as-ca (SQLite資料庫版)</title>
+<title>AI智能可轉債競拍系統 v3.97-as-cb (SQLite資料庫版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<!-- v3.97-as-cb: 加入 CSV/Excel fallback 機制 -->
 <!-- v3.97-as-ca: 改為從 data/00_cb/ 載入 CSV 檔案 -->
 <!-- v3.97-as-bz: 新增載入 12_call_execute.csv，修正強制贖回資料來源 -->
 <!-- v3.97-as-by: 修正強制贖回資料從 kanbanData 讀取，優化週餘額圖表尺寸 -->
@@ -1866,7 +1867,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.97-zs-u)...</div>
+    <div>🔄 系統啟動中 (v3.97-as-cb)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
@@ -3474,7 +3475,11 @@ let totalAuctionCount = 0; // v3.81 動態競拍案例總數
 async function loadStatistics() {
     const loadingDiv = document.getElementById('loading');
     try {
-        // v3.97-as-ca: 從 data/00_cb/ 載入 CSV 檔案
+        // v3.97-as-cb: CSV/Excel fallback 機制
+        let sheetHighLow, sheetAllCB, sheetSchedule, sheetPutback, sheetAuction;
+        let sheetPending, sheetBoard, sheetListed, sheetCBClose, sheetBalance;
+        let sheetCBAS, sheetCallExecute, sheetSuspend, sheetIndustry;
+        let dataSource = 'unknown';
         
         // 本地 CSV 行解析函數
         const parseCSVLineLocal = (line) => {
@@ -3499,13 +3504,10 @@ async function loadStatistics() {
         const loadCSVFile = async (filename) => {
             try {
                 const response = await fetch(`data/00_cb/${filename}`);
-                if (!response.ok) {
-                    console.log(`⚠️ 找不到 CSV: ${filename}`);
-                    return [];
-                }
+                if (!response.ok) return null;
                 const text = await response.text();
                 const lines = text.split('\n').filter(l => l.trim());
-                if (lines.length < 2) return [];
+                if (lines.length < 2) return null;
                 
                 const headers = parseCSVLineLocal(lines[0]);
                 const data = [];
@@ -3517,59 +3519,111 @@ async function loadStatistics() {
                     });
                     data.push(normalizeKeys(row));
                 }
-                console.log(`✅ 載入 CSV: ${filename} (${data.length} 筆)`);
+                console.log(`✅ CSV: ${filename} (${data.length} 筆)`);
                 return data;
             } catch (e) {
-                console.log(`⚠️ 載入 CSV 失敗: ${filename}`, e);
-                return [];
+                return null;
             }
         };
 
-        // 並行載入所有 CSV 檔案
-        const [
-            sheetHighLow,      // 00_CB_filter.csv
-            sheetAllCB,        // 01_basic.csv
-            sheetSchedule,     // 02_schedule.csv
-            sheetPutback,      // 03_putback.csv
-            sheetAuction,      // 04_auction.csv
-            sheetPending,      // 06_issue.csv
-            sheetBoard,        // 07_board.csv
-            sheetListed,       // 08_weekly_basic.csv
-            sheetCBClose,      // 09_weekly_quote.csv
-            sheetBalance,      // 10_weekly_balance.csv
-            sheetCBAS,         // 11_cbas_quote.csv
-            sheetCallExecute,  // 12_call_execute.csv
-            sheetSuspend,      // 13_stop_convert.csv
-            sheetIndustry      // 16_industry.csv
-        ] = await Promise.all([
-            loadCSVFile('00_CB_filter.csv'),
-            loadCSVFile('01_basic.csv'),
-            loadCSVFile('02_schedule.csv'),
-            loadCSVFile('03_putback.csv'),
-            loadCSVFile('04_auction.csv'),
-            loadCSVFile('06_issue.csv'),
-            loadCSVFile('07_board.csv'),
-            loadCSVFile('08_weekly_basic.csv'),
-            loadCSVFile('09_weekly_quote.csv'),
-            loadCSVFile('10_weekly_balance.csv'),
-            loadCSVFile('11_cbas_quote.csv'),
-            loadCSVFile('12_call_execute.csv'),
-            loadCSVFile('13_stop_convert.csv'),
-            loadCSVFile('16_industry.csv')
-        ]);
+        // 嘗試載入 CSV（先測試關鍵檔案是否存在）
+        const testCSV = await loadCSVFile('04_auction.csv');
+        
+        if (testCSV && testCSV.length > 0) {
+            // CSV 模式
+            console.log('📂 使用 CSV 資料來源');
+            dataSource = 'csv';
+            sheetAuction = testCSV;
+            
+            // 並行載入其他 CSV
+            const csvResults = await Promise.all([
+                loadCSVFile('00_CB_filter.csv'),
+                loadCSVFile('01_basic.csv'),
+                loadCSVFile('02_schedule.csv'),
+                loadCSVFile('03_putback.csv'),
+                loadCSVFile('06_issue.csv'),
+                loadCSVFile('07_board.csv'),
+                loadCSVFile('08_weekly_basic.csv'),
+                loadCSVFile('09_weekly_quote.csv'),
+                loadCSVFile('10_weekly_balance.csv'),
+                loadCSVFile('11_cbas_quote.csv'),
+                loadCSVFile('12_call_execute.csv'),
+                loadCSVFile('13_stop_convert.csv'),
+                loadCSVFile('16_industry.csv')
+            ]);
+            
+            [sheetHighLow, sheetAllCB, sheetSchedule, sheetPutback,
+             sheetPending, sheetBoard, sheetListed, sheetCBClose,
+             sheetBalance, sheetCBAS, sheetCallExecute, sheetSuspend, sheetIndustry] = csvResults;
+            
+        } else {
+            // Fallback 到 Excel
+            console.log('📂 CSV 不存在，使用 Excel 資料來源');
+            dataSource = 'excel';
+            
+            const response = await fetch('00_CB.xlsx');
+            if (!response.ok) throw new Error("找不到 00_CB.xlsx 或 data/00_cb/ CSV 檔案");
+            const workbook = XLSX.read(await response.arrayBuffer(), { type: 'array' });
 
-        // v3.97-as-ca: sheet10Date 改為從第一筆資料讀取日期欄位
-        window.sheet10Date = null;
-        if (sheetBalance && sheetBalance.length > 0) {
-            const firstRow = sheetBalance[0];
-            // 嘗試從欄位名稱中找日期，或從資料日期欄位讀取
-            const dateField = firstRow['資料日期'] || firstRow['日期'] || '';
-            if (dateField) {
-                window.sheet10Date = String(dateField).replace(/-/g, '/');
+            const getSheetData = (keywords) => {
+                const n = workbook.SheetNames.find(x => {
+                    return keywords.some(k => {
+                        if (k.endsWith('_')) return x.startsWith(k);
+                        return x.startsWith(k + '_') || x === k || x.includes(k);
+                    });
+                });
+                if (!n) return null;
+                console.log(`✅ Excel: "${n}"`);
+                return XLSX.utils.sheet_to_json(workbook.Sheets[n]).map(row => normalizeKeys(row));
+            };
+
+            sheetAuction = getSheetData(['04_', '04', '所有CB競拍']);
+            sheetHighLow = getSheetData(['00_', '00', '掛牌', '名稱過濾']);
+            sheetAllCB = getSheetData(['01_', '01', 'ALLCB基本']);
+            sheetSchedule = getSheetData(['02_', 'ALLCB發行時程']);
+            sheetPutback = getSheetData(['03_', 'ALLCB賣回']);
+            sheetListed = getSheetData(['08_', '08']);
+            sheetPending = getSheetData(['06_', '06', '發行案件']);
+            sheetBoard = getSheetData(['07_', '07', '董事會']);
+            sheetCBClose = getSheetData(['09_', '09', '每週日行情']);
+            sheetBalance = getSheetData(['10_', '10', '每週餘額']);
+            sheetCBAS = getSheetData(['11', 'CBAS報價']);
+            sheetCallExecute = getSheetData(['12_', '12', 'call_execute', '強制贖回']);
+            sheetSuspend = getSheetData(['13_', '13', '停止轉換', '暫停轉換']);
+            sheetIndustry = getSheetData(['16_', '16', '產業分類']);
+            
+            // Excel 模式下抓取 sheet10 的 H1 日期
+            window.sheet10Date = null;
+            const sheet10Name = workbook.SheetNames.find(x => x.startsWith('10_') || x.includes('每週餘額'));
+            if (sheet10Name) {
+                const sheet10 = workbook.Sheets[sheet10Name];
+                const h1Cell = sheet10['H1'];
+                if (h1Cell) {
+                    if (typeof h1Cell.v === 'number') {
+                        const excelDate = new Date((h1Cell.v - 25569) * 86400 * 1000);
+                        window.sheet10Date = excelDate.toISOString().split('T')[0].replace(/-/g, '/');
+                    } else if (h1Cell.w) {
+                        window.sheet10Date = h1Cell.w;
+                    } else {
+                        window.sheet10Date = String(h1Cell.v);
+                    }
+                }
+            }
+        }
+        
+        // CSV 模式下的日期處理
+        if (dataSource === 'csv') {
+            window.sheet10Date = null;
+            if (sheetBalance && sheetBalance.length > 0) {
+                const firstRow = sheetBalance[0];
+                const dateField = firstRow['資料日期'] || firstRow['日期'] || '';
+                if (dateField) {
+                    window.sheet10Date = String(dateField).replace(/-/g, '/');
+                }
             }
         }
 
-        if (!sheetAuction || sheetAuction.length === 0) throw new Error("找不到競拍資料 (04_auction.csv)");
+        if (!sheetAuction || sheetAuction.length === 0) throw new Error("找不到競拍資料");
 
         // v3.81 新增：保存競拍數據供KNN超級預測引擎使用
         window.auctionDataCache = sheetAuction;
@@ -4771,8 +4825,8 @@ async function loadStatistics() {
             console.log(`載入董事會決議: ${window.boardApprovalData.length} 筆, 總額 ${window.boardApprovalData.reduce((s,d)=>s+d.size,0).toFixed(1)} 億`);
         }
 
-        // v3.61 新增：讀取CBAS報價表 (11_cbas_quote.csv)
-        // sheetCBAS 已在上方 Promise.all 中載入
+        // v3.61 新增：讀取CBAS報價表
+        // v3.97-as-cb: sheetCBAS 已在上方 CSV/Excel 載入流程中處理
         window.cbasData = [];
         if (sheetCBAS && sheetCBAS.length > 0) {
             sheetCBAS.forEach(row => {
@@ -16754,10 +16808,6 @@ function renderBasicInfoCallOption(cbCode, container) {
         if (sheet08Row) {
             if (!delistDate || delistDate === '-') {
                 delistDate = sheet08Row['終止櫃檯買賣日'] || sheet08Row['下市日'] || '-';
-            }
-            if (!cbName) cbName = sheet08Row['名稱'] || '';
-        }
-    }
             }
             if (!cbName) cbName = sheet08Row['名稱'] || '';
         }

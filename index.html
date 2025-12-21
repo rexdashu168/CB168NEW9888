@@ -4,10 +4,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97-as-ce (SQLite資料庫版)</title>
+<title>AI智能可轉債競拍系統 v3.97-as-cf (SQLite資料庫版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<!-- v3.97-as-cf: 修正第五區塊 ID 衝突（rankingSection → stockRankingSection）-->
 <!-- v3.97-as-ce: 清理遺留程式碼，移除 dimension 相關 CSS/JS (~520行) -->
-<!-- v3.97-as-cd: 重新設計 CB 價格走勢和漲跌幅排行 UI，參考 Investing.com 風格 -->
 <!-- v3.97-as-cb: 加入 CSV/Excel fallback 機制 -->
 <!-- v3.97-as-ca: 改為從 data/00_cb/ 載入 CSV 檔案 -->
 <!-- v3.97-as-bz: 新增載入 12_call_execute.csv，修正強制贖回資料來源 -->
@@ -1660,7 +1660,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.97-as-ce)...</div>
+    <div>🔄 系統啟動中 (v3.97-as-cf)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
@@ -2606,13 +2606,13 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <!-- ========== 右側第五區塊：漲跌幅排行 ========== -->
 <div class="right-section section-ranking" style="margin-top:15px;">
-    <div class="right-section-header collapsed" onclick="toggleRightSection('rankingSection', this)">
+    <div class="right-section-header collapsed" onclick="toggleRightSection('stockRankingSection', this)">
         <span style="font-size:18px;">🏆</span>
         <span>五、股票漲跌幅排行</span>
         <span style="font-size:11px; font-weight:normal; opacity:0.9;">（標的股票強弱勢）</span>
         <span class="toggle-icon">▶</span>
     </div>
-    <div class="right-section-content collapsed" id="rankingSection">
+    <div class="right-section-content collapsed" id="stockRankingSection">
 
         <!-- v3.97-as-cd: 重新設計標籤和排序 -->
         <div style="background:#fff; border-radius:12px; padding:16px; margin-bottom:16px; box-shadow:0 2px 8px rgba(0,0,0,0.06);">
@@ -2640,7 +2640,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
         </div>
 
         <!-- 排行榜內容 -->
-        <div id="rankingContent" style="min-height:300px;">
+        <div id="stockRankingContent" style="min-height:300px;">
             <div style="text-align:center; color:#999; padding:60px 20px; background:#fff; border-radius:12px;">
                 <div style="font-size:32px; margin-bottom:12px;">⏳</div>
                 <div style="font-size:15px;">點擊展開後自動載入資料...</div>
@@ -2649,10 +2649,10 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
         <!-- 資料來源說明 -->
         <div style="text-align:right; padding:8px; color:#999; font-size:12px;">
-            <span id="rankingDataInfo"></span> | 資料來源：CB_kanban
+            <span id="stockRankingDataInfo"></span> | 資料來源：CB_kanban
         </div>
 
-    </div><!-- rankingSection結束 -->
+    </div><!-- stockRankingSection結束 -->
 </div><!-- 右側第五區塊結束 -->
 
 </div>
@@ -18422,8 +18422,9 @@ function calculateRankingData(period) {
  * 渲染漲跌幅排行表格
  */
 function renderRankingTable() {
-    const container = document.getElementById('rankingContent');
-    const infoSpan = document.getElementById('rankingDataInfo');
+    // v3.97-as-cf: 修正 ID 衝突，改用 stockRankingContent
+    const container = document.getElementById('stockRankingContent');
+    const infoSpan = document.getElementById('stockRankingDataInfo');
 
     // v3.97-as-cc: 改用 kanbanData
     if (!window.kanbanData?.loaded) {
@@ -18568,9 +18569,9 @@ function loadPriceTrendFromRanking(cbCode) {
  * 漲跌幅排行區塊初始化
  */
 function initRankingSection() {
-    // 當區塊展開時自動載入資料
-    const rankingContent = document.getElementById('rankingContent');
-    if (rankingContent && rankingContent.innerHTML.includes('載入漲跌幅資料中')) {
+    // v3.97-as-cf: 修正 ID 衝突，改用 stockRankingContent
+    const rankingContent = document.getElementById('stockRankingContent');
+    if (rankingContent && !rankingContent.innerHTML.includes('載入中')) {
         renderRankingTable();
     }
 }

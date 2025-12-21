@@ -4,10 +4,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97-as-cg (SQLite資料庫版)</title>
+<title>AI智能可轉債競拍系統 v3.97-as-ch (SQLite資料庫版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<!-- v3.97-as-ch: 1.第四區塊UI參考第五區塊簡潔風格 2.Kanban只載入2025年資料加速 -->
 <!-- v3.97-as-cg: 修正漲跌幅排行 CB 名稱顯示（name → cbName）-->
-<!-- v3.97-as-cf: 修正第五區塊 ID 衝突（rankingSection → stockRankingSection）-->
 <!-- v3.97-as-cb: 加入 CSV/Excel fallback 機制 -->
 <!-- v3.97-as-ca: 改為從 data/00_cb/ 載入 CSV 檔案 -->
 <!-- v3.97-as-bz: 新增載入 12_call_execute.csv，修正強制贖回資料來源 -->
@@ -1660,7 +1660,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.97-as-cg)...</div>
+    <div>🔄 系統啟動中 (v3.97-as-ch)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
@@ -2553,52 +2553,66 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     </div>
     <div class="right-section-content collapsed" id="priceTrendSection">
 
-        <!-- CB選擇器（價格走勢用）- v3.97-zs-ax: 參考基本資料查詢區設計 -->
-        <div style="margin-bottom:15px; padding:15px; background:#f5f5f5; border-radius:8px;">
-            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">
-                <label style="font-weight:bold; color:#333; white-space:nowrap;">🔍 快速搜尋：</label>
-                <div style="flex:1; min-width:200px; max-width:350px; position:relative;">
-                    <input type="text" id="priceTrendSearch"
-                           placeholder="輸入代號(如2383)或名稱(如台光電)..."
-                           oninput="smartSearchPriceTrend(this.value)"
-                           onkeydown="handlePriceTrendSearchKey(event)"
-                           autocomplete="off"
-                           style="width:100%; padding:8px 12px; border:2px solid #9c27b0; border-radius:6px; font-size:14px; font-weight:600;">
-                    <!-- 搜尋結果下拉框 -->
-                    <div id="priceTrendSearchResults" style="display:none; position:absolute; top:100%; left:0; right:0; max-height:300px; overflow-y:auto; background:white; border:2px solid #9c27b0; border-top:none; border-radius:0 0 6px 6px; z-index:1000; box-shadow:0 4px 12px rgba(0,0,0,0.15);"></div>
+        <!-- v3.97-as-ch: 重新設計 UI，參考第五區塊風格 -->
+        <div style="background:#fff; border-radius:12px; padding:16px; margin-bottom:16px; box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+            <!-- 搜尋區 -->
+            <div style="margin-bottom:16px;">
+                <div style="font-weight:600; color:#666; margin-bottom:8px;">🔍 快速搜尋：</div>
+                <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                    <div style="flex:1; min-width:200px; position:relative;">
+                        <input type="text" id="priceTrendSearch"
+                               placeholder="輸入代號(如2383)或名稱(如台光電)"
+                               oninput="smartSearchPriceTrend(this.value)"
+                               onkeydown="handlePriceTrendSearchKey(event)"
+                               autocomplete="off"
+                               style="width:100%; padding:12px 16px; border:2px solid #9c27b0; border-radius:8px; font-size:15px; font-weight:600; box-sizing:border-box;">
+                        <div id="priceTrendSearchResults" style="display:none; position:absolute; top:100%; left:0; right:0; max-height:300px; overflow-y:auto; background:white; border:2px solid #9c27b0; border-top:none; border-radius:0 0 8px 8px; z-index:1000; box-shadow:0 4px 12px rgba(0,0,0,0.15);"></div>
+                    </div>
+                    <button type="button" onclick="clearPriceTrendSearch()" style="padding:12px 20px; background:#9e9e9e; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:600;">✕ 清除</button>
                 </div>
-                <button type="button" onclick="clearPriceTrendSearch()" style="padding:8px 12px; background:#9e9e9e; color:white; border:none; border-radius:6px; cursor:pointer; font-size:12px;">
-                    ✕ 清除
-                </button>
-                <span style="color:#ccc;">│</span>
-                <label style="font-weight:bold; color:#666; font-size:12px; white-space:nowrap;">📋 或從清單：</label>
-                <select id="priceTrendCBSelect" onchange="loadPriceTrend(this.value)" style="flex:1; min-width:180px; max-width:280px; padding:8px 10px; border:2px solid #7b1fa2; border-radius:6px; font-size:13px;">
-                    <option value="">-- 請選擇CB --</option>
-                </select>
-                <select id="priceTrendPeriod" onchange="updatePriceTrendPeriod()" style="padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px;">
-                    <option value="30">1月</option>
-                    <option value="90" selected>3月</option>
-                    <option value="180">6月</option>
-                    <option value="365">1年</option>
-                    <option value="730">2年</option>
-                    <option value="1095">3年</option>
-                    <option value="all">全部</option>
-                </select>
+            </div>
+
+            <!-- 下拉選單區 -->
+            <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px;">
+                <div style="flex:1; min-width:150px;">
+                    <div style="font-size:12px; color:#888; margin-bottom:4px;">📋 或從清單：</div>
+                    <select id="priceTrendCBSelect" onchange="loadPriceTrend(this.value)" style="width:100%; padding:10px 12px; border:2px solid #7b1fa2; border-radius:8px; font-size:14px; font-weight:600;">
+                        <option value="">-- 請選擇CB代號 --</option>
+                    </select>
+                </div>
+                <div style="min-width:100px;">
+                    <div style="font-size:12px; color:#888; margin-bottom:4px;">📅 期間：</div>
+                    <select id="priceTrendPeriod" onchange="updatePriceTrendPeriod()" style="width:100%; padding:10px 12px; border:1px solid #ddd; border-radius:8px; font-size:14px;">
+                        <option value="30">1月</option>
+                        <option value="90" selected>3月</option>
+                        <option value="180">6月</option>
+                        <option value="365">1年</option>
+                        <option value="all">全部</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- 標籤頁按鈕 - 參考第五區塊風格 -->
+            <div style="display:flex; flex-wrap:wrap; gap:8px;">
+                <button type="button" class="price-trend-tab active" onclick="showPriceTrendTab('stockPrice', event)" style="padding:10px 14px; border:none; border-radius:8px; background:#9c27b0; color:white; cursor:pointer; font-weight:600; font-size:13px;">📈 股價與轉換價</button>
+                <button type="button" class="price-trend-tab" onclick="showPriceTrendTab('cbPrice', event)" style="padding:10px 14px; border:1px solid #ddd; border-radius:8px; background:#fff; color:#333; cursor:pointer; font-weight:500; font-size:13px;">💹 理論價值分析</button>
+                <button type="button" class="price-trend-tab" onclick="showPriceTrendTab('cbHistory', event)" style="padding:10px 14px; border:1px solid #ddd; border-radius:8px; background:#fff; color:#333; cursor:pointer; font-weight:500; font-size:13px;">💰 CB價格走勢</button>
+                <button type="button" class="price-trend-tab" onclick="showPriceTrendTab('balance', event)" style="padding:10px 14px; border:1px solid #ddd; border-radius:8px; background:#fff; color:#333; cursor:pointer; font-weight:500; font-size:13px;">📊 籌碼轉換分析</button>
+                <button type="button" class="price-trend-tab" onclick="showPriceTrendTab('cbas', event)" style="padding:10px 14px; border:1px solid #ddd; border-radius:8px; background:#fff; color:#333; cursor:pointer; font-weight:500; font-size:13px;">🎯 CBAS拆解</button>
             </div>
         </div>
 
-        <!-- 價格走勢標籤頁 -->
-        <div class="price-trend-tabs">
-            <button type="button" class="price-trend-tab active" onclick="showPriceTrendTab('stockPrice', event)">📈 股價與轉換價</button>
-            <button type="button" class="price-trend-tab" onclick="showPriceTrendTab('cbPrice', event)">💹 理論價值分析</button>
-            <button type="button" class="price-trend-tab" onclick="showPriceTrendTab('cbHistory', event)">💰 CB價格走勢</button>
-            <button type="button" class="price-trend-tab" onclick="showPriceTrendTab('balance', event)">📊 籌碼轉換分析</button>
-            <button type="button" class="price-trend-tab" onclick="showPriceTrendTab('cbas', event)">🎯 CBAS拆解</button>
-        </div>
-        <div id="priceTrendContent" style="min-height:300px; padding:15px; background:#fafafa; border-radius:0 0 8px 8px; border:1px solid #e0e0e0; border-top:none;">
-            <div style="text-align:center; color:#999; padding:40px;">
-                👆 請先選擇一檔可轉債查看價格走勢
+        <!-- 圖表內容區 -->
+        <div id="priceTrendContent" style="min-height:300px;">
+            <div style="text-align:center; color:#999; padding:60px 20px; background:#fff; border-radius:12px;">
+                <div style="font-size:32px; margin-bottom:12px;">👆</div>
+                <div style="font-size:15px;">請先選擇一檔可轉債查看價格走勢</div>
             </div>
+        </div>
+
+        <!-- 資料來源說明 -->
+        <div style="text-align:right; padding:8px; color:#999; font-size:12px;">
+            資料來源：CB_kanban（2025年）
         </div>
 
     </div><!-- priceTrendSection結束 -->
@@ -18620,8 +18634,13 @@ function updatePriceTrendPeriod() {
  * 顯示價格走勢標籤頁
  */
 function showPriceTrendTab(tabName, event) {
-    // 更新標籤狀態
-    document.querySelectorAll('.price-trend-tab').forEach(tab => tab.classList.remove('active'));
+    // v3.97-as-ch: 更新標籤樣式（參考第五區塊）
+    document.querySelectorAll('.price-trend-tab').forEach(tab => {
+        tab.style.background = '#fff';
+        tab.style.color = '#333';
+        tab.style.border = '1px solid #ddd';
+        tab.classList.remove('active');
+    });
 
     // 確保正確找到按鈕元素（處理點擊 emoji 或文字的情況）
     if (event) {
@@ -18629,19 +18648,32 @@ function showPriceTrendTab(tabName, event) {
         while (target && !target.classList.contains('price-trend-tab')) {
             target = target.parentElement;
         }
-        if (target) target.classList.add('active');
+        if (target) {
+            target.style.background = '#9c27b0';
+            target.style.color = 'white';
+            target.style.border = 'none';
+            target.classList.add('active');
+        }
     } else {
-        // v3.97-zs-br: 更新標籤索引（新增 cbHistory）
-        const index = tabName === 'stockPrice' ? 1 : tabName === 'cbPrice' ? 2 :
-                      tabName === 'cbHistory' ? 3 : tabName === 'balance' ? 4 : 5;
-        document.querySelector(`.price-trend-tab:nth-child(${index})`)?.classList.add('active');
+        const tabs = document.querySelectorAll('.price-trend-tab');
+        const index = tabName === 'stockPrice' ? 0 : tabName === 'cbPrice' ? 1 :
+                      tabName === 'cbHistory' ? 2 : tabName === 'balance' ? 3 : 4;
+        if (tabs[index]) {
+            tabs[index].style.background = '#9c27b0';
+            tabs[index].style.color = 'white';
+            tabs[index].style.border = 'none';
+            tabs[index].classList.add('active');
+        }
     }
 
     const content = document.getElementById('priceTrendContent');
     const cbCode = currentPriceTrendCB;
 
     if (!cbCode) {
-        content.innerHTML = `<div style="text-align:center; color:#999; padding:40px;">👆 請先選擇一檔可轉債</div>`;
+        content.innerHTML = `<div style="text-align:center; color:#999; padding:60px 20px; background:#fff; border-radius:12px;">
+            <div style="font-size:32px; margin-bottom:12px;">👆</div>
+            <div style="font-size:15px;">請先選擇一檔可轉債</div>
+        </div>`;
         return;
     }
 
@@ -18659,7 +18691,10 @@ function showPriceTrendTab(tabName, event) {
     }
 
     // 顯示載入中
-    content.innerHTML = `<div style="text-align:center; padding:40px; color:#666;">⏳ 載入 ${cbCode} 價格走勢中...</div>`;
+    content.innerHTML = `<div style="text-align:center; padding:40px; color:#666; background:#fff; border-radius:12px;">
+        <div style="font-size:24px; margin-bottom:10px;">⏳</div>
+        <div>載入 ${cbCode} 價格走勢中...</div>
+    </div>`;
 
     // 取得期間設定
     const period = document.getElementById('priceTrendPeriod')?.value || '90';
@@ -19284,13 +19319,14 @@ async function loadAllKanbanData(loadAll = false) {
 
     // 顯示載入進度
     const container = document.getElementById('priceTrendContent');
+    const stockRankingContainer = document.getElementById('stockRankingContent');
     const updateProgress = (msg) => {
-        if (container) {
-            container.innerHTML = `<div style="text-align:center; padding:40px; color:#666;">
-                <div style="font-size:24px; margin-bottom:10px;">⏳</div>
-                <div>${msg}</div>
-            </div>`;
-        }
+        const html = `<div style="text-align:center; padding:40px; color:#666;">
+            <div style="font-size:24px; margin-bottom:10px;">⏳</div>
+            <div>${msg}</div>
+        </div>`;
+        if (container) container.innerHTML = html;
+        if (stockRankingContainer) stockRankingContainer.innerHTML = html;
     };
 
     updateProgress('初始化資料庫引擎...');
@@ -19307,13 +19343,14 @@ async function loadAllKanbanData(loadAll = false) {
         const allData = window.kanbanData.data || {};
         const allDates = new Set(window.kanbanData.dates || []);
 
-        // v3.97-zs-br: 預設只載入最新資料庫（23MB），需要更早資料時再載入
+        // v3.97-as-ch: 預設只載入 2025 年資料（快速啟動）
+        // loadAll = true 時才載入全部歷史
         const dbFiles = loadAll ? [
-            { file: 'data/cb_kanban_2023_2025.db', label: '2023-2025' },
-            { file: 'data/cb_kanban_2020_2022.db', label: '2020-2022' },
-            { file: 'data/cb_kanban_2017_2019.db', label: '2017-2019' }
+            { file: 'data/cb_kanban_2023_2025.db', label: '2023-2025', yearFilter: null },
+            { file: 'data/cb_kanban_2020_2022.db', label: '2020-2022', yearFilter: null },
+            { file: 'data/cb_kanban_2017_2019.db', label: '2017-2019', yearFilter: null }
         ] : [
-            { file: 'data/cb_kanban_2023_2025.db', label: '2023-2025' }
+            { file: 'data/cb_kanban_2023_2025.db', label: '2025', yearFilter: '2025' }  // 只載入 2025
         ];
 
         for (const dbInfo of dbFiles) {
@@ -19326,11 +19363,16 @@ async function loadAllKanbanData(loadAll = false) {
                 const arrayBuffer = await response.arrayBuffer();
                 const db = new SQL.Database(new Uint8Array(arrayBuffer));
 
-                // 查詢所有資料
+                // v3.97-as-ch: 加入年份過濾條件
+                const whereClause = dbInfo.yearFilter 
+                    ? `WHERE date LIKE '${dbInfo.yearFilter}%'` 
+                    : '';
+                
+                // 查詢資料
                 const results = db.exec(`
                     SELECT date, code, name, conv_price, call_start, call_end,
                            call_price, delist_date, balance, cb_price, stock_price
-                    FROM kanban ORDER BY code, date
+                    FROM kanban ${whereClause} ORDER BY code, date
                 `);
 
                 if (results.length > 0) {

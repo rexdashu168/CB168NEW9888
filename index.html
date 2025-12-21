@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97-zs-bl (標籤緩存優化版)</title>
+<title>AI智能可轉債競拍系統 v3.97-zs-bo (純CSV載入版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <!-- v3.97-zs-ae: 改用 CB_kanban_YYYY.xlsx 載入時間序列資料，取代 kanban_data.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -2773,6 +2773,7 @@ if (typeof window.WEIGHT_COEFFICIENTS === 'undefined') {
         'years': {}, 
         'conversion': {}
     };
+    console.log('📊 WEIGHT_COEFFICIENTS 初始化完成（等待Excel載入）');
 }
 
 // ==========================================
@@ -3079,6 +3080,15 @@ function calculateComprehensiveCoefficient(params) {
         Math.pow(capCoef, WEIGHT_CONFIG.stockCap) *
         Math.pow(yearCoef, WEIGHT_CONFIG.years);
     
+    console.log('📊 v3.84 綜合係數計算:');
+    console.log('  產業:', industry, '→', industryCoef.toFixed(2), '(^0.30)');
+    console.log('  信評: TCRI', rating, '→', ratingCoef.toFixed(2), '(^0.22)');
+    console.log('  理論價:', theoPrice, '→', theoCoef.toFixed(2), '(^0.15)');
+    console.log('  券商:', broker, '→', brokerCoef.toFixed(2), '(^0.13)');
+    console.log('  規模:', issueSize, '億 →', sizeCoef.toFixed(2), '(^0.10)');
+    console.log('  股本:', stockCap, '億 →', capCoef.toFixed(2), '(^0.05)');
+    console.log('  年期:', years, '年 →', yearCoef.toFixed(2), '(^0.05)');
+    console.log('  🎯 綜合係數:', comprehensiveCoef.toFixed(4));
     
     return {
         comprehensive: comprehensiveCoef,
@@ -3118,6 +3128,7 @@ function getTcri6UnsecuredAdjustment(rating, guarantee, theoPrice) {
             adjustment = -3;  // 理論價>105：調降3元
         }
         
+        console.log('⚠️ TCRI6無擔保調整: 溢價', adjustment, '元');
         return {
             isApplicable: true,
             adjustment: adjustment,
@@ -3194,6 +3205,11 @@ function calcUndersubscriptionIndicator(targetDate) {
         color = '#ffc107';
     }
     
+    console.log('📉 投標不足指標:');
+    console.log('  近3個月競拍數:', totalCount);
+    console.log('  投標不足數:', undersubscribedCount, '(', undersubscribedRate.toFixed(1), '%)');
+    console.log('  有擔保投標不足:', securedUndersubscribed.length);
+    console.log('  市場狀態:', marketState);
     
     return {
         totalCount: totalCount,
@@ -3287,18 +3303,9 @@ function formatDate(dateVal) {
         return `${date.getFullYear()}/${(date.getMonth()+1).toString().padStart(2,'0')}/${date.getDate().toString().padStart(2,'0')}`;
     }
     if (typeof dateVal === 'string') {
-        // v3.97-zs-bg: 全面移除時間部分
-        let dateOnly = dateVal
-            .split(' ')[0]           // 處理 "2024-07-19 00:00:00"
-            .split('T')[0]           // 處理 "2024-07-19T00:00:00" (ISO格式)
-            .replace(/\s*\d{2}:\d{2}:\d{2}.*$/, '')  // 移除任何剩餘的時間格式
-            .trim();
-        return dateOnly.replace(/-/g, '/');
+        return dateVal.replace(/-/g, '/');
     }
-    if (dateVal instanceof Date) {
-        return `${dateVal.getFullYear()}/${(dateVal.getMonth()+1).toString().padStart(2,'0')}/${dateVal.getDate().toString().padStart(2,'0')}`;
-    }
-    return String(dateVal).split(' ')[0].replace(/-/g, '/');
+    return dateVal;
 }
 
 function normalizePremium(premium) {
@@ -3351,220 +3358,74 @@ let listedSet = new Set(); // 掛牌中清單
 let totalAuctionCount = 0; // v3.81 動態競拍案例總數
 
 // ==========================================
-// 2. 資料讀取 (v3.97-zs-bg: 改用 CSV 優先載入)
+// 2. 資料讀取
 // ==========================================
-
-/**
- * v3.97-zs-bg: CSV 解析函數 (處理含逗號、引號的欄位)
- */
-function parseCSVLine(line) {
-    const result = [];
-    let current = '';
-    let inQuotes = false;
-    for (let i = 0; i < line.length; i++) {
-        const c = line[i];
-        if (c === '"') {
-            if (inQuotes && line[i + 1] === '"') {
-                current += '"';
-                i++;
-            } else {
-                inQuotes = !inQuotes;
-            }
-        } else if (c === ',' && !inQuotes) {
-            result.push(current.trim());
-            current = '';
-        } else {
-            current += c;
-        }
-    }
-    result.push(current.trim());
-    return result;
-}
-
-/**
- * v3.97-zs-bg: 載入 CSV 並轉換為 JSON 陣列（優化版）
- * @param {string} csvPath - CSV 檔案路徑
- * @returns {Promise<Array>} - JSON 陣列
- */
-async function loadCSV(csvPath) {
-    try {
-        const response = await fetch(csvPath);
-        if (!response.ok) return null;
-        
-        const text = await response.text();
-        const lines = text.split('\n');
-        if (lines.length < 2) return [];
-        
-        // 解析標題列
-        const headers = parseCSVLine(lines[0]);
-        const headerCount = headers.length;
-        const result = new Array(lines.length - 1);  // 預分配陣列大小
-        let resultIdx = 0;
-        
-        for (let i = 1; i < lines.length; i++) {
-            const line = lines[i];
-            if (!line || line.length < 2) continue;
-            
-            const cols = parseCSVLine(line);
-            const row = {};
-            for (let j = 0; j < headerCount; j++) {
-                let val = cols[j] || '';
-                // 嘗試轉換數字（跳過空值和純空白）
-                if (val && val.length > 0) {
-                    const trimVal = typeof val === 'string' ? val.trim() : val;
-                    if (trimVal && !isNaN(trimVal)) {
-                        const num = parseFloat(trimVal);
-                        if (!isNaN(num)) val = num;
-                    }
-                }
-                row[headers[j].trim()] = val;
-            }
-            result[resultIdx++] = normalizeKeys(row);
-        }
-        
-        // 移除未使用的陣列空間
-        result.length = resultIdx;
-        return result;
-    } catch (e) {
-        return null;
-    }
-}
-
-/**
- * v3.97-zs-bg: 從 Excel 工作表載入資料 (作為 CSV 的備援)
- */
-async function loadExcelSheet(workbook, keywords) {
-    if (!workbook) return null;
-    const n = workbook.SheetNames.find(x => {
-        return keywords.some(k => {
-            if (k.endsWith('_')) return x.startsWith(k);
-            return x.startsWith(k + '_') || x === k || x.includes(k);
-        });
-    });
-    if (!n) {
-        return null;
-    }
-    return XLSX.utils.sheet_to_json(workbook.Sheets[n]).map(row => normalizeKeys(row));
-}
-
 async function loadStatistics() {
     const loadingDiv = document.getElementById('loading');
-    const csvBasePath = 'data/00_cb/';  // CSV 檔案存放路徑
-    
     try {
-        // v3.97-zs-bg: 優先嘗試 CSV，失敗才讀 Excel
-        let workbook = null;
-        let useCSV = true;
+        const response = await fetch('00_CB.xlsx');
+        if (!response.ok) throw new Error("找不到 00_CB.xlsx");
+        const workbook = XLSX.read(await response.arrayBuffer(), { type: 'array' });
         
-        // 測試 CSV 是否可用
-        const testCSV = await loadCSV(`${csvBasePath}04_auction.csv`);
-        if (!testCSV || testCSV.length === 0) {
-            useCSV = false;
-            const response = await fetch('00_CB.xlsx');
-            if (!response.ok) throw new Error("找不到 00_CB.xlsx");
-            workbook = XLSX.read(await response.arrayBuffer(), { type: 'array' });
-        } else {
-        }
-        
-        // v3.97-zs-bg: 使用 Promise.all 並行載入所有 CSV（大幅提升效能）
-        let sheetAuction, sheetHighLow, sheetAllCB, sheetSchedule, sheetPutback;
-        let sheetListed, sheetPending, sheetBoard, sheetCBClose, sheetBalance;
-        let sheetIndustry, sheetSuspend, sheetFilterRange, sheetCallExecute;
-        let sheetPriceAdjust, sheetCbasCalc;
-        
-        if (useCSV) {
-            // 並行載入所有 CSV 檔案
-            const csvFiles = [
-                loadCSV(`${csvBasePath}00_CB_filter.csv`),      // 0
-                loadCSV(`${csvBasePath}01_basic.csv`),          // 1
-                loadCSV(`${csvBasePath}02_schedule.csv`),       // 2
-                loadCSV(`${csvBasePath}03_putback.csv`),        // 3
-                loadCSV(`${csvBasePath}06_issue.csv`),          // 4
-                loadCSV(`${csvBasePath}07_board.csv`),          // 5
-                loadCSV(`${csvBasePath}08_weekly_basic.csv`),   // 6
-                loadCSV(`${csvBasePath}09_weekly_quote.csv`),   // 7
-                loadCSV(`${csvBasePath}10_weekly_balance.csv`), // 8
-                loadCSV(`${csvBasePath}13_stop_convert.csv`),   // 9
-                loadCSV(`${csvBasePath}16_industry.csv`),       // 10
-                loadCSV(`${csvBasePath}05_filter_range.csv`),   // 11 (預留)
-                loadCSV(`${csvBasePath}12_call_execute.csv`),   // 12 (預留)
-                loadCSV(`${csvBasePath}14_price_adjust.csv`),   // 13 (預留)
-                loadCSV(`${csvBasePath}15_cbas_calc.csv`)       // 14 (預留)
-            ];
-            
-            const results = await Promise.all(csvFiles);
-            
-            sheetAuction = testCSV;  // 04_auction.csv 已經載入
-            sheetHighLow = results[0];
-            sheetAllCB = results[1];
-            sheetSchedule = results[2];
-            sheetPutback = results[3];
-            sheetPending = results[4];
-            sheetBoard = results[5];
-            sheetListed = results[6];
-            sheetCBClose = results[7];
-            sheetBalance = results[8];
-            sheetSuspend = results[9];
-            sheetIndustry = results[10];
-            sheetFilterRange = results[11];
-            sheetCallExecute = results[12];
-            sheetPriceAdjust = results[13];
-            sheetCbasCalc = results[14];
-            
-        } else {
-            // Excel 模式：逐一載入
-            sheetAuction = await loadExcelSheet(workbook, ['04_', '04', '所有CB競拍']);
-            sheetHighLow = await loadExcelSheet(workbook, ['00_', '00', '掛牌', '名稱過濾']);
-            sheetAllCB = await loadExcelSheet(workbook, ['01_', '01', 'ALLCB基本']);
-            sheetSchedule = await loadExcelSheet(workbook, ['02_', 'ALLCB發行時程']);
-            sheetPutback = await loadExcelSheet(workbook, ['03_', 'ALLCB賣回']);
-            sheetListed = await loadExcelSheet(workbook, ['08_', '08']);
-            sheetPending = await loadExcelSheet(workbook, ['06_', '06', '發行案件']);
-            sheetBoard = await loadExcelSheet(workbook, ['07_', '07', '董事會']);
-            sheetCBClose = await loadExcelSheet(workbook, ['09_', '09', '每週日行情']);
-            sheetBalance = await loadExcelSheet(workbook, ['10_', '10', '每週餘額']);
-            sheetIndustry = await loadExcelSheet(workbook, ['16_', '16', '產業分類']);
-            sheetSuspend = await loadExcelSheet(workbook, ['13_', '13', '停止轉換', '暫停轉換']);
-            sheetFilterRange = await loadExcelSheet(workbook, ['05_', '05', '篩選範圍']);
-            sheetCallExecute = await loadExcelSheet(workbook, ['12_', '12', '強制贖回']);
-            sheetPriceAdjust = await loadExcelSheet(workbook, ['14_', '14', '價格調整']);
-            sheetCbasCalc = await loadExcelSheet(workbook, ['15_', '15', 'CBAS計算']);
-        }
-        
-        // v3.97-zs-ag: 抓取 sheet10 日期 (從 CSV 標題或 Excel H1)
-        window.sheet10Date = null;
-        if (useCSV) {
-            // CSV 模式：嘗試從獨立檔案讀取日期
-            try {
-                const dateRes = await fetch(`${csvBasePath}10_weekly_balance_date.txt`);
-                if (dateRes.ok) {
-                    window.sheet10Date = (await dateRes.text()).trim();
-                }
-            } catch (e) {}
-        } else if (workbook) {
-            const sheet10Name = workbook.SheetNames.find(x => x.startsWith('10_') || x.includes('每週餘額'));
-            if (sheet10Name) {
-                const sheet10 = workbook.Sheets[sheet10Name];
-                const h1Cell = sheet10['H1'];
-                if (h1Cell) {
-                    if (typeof h1Cell.v === 'number') {
-                        const excelDate = new Date((h1Cell.v - 25569) * 86400 * 1000);
-                        window.sheet10Date = excelDate.toISOString().split('T')[0].replace(/-/g, '/');
-                    } else if (h1Cell.w) {
-                        window.sheet10Date = h1Cell.w;
-                    } else {
-                        window.sheet10Date = String(h1Cell.v);
+        const getSheetData = (keywords) => { 
+            // v3.97-zs-t: 改用更精確的匹配方式，優先匹配以關鍵字開頭的工作表
+            const n = workbook.SheetNames.find(x => {
+                return keywords.some(k => {
+                    // 優先匹配以 "XX_" 格式開頭的工作表
+                    if (k.endsWith('_')) {
+                        return x.startsWith(k);
                     }
-                }
+                    // 精確匹配完整關鍵字
+                    return x.startsWith(k + '_') || x === k || x.includes(k);
+                });
+            });
+            if (!n) {
+                console.log(`⚠️ 找不到工作表: ${keywords.join(', ')}`);
+                return null;
             }
-        }
-        if (window.sheet10Date) {
+            console.log(`✅ 找到工作表: "${n}"`);
+            return XLSX.utils.sheet_to_json(workbook.Sheets[n]).map(row => normalizeKeys(row));
+        };
+
+        const sheetAuction = getSheetData(['04_', '04', '所有CB競拍']);
+        const sheetHighLow = getSheetData(['00_', '00', '掛牌', '名稱過濾']);
+        const sheetAllCB = getSheetData(['01_', '01', 'ALLCB基本']);
+        const sheetSchedule = getSheetData(['02_', 'ALLCB發行時程']); // v3.97-zs-t 修正匹配
+        const sheetPutback = getSheetData(['03_', 'ALLCB賣回']); // v3.97-zs-t 修正匹配
+        const sheetListed = getSheetData(['08_', '08']); // 掛牌中清單
+        const sheetPending = getSheetData(['06_', '06', '發行案件']); // v3.59 新增：承銷進行中
+        const sheetBoard = getSheetData(['07_', '07', '董事會']); // v3.59 新增：董事會決議
+        const sheetCBClose = getSheetData(['09_', '09', '每週日行情']); // v3.62 新增：CB收盤價
+        const sheetBalance = getSheetData(['10_', '10', '每週餘額']); // v3.97z-s 新增
+        const sheetIndustry = getSheetData(['16_', '16', '產業分類']); // v3.72 新增：產業分類對照表
+        const sheetSuspend = getSheetData(['13_', '13', '停止轉換', '暫停轉換']); // v3.97-zs-aj 新增：暫停轉換資訊
+        
+        // v3.97-zs-ag: 抓取 sheet10 (餘額表) 的 H1 日期
+        window.sheet10Date = null;
+        const sheet10Name = workbook.SheetNames.find(x => x.startsWith('10_') || x.includes('每週餘額'));
+        if (sheet10Name) {
+            const sheet10 = workbook.Sheets[sheet10Name];
+            const h1Cell = sheet10['H1'];
+            if (h1Cell) {
+                // 處理日期格式 (可能是數字或字串)
+                if (typeof h1Cell.v === 'number') {
+                    // Excel 日期數字轉換
+                    const excelDate = new Date((h1Cell.v - 25569) * 86400 * 1000);
+                    window.sheet10Date = excelDate.toISOString().split('T')[0].replace(/-/g, '/');
+                } else if (h1Cell.w) {
+                    window.sheet10Date = h1Cell.w; // 使用格式化後的值
+                } else {
+                    window.sheet10Date = String(h1Cell.v);
+                }
+                console.log('📅 餘額表資料日期 (H1):', window.sheet10Date);
+            }
         }
         
         if (!sheetAuction || sheetAuction.length === 0) throw new Error("找不到競拍資料分頁");
         
         // v3.81 新增：保存競拍數據供KNN超級預測引擎使用
         window.auctionDataCache = sheetAuction;
+        console.log('📊 競拍數據已載入:', sheetAuction.length, '筆（供KNN使用）');
 
         // v3.97z-s 新增：保存所有工作表供基本資料查詢模組使用
         window.sheet01Data = sheetAllCB || [];
@@ -3574,14 +3435,13 @@ async function loadStatistics() {
         window.sheet09Data = sheetCBClose || [];
         window.sheet10Data = sheetBalance || [];
         window.sheet13Data = sheetSuspend || []; // v3.97-zs-aj 新增：暫停轉換資訊
-        
-        // v3.97-zs-bg: 預留工作表資料（供日後擴充使用）
-        window.sheet05Data = sheetFilterRange || [];  // 篩選範圍
-        window.sheet12Data = sheetCallExecute || [];  // 強制贖回執行
-        window.sheet14Data = sheetPriceAdjust || [];  // 價格調整
-        window.sheet15Data = sheetCbasCalc || [];     // CBAS計算
-        
-        // 預留工作表
+        console.log('📋 基本資料工作表已載入:');
+        console.log('   01(基本):', window.sheet01Data.length, '筆');
+        console.log('   02(時程):', window.sheet02Data.length, '筆');
+        console.log('   03(賣回):', window.sheet03Data.length, '筆');
+        console.log('   08(掛牌中):', window.sheet08Data.length, '筆');
+        console.log('   09(行情):', window.sheet09Data.length, '筆');
+        console.log('   10(餘額):', window.sheet10Data.length, '筆');
 
         // v3.72 新增：建立產業分類對照表（從16工作表）
         window.industryMap = {};
@@ -3593,6 +3453,7 @@ async function loadStatistics() {
                     window.industryMap[stockCode] = industry;
                 }
             });
+            console.log(`載入產業分類對照表: ${Object.keys(window.industryMap).length} 筆`);
         }
 
         // v3.72 新增：從01工作表動態計算半年度統計（取代hardcodedStats）
@@ -3687,6 +3548,8 @@ async function loadStatistics() {
                 };
             });
             
+            console.log(`載入半年度統計: ${Object.keys(window.halfYearStats).length} 期`);
+            console.log('半年度統計:', window.halfYearStats);
         }
 
         // v3.97-zs-f 優化：將17次遍歷合併成1次預處理
@@ -3878,6 +3741,7 @@ async function loadStatistics() {
             });
             
             console.timeEnd('⚡ 統計預處理');
+            console.log(`📊 一次遍歷完成 ${sheetAuction.length} 筆資料預處理`);
             
             // ===== 統計計算（使用預處理資料）=====
             console.time('⚡ 統計計算');
@@ -3895,6 +3759,7 @@ async function loadStatistics() {
                     window.brokerPremiumAdj[broker] = Math.round((mean - overallMean) * 10) / 10;
                 }
             });
+            console.log(`計算承銷商調整: ${Object.keys(window.brokerPremiumAdj).length} 家`);
             
             // 2. 計算理論價×投標倍數交叉表 (CROSS_TABLE)
             window.crossTable = {};
@@ -3913,6 +3778,7 @@ async function loadStatistics() {
                     }
                 });
             });
+            console.log('計算交叉表完成');
             
             // 3. 計算擔保/無擔保統計分布 (GUARANTEED_STATS / UNGUARANTEED_STATS)
             function calcPercentile(arr, p) {
@@ -3958,12 +3824,16 @@ async function loadStatistics() {
                 if (unguarStats) window.unguaranteedStats[tk] = unguarStats;
             });
             
+            console.log(`計算擔保統計: 有擔保${Object.keys(window.guaranteedStats).length}組, 無擔保${Object.keys(window.unguaranteedStats).length}組`);
+            console.log('擔保統計:', window.guaranteedStats);
+            console.log('無擔保統計:', window.unguaranteedStats);
             
             // 4. 計算整體統計（供主力模擬使用）
             window.overallStats = {
                 mean: overallMean,
                 totalSamples: auctionData.length
             };
+            console.log(`統計模型載入完成，共 ${auctionData.length} 筆競拍樣本`);
             
             // v3.74 新增：動態計算所有統計表格（取代寫死的數據）
             // ===== 動態計算 OVERALL_STATS（使用預處理資料）=====
@@ -3996,6 +3866,7 @@ async function loadStatistics() {
                     avgBidShares: 34.5,
                     totalSamples: auctionData.length
                 };
+                console.log('動態計算 OVERALL_STATS:', window.OVERALL_STATS);
             }
             
             // ===== 價差統計分析（使用預處理的 spreadData）=====
@@ -4053,6 +3924,7 @@ async function loadStatistics() {
                     minSpread: sortedSpreads[0], maxSpread: sortedSpreads[sortedSpreads.length - 1],
                     distribution: spreadDist, bySize: sizeSpread, byMultiple: multSpread, byGuarantee: guarSpread
                 };
+                console.log('動態計算 SPREAD_STATS:', window.SPREAD_STATS);
             }
             
             // ===== 資金排擠效應分析（使用預處理的 weekMap）=====
@@ -4121,6 +3993,7 @@ async function loadStatistics() {
                     crowdedWeekCount: Object.keys(weekMap).filter(k => weekMap[k].length > 1).length
                 };
                 
+                console.log('動態計算 CROWDING_STATS:', window.CROWDING_STATS);
             }
             
             // ===== 動態計算統計表格（使用預處理資料）=====
@@ -4147,6 +4020,7 @@ async function loadStatistics() {
                     window.SIZE_MULT_TABLE[key] = { label: window.SIZE_MULT_TABLE[key].label, avgMult, avgPrice, count: g.length };
                 }
             });
+            console.log('動態計算 SIZE_MULT_TABLE');
             
             // TERM_GUAR_TABLE - 使用預處理的 termGuarGroups
             window.TERM_GUAR_TABLE = {};
@@ -4159,6 +4033,7 @@ async function loadStatistics() {
                     };
                 }
             });
+            console.log('動態計算 TERM_GUAR_TABLE');
             
             // CONV_VALUE_TABLE - 使用預處理的 theoGroups
             window.CONV_VALUE_TABLE = {
@@ -4177,6 +4052,7 @@ async function loadStatistics() {
                     window.CONV_VALUE_TABLE[ck].count += g.minBid.length;
                 }
             });
+            console.log('動態計算 CONV_VALUE_TABLE');
             
             // INDUSTRY_MULT_TABLE - 使用預處理的 industryGroups
             window.INDUSTRY_MULT_TABLE = {};
@@ -4191,6 +4067,7 @@ async function loadStatistics() {
                     };
                 }
             });
+            console.log('動態計算 INDUSTRY_MULT_TABLE:', Object.keys(window.INDUSTRY_MULT_TABLE).length, '個產業');
             
             // BROKER_MULT_TABLE - 使用預處理的 brokerPerfGroups
             window.BROKER_MULT_TABLE = {};
@@ -4205,6 +4082,7 @@ async function loadStatistics() {
                     };
                 }
             });
+            console.log('動態計算 BROKER_MULT_TABLE:', Object.keys(window.BROKER_MULT_TABLE).length, '家券商');
             
             // RATING_MULT_TABLE - 使用預處理的 ratingGroups
             window.RATING_MULT_TABLE = {};
@@ -4217,9 +4095,11 @@ async function loadStatistics() {
                     };
                 }
             });
+            console.log('動態計算 RATING_MULT_TABLE');
             
             // YEAR_STATS_TABLE - 需要額外處理日期，這裡簡化處理
             window.YEAR_STATS_TABLE = {};
+            console.log('動態計算 YEAR_STATS_TABLE');
             
             console.timeEnd('⚡ 統計計算');
             
@@ -4227,10 +4107,12 @@ async function loadStatistics() {
             if (collectors.allAuctions && collectors.allAuctions.length > 0) {
                 collectors.allAuctions.sort((a, b) => b.dateObj - a.dateObj);
                 window.recentAuctionData = collectors.allAuctions.slice(0, 10);
+                console.log('收集最近10檔開標資料:', window.recentAuctionData.length, '筆');
             } else {
                 window.recentAuctionData = [];
             }
             
+            console.log('✅ 所有統計表格已從Excel動態計算完成');
             
             // ===== v3.74 新增：計算各維度區間排名（按平均掛牌最高排名）=====
             window.dimensionRankings = {};
@@ -4401,6 +4283,7 @@ async function loadStatistics() {
                 window.dimensionRankings['發行券商'][s.key] = { avgHigh: s.avgHigh, rank: idx + 1, total: brokerStats.length, count: s.count };
             });
             
+            console.log('✅ 各維度區間排名計算完成:', Object.keys(window.dimensionRankings));
             
             // v3.72 新增：計算各條件組合的歷史統計（用於競拍前評估）
             // combinedData 已在上方預處理中建立
@@ -4456,6 +4339,8 @@ async function loadStatistics() {
                 });
             });
             
+            console.log(`計算條件組合統計: ${Object.keys(window.conditionStats).length} 組`);
+            console.log('條件組合統計:', window.conditionStats);
             }
         }
 
@@ -4472,6 +4357,7 @@ async function loadStatistics() {
                     window.cbClosePriceMap[cleanId] = safeFloat(closePrice);
                 }
             });
+            console.log(`載入CB收盤價: ${Object.keys(window.cbClosePriceMap).length} 筆`);
         }
 
         // 建立掛牌中代號Set（用於判斷狀態）
@@ -4480,6 +4366,7 @@ async function loadStatistics() {
                 let id = row['代號'] || row['CB代號'] || row['股票代號'];
                 if (id) listedSet.add(String(id).replace('.0','').trim());
             });
+            console.log(`載入掛牌中清單: ${listedSet.size} 筆`);
         }
         
         // v3.59 新增：處理承銷進行中資料
@@ -4728,6 +4615,13 @@ async function loadStatistics() {
                 });
             });
             
+            console.log(`載入閃電帶入資料: ${pendingCases.length} 筆`);
+            console.log(`  - 已掛牌: ${pendingCases.filter(c => c.status === 'listed').length} 筆`);
+            console.log(`  - 已開標: ${pendingCases.filter(c => c.status === 'opened').length} 筆`);
+            console.log(`  - 已截標: ${pendingCases.filter(c => c.status === 'closed').length} 筆`);
+            console.log(`  - 投標中: ${pendingCases.filter(c => c.status === 'bidding').length} 筆`);
+            console.log(`  - 待公告: ${pendingCases.filter(c => c.status === 'pending').length} 筆`);
+            console.log(`  - 競拍待投標: ${pendingCases.filter(c => (c.status === 'pending' || c.status === 'bidding') && c.auctionType === '競拍').length} 筆`);
         }
         
         // v3.59 新增：處理董事會決議資料
@@ -4747,13 +4641,11 @@ async function loadStatistics() {
                     });
                 }
             });
+            console.log(`載入董事會決議: ${window.boardApprovalData.length} 筆, 總額 ${window.boardApprovalData.reduce((s,d)=>s+d.size,0).toFixed(1)} 億`);
         }
 
         // v3.61 新增：讀取CBAS報價表 (工作表11)
-        // v3.97-zs-bg: 改用 CSV 優先載入
-        const sheetCBAS = useCSV 
-            ? await loadCSV(`${csvBasePath}11_cbas_quote.csv`)
-            : (workbook ? await loadExcelSheet(workbook, ['11', 'CBAS報價']) : null);
+        const sheetCBAS = getSheetData(['11', 'CBAS報價']);
         window.cbasData = [];
         if (sheetCBAS && sheetCBAS.length > 0) {
             sheetCBAS.forEach(row => {
@@ -4764,10 +4656,10 @@ async function loadStatistics() {
                 const premium = safeFloat(row['權利金(佰元報價)']);
                 const remainingYears = safeFloat(row['剩餘年期']);
                 const discountRate = safeFloat(row['溢(折)價%']);
-                const ratingRaw = String(row['擔保銀行/信用評等(TCRI)'] || '').trim();
+                const ratingRaw = row['擔保銀行/信用評等(TCRI)'] || '';
                 
                 // 判斷擔保類型：數字為TCRI無擔保，非數字為銀行有擔保
-                const isGuaranteed = ratingRaw && !/^\d+$/.test(ratingRaw);
+                const isGuaranteed = ratingRaw && !/^\d+$/.test(ratingRaw.trim());
                 const guaranteeType = isGuaranteed ? 'guaranteed' : 'unguaranteed';
                 const guaranteeDisplay = isGuaranteed ? ratingRaw : `TCRI ${ratingRaw}`;
                 
@@ -4799,6 +4691,7 @@ async function loadStatistics() {
             });
             const guaranteedCount = window.cbasData.filter(d => d.isGuaranteed).length;
             const unguaranteedCount = window.cbasData.filter(d => !d.isGuaranteed).length;
+            console.log(`載入CBAS報價表: ${window.cbasData.length} 筆 (有擔保${guaranteedCount}筆, 無擔保${unguaranteedCount}筆)`);
         }
         
         // v3.61 新增：從01工作表建立CB補充資訊對照表（券商、股本）
@@ -4814,6 +4707,7 @@ async function loadStatistics() {
                     issueSize: safeFloat(row['發行規模']) || safeFloat(row['發行總額'])
                 };
             });
+            console.log(`建立CB補充資訊對照表: ${Object.keys(window.cbSupplementMap).length} 筆`);
             
             // 補充CBAS資料的券商和股本資訊
             if (window.cbasData && window.cbasData.length > 0) {
@@ -4829,6 +4723,7 @@ async function loadStatistics() {
                         supplemented++;
                     }
                 });
+                console.log(`CBAS資料補充完成: ${supplemented} 筆有補充券商/股本資訊`);
             }
         }
 
@@ -4908,6 +4803,29 @@ async function loadStatistics() {
                 };
             }).filter(item => item !== null);
             
+            console.log(`載入詢圈資料: ${inquiryRawData.length} 筆`);
+            // 除錯：檢查詢圈資料
+            const withCapital = inquiryRawData.filter(d => d.capital > 0);
+            const withMarket = inquiryRawData.filter(d => d.marketHigh > 0 && d.marketLow > 0);
+            console.log(`詢圈資料中有股本數據: ${withCapital.length} 筆`);
+            console.log(`詢圈資料中有掛牌數據: ${withMarket.length} 筆`);
+            console.log(`00工作表(highLowMap)筆數: ${Object.keys(highLowMap).length}`);
+            if (withCapital.length > 0) {
+                console.log('詢圈範例(含股本):', withCapital.slice(0, 3).map(d => ({
+                    id: d.id, 
+                    name: d.name, 
+                    capital: d.capital,
+                    marketHigh: d.marketHigh,
+                    marketLow: d.marketLow
+                })));
+            }
+            // 檢查 highLowMap 範例
+            const hlKeys = Object.keys(highLowMap).slice(0, 3);
+            console.log('highLowMap範例:', hlKeys.map(k => ({
+                id: k,
+                high: highLowMap[k]['掛牌最高'] || highLowMap[k]['掛牌最高價'],
+                low: highLowMap[k]['掛牌最低'] || highLowMap[k]['掛牌最低價']
+            })));
         }
 
         auctionRawData = sheetAuction.map(row => {
@@ -4993,15 +4911,18 @@ async function loadStatistics() {
         
         // v3.97-zs-f 新增：背景預載入三、四區塊所需資料（避免展開時卡頓）
         setTimeout(() => {
+            console.log('⏳ 背景預載入額外資料...');
             
             // 預載入 yuanta 歷史資料（基本資料查詢用）
             if (typeof loadYuantaHistoryData === 'function') {
                 loadYuantaHistoryData().then(() => {
+                    console.log('✅ 背景預載入: yuanta 歷史資料完成');
                 }).catch(err => console.warn('yuanta預載入失敗:', err));
             }
             
             // v3.97-zs-f: 移除 kanban 預載入，改為用戶點擊時才載入
             // 這樣可以大幅改善手機載入速度
+            console.log('ℹ️ kanban 時間序列將在用戶使用價格走勢分析時載入');
         }, 1000); // 延遲1秒後開始，讓主UI先穩定
     } catch (error) { 
         console.error(error); 
@@ -5256,6 +5177,7 @@ function getStatsSmart(category, val) {
         
         // === 詢圈數據統計（全部）===
         const inquiryFiltered = inquiryRawData.filter(filterFn);
+        console.log(`[${category}=${val}] 詢圈篩選結果: ${inquiryFiltered.length} 筆 (原始: ${inquiryRawData.length} 筆)`);
         
         let iSumH = 0, iSumL = 0, iCountM = 0;
         
@@ -5265,6 +5187,7 @@ function getStatsSmart(category, val) {
             }
         });
         
+        console.log(`[${category}=${val}] 詢圈有掛牌數據: ${iCountM} 筆`);
         
         if (iCountM > 0) {
             stats.inquiryData = {
@@ -5978,6 +5901,7 @@ function updateInitialDisplayFromData() {
         winRate: winRate
     };
     
+    console.log('📊 動態統計數據更新完成:', window.DYNAMIC_STATS);
 }
 
 function populateSelect(id, dataObj) {
@@ -7002,8 +6926,10 @@ function generateDimensionAnalysis() {
     // v3.92 除錯：檢查信評分布
     const auctionWithRating = allCBData.filter(d => d.type === '競拍' && d.rating && ['3','4','5','6','7','8'].includes(String(d.rating)));
     const inquiryWithRating = allCBData.filter(d => d.type === '詢圈' && d.rating && ['3','4','5','6','7','8'].includes(String(d.rating)));
+    console.log(`維度分析信評統計: 競拍有信評${auctionWithRating.length}筆, 詢圈有信評${inquiryWithRating.length}筆`);
     const inquiryRatings = allCBData.filter(d => d.type === '詢圈').map(d => d.rating);
     const uniqueRatings = [...new Set(inquiryRatings)].slice(0, 10);
+    console.log(`詢圈信評值範例:`, uniqueRatings);
     
     // 輔助函數：計算區間統計
     function calcRangeStats(data, label) {
@@ -7706,60 +7632,64 @@ function showMarketTrendTab(tab, event) {
         event.stopPropagation();
     }
     
-    // 更新標籤狀態
-    const tabs = document.querySelectorAll('.market-trend-tab');
-    const tabMap = {
-        'supply': '供給分析', 'yearly': '年度趨勢', 'industry': '產業分析',
-        'broker': '券商分析', 'guarantee': '擔保比較', 'size': '發行規模',
-        'capital': '股本大小', 'conversion': '轉換價', 'rating': '信評',
-        'yearPeriod': '發行年期', 'type': '競拍vs詢圈', 'issueNum': '發行次數', 'ky': 'KY股分析'
-    };
-    
-    for (let i = 0; i < tabs.length; i++) {
-        const t = tabs[i];
-        t.classList.remove('active');
+    // 更新Tab狀態
+    document.querySelectorAll('.market-trend-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.market-trend-tab').forEach(t => {
+        const tabMap = {
+            'supply': '供給分析',
+            'yearly': '年度趨勢',
+            'industry': '產業分析',
+            'broker': '券商分析',
+            'guarantee': '擔保比較',
+            'size': '發行規模',
+            'capital': '股本大小',
+            'conversion': '轉換價',
+            'rating': '信評',
+            'yearPeriod': '發行年期',
+            'type': '競拍vs詢圈',
+            'issueNum': '發行次數',
+            'ky': 'KY股分析'
+        };
         if (t.textContent.includes(tabMap[tab])) {
             t.classList.add('active');
         }
-    }
+    });
     
     const content = document.getElementById('marketTrendContent');
+    let html = '';
     
-    // v3.97-zs-bl: 檢查緩存（市場趨勢資料不常變，適合緩存）
-    if (window.tabCache.marketTrend[tab]) {
-        content.innerHTML = window.tabCache.marketTrend[tab];
-        setTimeout(() => initTableSortForContent(), 20);
-        return;
+    if (tab === 'supply') {
+        html = renderSupplyAnalysis();
+    } else if (tab === 'yearly') {
+        html = renderYearlyTrend();
+    } else if (tab === 'industry') {
+        html = renderIndustryAnalysis();
+    } else if (tab === 'broker') {
+        html = renderBrokerAnalysis();
+    } else if (tab === 'guarantee') {
+        html = renderGuaranteeCompare();
+    } else if (tab === 'size') {
+        html = renderSizeCompare();
+    } else if (tab === 'capital') {
+        html = renderCapitalCompare();
+    } else if (tab === 'conversion') {
+        html = renderConversionCompare();
+    } else if (tab === 'rating') {
+        html = renderRatingCompare();
+    } else if (tab === 'yearPeriod') {
+        html = renderYearPeriodCompare();
+    } else if (tab === 'type') {
+        html = renderTypeCompare();
+    } else if (tab === 'issueNum') {
+        html = renderIssueNumAnalysis();
+    } else if (tab === 'ky') {
+        html = renderKYAnalysis();
     }
     
-    // 顯示載入中
-    content.innerHTML = `<div style="text-align:center; padding:30px; color:#666;">⏳ 載入中...</div>`;
+    content.innerHTML = html;
     
-    // 使用 setTimeout 讓載入訊息先顯示
-    setTimeout(() => {
-        let html = '';
-        switch(tab) {
-            case 'supply': html = renderSupplyAnalysis(); break;
-            case 'yearly': html = renderYearlyTrend(); break;
-            case 'industry': html = renderIndustryAnalysis(); break;
-            case 'broker': html = renderBrokerAnalysis(); break;
-            case 'guarantee': html = renderGuaranteeCompare(); break;
-            case 'size': html = renderSizeCompare(); break;
-            case 'capital': html = renderCapitalCompare(); break;
-            case 'conversion': html = renderConversionCompare(); break;
-            case 'rating': html = renderRatingCompare(); break;
-            case 'yearPeriod': html = renderYearPeriodCompare(); break;
-            case 'type': html = renderTypeCompare(); break;
-            case 'issueNum': html = renderIssueNumAnalysis(); break;
-            case 'ky': html = renderKYAnalysis(); break;
-        }
-        
-        // 存入緩存
-        window.tabCache.marketTrend[tab] = html;
-        
-        content.innerHTML = html;
-        setTimeout(() => initTableSortForContent(), 20);
-    }, 10);
+    // v3.96 新增：啟用表格排序功能
+    setTimeout(() => initTableSortForContent(), 100);
 }
 
 function renderYearlyTrend() {
@@ -8553,6 +8483,7 @@ function showDimensionTab(dimension, event) {
     const data = dimensionData[dimension];
     if (!data) {
         contentDiv.innerHTML = '<div style="text-align:center; padding:20px; color:#999;">暫無資料</div>';
+        console.log(`維度統計: ${dimension} 無資料`);
         return;
     }
     
@@ -9789,6 +9720,7 @@ function displayResult(r) {
     const step4Rating = String(inputData.rating || '').replace(/[^0-9]/g, '');  // 只取數字
     
     // v3.97w: Debug 輸出
+    console.log('🧠 Step4 篩選條件:', { step4Guarantee, step4Size, step4Industry, step4Rating });
     
     // 規模範圍 50%-150% (v3.97s 放寬條件增加樣本數)
     const sizeMin = step4Size * 0.5;
@@ -9937,6 +9869,15 @@ function displayResult(r) {
             if (!baseFilterNoSize(item)) return false;
             const itemRating = String(item['信用評等'] || item['TCRI'] || item['信評'] || '').replace(/[^0-9]/g, '');
             return itemRating === step4Rating && step4Rating !== '';
+        });
+        
+        // v3.97u: Debug 輸出篩選結果
+        console.log('🧠 Step4 篩選結果:', {
+            總數據: allData.length,
+            產業: industryData.length,
+            市場氛圍: marketData.length,
+            理論價: theoData.length,
+            信評: ratingData.length
         });
         
         // 計算各維度滾動結果
@@ -10155,6 +10096,7 @@ function displayResult(r) {
     // 計算訂價基準股價
     const step5BasePrice = step5PricingPremium > 0 ? step5ConvPrice / step5PricingPremium : 0;
     
+    console.log('🔬 Step5 條件:', { step5ConvPrice, step5Capital, step5Scarcity, step5BasePrice, theoPrice });
     
     if (typeof window.auctionDataCache !== 'undefined' && window.auctionDataCache.length > 0 && step5ConvPrice > 0 && step5Capital > 0) {
         const allData = window.auctionDataCache;
@@ -10286,6 +10228,7 @@ function displayResult(r) {
         const step5High = Math.max(method1Price, method2Price);
         document.getElementById('step5PriceRange').textContent = `${step5Low.toFixed(2)} ~ ${step5High.toFixed(2)}元`;
         
+        console.log('🔬 Step5 結果:', { method1Price, method2Price, dim1Premium, dim2Premium, dim3Premium, dim4Premium });
         
     } else {
         // 數據不足或條件不完整
@@ -10880,6 +10823,7 @@ function handleQuickSelect() {
     // v3.97y: 保存完整標的資訊供結果標題使用
     window.currentCBCode = c.cbCode || '';
     window.currentCBName = c.cbName || '';
+    console.log('⚡ 閃電帶入標的:', window.currentCBCode, window.currentCBName);
     
     // 帶入各欄位
     // v3.74 修正：只帶入股票代號，這樣可以搜尋該公司所有歷史競拍/詢圈紀錄
@@ -10945,6 +10889,7 @@ function handleQuickSelect() {
     // v3.97w: 同時存實際數字供 Step 4 使用
     if (c.issueSize > 0) {
         window.currentActualIssueSize = c.issueSize;
+        console.log('⚡ 閃電帶入實際規模:', c.issueSize, '億');
     }
     if (c.sizeRange) {
         document.getElementById('issueSize').value = c.sizeRange;
@@ -11696,6 +11641,7 @@ function calcIndustryAtmosphere(industry, guarantee = null) {
     const mult9 = calcAvg(recent9, 'bidMultiple');
     const weightedMultiple = (mult3 * 5 + mult6 * 3 + mult9 * 2) / 10;
     
+    console.log(`📊 產業氛圍[${industry}]: 最低溢價=${weightedMinPremium.toFixed(2)}%, 平均溢價=${weightedAvgPremium.toFixed(2)}%, 倍數=${weightedMultiple.toFixed(2)}x (${sortedData.length}檔)`);
     
     return {
         industry: industry,
@@ -11827,6 +11773,11 @@ function calcConcurrentIssue(targetDate, daysBefore = 14, daysAfter = 14, exclud
         note = '⚠️ 同期發行量非常大，注意競爭壓力';
     }
     
+    console.log(`📦 同期發行分析(${daysBefore}天前~${daysAfter}天後):`);
+    console.log(`  總計: ${concurrentCases.length}檔, ${totalSize.toFixed(1)}億`);
+    console.log(`  競拍: ${auctionCases.length}檔, ${auctionSize.toFixed(1)}億`);
+    console.log(`  詢圈: ${inquiryCases.length}檔, ${inquirySize.toFixed(1)}億`);
+    console.log(`  壓力指數: ${pressureIndex}, 調整: ${adjustment}%`);
     
     return {
         cases: concurrentCases,
@@ -12604,6 +12555,7 @@ function initSmartTips() {
         });
     }
     
+    console.log('✅ 智慧提示系統初始化完成');
 }
 
 /**
@@ -12949,6 +12901,7 @@ function calculateMarketMomentum() {
         `;
     }
     
+    console.log('市場動能計算完成:', window.marketMomentum);
 }
 
 /**
@@ -13213,6 +13166,8 @@ function getExpectedPriceByMult(bidMult) {
     
     return baseResult;
 }
+
+
 // v3.72 修改：改用動態計算的統計數據
 // ==========================================
 
@@ -14799,6 +14754,8 @@ function findSimilarCasesForStats(params) {
     };
 }
 
+
+
 /**
  * 更新市場氛圍面板
  * v3.72 修改：根據用戶選擇的擔保類型篩選
@@ -14891,6 +14848,7 @@ let currentPriceTrendCB = null;
  * 初始化基本資料查詢模組
  */
 function initBasicInfoModule() {
+    console.log('初始化基本資料查詢模組...');
     buildCBDatabase();
     populateBasicInfoCBList();
     
@@ -15026,6 +14984,7 @@ function buildCBDatabase() {
     // 轉換為陣列
     db.allCB = Array.from(cbMap.values());
     
+    console.log(`CB資料庫建立完成: 總計 ${db.allCB.length} 檔, 競拍 ${db.auctionCodes.size} 檔, 掛牌中 ${db.listedCodes.size} 檔`);
 }
 
 /**
@@ -15371,6 +15330,7 @@ function populateBasicInfoCBList() {
     // v3.97z-s 新增：背景載入yuanta歷史資料（非阻塞）
     if (!window.yuantaHistoryData.loaded && !window.yuantaHistoryData.loading) {
         loadYuantaHistoryData().then(() => {
+            console.log('📂 yuanta歷史資料已背景載入完成');
         }).catch(err => {
             console.warn('yuanta歷史資料載入失敗:', err);
         });
@@ -15404,6 +15364,7 @@ function populateBasicInfoCBList() {
         listCountEl.textContent = `資料庫共 ${db.allCB.length} 檔`;
     }
     
+    console.log(`基本資料查詢模組初始化完成，共 ${db.allCB.length} 檔CB可查詢 (競拍${auctionCount}/詢圈${inquiryCount}, 掛牌中${listedCount}/已下市${delistedCount})`);
 }
 
 /**
@@ -15462,101 +15423,65 @@ function loadBasicInfo(cbCode) {
 /**
  * 顯示基本資料標籤頁
  */
-// v3.97-zs-bl: 標籤內容緩存系統
-window.tabCache = {
-    basicInfo: {},  // { cbCode: { tabName: htmlContent, rendered: Set } }
-    priceTrend: {}, // { cbCode: { tabName: htmlContent } }
-    marketTrend: {} // { tabName: htmlContent }
-};
-
 function showBasicInfoTab(tabName, event) {
+    console.log('[showBasicInfoTab] 開始執行, tabName:', tabName);
+    
+    // v3.97-zs-aq: 追蹤當前標籤（用於非同步函數檢查）
     window.currentBasicInfoTab = tabName;
     
     // 更新標籤狀態
-    const tabs = document.querySelectorAll('.basic-info-tab');
-    for (let i = 0; i < tabs.length; i++) {
-        tabs[i].classList.remove('active');
-    }
+    document.querySelectorAll('.basic-info-tab').forEach(tab => tab.classList.remove('active'));
     if (event) event.target.classList.add('active');
-    else if (tabs[0]) tabs[0].classList.add('active');
+    else document.querySelector('.basic-info-tab').classList.add('active');
     
     const content = document.getElementById('basicInfoContent');
     const cbCode = currentBasicInfoCB;
+    
+    console.log('[showBasicInfoTab] currentBasicInfoCB:', cbCode);
     
     if (!cbCode) {
         content.innerHTML = `<div style="text-align:center; color:#999; padding:40px;">👆 請先選擇一檔可轉債</div>`;
         return;
     }
     
-    // v3.97-zs-bl: 檢查緩存
-    const cacheKey = `${cbCode}_${tabName}`;
-    if (window.tabCache.basicInfo[cacheKey]) {
-        content.innerHTML = window.tabCache.basicInfo[cacheKey];
-        return;
-    }
-    
-    // 顯示載入中（立即顯示，不阻塞）
-    content.innerHTML = `<div style="text-align:center; padding:40px; color:#666;">⏳ 載入中...</div>`;
-    
-    // 使用 setTimeout 讓載入中訊息先顯示
-    setTimeout(() => {
-        try {
-            // 創建臨時容器來渲染內容
-            const tempDiv = document.createElement('div');
-            
-            switch(tabName) {
-                case 'overview':
-                    renderBasicInfoOverview(cbCode, tempDiv);
-                    break;
-                case 'schedule':
-                    renderBasicInfoSchedule(cbCode, tempDiv);
-                    break;
-                case 'putback':
-                    renderBasicInfoPutback(cbCode, tempDiv);
-                    break;
-                case 'callOption':
-                    renderBasicInfoCallOption(cbCode, tempDiv);
-                    break;
-                case 'auction':
-                    renderBasicInfoAuction(cbCode, tempDiv);
-                    break;
-                case 'quote':
-                    renderBasicInfoQuote(cbCode, tempDiv);
-                    break;
-                case 'balance':
-                    renderBasicInfoBalance(cbCode, tempDiv);
-                    break;
-                default:
-                    tempDiv.innerHTML = `<div style="color:#999;">未知標籤：${tabName}</div>`;
-            }
-            
-            // 存入緩存（balance 標籤因為有圖表不緩存）
-            if (tabName !== 'balance') {
-                window.tabCache.basicInfo[cacheKey] = tempDiv.innerHTML;
-            }
-            
-            // 顯示內容
-            content.innerHTML = tempDiv.innerHTML;
-            
-        } catch(e) {
-            console.error('[showBasicInfoTab] 錯誤:', e);
-            content.innerHTML = `<div style="color:#c62828; padding:20px;">❌ 載入錯誤: ${e.message}</div>`;
+    // 根據標籤顯示不同內容
+    try {
+        switch(tabName) {
+            case 'overview':
+                console.log('[showBasicInfoTab] 執行 renderBasicInfoOverview');
+                renderBasicInfoOverview(cbCode, content);
+                break;
+            case 'schedule':
+                console.log('[showBasicInfoTab] 執行 renderBasicInfoSchedule');
+                renderBasicInfoSchedule(cbCode, content);
+                break;
+            case 'putback':
+                console.log('[showBasicInfoTab] 執行 renderBasicInfoPutback');
+                renderBasicInfoPutback(cbCode, content);
+                break;
+            case 'callOption':
+                console.log('[showBasicInfoTab] 執行 renderBasicInfoCallOption');
+                renderBasicInfoCallOption(cbCode, content);
+                break;
+            case 'auction':
+                console.log('[showBasicInfoTab] 執行 renderBasicInfoAuction');
+                renderBasicInfoAuction(cbCode, content);
+                break;
+            case 'quote':
+                console.log('[showBasicInfoTab] 執行 renderBasicInfoQuote');
+                renderBasicInfoQuote(cbCode, content);
+                break;
+            case 'balance':
+                console.log('[showBasicInfoTab] 執行 renderBasicInfoBalance');
+                renderBasicInfoBalance(cbCode, content);
+                break;
+            default:
+                content.innerHTML = `<div style="color:#999;">未知標籤：${tabName}</div>`;
         }
-    }, 10);
-}
-
-// v3.97-zs-bl: 當選擇新的 CB 時清除緩存
-function clearBasicInfoCache(cbCode) {
-    if (cbCode) {
-        // 清除特定 CB 的緩存
-        Object.keys(window.tabCache.basicInfo).forEach(key => {
-            if (key.startsWith(cbCode + '_')) {
-                delete window.tabCache.basicInfo[key];
-            }
-        });
-    } else {
-        // 清除所有緩存
-        window.tabCache.basicInfo = {};
+        console.log('[showBasicInfoTab] 執行完成');
+    } catch(e) {
+        console.error('[showBasicInfoTab] 錯誤:', e);
+        content.innerHTML = `<div style="color:#c62828; padding:20px;">❌ 載入錯誤: ${e.message}</div>`;
     }
 }
 
@@ -16003,6 +15928,7 @@ function renderBasicInfoOverview(cbCode, container) {
     // v3.97-zs-ba: 承銷商 - 使用代號對照表轉換
     const brokerRaw = data['發行券商'] || sheet01Row?.['發行券商'] || '-';
     const brokerDisplay = convertBrokerCodeToName(brokerRaw);
+    console.log('[承銷商轉換]', searchCode, '原始:', brokerRaw, '→ 轉換後:', brokerDisplay);
     
     // 發行規模（億）
     const issueSizeBillion = issueSize > 0 ? (issueSize / 100).toFixed(2) : '-';
@@ -16329,13 +16255,16 @@ function renderBasicInfoOverview(cbCode, container) {
  * 渲染發行時程
  */
 function renderBasicInfoSchedule(cbCode, container) {
+    console.log('[renderBasicInfoSchedule] 開始執行, cbCode:', cbCode);
     const searchCode = String(cbCode).trim();
     
     // 從02工作表取得發行時程
     let scheduleData = null;
+    console.log('[renderBasicInfoSchedule] sheet02Data:', window.sheet02Data?.length || 0, '筆');
     if (window.sheet02Data && window.sheet02Data.length > 0) {
         scheduleData = window.sheet02Data.find(r => String(r['CB代號']).trim() === searchCode);
     }
+    console.log('[renderBasicInfoSchedule] scheduleData:', scheduleData ? '找到' : '未找到');
     
     // 從08工作表取得詳細日期
     let sheet08Row = null;
@@ -16718,6 +16647,7 @@ async function renderBasicInfoCallOption(cbCode, container) {
         }
     }
     
+    console.log('[renderBasicInfoCallOption]', searchCode, ':', hasData ? '有資料' : '無資料');
     
     // 判斷是否有強制贖回條款
     const hasCallOption = callStartDate !== '-' || callEndDate !== '-' || 
@@ -17462,7 +17392,9 @@ function renderBasicInfoBalance(cbCode, container) {
     container.innerHTML = html;
     
     // v3.97-zs-at: 自動載入週餘額走勢圖
+    console.log('[renderBasicInfoBalance] 設定 setTimeout 呼叫 renderWeeklyChart, searchCode:', searchCode);
     setTimeout(() => {
+        console.log('[renderBasicInfoBalance] setTimeout 執行中，呼叫 renderWeeklyChart');
         renderWeeklyChart(searchCode);
     }, 100);
 }
@@ -17794,6 +17726,21 @@ async function renderWeeklyTable(cbCode) {
     const stockCode = getStockCodeFromCB(searchCode);
     const hasMarginData = window.marginData.loaded && stockCode && window.marginData.data[stockCode];
     
+    // v3.97-zs-bc: Debug log
+    console.log('[週記錄融資融券]', {
+        cbCode: searchCode,
+        stockCode: stockCode,
+        marginLoaded: window.marginData.loaded,
+        hasStockInMargin: stockCode ? !!window.marginData.data[stockCode] : false,
+        marginStockCount: Object.keys(window.marginData.data || {}).length
+    });
+    
+    // 如果有股票代號但找不到融資融券資料，列出前10個可用的股票代號供參考
+    if (stockCode && !window.marginData.data[stockCode] && window.marginData.loaded) {
+        const availableCodes = Object.keys(window.marginData.data).slice(0, 20);
+        console.log('[融資融券] 可用股票代號範例:', availableCodes);
+    }
+    
     const periodTexts = { '30': '1個月', '90': '3個月', '180': '6個月', '365': '1年', '730': '2年', '1095': '3年', 'all': '全部' };
     
     // v3.97-zs-az: 表格加入融資融券欄位
@@ -17885,19 +17832,23 @@ async function renderWeeklyTable(cbCode) {
  * v3.97-zs-al 修改：渲染轉換走勢圖（加入時間區間選擇）
  */
 async function renderConversionChart(cbCode) {
+    console.log('[renderConversionChart] 開始執行, cbCode:', cbCode);
     
     const container = document.getElementById(`balanceSubContent_${cbCode}`);
     if (!container) {
+        console.log('[renderConversionChart] 找不到容器 balanceSubContent_' + cbCode);
         return;
     }
     
     const searchCode = String(cbCode).trim();
+    console.log('[renderConversionChart] searchCode:', searchCode);
     
     // v3.97-zs-aq: 記錄開始時的標籤狀態
     const startTab = window.currentBasicInfoTab;
     
     // v3.97-zs-am: 確保 kanbanData 已載入（非阻塞方式）
     if (!window.kanbanData.loaded && !window.kanbanData.loading) {
+        console.log('[renderConversionChart] kanbanData 未載入，開始載入...');
         container.innerHTML = `<div style="text-align:center; padding:40px; color:#666;">
             <div style="font-size:24px; margin-bottom:10px;">⏳</div>
             <div>首次載入 CB_kanban 歷史資料中...</div>
@@ -17935,9 +17886,11 @@ async function renderConversionChart(cbCode) {
         return;
     }
     
+    console.log('[renderConversionChart] kanbanData 載入狀態:', window.kanbanData.loaded, '共', Object.keys(window.kanbanData.data).length, '檔CB');
     
     // v3.97-zs-aq: 再次檢查標籤狀態，如果已切換則不繼續
     if (window.currentBasicInfoTab !== 'balance') {
+        console.log('[renderConversionChart] 標籤已切換，停止渲染');
         return;
     }
     
@@ -17947,20 +17900,25 @@ async function renderConversionChart(cbCode) {
     
     // 從 kanbanData 取得時間序列資料（O欄：上月底發行餘額）
     let allData = window.kanbanData.data[searchCode] || [];
+    console.log('[renderConversionChart] 查詢', searchCode, '直接匹配筆數:', allData.length);
     
     // 如果找不到，嘗試純數字格式
     if (allData.length === 0) {
         const numCode = parseInt(searchCode, 10);
         if (!isNaN(numCode)) {
             allData = window.kanbanData.data[String(numCode)] || [];
+            console.log('[renderConversionChart] 嘗試數字格式', numCode, '筆數:', allData.length);
         }
     }
     
     // 除錯：列出 kanbanData 中的部分 key
     if (allData.length === 0) {
         const allKeys = Object.keys(window.kanbanData.data);
+        console.log('[renderConversionChart] kanbanData 中共有', allKeys.length, '檔CB');
+        console.log('[renderConversionChart] 前20個CB代號:', allKeys.slice(0, 20));
         // 檢查是否有包含 searchCode 的 key
         const matchingKeys = allKeys.filter(k => k.includes(searchCode.slice(-4)));
+        console.log('[renderConversionChart] 可能匹配的key:', matchingKeys);
     }
     
     if (allData.length === 0) {
@@ -17974,6 +17932,7 @@ async function renderConversionChart(cbCode) {
         return;
     }
     
+    console.log('[renderConversionChart] 找到', allData.length, '筆資料，開始繪製');
     
     // 根據時間區間過濾資料
     let filteredData = allData;
@@ -18126,9 +18085,11 @@ async function renderConversionChart(cbCode) {
  * v3.97-zs-al 修改：渲染轉換記錄表（加入時間區間選擇）
  */
 async function renderConversionTable(cbCode) {
+    console.log('[renderConversionTable] 開始執行, cbCode:', cbCode);
     
     const container = document.getElementById(`balanceSubContent_${cbCode}`);
     if (!container) {
+        console.log('[renderConversionTable] 找不到容器');
         return;
     }
     
@@ -18167,9 +18128,11 @@ async function renderConversionTable(cbCode) {
         return;
     }
     
+    console.log('[renderConversionTable] kanbanData 載入狀態:', window.kanbanData.loaded);
     
     // 再次檢查標籤狀態
     if (window.currentBasicInfoTab !== 'balance') {
+        console.log('[renderConversionTable] 標籤已切換，停止渲染');
         return;
     }
     
@@ -18179,12 +18142,14 @@ async function renderConversionTable(cbCode) {
     
     // 從 kanbanData 取得時間序列資料
     let allData = window.kanbanData.data[searchCode] || [];
+    console.log('[renderConversionTable] 查詢', searchCode, '直接匹配筆數:', allData.length);
     
     // 如果找不到，嘗試純數字格式
     if (allData.length === 0) {
         const numCode = parseInt(searchCode, 10);
         if (!isNaN(numCode)) {
             allData = window.kanbanData.data[String(numCode)] || [];
+            console.log('[renderConversionTable] 嘗試數字格式', numCode, '筆數:', allData.length);
         }
     }
     
@@ -18199,6 +18164,7 @@ async function renderConversionTable(cbCode) {
         return;
     }
     
+    console.log('[renderConversionTable] 找到', allData.length, '筆資料');
     
     // 根據時間區間過濾資料
     let filteredData = allData;
@@ -18623,13 +18589,10 @@ function updatePriceTrendPeriod() {
  * 顯示價格走勢標籤頁
  */
 function showPriceTrendTab(tabName, event) {
-    // v3.97-zs-bh: 效能優化
-    const tabs = document.querySelectorAll('.price-trend-tab');
-    for (let i = 0; i < tabs.length; i++) {
-        tabs[i].classList.remove('active');
-    }
+    // 更新標籤狀態
+    document.querySelectorAll('.price-trend-tab').forEach(tab => tab.classList.remove('active'));
     
-    // 確保正確找到按鈕元素
+    // 確保正確找到按鈕元素（處理點擊 emoji 或文字的情況）
     if (event) {
         let target = event.target;
         while (target && !target.classList.contains('price-trend-tab')) {
@@ -18637,8 +18600,8 @@ function showPriceTrendTab(tabName, event) {
         }
         if (target) target.classList.add('active');
     } else {
-        const index = tabName === 'stockPrice' ? 0 : tabName === 'cbPrice' ? 1 : tabName === 'balance' ? 2 : 3;
-        if (tabs[index]) tabs[index].classList.add('active');
+        const index = tabName === 'stockPrice' ? 1 : tabName === 'cbPrice' ? 2 : tabName === 'balance' ? 3 : 4;
+        document.querySelector(`.price-trend-tab:nth-child(${index})`)?.classList.add('active');
     }
     
     const content = document.getElementById('priceTrendContent');
@@ -18651,18 +18614,18 @@ function showPriceTrendTab(tabName, event) {
     
     // CBAS標籤特殊處理：可以不依賴 kanban 歷史資料
     if (tabName === 'cbas') {
-        requestAnimationFrame(() => renderCBASFromCurrentData(cbCode, content));
+        renderCBASFromCurrentData(cbCode, content);
         return;
     }
     
     // 顯示載入中
-    content.innerHTML = `<div style="text-align:center; padding:40px; color:#666;">⏳ 載入中...</div>`;
+    content.innerHTML = `<div style="text-align:center; padding:40px; color:#666;">⏳ 載入 ${cbCode} 價格走勢中...</div>`;
     
     // 取得期間設定
     const period = document.getElementById('priceTrendPeriod')?.value || '90';
     
-    // 使用 setTimeout 讓 UI 先更新
-    setTimeout(() => loadKanbanAndRender(cbCode, tabName, period, content), 10);
+    // 載入kanban資料並繪製圖表
+    loadKanbanAndRender(cbCode, tabName, period, content);
 }
 
 /**
@@ -18735,6 +18698,7 @@ async function loadMarginData() {
     if (window.marginData.loaded || window.marginData.loading) return;
     window.marginData.loading = true;
     
+    console.log('📊 開始載入融資融券資料...');
     const startTime = Date.now();
     
     const allData = {};
@@ -18813,6 +18777,7 @@ async function loadMarginData() {
                 if (config.prefix.includes('tpx')) loadedFiles.tpx++;
                 else loadedFiles.otc++;
                 
+                console.log(`✅ ${config.market} ${year}: ${validSheets.length} 個交易日, ${addedCount} 筆資料`);
                 
             } catch (err) {
                 console.warn(`❌ 載入 ${filePath} 失敗:`, err.message);
@@ -18842,11 +18807,14 @@ async function loadMarginData() {
     
     // v3.97-zs-bc: 顯示載入統計
     const stockCodes = Object.keys(allData);
+    console.log(`✅ 融資融券載入完成: ${stockCodes.length} 檔股票 (上市${loadedFiles.tpx}檔/上櫃${loadedFiles.otc}檔), ${Date.now() - startTime}ms`);
     
     // 列出部分股票代號供參考
+    console.log('📋 融資融券股票代號範例:', stockCodes.slice(0, 30));
     
     // 檢查特定股票是否存在
     ['6223', '2330', '2317', '3008'].forEach(code => {
+        console.log(`   ${code}: ${allData[code] ? '✅ 有資料' : '❌ 無資料'}`);
     });
 }
 
@@ -18922,6 +18890,7 @@ async function loadWeeklyBalanceData() {
     if (window.weeklyBalanceData.loaded || window.weeklyBalanceData.loading) return;
     window.weeklyBalanceData.loading = true;
     
+    console.log('📊 開始載入週餘額時間序列...');
     const startTime = Date.now();
     
     const allData = {};
@@ -19006,6 +18975,7 @@ async function loadWeeklyBalanceData() {
     window.weeklyBalanceData.loading = false;
     
     const totalRecords = Object.values(allData).reduce((sum, arr) => sum + arr.length, 0);
+    console.log(`✅ 週餘額載入完成: ${Object.keys(allData).length} 檔CB, ${totalRecords} 筆週資料, ${Date.now() - startTime}ms`);
 }
 
 /**
@@ -19016,6 +18986,7 @@ async function loadYuantaHistoryData() {
     if (window.yuantaHistoryData.loaded || window.yuantaHistoryData.loading) return;
     window.yuantaHistoryData.loading = true;
     
+    console.log('📂 開始載入元大歷史資料...');
     const startTime = Date.now();
     
     // 欄位名稱標準化（去掉日期前綴 YYYMMDD 民國年7位 或 YYYYMM 西元年6位）
@@ -19067,6 +19038,7 @@ async function loadYuantaHistoryData() {
             }
             
             const workbook = XLSX.read(await response.arrayBuffer(), { type: 'array' });
+            console.log(`載入 ${fileInfo.name}: ${workbook.SheetNames.length} 個工作表`);
             
             // 過濾出有效的日期工作表（民國年格式 YYYMMDD）
             const validSheets = workbook.SheetNames.filter(name => /^\d{7}$/.test(name));
@@ -19125,6 +19097,7 @@ async function loadYuantaHistoryData() {
     window.yuantaHistoryData.loading = false;
     
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+    console.log(`✅ 元大歷史資料載入完成: ${Object.keys(allData).length} 檔CB，耗時 ${elapsed} 秒`);
 }
 
 /**
@@ -19156,10 +19129,12 @@ async function loadKanbanAndRender(cbCode, tabName, period, container) {
         }
         
         // 除錯輸出
+        console.log(`[kanban] 查詢 ${searchCode}, 找到 ${cbTimeSeries.length} 筆資料`);
         
         if (cbTimeSeries.length === 0) {
             // 檢查kanban中是否有該CB（列出前10個key作為參考）
             const keys = Object.keys(window.kanbanData.data).slice(0, 10);
+            console.log(`[kanban] 資料庫中前10個CB代號:`, keys);
             
             container.innerHTML = `
                 <div style="text-align:center; padding:40px; color:#999;">
@@ -19169,7 +19144,7 @@ async function loadKanbanAndRender(cbCode, tabName, period, container) {
                         可能原因：<br>
                         • 新發行的CB，尚無歷史行情<br>
                         • 已下市較久的CB，不在 CB_kanban Excel 資料中<br>
-                        • data/kanban/ 資料夾未放置 CB_kanban_YYYY.xlsx 檔案
+                        • data/kanban/ 資料夾未放置 CB_kanban_YYYY_all.csv 檔案
                     </div>
                     <div style="margin-top:15px;">
                         <button onclick="showPriceTrendTab('cbas')" 
@@ -19214,8 +19189,6 @@ async function loadAllKanbanData() {
     if (window.kanbanData.loaded || window.kanbanData.loading) return;
     window.kanbanData.loading = true;
     
-    const startTime = Date.now();
-    
     // 顯示載入進度
     const container = document.getElementById('priceTrendContent');
     const updateProgress = (msg) => {
@@ -19232,38 +19205,27 @@ async function loadAllKanbanData() {
     try {
         const allData = {};
         const allDates = new Set();
-        let totalRecords = 0;
         
-        // v3.97-zs-be: 優先讀取 CSV 格式（按年度）
+        // v3.97-zs-bo: 純 CSV 載入，完全移除 Excel
         const years = [2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017];
+        const csvFiles = years.map(year => `data/kanban/CB_kanban_${year}_all.csv`);
         
-        for (const year of years) {
-            // 優先嘗試 CSV 格式
-            const csvFile = `data/kanban/CB_kanban_${year}_all.csv`;
-            const xlsxFile = `data/kanban/CB_kanban_${year}.xlsx`;
-            
-            // 嘗試 CSV
+        // 並行載入所有 CSV
+        const results = await Promise.all(csvFiles.map(async (file) => {
             try {
-                const response = await fetch(csvFile);
+                const response = await fetch(file);
                 if (response.ok) {
-                    const csvText = await response.text();
-                    const records = parseKanbanCSV(csvText, allData, allDates);
-                    totalRecords += records;
-                    continue; // CSV 成功就跳過 Excel
+                    return await response.text();
                 }
             } catch (e) {}
-            
-            // 退而求其次讀取 Excel（向下相容）
-            try {
-                const response = await fetch(xlsxFile);
-                if (response.ok) {
-                    updateProgress(`載入 ${year} 年 Excel 資料...`);
-                    const arrayBuffer = await response.arrayBuffer();
-                    const records = await parseKanbanExcel(arrayBuffer, allData, allDates);
-                    totalRecords += records;
-                }
-            } catch (e) {
-                console.warn(`⚠️ ${year} 年資料不存在，跳過`);
+            return null;
+        }));
+        
+        // 處理載入結果
+        updateProgress('處理資料中...');
+        for (const csvText of results) {
+            if (csvText) {
+                parseKanbanCSV(csvText, allData, allDates);
             }
         }
         
@@ -19276,10 +19238,8 @@ async function loadAllKanbanData() {
         window.kanbanData.dates = [...allDates].sort();
         window.kanbanData.loaded = true;
         
-        const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
-        
     } catch (err) {
-        console.error('❌ 載入 kanban 資料失敗:', err);
+        console.error('載入 kanban 資料失敗:', err);
         if (container) {
             container.innerHTML = `<div style="text-align:center; padding:40px; color:#e74c3c;">
                 <div style="font-size:24px; margin-bottom:10px;">❌</div>
@@ -19381,6 +19341,29 @@ function parseKanbanCSV(csvText, allData, allDates) {
     }
     
     return count;
+}
+
+/**
+ * v3.97-zs-be: 解析 CSV 行（處理逗號在引號內的情況）
+ */
+function parseCSVLine(line) {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+    
+    for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"') {
+            inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+            result.push(current.trim());
+            current = '';
+        } else {
+            current += char;
+        }
+    }
+    result.push(current.trim());
+    return result;
 }
 
 /**
@@ -19947,6 +19930,7 @@ function renderBalanceChart(cbCode, data, container, period) {
         }
     }
     
+    console.log(`📊 ${cbCode} 股本資料: ${stockCapital} 億`);
     
     // 計算張數資料（每張CB面額10萬元）
     // CB張數 = 餘額(億) × 1億 / 10萬 = 餘額(億) × 1000

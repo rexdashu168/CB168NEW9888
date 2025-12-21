@@ -4,8 +4,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97-as-bs (SQLite資料庫版)</title>
+<title>AI智能可轉債競拍系統 v3.97-as-bt (SQLite資料庫版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<!-- v3.97-as-bt: 修正 SVG 圖表手機版太小的問題，增加高度和字體 -->
 <!-- v3.97-as-bs: 將三個 Canvas 圖表轉換為 SVG（股價走勢、理論價值、籌碼轉換）-->
 <!-- v3.97-zs-br: 改用 SQLite 資料庫載入 kanban 資料 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
@@ -19884,7 +19885,7 @@ function renderStockPriceChart(cbCode, data, container, period) {
             </div>
             
             <!-- 圖表區域 - SVG版本 -->
-            <div id="stockPriceChartSVG" style="width:100%; height:320px;"></div>
+            <div id="stockPriceChartSVG" style="width:100%; min-height:350px;"></div>
             
             <!-- 動態情境分析說明 -->
             <div style="margin-top:15px; padding:12px; background:${statusBg}; border-radius:8px; border-left:4px solid ${statusColor};">
@@ -19906,15 +19907,16 @@ function renderStockPriceChart(cbCode, data, container, period) {
 }
 
 /**
- * v3.97-as-bs: SVG 版股價與轉換價走勢圖
+ * v3.97-as-bt: SVG 版股價與轉換價走勢圖（手機版優化）
  */
 function renderStockPriceChartSVG(data, stockPrices, convPrices, labels) {
     const container = document.getElementById('stockPriceChartSVG');
     if (!container) return;
     
-    const width = 680;
-    const height = 320;
-    const padding = { top: 35, right: 50, bottom: 45, left: 55 };
+    // v3.97-as-bt: 加大尺寸，移除 max-width 限制
+    const width = 600;
+    const height = 380;
+    const padding = { top: 45, right: 55, bottom: 50, left: 60 };
     const chartWidth = width - padding.left - padding.right;
     const chartHeight = height - padding.top - padding.bottom;
     
@@ -19947,25 +19949,25 @@ function renderStockPriceChartSVG(data, stockPrices, convPrices, labels) {
         }
     }
     
-    // Y軸刻度
+    // Y軸刻度 - 加大字體
     const yTicks = generateYTicks(minY, maxY, 5);
     let yTicksHTML = yTicks.map(tick => {
         const y = yScale(tick);
         return `
             <line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" stroke="#e0e0e0" stroke-width="1"/>
-            <text x="${padding.left - 8}" y="${y + 4}" text-anchor="end" font-size="10" fill="#666">${tick.toFixed(1)}</text>
+            <text x="${padding.left - 10}" y="${y + 5}" text-anchor="end" font-size="13" fill="#666" font-weight="500">${tick.toFixed(1)}</text>
         `;
     }).join('');
     
-    // X軸標籤
-    const xLabels = generateXLabels(data, 6);
+    // X軸標籤 - 加大字體
+    const xLabels = generateXLabels(data, 5);
     let xLabelsHTML = xLabels.map(({ idx, label }) => {
         const x = xScale(idx);
-        return `<text x="${x}" y="${height - 10}" text-anchor="middle" font-size="10" fill="#666">${label}</text>`;
+        return `<text x="${x}" y="${height - 12}" text-anchor="middle" font-size="12" fill="#666">${label}</text>`;
     }).join('');
     
     container.innerHTML = `
-        <svg width="100%" viewBox="0 0 ${width} ${height}" style="max-width:${width}px; display:block; margin:0 auto;">
+        <svg width="100%" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" style="display:block; margin:0 auto;">
             <!-- 背景 -->
             <rect x="${padding.left}" y="${padding.top}" width="${chartWidth}" height="${chartHeight}" fill="#fafafa" rx="4"/>
             
@@ -19973,30 +19975,30 @@ function renderStockPriceChartSVG(data, stockPrices, convPrices, labels) {
             ${yTicksHTML}
             
             <!-- 股價填充區域 -->
-            <path d="${stockFillPath}" fill="rgba(25, 118, 210, 0.1)"/>
+            <path d="${stockFillPath}" fill="rgba(25, 118, 210, 0.15)"/>
             
             <!-- 股價線 -->
-            <path d="${stockPath}" fill="none" stroke="#1976d2" stroke-width="2"/>
+            <path d="${stockPath}" fill="none" stroke="#1976d2" stroke-width="2.5"/>
             
             <!-- 轉換價線（虛線）-->
-            <path d="${convPath}" fill="none" stroke="#e65100" stroke-width="2" stroke-dasharray="5,5"/>
+            <path d="${convPath}" fill="none" stroke="#e65100" stroke-width="2.5" stroke-dasharray="8,4"/>
             
             <!-- 圖例 -->
-            <g transform="translate(${padding.left + 10}, ${padding.top - 12})">
-                <line x1="0" y1="0" x2="20" y2="0" stroke="#1976d2" stroke-width="2"/>
-                <text x="25" y="4" font-size="11" fill="#1976d2" font-weight="600">股價</text>
-                <line x1="70" y1="0" x2="90" y2="0" stroke="#e65100" stroke-width="2" stroke-dasharray="5,5"/>
-                <text x="95" y="4" font-size="11" fill="#e65100" font-weight="600">轉換價</text>
+            <g transform="translate(${padding.left + 10}, ${padding.top - 18})">
+                <line x1="0" y1="0" x2="25" y2="0" stroke="#1976d2" stroke-width="3"/>
+                <text x="30" y="5" font-size="14" fill="#1976d2" font-weight="600">股價</text>
+                <line x1="80" y1="0" x2="105" y2="0" stroke="#e65100" stroke-width="3" stroke-dasharray="8,4"/>
+                <text x="110" y="5" font-size="14" fill="#e65100" font-weight="600">轉換價</text>
             </g>
             
             <!-- X軸標籤 -->
             ${xLabelsHTML}
             
             <!-- Y軸標題 -->
-            <text x="${padding.left - 40}" y="${height/2}" text-anchor="middle" font-size="11" fill="#666" transform="rotate(-90, ${padding.left - 40}, ${height/2})">價格(元)</text>
+            <text x="${padding.left - 45}" y="${height/2}" text-anchor="middle" font-size="13" fill="#666" font-weight="500" transform="rotate(-90, ${padding.left - 45}, ${height/2})">價格(元)</text>
             
             <!-- 邊框 -->
-            <rect x="${padding.left}" y="${padding.top}" width="${chartWidth}" height="${chartHeight}" fill="none" stroke="#e0e0e0" stroke-width="1" rx="4"/>
+            <rect x="${padding.left}" y="${padding.top}" width="${chartWidth}" height="${chartHeight}" fill="none" stroke="#ccc" stroke-width="1" rx="4"/>
         </svg>
     `;
 }
@@ -20147,7 +20149,7 @@ function renderCBPriceChart(cbCode, data, container, period) {
             </div>
             
             <!-- 圖表區域 - SVG版本 -->
-            <div id="cbPriceChartSVG" style="width:100%; height:320px;"></div>
+            <div id="cbPriceChartSVG" style="width:100%; min-height:380px;"></div>
             
             <!-- 動態理論價值分析說明 -->
             <div style="margin-top:15px; padding:12px; background:${statusBg}; border-radius:8px; border-left:4px solid ${statusColor};">
@@ -20174,15 +20176,16 @@ function renderCBPriceChart(cbCode, data, container, period) {
 }
 
 /**
- * v3.97-as-bs: SVG 版理論價值分析圖（雙Y軸混合圖）
+ * v3.97-as-bt: SVG 版理論價值分析圖（雙Y軸混合圖，手機版優化）
  */
 function renderCBPriceChartSVG(data, cbPrices, convValues, premiums, labels) {
     const container = document.getElementById('cbPriceChartSVG');
     if (!container) return;
     
-    const width = 680;
-    const height = 320;
-    const padding = { top: 35, right: 60, bottom: 45, left: 55 };
+    // v3.97-as-bt: 加大尺寸
+    const width = 600;
+    const height = 400;
+    const padding = { top: 50, right: 65, bottom: 50, left: 60 };
     const chartWidth = width - padding.left - padding.right;
     const chartHeight = height - padding.top - padding.bottom;
     
@@ -20204,8 +20207,8 @@ function renderCBPriceChartSVG(data, cbPrices, convValues, premiums, labels) {
     const yPriceScale = (v) => padding.top + chartHeight - ((v - minPrice) / priceRange) * chartHeight;
     const yPremiumScale = (v) => padding.top + chartHeight - ((v - minPremium) / premiumRange) * chartHeight;
     
-    // 柱狀圖
-    const barWidth = Math.max(2, Math.min(8, chartWidth / data.length * 0.6));
+    // 柱狀圖 - 加粗
+    const barWidth = Math.max(3, Math.min(12, chartWidth / data.length * 0.7));
     let barsHTML = '';
     data.forEach((d, i) => {
         const p = premiums[i];
@@ -20216,42 +20219,42 @@ function renderCBPriceChartSVG(data, cbPrices, convValues, premiums, labels) {
         const valueY = yPremiumScale(p);
         const barHeight = Math.abs(valueY - zeroY);
         const barY = p >= 0 ? valueY : zeroY;
-        const fillColor = p >= 0 ? 'rgba(255, 152, 0, 0.4)' : 'rgba(76, 175, 80, 0.4)';
+        const fillColor = p >= 0 ? 'rgba(255, 152, 0, 0.5)' : 'rgba(76, 175, 80, 0.5)';
         const strokeColor = p >= 0 ? '#ff9800' : '#4caf50';
         
-        barsHTML += `<rect x="${x.toFixed(1)}" y="${barY.toFixed(1)}" width="${barWidth}" height="${barHeight.toFixed(1)}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="0.5"/>`;
+        barsHTML += `<rect x="${x.toFixed(1)}" y="${barY.toFixed(1)}" width="${barWidth}" height="${barHeight.toFixed(1)}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="1"/>`;
     });
     
     // 生成線條路徑
     const cbPath = generateSVGPath(data, xScale, yPriceScale, (d, i) => cbPrices[data.indexOf(d)] || cbPrices[i]);
     const convPath = generateSVGPath(data, xScale, yPriceScale, (d, i) => convValues[data.indexOf(d)] || convValues[i]);
     
-    // 左Y軸刻度（價格）
+    // 左Y軸刻度（價格）- 加大字體
     const yPriceTicks = generateYTicks(minPrice, maxPrice, 5);
     let yPriceTicksHTML = yPriceTicks.map(tick => {
         const y = yPriceScale(tick);
         return `
             <line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" stroke="#e0e0e0" stroke-width="1"/>
-            <text x="${padding.left - 8}" y="${y + 4}" text-anchor="end" font-size="10" fill="#666">${tick.toFixed(1)}</text>
+            <text x="${padding.left - 10}" y="${y + 5}" text-anchor="end" font-size="13" fill="#666" font-weight="500">${tick.toFixed(1)}</text>
         `;
     }).join('');
     
-    // 右Y軸刻度（折溢價率）
+    // 右Y軸刻度（折溢價率）- 加大字體
     const yPremiumTicks = generateYTicks(minPremium, maxPremium, 5);
     let yPremiumTicksHTML = yPremiumTicks.map(tick => {
         const y = yPremiumScale(tick);
-        return `<text x="${width - padding.right + 8}" y="${y + 4}" text-anchor="start" font-size="10" fill="#666">${tick.toFixed(1)}%</text>`;
+        return `<text x="${width - padding.right + 10}" y="${y + 5}" text-anchor="start" font-size="13" fill="#666" font-weight="500">${tick.toFixed(1)}%</text>`;
     }).join('');
     
-    // X軸標籤
-    const xLabels = generateXLabels(data, 6);
+    // X軸標籤 - 加大字體
+    const xLabels = generateXLabels(data, 5);
     let xLabelsHTML = xLabels.map(({ idx, label }) => {
         const x = xScale(idx);
-        return `<text x="${x}" y="${height - 10}" text-anchor="middle" font-size="10" fill="#666">${label}</text>`;
+        return `<text x="${x}" y="${height - 12}" text-anchor="middle" font-size="12" fill="#666">${label}</text>`;
     }).join('');
     
     container.innerHTML = `
-        <svg width="100%" viewBox="0 0 ${width} ${height}" style="max-width:${width}px; display:block; margin:0 auto;">
+        <svg width="100%" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" style="display:block; margin:0 auto;">
             <!-- 背景 -->
             <rect x="${padding.left}" y="${padding.top}" width="${chartWidth}" height="${chartHeight}" fill="#fafafa" rx="4"/>
             
@@ -20263,30 +20266,30 @@ function renderCBPriceChartSVG(data, cbPrices, convValues, premiums, labels) {
             ${barsHTML}
             
             <!-- CB價格線 -->
-            <path d="${cbPath}" fill="none" stroke="#7b1fa2" stroke-width="2"/>
+            <path d="${cbPath}" fill="none" stroke="#7b1fa2" stroke-width="2.5"/>
             
             <!-- 理論價格線（虛線）-->
-            <path d="${convPath}" fill="none" stroke="#2e7d32" stroke-width="2" stroke-dasharray="5,5"/>
+            <path d="${convPath}" fill="none" stroke="#2e7d32" stroke-width="2.5" stroke-dasharray="8,4"/>
             
             <!-- 圖例 -->
-            <g transform="translate(${padding.left + 10}, ${padding.top - 12})">
-                <line x1="0" y1="0" x2="20" y2="0" stroke="#7b1fa2" stroke-width="2"/>
-                <text x="25" y="4" font-size="10" fill="#7b1fa2" font-weight="600">CB價格</text>
-                <line x1="85" y1="0" x2="105" y2="0" stroke="#2e7d32" stroke-width="2" stroke-dasharray="5,5"/>
-                <text x="110" y="4" font-size="10" fill="#2e7d32" font-weight="600">理論價格</text>
-                <rect x="175" y="-5" width="12" height="10" fill="rgba(255, 152, 0, 0.4)" stroke="#ff9800" stroke-width="0.5"/>
-                <text x="192" y="4" font-size="10" fill="#ff9800" font-weight="600">折溢價%</text>
+            <g transform="translate(${padding.left + 5}, ${padding.top - 20})">
+                <line x1="0" y1="0" x2="22" y2="0" stroke="#7b1fa2" stroke-width="3"/>
+                <text x="27" y="5" font-size="13" fill="#7b1fa2" font-weight="600">CB價格</text>
+                <line x1="95" y1="0" x2="117" y2="0" stroke="#2e7d32" stroke-width="3" stroke-dasharray="8,4"/>
+                <text x="122" y="5" font-size="13" fill="#2e7d32" font-weight="600">理論價格</text>
+                <rect x="200" y="-6" width="14" height="12" fill="rgba(255, 152, 0, 0.5)" stroke="#ff9800" stroke-width="1"/>
+                <text x="220" y="5" font-size="13" fill="#ff9800" font-weight="600">折溢價%</text>
             </g>
             
             <!-- X軸標籤 -->
             ${xLabelsHTML}
             
             <!-- Y軸標題 -->
-            <text x="${padding.left - 40}" y="${height/2}" text-anchor="middle" font-size="10" fill="#666" transform="rotate(-90, ${padding.left - 40}, ${height/2})">價格(元)</text>
-            <text x="${width - padding.right + 45}" y="${height/2}" text-anchor="middle" font-size="10" fill="#666" transform="rotate(90, ${width - padding.right + 45}, ${height/2})">折溢價率</text>
+            <text x="${padding.left - 45}" y="${height/2}" text-anchor="middle" font-size="13" fill="#7b1fa2" font-weight="500" transform="rotate(-90, ${padding.left - 45}, ${height/2})">價格(元)</text>
+            <text x="${width - padding.right + 50}" y="${height/2}" text-anchor="middle" font-size="13" fill="#ff9800" font-weight="500" transform="rotate(90, ${width - padding.right + 50}, ${height/2})">折溢價率</text>
             
             <!-- 邊框 -->
-            <rect x="${padding.left}" y="${padding.top}" width="${chartWidth}" height="${chartHeight}" fill="none" stroke="#e0e0e0" stroke-width="1" rx="4"/>
+            <rect x="${padding.left}" y="${padding.top}" width="${chartWidth}" height="${chartHeight}" fill="none" stroke="#ccc" stroke-width="1" rx="4"/>
         </svg>
     `;
 }
@@ -20461,7 +20464,7 @@ function renderBalanceChart(cbCode, data, container, period) {
             </div>
             
             <!-- 圖表區域 - SVG版本 -->
-            <div id="balanceChartSVG" style="width:100%; height:280px;"></div>
+            <div id="balanceChartSVG" style="width:100%; min-height:350px;"></div>
             
             <!-- 動態籌碼分析說明 -->
             <div style="margin-top:15px; padding:12px; background:${statusBg}; border-radius:8px; border-left:4px solid ${statusColor};">
@@ -20484,15 +20487,16 @@ function renderBalanceChart(cbCode, data, container, period) {
 }
 
 /**
- * v3.97-as-bs: SVG 版籌碼轉換分析圖（雙Y軸）
+ * v3.97-as-bt: SVG 版籌碼轉換分析圖（雙Y軸，手機版優化）
  */
 function renderBalanceChartSVG(data, cbShares, stockShares, labels) {
     const container = document.getElementById('balanceChartSVG');
     if (!container) return;
     
-    const width = 680;
-    const height = 280;
-    const padding = { top: 35, right: 70, bottom: 45, left: 65 };
+    // v3.97-as-bt: 加大尺寸
+    const width = 600;
+    const height = 360;
+    const padding = { top: 45, right: 75, bottom: 50, left: 70 };
     const chartWidth = width - padding.left - padding.right;
     const chartHeight = height - padding.top - padding.bottom;
     
@@ -20547,32 +20551,32 @@ function renderBalanceChartSVG(data, cbShares, stockShares, labels) {
         }
     });
     
-    // 左Y軸刻度（CB張數）- 使用千分位格式
+    // 左Y軸刻度（CB張數）- 加大字體，使用千分位格式
     const yCBTicks = generateYTicks(minCB, maxCB, 5);
     let yCBTicksHTML = yCBTicks.map(tick => {
         const y = yCBScale(tick);
         return `
             <line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" stroke="#e0e0e0" stroke-width="1"/>
-            <text x="${padding.left - 8}" y="${y + 4}" text-anchor="end" font-size="9" fill="#666">${Math.round(tick).toLocaleString()}</text>
+            <text x="${padding.left - 10}" y="${y + 5}" text-anchor="end" font-size="12" fill="#666" font-weight="500">${Math.round(tick).toLocaleString()}</text>
         `;
     }).join('');
     
-    // 右Y軸刻度（約當股票張數）
+    // 右Y軸刻度（約當股票張數）- 加大字體
     const yStockTicks = generateYTicks(minStock, maxStock, 5);
     let yStockTicksHTML = yStockTicks.map(tick => {
         const y = yStockScale(tick);
-        return `<text x="${width - padding.right + 8}" y="${y + 4}" text-anchor="start" font-size="9" fill="#666">${Math.round(tick).toLocaleString()}</text>`;
+        return `<text x="${width - padding.right + 10}" y="${y + 5}" text-anchor="start" font-size="12" fill="#666" font-weight="500">${Math.round(tick).toLocaleString()}</text>`;
     }).join('');
     
-    // X軸標籤
-    const xLabels = generateXLabels(data, 6);
+    // X軸標籤 - 加大字體
+    const xLabels = generateXLabels(data, 5);
     let xLabelsHTML = xLabels.map(({ idx, label }) => {
         const x = xScale(idx);
-        return `<text x="${x}" y="${height - 10}" text-anchor="middle" font-size="10" fill="#666">${label}</text>`;
+        return `<text x="${x}" y="${height - 12}" text-anchor="middle" font-size="12" fill="#666">${label}</text>`;
     }).join('');
     
     container.innerHTML = `
-        <svg width="100%" viewBox="0 0 ${width} ${height}" style="max-width:${width}px; display:block; margin:0 auto;">
+        <svg width="100%" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" style="display:block; margin:0 auto;">
             <!-- 背景 -->
             <rect x="${padding.left}" y="${padding.top}" width="${chartWidth}" height="${chartHeight}" fill="#fafafa" rx="4"/>
             
@@ -20581,31 +20585,31 @@ function renderBalanceChartSVG(data, cbShares, stockShares, labels) {
             ${yStockTicksHTML}
             
             <!-- CB張數填充區域 -->
-            <path d="${cbFillPath}" fill="rgba(25, 118, 210, 0.1)"/>
+            <path d="${cbFillPath}" fill="rgba(25, 118, 210, 0.15)"/>
             
             <!-- CB張數線 -->
-            <path d="${cbPath}" fill="none" stroke="#1976d2" stroke-width="2"/>
+            <path d="${cbPath}" fill="none" stroke="#1976d2" stroke-width="2.5"/>
             
             <!-- 約當股票張數線（虛線）-->
-            <path d="${stockPath}" fill="none" stroke="#2e7d32" stroke-width="2" stroke-dasharray="5,5"/>
+            <path d="${stockPath}" fill="none" stroke="#2e7d32" stroke-width="2.5" stroke-dasharray="8,4"/>
             
             <!-- 圖例 -->
-            <g transform="translate(${padding.left + 10}, ${padding.top - 12})">
-                <line x1="0" y1="0" x2="20" y2="0" stroke="#1976d2" stroke-width="2"/>
-                <text x="25" y="4" font-size="10" fill="#1976d2" font-weight="600">CB張數</text>
-                <line x1="90" y1="0" x2="110" y2="0" stroke="#2e7d32" stroke-width="2" stroke-dasharray="5,5"/>
-                <text x="115" y="4" font-size="10" fill="#2e7d32" font-weight="600">約當股票張數</text>
+            <g transform="translate(${padding.left + 10}, ${padding.top - 18})">
+                <line x1="0" y1="0" x2="25" y2="0" stroke="#1976d2" stroke-width="3"/>
+                <text x="30" y="5" font-size="13" fill="#1976d2" font-weight="600">CB張數</text>
+                <line x1="105" y1="0" x2="130" y2="0" stroke="#2e7d32" stroke-width="3" stroke-dasharray="8,4"/>
+                <text x="135" y="5" font-size="13" fill="#2e7d32" font-weight="600">約當股票張數</text>
             </g>
             
             <!-- X軸標籤 -->
             ${xLabelsHTML}
             
             <!-- Y軸標題 -->
-            <text x="${padding.left - 50}" y="${height/2}" text-anchor="middle" font-size="10" fill="#1976d2" transform="rotate(-90, ${padding.left - 50}, ${height/2})">CB張數</text>
-            <text x="${width - padding.right + 55}" y="${height/2}" text-anchor="middle" font-size="10" fill="#2e7d32" transform="rotate(90, ${width - padding.right + 55}, ${height/2})">約當股票張數</text>
+            <text x="${padding.left - 55}" y="${height/2}" text-anchor="middle" font-size="13" fill="#1976d2" font-weight="500" transform="rotate(-90, ${padding.left - 55}, ${height/2})">CB張數</text>
+            <text x="${width - padding.right + 60}" y="${height/2}" text-anchor="middle" font-size="13" fill="#2e7d32" font-weight="500" transform="rotate(90, ${width - padding.right + 60}, ${height/2})">約當股票張數</text>
             
             <!-- 邊框 -->
-            <rect x="${padding.left}" y="${padding.top}" width="${chartWidth}" height="${chartHeight}" fill="none" stroke="#e0e0e0" stroke-width="1" rx="4"/>
+            <rect x="${padding.left}" y="${padding.top}" width="${chartWidth}" height="${chartHeight}" fill="none" stroke="#ccc" stroke-width="1" rx="4"/>
         </svg>
     `;
 }

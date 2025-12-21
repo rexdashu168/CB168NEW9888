@@ -4,9 +4,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97-zs-bq (SQLite資料庫版)</title>
+<title>AI智能可轉債競拍系統 v3.97-zs-br (SQLite資料庫版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
-<!-- v3.97-zs-bq: 改用 SQLite 資料庫載入 kanban 資料 -->
+<!-- v3.97-zs-br: 改用 SQLite 資料庫載入 kanban 資料 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
@@ -16556,28 +16556,12 @@ function renderBasicInfoPutback(cbCode, container) {
  */
 
 /**
- * v3.97-zs-bf 修正：強制贖回標籤頁
- * 資料來源：CB_kanban CSV（已包含強制贖回欄位）
+ * v3.97-zs-br 修正：強制贖回標籤頁（改為同步函數）
+ * 資料來源：sheet01Data 或 yuantaHistoryData（已在啟動時載入）
+ * 不再等待 kanbanData，避免切換標籤卡住
  */
-async function renderBasicInfoCallOption(cbCode, container) {
+function renderBasicInfoCallOption(cbCode, container) {
     const searchCode = String(cbCode).replace(/\.0*$/, '').trim();
-    
-    // v3.97-zs-bf: 直接從 kanbanData 讀取（CSV 已包含強制贖回資料）
-    if (!window.kanbanData.loaded && !window.kanbanData.loading) {
-        container.innerHTML = `<div style="text-align:center; padding:40px; color:#666;">
-            <div style="font-size:24px; margin-bottom:10px;">⏳</div>
-            <div>載入 CB_kanban 資料中...</div>
-        </div>`;
-        await loadAllKanbanData();
-    } else if (window.kanbanData.loading) {
-        container.innerHTML = `<div style="text-align:center; padding:40px; color:#666;">
-            <div style="font-size:24px; margin-bottom:10px;">⏳</div>
-            <div>等待資料載入完成...</div>
-        </div>`;
-        while (window.kanbanData.loading) {
-            await new Promise(r => setTimeout(r, 100));
-        }
-    }
     
     // 從 sheet08 取得名稱
     let cbName = '';
@@ -16590,64 +16574,96 @@ async function renderBasicInfoCallOption(cbCode, container) {
     const isListed = window.cbDatabase?.listedCodes?.has(searchCode) || false;
     const statusLabel = isListed ? '🟢 掛牌中' : '⚫ 已下市';
     
-    // v3.97-zs-bf: 從 kanbanData 讀取最新一筆資料
+    // v3.97-zs-br: 直接從已載入的資料讀取（不等待 kanbanData）
     let callStartDate = '-', callEndDate = '-', callPrice = '-', delistDate = '-';
     let hasData = false;
+    let dataSource = '';
     
-    const cbData = window.kanbanData.data[searchCode];
-    if (cbData && cbData.length > 0) {
-        // 取最新一筆
-        const latest = cbData[cbData.length - 1];
-        callStartDate = latest.callStartDate || '-';
-        callEndDate = latest.callEndDate || '-';
-        callPrice = latest.callPrice || '-';
-        delistDate = latest.delistDate || '-';
+    // 1. 優先從 yuantaHistoryData 讀取
+    if (window.yuantaHistoryData?.loaded && window.yuantaHistoryData.data[searchCode]) {
+        const yuantaRow = window.yuantaHistoryData.data[searchCode];
+        callStartDate = yuantaRow['強制贖回起日'] || '-';
+        callEndDate = yuantaRow['強制贖回迄日'] || '-';
+        callPrice = yuantaRow['強制贖回價格'] || '-';
+        delistDate = yuantaRow['終止櫃檯買賣日'] || '-';
+        if (!cbName) cbName = yuantaRow['名稱'] || '';
         hasData = true;
-        
-        // 如果是名稱為空，從 kanbanData 補充
-        if (!cbName && latest.cbName) {
-            cbName = latest.cbName;
+        dataSource = 'yuanta';
+    }
+    
+    // 2. 從 sheet01Data 補充
+    if (window.sheet01Data?.length > 0) {
+        const sheet01Row = window.sheet01Data.find(r => String(r['CB代號']).trim() === searchCode);
+        if (sheet01Row) {
+            if (callStartDate === '-' || !callStartDate) callStartDate = sheet01Row['強制贖回起日'] || '-';
+            if (callEndDate === '-' || !callEndDate) callEndDate = sheet01Row['強制贖回迄日'] || '-';
+            if (callPrice === '-' || !callPrice) callPrice = sheet01Row['強制贖回價格'] || '-';
+            if (!cbName) cbName = sheet01Row['名稱'] || '';
+            if (!hasData && (callStartDate !== '-' || callEndDate !== '-')) {
+                hasData = true;
+                dataSource = 'sheet01';
+            }
         }
     }
     
-    console.log('[renderBasicInfoCallOption]', searchCode, ':', hasData ? '有資料' : '無資料');
+    // 3. 從 sheet08Data 補充終止日期
+    if (window.sheet08Data?.length > 0) {
+        const sheet08Row = window.sheet08Data.find(r => String(r['代號']).trim() === searchCode);
+        if (sheet08Row) {
+            if (delistDate === '-' || !delistDate) {
+                delistDate = sheet08Row['終止櫃檯買賣日'] || sheet08Row['下市日'] || '-';
+            }
+            if (!cbName) cbName = sheet08Row['名稱'] || '';
+        }
+    }
+    
+    // 格式化日期
+    const formatDate = (val) => {
+        if (!val || val === '-') return '-';
+        if (typeof val === 'number') {
+            // Excel 日期數字
+            const d = new Date((val - 25569) * 86400 * 1000);
+            return d.getFullYear() + '' + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
+        }
+        return String(val).replace(/[-\/]/g, '').slice(0, 8);
+    };
+    
+    callStartDate = formatDate(callStartDate);
+    callEndDate = formatDate(callEndDate);
+    delistDate = formatDate(delistDate);
+    
+    console.log('[renderBasicInfoCallOption]', searchCode, ':', hasData ? `有資料(${dataSource})` : '無資料');
     
     // 判斷是否有強制贖回條款
     const hasCallOption = callStartDate !== '-' || callEndDate !== '-' || 
                           (callPrice !== '-' && parseFloat(callPrice) > 0);
     const isDelisted = delistDate !== '-';
     
-    // v3.97-zs-ax: 計算提早下市天數
+    // 計算提早下市天數
     let earlyDelistDays = '';
     if (isDelisted) {
-        // 取得到期日
         let maturityDateStr = '';
-        // 從 sheet08Data 取得到期日
         if (window.sheet08Data?.length > 0) {
             const row = window.sheet08Data.find(r => String(r['代號']).trim() === searchCode);
             if (row) maturityDateStr = row['到期日'] || '';
         }
-        // 從 sheet01Data 補充
         if (!maturityDateStr && window.sheet01Data?.length > 0) {
             const row = window.sheet01Data.find(r => String(r['CB代號']).trim() === searchCode);
             if (row) maturityDateStr = row['到期日期'] || '';
         }
-        // 從 yuantaHistoryData 補充
-        if (!maturityDateStr && window.yuantaHistoryData?.loaded) {
-            const row = window.yuantaHistoryData.data[searchCode];
-            if (row) maturityDateStr = row['到期日'] || '';
-        }
         
-        // 計算天數差
         if (maturityDateStr && delistDate) {
             try {
                 const parseDate = (str) => {
-                    if (!str) return null;
+                    if (!str || str === '-') return null;
                     if (typeof str === 'number') {
                         return new Date((str - 25569) * 86400 * 1000);
                     }
-                    const cleaned = String(str).replace(/\//g, '-');
-                    return new Date(cleaned);
+                    const cleaned = String(str).replace(/[-\/]/g, '');
+                    if (cleaned.length === 8) {
+                        return new Date(cleaned.slice(0, 4), parseInt(cleaned.slice(4, 6)) - 1, cleaned.slice(6, 8));
+                    }
+                    return new Date(str);
                 };
                 
                 const maturityDate = parseDate(maturityDateStr);
@@ -16680,7 +16696,7 @@ async function renderBasicInfoCallOption(cbCode, container) {
         <div style="background:linear-gradient(135deg, #fce4ec 0%, #f8bbd9 100%); padding:25px; border-radius:12px;">
             ${renderTabHeader('強制贖回', '🔔', '#c2185b', completeness, statusLabel, cbCode, cbName)}
             
-            <!-- v3.97-zs-aj 新增：公司可贖回條件說明 -->
+            <!-- 公司可贖回條件說明 -->
             <div style="background:white; padding:18px; border-radius:10px; margin-bottom:18px; border-left:5px solid #7b1fa2;">
                 <div style="font-size:15px; color:#7b1fa2; margin-bottom:12px; font-weight:bold;">📋 公司可贖回條件 (一般條款)</div>
                 <div style="font-size:14px; color:#333; line-height:1.8;">
@@ -16700,8 +16716,7 @@ async function renderBasicInfoCallOption(cbCode, container) {
             
             <!-- 資料來源說明 -->
             <div style="background:white; padding:12px 15px; border-radius:8px; margin-bottom:18px; font-size:13px; color:#666;">
-                📊 資料來源：CB_kanban (J-M欄)
-                <span style="margin-left:15px;">📅 資料區間：2017-2025</span>
+                📊 資料來源：${dataSource === 'yuanta' ? 'yuanta 歷史資料' : dataSource === 'sheet01' ? '01工作表' : '系統資料庫'}
             </div>
             
             <!-- 強制贖回資料 -->
@@ -16746,7 +16761,7 @@ async function renderBasicInfoCallOption(cbCode, container) {
             
             ${!hasData ? `
             <div style="margin-top:18px; padding:15px; background:#fff8e1; border-radius:8px; font-size:14px; color:#f57c00; text-align:center;">
-                ⚠️ 此CB在 CB_kanban 資料中無強制贖回紀錄
+                ⚠️ 此CB在資料庫中無強制贖回紀錄
             </div>
             ` : ''}
         </div>
@@ -18306,7 +18321,8 @@ function initPriceTrendCBOptions() {
 }
 
 /**
- * v3.97-zs-ax: 智能搜尋價格走勢CB（參考基本資料查詢區設計）
+ * v3.97-zs-br 修正：智能搜尋價格走勢CB
+ * 使用 cbDatabase.allCB（包含已下市CB）
  */
 function smartSearchPriceTrend(keyword) {
     const resultsDiv = document.getElementById('priceTrendSearchResults');
@@ -18319,14 +18335,15 @@ function smartSearchPriceTrend(keyword) {
         return;
     }
     
-    // 確保已初始化選項列表
-    if (priceTrendCBOptions.length === 0) {
-        initPriceTrendCBOptions();
-    }
-    
-    // 使用基本資料查詢的資料庫
-    const db = window.basicInfoDB || { allCB: [] };
+    // v3.97-zs-br: 使用 cbDatabase（不是 basicInfoDB）
+    const db = window.cbDatabase || { allCB: [] };
     let results = [];
+    
+    if (!db.allCB || db.allCB.length === 0) {
+        resultsDiv.innerHTML = '<div style="padding:10px; color:#999; text-align:center;">資料庫載入中...</div>';
+        resultsDiv.style.display = 'block';
+        return;
+    }
     
     // 搜尋邏輯：代號前綴匹配 > 名稱包含 > 股票代號匹配
     db.allCB.forEach(cb => {
@@ -18359,7 +18376,7 @@ function smartSearchPriceTrend(keyword) {
     let html = '';
     results.forEach((cb, idx) => {
         const statusIcon = cb.isListed ? '🟢' : '⚫';
-        const typeLabel = cb.type === '競拍' ? '<span style="color:#2e7d32; font-size:10px;">競拍</span>' : '<span style="color:#1976d2; font-size:10px;">詢圈</span>';
+        const typeLabel = cb.isAuction || cb.type === '競拍' ? '<span style="color:#2e7d32; font-size:10px;">競拍</span>' : '<span style="color:#1976d2; font-size:10px;">詢圈</span>';
         html += `
             <div class="price-trend-search-item" data-code="${cb.code}" data-index="${idx}"
                  style="padding:10px 12px; cursor:pointer; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;"
@@ -18454,7 +18471,7 @@ function selectPriceTrendFromSearch(cbCode) {
     
     // 更新輸入框顯示
     if (input) {
-        const db = window.basicInfoDB || { allCB: [] };
+        const db = window.cbDatabase || { allCB: [] };
         const cb = db.allCB.find(c => c.code === cbCode);
         input.value = cb ? `${cbCode} ${cb.name}` : cbCode;
     }
@@ -18464,10 +18481,10 @@ function selectPriceTrendFromSearch(cbCode) {
 }
 
 /**
- * v3.97-zs-ax: 直接搜尋CB（Enter鍵）
+ * v3.97-zs-br 修正：直接搜尋CB（Enter鍵）
  */
 function searchPriceTrendCBDirect(keyword) {
-    const db = window.basicInfoDB || { allCB: [] };
+    const db = window.cbDatabase || { allCB: [] };
     const kw = keyword.toLowerCase();
     
     // 精確匹配代號
@@ -18949,13 +18966,12 @@ async function loadYuantaHistoryData() {
     if (window.yuantaHistoryData.loaded || window.yuantaHistoryData.loading) return;
     window.yuantaHistoryData.loading = true;
     
-    console.log('📂 開始載入元大歷史資料...');
+    console.log('📂 開始載入元大歷史資料 (SQLite版)...');
     const startTime = Date.now();
     
     // 欄位名稱標準化（去掉日期前綴 YYYMMDD 民國年7位 或 YYYYMM 西元年6位）
     function normalizeFieldName(field) {
         if (!field) return '';
-        // 先嘗試去掉7位數字前綴（民國年 YYYMMDD），再嘗試6位
         let result = String(field).replace(/^\d{7}/, '').trim();
         if (result === String(field).trim()) {
             result = String(field).replace(/^\d{6}/, '').trim();
@@ -18963,95 +18979,90 @@ async function loadYuantaHistoryData() {
         return result;
     }
     
-    // 標準欄位對照表（08工作表欄位名稱）
-    const standardFields = [
-        '代號', '名稱', '英文名稱', '債券簡稱', '票面利率', '轉換價格(元)', '轉換價格生效日期',
-        '轉換標的代碼', '轉換標的名稱', '轉換日期起', '轉換日期迄', '轉換起日', '轉換迄日', '轉換價格',
-        '發行日期', '掛牌日期', '到期日', '到期價格', '到期殖利率', 
-        '申請發行總額(百萬)', '實際發行總額(百萬)', '原始發行額', '最新餘額',
-        '發行價格(元)', '最新餘額(百萬)', '還本年限', '發行時轉換價格(元)', '承銷機構',
-        '過戶機構', '提前償還日', '提前償還日1', '提前償還價格1', '提前償還殖利率1',
-        '提前償還日2', '提前償還價格2', '提前償還殖利率2', '提前償還日3', '提前償還價格3',
-        '提前償還殖利率3', '提前償還日4', '提前償還價格4', '提前償還殖利率4',
-        '最近提前償還日', '最近提前償還價格', '最近提前償還殖利率', '債券擔保情形',
-        '重設平均天數3', '重設轉換價格公式', '停止受理轉換登記日期起', '停止受理轉換登記日期訖', 
-        '強制贖回日', '強制贖回起日', '強制贖回迄日', '強制贖回價格', '終止櫃檯買賣日',
-        '最近賣回權起日', '最近賣回權迄日', '最近賣回權價格'
-    ];
-    
-    // 額外欄位（yuanta_data1特有）
-    const extraFields = ['本月賣回張數', '本月買回張數', '本月轉換張數', '信用評等', 
-        '重設轉換價格閉鎖期', '靜態重設基準日1', '靜態重設基準日2', '動態重設基準日',
-        '重設溢價率(%)', '重設上限(%)', '重設平均天數1', '重設平均天數2'];
-    
     const allData = {};
     
-    // 載入檔案清單（先載入舊的，再載入新的，新的會覆蓋舊的）
-    const files = [
-        { name: 'data/kanban/yuanta_data1.xlsx', datePrefix: 6 },  // 舊格式
-        { name: 'data/kanban/yuanta_data2.xlsx', datePrefix: 6 }   // 新格式
-    ];
+    // v3.97-zs-br: 改用 SQLite 資料庫載入
+    const dbFiles = ['data/yuanta_data1.db', 'data/yuanta_data2.db'];
     
-    for (const fileInfo of files) {
+    for (const dbFile of dbFiles) {
         try {
-            const response = await fetch(fileInfo.name);
+            const response = await fetch(dbFile);
             if (!response.ok) {
-                console.warn(`找不到 ${fileInfo.name}，跳過`);
+                console.warn(`找不到 ${dbFile}，跳過`);
                 continue;
             }
             
-            const workbook = XLSX.read(await response.arrayBuffer(), { type: 'array' });
-            console.log(`載入 ${fileInfo.name}: ${workbook.SheetNames.length} 個工作表`);
+            const buffer = await response.arrayBuffer();
+            const db = new SQL.Database(new Uint8Array(buffer));
             
-            // 過濾出有效的日期工作表（民國年格式 YYYMMDD）
-            const validSheets = workbook.SheetNames.filter(name => /^\d{7}$/.test(name));
+            // 讀取欄位對照表
+            const mappingResult = db.exec("SELECT col_index, col_name FROM column_mapping ORDER BY col_index");
+            if (!mappingResult.length) {
+                console.warn(`${dbFile} 無 column_mapping，跳過`);
+                db.close();
+                continue;
+            }
             
-            // 按日期排序（舊到新）
-            validSheets.sort((a, b) => parseInt(a) - parseInt(b));
+            // 建立欄位映射 (col索引 -> 標準化欄位名)
+            const colToField = {};
+            mappingResult[0].values.forEach(([idx, name]) => {
+                const normalized = normalizeFieldName(name);
+                if (normalized) colToField[idx] = normalized;
+            });
             
-            for (const sheetName of validSheets) {
-                const sheet = workbook.Sheets[sheetName];
-                const rawData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            // 找出「代號」對應的 col 索引
+            let codeColIdx = null;
+            for (const [idx, field] of Object.entries(colToField)) {
+                if (field === '代號') { codeColIdx = parseInt(idx); break; }
+            }
+            if (codeColIdx === null) {
+                console.warn(`${dbFile} 找不到代號欄位，跳過`);
+                db.close();
+                continue;
+            }
+            
+            // 取得所有 table（排除 column_mapping，按日期排序）
+            const tablesResult = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name != 'column_mapping' ORDER BY name ASC");
+            if (!tablesResult.length) {
+                db.close();
+                continue;
+            }
+            
+            const tables = tablesResult[0].values.map(r => r[0]);
+            console.log(`載入 ${dbFile}: ${tables.length} 個快照`);
+            
+            // 遍歷每個 table（從舊到新，新的會覆蓋舊的）
+            for (const tableName of tables) {
+                const sheetDate = tableName.replace('t', ''); // t1141212 -> 1141212
                 
-                if (rawData.length < 2) continue;
+                const dataResult = db.exec(`SELECT * FROM "${tableName}"`);
+                if (!dataResult.length) continue;
                 
-                const headers = rawData[0];
-                // 建立欄位名稱到索引的映射（標準化後）
-                const fieldMap = {};
-                headers.forEach((h, idx) => {
-                    const normalized = normalizeFieldName(h);
-                    if (normalized) fieldMap[normalized] = idx;
-                });
+                const rows = dataResult[0].values;
+                const colCount = rows[0]?.length || 0;
                 
-                // 處理每一列資料
-                for (let i = 1; i < rawData.length; i++) {
-                    const row = rawData[i];
-                    const code = String(row[fieldMap['代號']] || '').trim();
+                for (const row of rows) {
+                    const code = String(row[codeColIdx] || '').trim();
                     if (!code || code === 'undefined') continue;
                     
                     // 建立標準化的資料物件
-                    const record = { _sheetDate: sheetName };
+                    const record = { _sheetDate: sheetDate };
                     
-                    // 標準欄位
-                    standardFields.forEach(field => {
-                        if (fieldMap[field] !== undefined) {
-                            record[field] = row[fieldMap[field]];
+                    for (let i = 0; i < colCount; i++) {
+                        const fieldName = colToField[i];
+                        if (fieldName && row[i] !== null && row[i] !== '') {
+                            record[fieldName] = row[i];
                         }
-                    });
-                    
-                    // 額外欄位
-                    extraFields.forEach(field => {
-                        if (fieldMap[field] !== undefined) {
-                            record[field] = row[fieldMap[field]];
-                        }
-                    });
+                    }
                     
                     // 儲存（新的會覆蓋舊的，保留最新資料）
                     allData[code] = record;
                 }
             }
+            
+            db.close();
         } catch (err) {
-            console.warn(`載入 ${fileInfo.name} 失敗:`, err);
+            console.warn(`載入 ${dbFile} 失敗:`, err);
         }
     }
     
@@ -19146,7 +19157,7 @@ async function loadKanbanAndRender(cbCode, tabName, period, container) {
 
 /**
  * 載入kanban資料
- * v3.97-zs-bq: 改用 SQLite 資料庫，預設只載入最新 3 年
+ * v3.97-zs-br: 改用 SQLite 資料庫，預設只載入最新 3 年
  * @param {boolean} loadAll - 是否載入全部歷史（預設 false，只載入 2023-2025）
  */
 async function loadAllKanbanData(loadAll = false) {
@@ -19178,7 +19189,7 @@ async function loadAllKanbanData(loadAll = false) {
         const allData = window.kanbanData.data || {};
         const allDates = new Set(window.kanbanData.dates || []);
         
-        // v3.97-zs-bq: 預設只載入最新資料庫（23MB），需要更早資料時再載入
+        // v3.97-zs-br: 預設只載入最新資料庫（23MB），需要更早資料時再載入
         const dbFiles = loadAll ? [
             { file: 'data/cb_kanban_2023_2025.db', label: '2023-2025' },
             { file: 'data/cb_kanban_2020_2022.db', label: '2020-2022' },
@@ -19267,7 +19278,7 @@ async function loadAllKanbanData(loadAll = false) {
 }
 
 /**
- * v3.97-zs-bq: 載入更早期的資料（2017-2022）
+ * v3.97-zs-br: 載入更早期的資料（2017-2022）
  */
 async function loadEarlierKanbanData() {
     if (window.kanbanData.loadedAll) return;

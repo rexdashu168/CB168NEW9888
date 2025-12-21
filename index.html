@@ -4,8 +4,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97-as-cb (SQLite資料庫版)</title>
+<title>AI智能可轉債競拍系統 v3.97-as-cc (SQLite資料庫版)</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<!-- v3.97-as-cc: 漲跌幅排行改用 kanbanData 的 stockPrice（股票價格）-->
 <!-- v3.97-as-cb: 加入 CSV/Excel fallback 機制 -->
 <!-- v3.97-as-ca: 改為從 data/00_cb/ 載入 CSV 檔案 -->
 <!-- v3.97-as-bz: 新增載入 12_call_execute.csv，修正強制贖回資料來源 -->
@@ -1867,7 +1868,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.97-as-cb)...</div>
+    <div>🔄 系統啟動中 (v3.97-as-cc)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
@@ -18822,21 +18823,38 @@ function calculateRankingData(period) {
         return rankingDataCache[cacheKey];
     }
 
-    const cbPriceData = window.cbPriceData?.data || {};
+    // v3.97-as-cc: 改用 kanbanData 的 stockPrice（股票價格）
+    const kanbanData = window.kanbanData?.data || {};
     const results = [];
 
     // 遍歷所有 CB
-    for (const cbCode in cbPriceData) {
-        const priceHistory = cbPriceData[cbCode];
+    for (const cbCode in kanbanData) {
+        const priceHistory = kanbanData[cbCode];
         if (!priceHistory || priceHistory.length < 2) continue;
 
-        // 取得最新價格和名稱
-        const latestData = priceHistory[priceHistory.length - 1];
-        const latestPrice = latestData?.close;
+        // 按日期排序（確保最新在最後）
+        const sortedHistory = [...priceHistory].sort((a, b) => {
+            const dateA = String(a.date || '').replace(/[^\d]/g, '');
+            const dateB = String(b.date || '').replace(/[^\d]/g, '');
+            return dateA.localeCompare(dateB);
+        });
+
+        // 取得最新股票價格和名稱
+        const latestData = sortedHistory[sortedHistory.length - 1];
+        const latestStockPrice = parseFloat(latestData?.stockPrice) || 0;  // 股票價格
+        const latestCBPrice = parseFloat(latestData?.cbPrice) || 0;        // CB價格（參考）
         const cbName = latestData?.name || cbCode;
         const latestDate = latestData?.date || '';
 
-        if (!latestPrice || latestPrice <= 0) continue;
+        if (!latestStockPrice || latestStockPrice <= 0) continue;
+
+        // 計算日期數字
+        const getDateNum = (dateStr) => {
+            if (!dateStr) return 0;
+            return parseInt(String(dateStr).replace(/[^\d]/g, '').slice(0, 8)) || 0;
+        };
+
+        const latestDateNum = getDateNum(latestDate);
 
         // 根據期間找起始價格
         let startPrice = 0;
@@ -18845,23 +18863,23 @@ function calculateRankingData(period) {
 
         if (period === 'all') {
             // 歷年：從第一筆資料開始
-            const firstData = priceHistory[0];
-            startPrice = firstData?.close || 0;
+            const firstData = sortedHistory[0];
+            startPrice = parseFloat(firstData?.stockPrice) || 0;
             startDate = firstData?.date || '';
-            dataCount = priceHistory.length;
+            dataCount = sortedHistory.length;
         } else if (period === 'ytd') {
             // 今年：從今年第一個交易日開始
-            const latestDateNum = latestData?.dateNum;
             if (latestDateNum) {
                 const currentYear = String(latestDateNum).substring(0, 4);
                 const ytdStart = parseInt(currentYear + '0101');
 
                 // 找今年第一筆資料
-                for (let i = 0; i < priceHistory.length; i++) {
-                    if (priceHistory[i]?.dateNum >= ytdStart) {
-                        startPrice = priceHistory[i]?.close || 0;
-                        startDate = priceHistory[i]?.date || '';
-                        dataCount = priceHistory.length - i;
+                for (let i = 0; i < sortedHistory.length; i++) {
+                    const dateNum = getDateNum(sortedHistory[i]?.date);
+                    if (dateNum >= ytdStart && parseFloat(sortedHistory[i]?.stockPrice) > 0) {
+                        startPrice = parseFloat(sortedHistory[i]?.stockPrice) || 0;
+                        startDate = sortedHistory[i]?.date || '';
+                        dataCount = sortedHistory.length - i;
                         break;
                     }
                 }
@@ -18869,7 +18887,6 @@ function calculateRankingData(period) {
         } else {
             // N日：從最新日期往前推
             const days = parseInt(period);
-            const latestDateNum = latestData?.dateNum;
 
             if (latestDateNum) {
                 // 計算起始日期
@@ -18883,11 +18900,12 @@ function calculateRankingData(period) {
                 const cutoffNum = parseInt(latestDateObj.toISOString().slice(0, 10).replace(/-/g, ''));
 
                 // 找最接近起始日期的資料
-                for (let i = 0; i < priceHistory.length; i++) {
-                    if (priceHistory[i]?.dateNum >= cutoffNum) {
-                        startPrice = priceHistory[i]?.close || 0;
-                        startDate = priceHistory[i]?.date || '';
-                        dataCount = priceHistory.length - i;
+                for (let i = 0; i < sortedHistory.length; i++) {
+                    const dateNum = getDateNum(sortedHistory[i]?.date);
+                    if (dateNum >= cutoffNum && parseFloat(sortedHistory[i]?.stockPrice) > 0) {
+                        startPrice = parseFloat(sortedHistory[i]?.stockPrice) || 0;
+                        startDate = sortedHistory[i]?.date || '';
+                        dataCount = sortedHistory.length - i;
                         break;
                     }
                 }
@@ -18896,14 +18914,15 @@ function calculateRankingData(period) {
 
         if (!startPrice || startPrice <= 0) continue;
 
-        // 計算漲跌幅
-        const change = latestPrice - startPrice;
-        const changePercent = ((latestPrice - startPrice) / startPrice) * 100;
+        // 計算股票漲跌幅
+        const change = latestStockPrice - startPrice;
+        const changePercent = ((latestStockPrice - startPrice) / startPrice) * 100;
 
         results.push({
             cbCode,
             cbName,
-            latestPrice,
+            latestPrice: latestStockPrice,  // 股票最新價
+            latestCBPrice,                   // CB最新價（參考）
             latestDate,
             startPrice,
             startDate,
@@ -18925,20 +18944,26 @@ function renderRankingTable() {
     const container = document.getElementById('rankingContent');
     const infoSpan = document.getElementById('rankingDataInfo');
 
-    // 檢查資料是否已載入
-    if (!window.cbPriceData?.loaded) {
-        if (!window.cbPriceData?.loading) {
+    // v3.97-as-cc: 改用 kanbanData
+    if (!window.kanbanData?.loaded) {
+        if (!window.kanbanData?.loading) {
             container.innerHTML = `<div style="text-align:center; padding:40px; color:#666;">
                 <div style="font-size:24px; margin-bottom:10px;">⏳</div>
-                <div>首次載入 CB 價格資料中...</div>
+                <div>首次載入 CB 看板資料中...</div>
             </div>`;
-            loadCBPriceData().then(() => renderRankingTable());
+            loadKanbanData().then(() => {
+                rankingDataCache = {}; // 清除快取
+                renderRankingTable();
+            });
         } else {
             container.innerHTML = `<div style="text-align:center; padding:40px; color:#666;">
                 <div style="font-size:24px; margin-bottom:10px;">⏳</div>
-                <div>CB 價格資料載入中...</div>
+                <div>CB 看板資料載入中...</div>
             </div>`;
-            waitForDataLoaded(() => window.cbPriceData?.loaded).then(() => renderRankingTable());
+            waitForDataLoaded(() => window.kanbanData?.loaded).then(() => {
+                rankingDataCache = {}; // 清除快取
+                renderRankingTable();
+            });
         }
         return;
     }
@@ -18972,7 +18997,7 @@ function renderRankingTable() {
 
     // 更新資訊
     if (infoSpan) {
-        infoSpan.textContent = `共 ${sortedData.length} 檔 CB`;
+        infoSpan.textContent = `共 ${sortedData.length} 檔（股票漲跌幅）`;
     }
 
     // 生成表格
@@ -18981,12 +19006,13 @@ function renderRankingTable() {
             <table style="width:100%; border-collapse:collapse; font-size:13px; table-layout:fixed;">
                 <thead style="position:sticky; top:0; background:#e91e63; color:white;">
                     <tr>
-                        <th style="padding:10px 6px; text-align:center; font-weight:600; width:8%;">排名</th>
-                        <th style="padding:10px 6px; text-align:left; font-weight:600; width:25%;">CB名稱</th>
-                        <th style="padding:10px 6px; text-align:right; font-weight:600; width:15%;">最新價</th>
-                        <th style="padding:10px 6px; text-align:right; font-weight:600; width:15%;">起始價</th>
-                        <th style="padding:10px 6px; text-align:right; font-weight:600; width:15%;">漲跌</th>
-                        <th style="padding:10px 6px; text-align:right; font-weight:600; width:17%;">${periodText}漲跌幅</th>
+                        <th style="padding:10px 4px; text-align:center; font-weight:600; width:7%;">排名</th>
+                        <th style="padding:10px 4px; text-align:left; font-weight:600; width:24%;">CB名稱</th>
+                        <th style="padding:10px 4px; text-align:right; font-weight:600; width:14%;">最新股價</th>
+                        <th style="padding:10px 4px; text-align:right; font-weight:600; width:14%;">起始股價</th>
+                        <th style="padding:10px 4px; text-align:right; font-weight:600; width:12%;">漲跌</th>
+                        <th style="padding:10px 4px; text-align:right; font-weight:600; width:15%;">${periodText}幅</th>
+                        <th style="padding:10px 4px; text-align:right; font-weight:600; width:14%;">CB參考</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -19006,24 +19032,30 @@ function renderRankingTable() {
         if (item.changePercent >= 10) percentBg = 'rgba(198, 40, 40, 0.15)';
         else if (item.changePercent <= -10) percentBg = 'rgba(46, 125, 50, 0.15)';
 
+        // CB參考價顯示
+        const cbPriceDisplay = item.latestCBPrice > 0 ? item.latestCBPrice.toFixed(1) : '-';
+
         tableHTML += `
             <tr style="background:${bgColor}; cursor:pointer;" onclick="loadPriceTrendFromRanking('${item.cbCode}')">
-                <td style="padding:8px 6px; text-align:center; color:#888; font-weight:600;">${i + 1}</td>
-                <td style="padding:8px 6px; text-align:left;">
-                    <div style="font-weight:600; color:#333;">${item.cbName}</div>
-                    <div style="font-size:11px; color:#888;">${item.cbCode}</div>
+                <td style="padding:8px 4px; text-align:center; color:#888; font-weight:600;">${i + 1}</td>
+                <td style="padding:8px 4px; text-align:left;">
+                    <div style="font-weight:600; color:#333; font-size:12px;">${item.cbName}</div>
+                    <div style="font-size:10px; color:#888;">${item.cbCode}</div>
                 </td>
-                <td style="padding:8px 6px; text-align:right; font-weight:700; color:#e91e63; font-size:14px;">
-                    ${item.latestPrice.toFixed(2)}
+                <td style="padding:8px 4px; text-align:right; font-weight:700; color:#1976d2; font-size:13px;">
+                    ${item.latestPrice.toFixed(1)}
                 </td>
-                <td style="padding:8px 6px; text-align:right; color:#666;">
-                    ${item.startPrice.toFixed(2)}
+                <td style="padding:8px 4px; text-align:right; color:#666; font-size:12px;">
+                    ${item.startPrice.toFixed(1)}
                 </td>
-                <td style="padding:8px 6px; text-align:right; color:${changeColor}; font-weight:600;">
-                    ${changeSign}${item.change.toFixed(2)}
+                <td style="padding:8px 4px; text-align:right; color:${changeColor}; font-weight:600; font-size:12px;">
+                    ${changeSign}${item.change.toFixed(1)}
                 </td>
-                <td style="padding:8px 6px; text-align:right; color:${changeColor}; font-weight:700; font-size:14px; background:${percentBg}; border-radius:4px;">
-                    ${percentSign}${item.changePercent.toFixed(2)}%
+                <td style="padding:8px 4px; text-align:right; color:${changeColor}; font-weight:700; font-size:13px; background:${percentBg}; border-radius:4px;">
+                    ${percentSign}${item.changePercent.toFixed(1)}%
+                </td>
+                <td style="padding:8px 4px; text-align:right; color:#e91e63; font-size:12px;">
+                    ${cbPriceDisplay}
                 </td>
             </tr>
         `;

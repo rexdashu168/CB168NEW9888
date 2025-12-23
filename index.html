@@ -2655,11 +2655,11 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
                     style="padding:8px 14px; border:1px solid #c62828; border-radius:6px; background:white; color:#c62828; cursor:pointer; font-weight:500; font-size:12px;">
                     📈 1日漲幅
                 </button>
-                <button type="button" id="rankTypeStrong" onclick="sortHotStockTable('Strength')"
+                <button type="button" id="rankTypeStrong" onclick="sortHotStockTable('Strength', 'desc')"
                     style="padding:8px 14px; border:1px solid #ff9800; border-radius:6px; background:white; color:#ff9800; cursor:pointer; font-weight:500; font-size:12px;">
                     💪 強度
                 </button>
-                <button type="button" id="rankTypeWeak" onclick="hotStockSortDir='asc'; sortHotStockTable('Strength')"
+                <button type="button" id="rankTypeWeak" onclick="sortHotStockTable('Strength', 'asc')"
                     style="padding:8px 14px; border:1px solid #2e7d32; border-radius:6px; background:white; color:#2e7d32; cursor:pointer; font-weight:500; font-size:12px;">
                     📉 弱勢
                 </button>
@@ -18821,14 +18821,21 @@ async function loadIndustryData() {
 
 /**
  * 表格欄位排序
+ * @param {string} field - 排序欄位
+ * @param {string} [forceDir] - 強制指定排序方向 ('asc' 或 'desc')
  */
-function sortHotStockTable(field) {
-    // 如果點擊同一欄位，切換排序方向
-    if (hotStockSortField === field) {
+function sortHotStockTable(field, forceDir) {
+    if (forceDir) {
+        // 強制指定方向
+        hotStockSortField = field;
+        hotStockSortDir = forceDir;
+    } else if (hotStockSortField === field) {
+        // 同一欄位，切換方向
         hotStockSortDir = hotStockSortDir === 'desc' ? 'asc' : 'desc';
     } else {
+        // 新欄位，預設降冪
         hotStockSortField = field;
-        hotStockSortDir = 'desc'; // 預設降冪
+        hotStockSortDir = 'desc';
     }
     renderHotStockTable();
 }
@@ -19176,7 +19183,7 @@ async function renderHotStockTable() {
     let tableHTML = `
         <div style="background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.08);">
             <div style="overflow-x:auto;">
-            <table style="width:100%; border-collapse:collapse; font-size:11px; min-width:900px;">
+            <table style="width:100%; border-collapse:collapse; font-size:11px; min-width:950px;">
                 <thead>
                     <tr style="background:${headerBg}; color:white;">
                         <th style="padding:8px 3px; text-align:center; font-weight:600; width:24px;">#</th>
@@ -19202,6 +19209,9 @@ async function renderHotStockTable() {
                         </th>
                         <th style="${thStyle}" onclick="sortHotStockTable('Change_60D')">
                             60日%<br><span style="font-size:9px;opacity:0.7;">${getSortIcon('Change_60D')}</span>
+                        </th>
+                        <th style="${thStyle}" onclick="sortHotStockTable('Strength')">
+                            強度<br><span style="font-size:9px;opacity:0.7;">${getSortIcon('Strength')}</span>
                         </th>
                         <th style="${thStyle}" onclick="sortHotStockTable('Value_M')">
                             成交值<br><span style="font-size:9px;opacity:0.7;">${getSortIcon('Value_M')}</span>
@@ -19263,6 +19273,7 @@ async function renderHotStockTable() {
                 <td style="${tdStyle} ${getChangeStyle(stock.Change_10D)}">${fmtChg(stock.Change_10D)}</td>
                 <td style="${tdStyle} ${getChangeStyle(stock.Change_20D)}">${fmtChg(stock.Change_20D)}</td>
                 <td style="${tdStyle} ${getChangeStyle(stock.Change_60D)}">${fmtChg(stock.Change_60D)}</td>
+                <td style="${tdStyle} ${getChangeStyle(stock.Strength)} font-weight:600;">${stock.Strength.toFixed(2)}</td>
                 <td style="${tdStyle} color:#666;">${(stock.Value_M).toFixed(0)}</td>
                 <td style="${tdStyle} ${volRatioStyle} font-weight:500;">${stock.Vol_Ratio.toFixed(2)}</td>
                 <td style="padding:5px 3px; text-align:center; color:#888; font-size:10px;">${foreignDisplay}</td>

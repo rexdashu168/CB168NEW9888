@@ -2646,22 +2646,30 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
         <div style="background:#fff; border-radius:12px; padding:12px 16px; margin-bottom:12px; box-shadow:0 2px 8px rgba(0,0,0,0.06);">
             <!-- 排行類型切換 -->
             <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-                <span style="font-size:12px; color:#666; margin-right:4px;">排序方式：</span>
-                <button type="button" id="rankTypeValue" onclick="sortHotStockTable('Value_M')"
-                    style="padding:8px 14px; border:1px solid #1976d2; border-radius:6px; background:#1976d2; color:white; cursor:pointer; font-weight:600; font-size:12px;">
+                <span style="font-size:12px; color:#666; margin-right:4px;">排序：</span>
+                <button type="button" onclick="sortHotStockTable('Value_M', 'desc')"
+                    style="padding:8px 12px; border:1px solid #1976d2; border-radius:6px; background:#1976d2; color:white; cursor:pointer; font-weight:600; font-size:12px;">
                     💰 成交值
                 </button>
-                <button type="button" id="rankTypeGain" onclick="sortHotStockTable('Change_1D')"
-                    style="padding:8px 14px; border:1px solid #c62828; border-radius:6px; background:white; color:#c62828; cursor:pointer; font-weight:500; font-size:12px;">
-                    📈 1日漲幅
+                <button type="button" onclick="sortHotStockTable('Change_1D', 'desc')"
+                    style="padding:8px 12px; border:1px solid #c62828; border-radius:6px; background:white; color:#c62828; cursor:pointer; font-weight:500; font-size:12px;">
+                    📈 漲幅
                 </button>
-                <button type="button" id="rankTypeStrong" onclick="sortHotStockTable('Strength', 'desc')"
-                    style="padding:8px 14px; border:1px solid #ff9800; border-radius:6px; background:white; color:#ff9800; cursor:pointer; font-weight:500; font-size:12px;">
-                    💪 強度
+                <button type="button" onclick="sortHotStockTable('Strength', 'desc')"
+                    style="padding:8px 12px; border:1px solid #ff9800; border-radius:6px; background:white; color:#ff9800; cursor:pointer; font-weight:500; font-size:12px;">
+                    💪 強勢
                 </button>
-                <button type="button" id="rankTypeWeak" onclick="sortHotStockTable('Strength', 'asc')"
-                    style="padding:8px 14px; border:1px solid #2e7d32; border-radius:6px; background:white; color:#2e7d32; cursor:pointer; font-weight:500; font-size:12px;">
+                <button type="button" onclick="sortHotStockTable('Strength', 'asc')"
+                    style="padding:8px 12px; border:1px solid #2e7d32; border-radius:6px; background:white; color:#2e7d32; cursor:pointer; font-weight:500; font-size:12px;">
                     📉 弱勢
+                </button>
+                <button type="button" onclick="sortHotStockTable('Margin_Change', 'desc')"
+                    style="padding:8px 12px; border:1px solid #e91e63; border-radius:6px; background:white; color:#e91e63; cursor:pointer; font-weight:500; font-size:12px;">
+                    🔥 融資增
+                </button>
+                <button type="button" onclick="sortHotStockTable('Short_Balance', 'desc')"
+                    style="padding:8px 12px; border:1px solid #9c27b0; border-radius:6px; background:white; color:#9c27b0; cursor:pointer; font-weight:500; font-size:12px;">
+                    ⚡ 高融券
                 </button>
             </div>
         </div>
@@ -2697,6 +2705,93 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
     </div><!-- stockRankingSection結束 -->
 </div><!-- 右側第五區塊結束 -->
+
+<!-- 右側第六區塊：CB套利追蹤 -->
+<div class="right-section section-arbitrage" style="margin-top:16px;">
+    <div class="right-section-header" onclick="toggleSection(this)" style="background:linear-gradient(135deg, #7b1fa2 0%, #9c27b0 100%); color:white; padding:14px 18px; border-radius:12px 12px 0 0; cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
+        💎 六、CB套利追蹤
+        <span style="font-size:11px; font-weight:normal; opacity:0.9;">（融資融券+CB餘額）</span>
+        <span class="toggle-icon">▶</span>
+    </div>
+    <div class="right-section-content collapsed" id="arbitrageSection">
+        
+        <!-- CB選擇器 -->
+        <div style="background:#fff; border-radius:12px; padding:16px; margin-bottom:12px; box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+            <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+                <label style="font-size:13px; color:#666;">選擇CB：</label>
+                <select id="arbitrageCBSelect" onchange="loadArbitrageData(this.value)" 
+                    style="padding:10px 14px; border:1px solid #ddd; border-radius:8px; font-size:14px; min-width:200px; cursor:pointer;">
+                    <option value="">-- 請選擇要追蹤的CB --</option>
+                </select>
+                <button type="button" onclick="loadArbitrageHotList()" 
+                    style="padding:10px 16px; border:1px solid #9c27b0; border-radius:8px; background:#9c27b0; color:white; cursor:pointer; font-weight:600; font-size:13px;">
+                    🔥 轉換熱門榜
+                </button>
+            </div>
+        </div>
+
+        <!-- 套利狀態摘要 -->
+        <div id="arbitrageSummary" style="display:none; background:#fff; border-radius:12px; padding:16px; margin-bottom:12px;">
+            <!-- 動態載入 -->
+        </div>
+
+        <!-- 三線圖：融資/融券/CB餘額 -->
+        <div id="arbitrageChart" style="background:#fff; border-radius:12px; padding:16px; margin-bottom:12px; min-height:300px;">
+            <div style="text-align:center; color:#999; padding:60px 20px;">
+                <div style="font-size:48px; margin-bottom:12px;">💎</div>
+                <div style="font-size:15px; color:#666;">CB套利追蹤系統</div>
+                <div style="font-size:13px; color:#999; margin-top:8px;">
+                    選擇一檔CB，觀察主力套利軌跡<br>
+                    融資餘額↑ → 融券餘額↑ → CB餘額↓ = 套利進行中
+                </div>
+            </div>
+        </div>
+
+        <!-- 轉換熱門榜 (預設隱藏) -->
+        <div id="arbitrageHotList" style="display:none; background:#fff; border-radius:12px; overflow:hidden;">
+            <!-- 動態載入 -->
+        </div>
+
+        <!-- 說明 -->
+        <details style="background:#fff; border-radius:8px; overflow:hidden;">
+            <summary style="padding:12px 16px; cursor:pointer; font-size:13px; color:#666; background:#f5f5f5;">
+                ▶ 📖 套利機制說明（點擊展開）
+            </summary>
+            <div style="padding:16px; font-size:13px; color:#555; line-height:1.8;">
+                <div style="margin-bottom:12px;">
+                    <b>🎯 主力CB套利三階段：</b>
+                </div>
+                <div style="background:#f8f9fa; padding:12px; border-radius:8px; margin-bottom:12px;">
+                    <div style="margin-bottom:8px;"><span style="color:#e91e63;">【階段一：佈局期】</span></div>
+                    <div style="padding-left:12px; font-size:12px;">
+                        融資買進股票 → 融資餘額↑↑ → 產生融券額度 → 融券賣出鎖價差 → 融券餘額↑↑
+                    </div>
+                </div>
+                <div style="background:#f8f9fa; padding:12px; border-radius:8px; margin-bottom:12px;">
+                    <div style="margin-bottom:8px;"><span style="color:#ff9800;">【階段二：套利期】</span></div>
+                    <div style="padding-left:12px; font-size:12px;">
+                        股價上漲 → CB申請轉換 → CB餘額↓↓ → 取得股票
+                    </div>
+                </div>
+                <div style="background:#f8f9fa; padding:12px; border-radius:8px; margin-bottom:12px;">
+                    <div style="margin-bottom:8px;"><span style="color:#4caf50;">【階段三：交割期】</span></div>
+                    <div style="padding-left:12px; font-size:12px;">
+                        股票償還融券 → 融券餘額↓↓ → 完成套利 → 獲取價差利潤
+                    </div>
+                </div>
+                <div style="margin-top:12px; padding:12px; background:#fff3e0; border-radius:8px;">
+                    <b>📊 關鍵指標：</b><br>
+                    <span style="font-size:12px;">
+                    • <b>券資比</b> = 融券餘額 / 融資餘額（越高代表套利越積極）<br>
+                    • <b>CB餘額變化</b> = 轉換速度指標（快速下降=大量套利中）<br>
+                    • <b>CBAS成交</b> = 法人換股動向
+                    </span>
+                </div>
+            </div>
+        </details>
+
+    </div><!-- arbitrageSection結束 -->
+</div><!-- 右側第六區塊結束 -->
 
 </div>
 <div id="evaluationResult" class="evaluation-result"></div>
@@ -18166,9 +18261,9 @@ async function renderConversionChart(cbCode) {
     });
     filteredData = Object.values(monthlyData).sort((a, b) => a.date.localeCompare(b.date));
 
-    // v3.97-zs-br: balance 單位是元，轉換為億元
-    const YI_UNIT = 100000000;
-    const balances = filteredData.map(d => (d.balance || 0) / YI_UNIT).filter(v => v > 0);
+    // v3.97-de: balance 單位是元，轉換為張數（每張面額10萬元）
+    const SHEET_UNIT = 100000; // 1張 = 10萬元
+    const balances = filteredData.map(d => (d.balance || 0) / SHEET_UNIT).filter(v => v > 0);
     if (balances.length === 0) {
         container.innerHTML = `
             <div style="text-align:center; color:#888; padding:40px;">
@@ -18203,11 +18298,11 @@ async function renderConversionChart(cbCode) {
     const chartWidth = width - padding * 2;
     const chartHeight = height - padding * 2;
 
-    // 生成路徑（使用億元單位）
+    // 生成路徑（使用張數單位）
     let pathD = '';
     let validPoints = 0;
     filteredData.forEach((d, i) => {
-        const balance = (d.balance || 0) / YI_UNIT;
+        const balance = (d.balance || 0) / SHEET_UNIT;
         if (balance <= 0) return;
 
         const x = padding + (validPoints / Math.max(filteredData.length - 1, 1)) * chartWidth;
@@ -18220,12 +18315,11 @@ async function renderConversionChart(cbCode) {
         validPoints++;
     });
 
-    // 計算轉換趨勢（v3.97-zs-br: balance 單位是元，需轉換為億）
-    const YI = 100000000; // 1億
+    // 計算轉換趨勢（v3.97-de: balance 單位是元，需轉換為張數）
     const firstBalanceRaw = filteredData[0]?.balance || 0;
     const lastBalanceRaw = filteredData[filteredData.length - 1]?.balance || 0;
-    const firstBalance = firstBalanceRaw / YI;
-    const lastBalance = lastBalanceRaw / YI;
+    const firstBalance = Math.round(firstBalanceRaw / SHEET_UNIT);
+    const lastBalance = Math.round(lastBalanceRaw / SHEET_UNIT);
     const changeAmount = lastBalance - firstBalance;
     const changeRatio = firstBalance > 0 ? ((changeAmount / firstBalance) * 100).toFixed(2) : 0;
     const trendColor = changeAmount <= 0 ? '#2e7d32' : '#d32f2f';
@@ -18246,16 +18340,16 @@ async function renderConversionChart(cbCode) {
         <div style="display:flex; justify-content:space-around; margin-bottom:15px; padding:10px; background:#f5f5f5; border-radius:8px;">
             <div style="text-align:center;">
                 <div style="font-size:12px; color:#888;">期初餘額</div>
-                <div style="font-size:16px; font-weight:bold; color:#1976d2;">${firstBalance.toFixed(2)} 億</div>
+                <div style="font-size:16px; font-weight:bold; color:#1976d2;">${formatNumber(firstBalance)} 張</div>
             </div>
             <div style="text-align:center;">
                 <div style="font-size:12px; color:#888;">期末餘額</div>
-                <div style="font-size:16px; font-weight:bold; color:#e65100;">${lastBalance.toFixed(2)} 億</div>
+                <div style="font-size:16px; font-weight:bold; color:#e65100;">${formatNumber(lastBalance)} 張</div>
             </div>
             <div style="text-align:center;">
                 <div style="font-size:12px; color:#888;">變化</div>
                 <div style="font-size:16px; font-weight:bold; color:${trendColor};">
-                    ${trendIcon} ${Math.abs(changeAmount).toFixed(2)} 億 (${changeRatio}%)
+                    ${trendIcon} ${formatNumber(Math.abs(changeAmount))} 張 (${changeRatio}%)
                 </div>
                 <div style="font-size:11px; color:${trendColor};">${trendText}</div>
             </div>
@@ -18265,7 +18359,7 @@ async function renderConversionChart(cbCode) {
             <rect x="${padding}" y="${padding}" width="${chartWidth}" height="${chartHeight}" fill="#fafafa" stroke="#e0e0e0"/>
             ${[0, 0.25, 0.5, 0.75, 1].map(ratio => {
                 const y = padding + chartHeight * (1 - ratio);
-                const val = (yMin + range * ratio).toFixed(2);
+                const val = formatNumber(Math.round(yMin + range * ratio));
                 return `<line x1="${padding}" y1="${y}" x2="${width - padding}" y2="${y}" stroke="#e0e0e0" stroke-dasharray="3,3"/>
                         <text x="${padding - 5}" y="${y + 4}" text-anchor="end" font-size="11" fill="#888">${val}</text>`;
             }).join('')}
@@ -18278,7 +18372,7 @@ async function renderConversionChart(cbCode) {
             ${lastBalance > 0 ? `<circle cx="${width - padding}" cy="${padding + chartHeight - ((lastBalance - yMin) / range) * chartHeight}" r="5" fill="${trendColor}"/>` : ''}
 
             <!-- Y軸標題 -->
-            <text x="15" y="${height / 2}" text-anchor="middle" font-size="12" fill="#666" transform="rotate(-90, 15, ${height / 2})">餘額(億元)</text>
+            <text x="15" y="${height / 2}" text-anchor="middle" font-size="12" fill="#666" transform="rotate(-90, 15, ${height / 2})">餘額(張)</text>
         </svg>
         <div style="display:flex; justify-content:space-between; font-size:12px; color:#888; margin-top:10px; padding:0 50px;">
             <span>${filteredData[0]?.date || ''}</span>
@@ -18944,6 +19038,45 @@ async function loadHotStockData() {
         const tseDb = new window.hotStockSQL.Database(new Uint8Array(tseBuffer));
         const otcDb = new window.hotStockSQL.Database(new Uint8Array(otcBuffer));
         
+        // 載入融資融券資料（可選）
+        let marginMap = {};
+        try {
+            const marginResponse = await fetch('data/margin_2025.db');
+            if (marginResponse.ok) {
+                const marginBuffer = await marginResponse.arrayBuffer();
+                const marginDb = new window.hotStockSQL.Database(new Uint8Array(marginBuffer));
+                
+                // 取得最新日期的融資融券資料
+                const marginData = marginDb.exec(`
+                    SELECT Code,
+                           Margin_Balance,
+                           Margin_Buy - Margin_Sell - Margin_Cash as Margin_Change,
+                           Short_Balance,
+                           CASE WHEN Margin_Balance > 0 
+                                THEN ROUND(Short_Balance * 100.0 / Margin_Balance, 2) 
+                                ELSE 0 END as Short_Ratio
+                    FROM margin 
+                    WHERE Date = (SELECT MAX(Date) FROM margin)
+                `)[0];
+                
+                if (marginData) {
+                    marginData.values.forEach(row => {
+                        const code = String(row[0]);
+                        marginMap[code] = {
+                            Margin_Balance: row[1] || 0,
+                            Margin_Change: row[2] || 0,
+                            Short_Balance: row[3] || 0,
+                            Short_Ratio: row[4] || 0
+                        };
+                    });
+                    console.log(`融資融券資料載入: ${Object.keys(marginMap).length} 檔`);
+                }
+                marginDb.close();
+            }
+        } catch (e) {
+            console.warn('融資融券資料載入失敗:', e);
+        }
+        
         // 查詢上市資料
         const tseData = tseDb.exec(`
             SELECT Code, Name, Date, Open, High, Low, Close, Volume, Value
@@ -18972,6 +19105,20 @@ async function loadHotStockData() {
             const processed = processStockData(otcData.values, otcData.columns, '上櫃');
             allStocks.push(...processed);
         }
+        
+        // 整合融資融券資料
+        allStocks.forEach(stock => {
+            const marginInfo = marginMap[stock.Code];
+            if (marginInfo) {
+                stock.Margin_Change = marginInfo.Margin_Change;  // 融資增減
+                stock.Short_Balance = marginInfo.Short_Balance;  // 融券餘額
+                stock.Short_Ratio = marginInfo.Short_Ratio;      // 券資比
+            } else {
+                stock.Margin_Change = null;
+                stock.Short_Balance = null;
+                stock.Short_Ratio = null;
+            }
+        });
         
         // 篩選成交值 >= 5000萬
         const hotStocks = allStocks.filter(s => s.Value_M >= 50);
@@ -19219,8 +19366,12 @@ async function renderHotStockTable() {
                         <th style="${thStyle}" onclick="sortHotStockTable('Vol_Ratio')">
                             量比 ${getSortIcon('Vol_Ratio')}
                         </th>
-                        <th style="padding:12px 6px; text-align:center; font-weight:600;">外資</th>
-                        <th style="padding:12px 6px; text-align:center; font-weight:600;">投信</th>
+                        <th style="${thStyle}" onclick="sortHotStockTable('Margin_Change')">
+                            融資增 ${getSortIcon('Margin_Change')}
+                        </th>
+                        <th style="${thStyle}" onclick="sortHotStockTable('Short_Balance')">
+                            融券 ${getSortIcon('Short_Balance')}
+                        </th>
                     </tr>
                 </thead>
                 <tbody>`;
@@ -19249,12 +19400,19 @@ async function renderHotStockTable() {
         // 產業
         const industry = industryMap[stock.Code] || '-';
         
-        // 法人欄位（預留）
-        const foreignDisplay = stock.Foreign !== null ? stock.Foreign.toLocaleString() : '-';
-        const investDisplay = stock.Investment !== null ? stock.Investment.toLocaleString() : '-';
+        // 法人欄位改為融資融券
+        const marginChangeDisplay = stock.Margin_Change !== null ? 
+            (stock.Margin_Change > 0 ? '+' : '') + stock.Margin_Change.toLocaleString() : '-';
+        const shortDisplay = stock.Short_Balance !== null ? 
+            stock.Short_Balance.toLocaleString() : '-';
         
-        // 格式化漲跌幅
-        const fmtChg = (val) => val !== 0 ? `${val >= 0 ? '+' : ''}${val.toFixed(1)}` : '-';
+        // 融資增減顏色
+        let marginStyle = 'color:#888;';
+        if (stock.Margin_Change > 500) {
+            marginStyle = 'color:#c62828; font-weight:600;';  // 大增紅色
+        } else if (stock.Margin_Change < -500) {
+            marginStyle = 'color:#2e7d32; font-weight:600;';  // 大減綠色
+        }
         
         const tdStyle = 'padding:10px 6px; text-align:right; font-size:13px;';
         
@@ -19276,8 +19434,8 @@ async function renderHotStockTable() {
                 <td style="${tdStyle} ${getChangeStyle(stock.Strength)} font-weight:600;">${stock.Strength.toFixed(2)}</td>
                 <td style="${tdStyle} color:#666; font-weight:500;">${(stock.Value_M).toFixed(0)}</td>
                 <td style="${tdStyle} ${volRatioStyle} font-weight:500;">${stock.Vol_Ratio.toFixed(2)}</td>
-                <td style="padding:10px 6px; text-align:center; color:#888; font-size:12px;">${foreignDisplay}</td>
-                <td style="padding:10px 6px; text-align:center; color:#888; font-size:12px;">${investDisplay}</td>
+                <td style="${tdStyle} ${marginStyle}">${marginChangeDisplay}</td>
+                <td style="${tdStyle} color:#666;">${shortDisplay}</td>
             </tr>`;
     });
     
@@ -19287,7 +19445,7 @@ async function renderHotStockTable() {
             </div>
         </div>
         <div style="padding:10px 16px; font-size:12px; color:#666; background:#f5f5f5; border-radius:0 0 8px 8px;">
-            💡 點擊表頭排序 | <span style="color:#c62828;">紅</span>=漲>2% <span style="color:#2e7d32;">綠</span>=跌>2% <span style="color:#e65100;">橘底</span>=量增偏多 <span style="color:#1565c0;">藍底</span>=量增偏空 | 成交值單位：百萬
+            💡 點擊表頭排序 | <span style="color:#c62828;">紅</span>=漲>2% <span style="color:#2e7d32;">綠</span>=跌>2% | 融資增：<span style="color:#c62828;">紅>500</span> <span style="color:#2e7d32;">綠<-500</span> | 成交值：百萬
         </div>`;
     
     container.innerHTML = tableHTML;
@@ -22144,6 +22302,495 @@ function generateCBPriceTable(data) {
     tableHTML += '</tbody></table></div>';
     return tableHTML;
 }
+
+// ==================== v3.97-dc 新增：CB套利追蹤模組 ====================
+// 追蹤CB主力套利軌跡：融資餘額 / 融券餘額 / CB流通餘額
+
+let arbitrageDataCache = {};
+let arbitrageCBList = [];
+
+/**
+ * 初始化CB套利追蹤模組
+ */
+async function initArbitrageModule() {
+    const select = document.getElementById('arbitrageCBSelect');
+    if (!select || arbitrageCBList.length > 0) return;
+    
+    try {
+        // 載入CB餘額資料庫
+        if (!window.arbitrageSQL) {
+            window.arbitrageSQL = await initSqlJs({
+                locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}`
+            });
+        }
+        
+        const response = await fetch('data/cb_balance.db');
+        if (!response.ok) throw new Error('無法載入CB餘額資料庫');
+        
+        const buffer = await response.arrayBuffer();
+        const db = new window.arbitrageSQL.Database(new Uint8Array(buffer));
+        
+        // 取得所有CB清單（取最新日期有資料的CB）
+        const result = db.exec(`
+            SELECT DISTINCT CBCode, CBName, StockCode, StockName, IssueActual, Balance
+            FROM cb_balance 
+            WHERE Date = (SELECT MAX(Date) FROM cb_balance)
+            AND Balance > 0
+            ORDER BY CBName
+        `)[0];
+        
+        if (result) {
+            arbitrageCBList = result.values.map(row => ({
+                cbCode: row[0],
+                cbName: row[1],
+                stockCode: row[2],
+                stockName: row[3],
+                issueActual: row[4],
+                balance: row[5]
+            }));
+            
+            // 填充下拉選單
+            select.innerHTML = '<option value="">-- 請選擇要追蹤的CB --</option>';
+            arbitrageCBList.forEach(cb => {
+                const pct = ((1 - cb.balance / cb.issueActual) * 100).toFixed(0);
+                const balanceShares = Math.round(cb.balance * 10);
+                select.innerHTML += `<option value="${cb.cbCode}">${cb.cbName} (${cb.stockName}) - 餘${balanceShares.toLocaleString()}張 已轉${pct}%</option>`;
+            });
+            
+            console.log(`CB套利模組: 載入 ${arbitrageCBList.length} 檔CB`);
+        }
+        
+        db.close();
+        
+    } catch (error) {
+        console.error('初始化CB套利模組失敗:', error);
+    }
+}
+
+/**
+ * 載入指定CB的套利資料
+ */
+async function loadArbitrageData(cbCode) {
+    if (!cbCode) {
+        document.getElementById('arbitrageSummary').style.display = 'none';
+        document.getElementById('arbitrageHotList').style.display = 'none';
+        document.getElementById('arbitrageChart').innerHTML = `
+            <div style="text-align:center; color:#999; padding:60px 20px;">
+                <div style="font-size:48px; margin-bottom:12px;">💎</div>
+                <div style="font-size:15px; color:#666;">CB套利追蹤系統</div>
+                <div style="font-size:13px; color:#999; margin-top:8px;">
+                    選擇一檔CB，觀察主力套利軌跡
+                </div>
+            </div>`;
+        return;
+    }
+    
+    document.getElementById('arbitrageHotList').style.display = 'none';
+    document.getElementById('arbitrageChart').innerHTML = `
+        <div style="text-align:center; padding:40px;">
+            <div style="font-size:24px;">⏳</div>
+            <div style="color:#666; margin-top:8px;">載入資料中...</div>
+        </div>`;
+    
+    try {
+        // 載入CB餘額歷史
+        const cbBalanceResponse = await fetch('data/cb_balance.db');
+        const cbBuffer = await cbBalanceResponse.arrayBuffer();
+        const cbDb = new window.arbitrageSQL.Database(new Uint8Array(cbBuffer));
+        
+        const cbResult = cbDb.exec(`
+            SELECT Date, CBName, StockCode, StockName, ConvPrice, IssueActual, Balance
+            FROM cb_balance 
+            WHERE CBCode = '${cbCode}'
+            ORDER BY Date
+        `)[0];
+        
+        if (!cbResult || cbResult.values.length === 0) {
+            throw new Error('找不到此CB的資料');
+        }
+        
+        const cbData = cbResult.values.map(row => ({
+            date: row[0],
+            cbName: row[1],
+            stockCode: row[2],
+            stockName: row[3],
+            convPrice: row[4],
+            issueActual: row[5],
+            balance: row[6]
+        }));
+        
+        cbDb.close();
+        
+        // 取得股票代碼
+        const stockCode = cbData[0].stockCode;
+        
+        // 載入融資融券歷史
+        let marginData = [];
+        try {
+            const marginResponse = await fetch('data/margin_2025.db');
+            if (marginResponse.ok) {
+                const marginBuffer = await marginResponse.arrayBuffer();
+                const marginDb = new window.arbitrageSQL.Database(new Uint8Array(marginBuffer));
+                
+                const marginResult = marginDb.exec(`
+                    SELECT Date, 
+                           Margin_Balance,
+                           Short_Balance,
+                           Margin_Buy - Margin_Sell - Margin_Cash as Margin_Change
+                    FROM margin 
+                    WHERE Code = '${stockCode}'
+                    ORDER BY Date
+                `)[0];
+                
+                if (marginResult) {
+                    marginData = marginResult.values.map(row => ({
+                        date: row[0],
+                        marginBalance: row[1],
+                        shortBalance: row[2],
+                        marginChange: row[3]
+                    }));
+                }
+                marginDb.close();
+            }
+        } catch (e) {
+            console.warn('融資融券資料載入失敗:', e);
+        }
+        
+        // 顯示摘要
+        displayArbitrageSummary(cbData, marginData);
+        
+        // 繪製圖表
+        displayArbitrageChart(cbData, marginData);
+        
+    } catch (error) {
+        console.error('載入套利資料失敗:', error);
+        document.getElementById('arbitrageChart').innerHTML = `
+            <div style="text-align:center; color:#c62828; padding:40px;">
+                <div style="font-size:24px;">⚠️</div>
+                <div style="margin-top:8px;">${error.message}</div>
+            </div>`;
+    }
+}
+
+/**
+ * 顯示套利狀態摘要
+ * 單位說明：
+ * - CB面額：每張10萬元
+ * - 換股比例 = 100,000 ÷ 轉換價格
+ * - 約當股票張數 = CB張數 × 換股比例 ÷ 1,000
+ */
+function displayArbitrageSummary(cbData, marginData) {
+    const summary = document.getElementById('arbitrageSummary');
+    const latest = cbData[cbData.length - 1];
+    const first = cbData[0];
+    
+    // 百萬 × 10 = 張數（每張CB面額10萬元）
+    const issueShares = Math.round(latest.issueActual * 10);
+    const balanceShares = Math.round(latest.balance * 10);
+    const convertedShares = issueShares - balanceShares;
+    const convertedPct = ((1 - latest.balance / latest.issueActual) * 100).toFixed(1);
+    
+    // 換股比例 & 約當股票張數
+    const convRatio = latest.convPrice > 0 ? (100000 / latest.convPrice) : 0;
+    const equivStockShares = balanceShares * convRatio / 1000;  // 剩餘CB約當股票張數
+    const convertedStockShares = convertedShares * convRatio / 1000;  // 已轉換約當股票張數
+    
+    // 計算階段
+    let stage = '觀望期';
+    let stageColor = '#666';
+    let stageIcon = '⏸️';
+    
+    if (convertedPct > 80) {
+        stage = '套利完成';
+        stageColor = '#4caf50';
+        stageIcon = '✅';
+    } else if (convertedPct > 50) {
+        stage = '大量轉換中';
+        stageColor = '#ff9800';
+        stageIcon = '🔥';
+    } else if (convertedPct > 20) {
+        stage = '套利進行中';
+        stageColor = '#e91e63';
+        stageIcon = '⚡';
+    } else if (convertedPct > 5) {
+        stage = '小量轉換';
+        stageColor = '#2196f3';
+        stageIcon = '📈';
+    }
+    
+    // 融資融券最新資料
+    let marginInfo = '';
+    if (marginData.length > 0) {
+        const latestMargin = marginData[marginData.length - 1];
+        const shortRatio = latestMargin.marginBalance > 0 ? 
+            (latestMargin.shortBalance / latestMargin.marginBalance * 100).toFixed(1) : 0;
+        marginInfo = `
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-top:12px; padding-top:12px; border-top:1px solid #eee;">
+                <div style="text-align:center;">
+                    <div style="font-size:11px; color:#888;">融資餘額</div>
+                    <div style="font-size:16px; font-weight:600; color:#c62828;">${latestMargin.marginBalance?.toLocaleString() || '-'}</div>
+                    <div style="font-size:10px; color:#999;">張</div>
+                </div>
+                <div style="text-align:center;">
+                    <div style="font-size:11px; color:#888;">融券餘額</div>
+                    <div style="font-size:16px; font-weight:600; color:#2e7d32;">${latestMargin.shortBalance?.toLocaleString() || '-'}</div>
+                    <div style="font-size:10px; color:#999;">張</div>
+                </div>
+                <div style="text-align:center;">
+                    <div style="font-size:11px; color:#888;">券資比</div>
+                    <div style="font-size:16px; font-weight:600; color:#9c27b0;">${shortRatio}%</div>
+                </div>
+            </div>`;
+    }
+    
+    summary.style.display = 'block';
+    summary.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <div>
+                <div style="font-size:18px; font-weight:700; color:#333;">${latest.cbName}</div>
+                <div style="font-size:13px; color:#888;">${latest.stockCode} ${latest.stockName} | 轉換價 ${latest.convPrice} 元 | 換股比例 ${convRatio.toFixed(2)}</div>
+            </div>
+            <div style="text-align:right;">
+                <div style="font-size:14px; color:${stageColor}; font-weight:600;">${stageIcon} ${stage}</div>
+            </div>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(5, 1fr); gap:10px;">
+            <div style="text-align:center; padding:12px 8px; background:#f8f9fa; border-radius:8px;">
+                <div style="font-size:11px; color:#888;">發行張數</div>
+                <div style="font-size:16px; font-weight:700; color:#333;">${issueShares.toLocaleString()}</div>
+                <div style="font-size:10px; color:#999;">張</div>
+            </div>
+            <div style="text-align:center; padding:12px 8px; background:#f8f9fa; border-radius:8px;">
+                <div style="font-size:11px; color:#888;">目前餘額</div>
+                <div style="font-size:16px; font-weight:700; color:#1976d2;">${balanceShares.toLocaleString()}</div>
+                <div style="font-size:10px; color:#999;">張</div>
+            </div>
+            <div style="text-align:center; padding:12px 8px; background:#f8f9fa; border-radius:8px;">
+                <div style="font-size:11px; color:#888;">已轉換</div>
+                <div style="font-size:16px; font-weight:700; color:#e91e63;">${convertedShares.toLocaleString()}</div>
+                <div style="font-size:10px; color:#999;">張</div>
+            </div>
+            <div style="text-align:center; padding:12px 8px; background:#fff3e0; border-radius:8px;">
+                <div style="font-size:11px; color:#888;">轉換率</div>
+                <div style="font-size:16px; font-weight:700; color:#ff9800;">${convertedPct}%</div>
+            </div>
+            <div style="text-align:center; padding:12px 8px; background:#fce4ec; border-radius:8px;">
+                <div style="font-size:11px; color:#888;">約當股票</div>
+                <div style="font-size:16px; font-weight:700; color:#c62828;">${equivStockShares.toFixed(0)}</div>
+                <div style="font-size:10px; color:#999;">張(潛在壓力)</div>
+            </div>
+        </div>
+        ${marginInfo}
+    `;
+}
+
+/**
+ * 繪製套利追蹤圖表
+ */
+function displayArbitrageChart(cbData, marginData) {
+    const container = document.getElementById('arbitrageChart');
+    
+    // 準備資料
+    const labels = cbData.map(d => {
+        const dateStr = String(d.date);
+        return dateStr.slice(4, 6) + '/' + dateStr.slice(6, 8);
+    });
+    
+    // CB餘額轉換為張數（百萬 × 10）
+    const cbBalanceData = cbData.map(d => Math.round(d.balance * 10));
+    
+    // 合併融資融券資料（依日期對應）
+    const marginMap = {};
+    marginData.forEach(m => { marginMap[m.date] = m; });
+    
+    const marginBalanceData = cbData.map(d => marginMap[d.date]?.marginBalance || null);
+    const shortBalanceData = cbData.map(d => marginMap[d.date]?.shortBalance || null);
+    
+    container.innerHTML = `<canvas id="arbitrageChartCanvas" style="width:100%; height:280px;"></canvas>`;
+    
+    const ctx = document.getElementById('arbitrageChartCanvas').getContext('2d');
+    
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'CB餘額(張)',
+                    data: cbBalanceData,
+                    borderColor: '#9c27b0',
+                    backgroundColor: 'rgba(156, 39, 176, 0.1)',
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.3,
+                    yAxisID: 'y'
+                },
+                {
+                    label: '融資餘額(張)',
+                    data: marginBalanceData,
+                    borderColor: '#c62828',
+                    borderWidth: 2,
+                    borderDash: [5, 5],
+                    fill: false,
+                    tension: 0.3,
+                    yAxisID: 'y1'
+                },
+                {
+                    label: '融券餘額(張)',
+                    data: shortBalanceData,
+                    borderColor: '#2e7d32',
+                    borderWidth: 2,
+                    borderDash: [3, 3],
+                    fill: false,
+                    tension: 0.3,
+                    yAxisID: 'y1'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: { font: { size: 11 } }
+                },
+                title: {
+                    display: true,
+                    text: `${cbData[0].cbName} 套利追蹤`,
+                    font: { size: 14, weight: 'bold' }
+                }
+            },
+            scales: {
+                x: {
+                    ticks: { font: { size: 10 }, maxRotation: 45 }
+                },
+                y: {
+                    type: 'linear',
+                    position: 'left',
+                    title: { display: true, text: 'CB餘額(張)', font: { size: 11 } },
+                    ticks: { font: { size: 10 } }
+                },
+                y1: {
+                    type: 'linear',
+                    position: 'right',
+                    title: { display: true, text: '融資/融券(張)', font: { size: 11 } },
+                    ticks: { font: { size: 10 } },
+                    grid: { drawOnChartArea: false }
+                }
+            }
+        }
+    });
+}
+
+/**
+ * 載入轉換熱門榜
+ */
+async function loadArbitrageHotList() {
+    const container = document.getElementById('arbitrageHotList');
+    container.style.display = 'block';
+    container.innerHTML = `
+        <div style="text-align:center; padding:40px;">
+            <div style="font-size:24px;">⏳</div>
+            <div style="color:#666; margin-top:8px;">載入熱門榜...</div>
+        </div>`;
+    
+    document.getElementById('arbitrageSummary').style.display = 'none';
+    document.getElementById('arbitrageChart').innerHTML = '';
+    
+    try {
+        const response = await fetch('data/cb_balance.db');
+        const buffer = await response.arrayBuffer();
+        const db = new window.arbitrageSQL.Database(new Uint8Array(buffer));
+        
+        // 計算近期轉換最多的CB
+        const result = db.exec(`
+            WITH recent AS (
+                SELECT CBCode, CBName, StockCode, StockName, IssueActual, Balance, Date,
+                       ROW_NUMBER() OVER (PARTITION BY CBCode ORDER BY Date ASC) as rn_first,
+                       ROW_NUMBER() OVER (PARTITION BY CBCode ORDER BY Date DESC) as rn_last
+                FROM cb_balance
+                WHERE Date >= 20250901
+            )
+            SELECT 
+                a.CBCode, a.CBName, a.StockCode, a.StockName, a.IssueActual,
+                a.Balance as BalanceStart,
+                b.Balance as BalanceEnd
+            FROM recent a
+            JOIN recent b ON a.CBCode = b.CBCode
+            WHERE a.rn_first = 1 AND b.rn_last = 1
+            AND a.Balance >= 100
+            ORDER BY (b.Balance - a.Balance) ASC
+            LIMIT 20
+        `)[0];
+        
+        db.close();
+        
+        if (!result) {
+            container.innerHTML = '<div style="padding:20px; text-align:center; color:#888;">無資料</div>';
+            return;
+        }
+        
+        let html = `
+            <div style="padding:12px 16px; background:#9c27b0; color:white; font-weight:600;">
+                🔥 轉換熱門榜（2025/09以來）
+            </div>
+            <table style="width:100%; border-collapse:collapse; font-size:13px;">
+                <thead>
+                    <tr style="background:#f5f5f5;">
+                        <th style="padding:10px; text-align:left;">#</th>
+                        <th style="padding:10px; text-align:left;">CB名稱</th>
+                        <th style="padding:10px; text-align:left;">股票</th>
+                        <th style="padding:10px; text-align:right;">發行</th>
+                        <th style="padding:10px; text-align:right;">期初</th>
+                        <th style="padding:10px; text-align:right;">目前</th>
+                        <th style="padding:10px; text-align:right;">已轉換</th>
+                        <th style="padding:10px; text-align:right;">轉換率</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+        
+        result.values.forEach((row, idx) => {
+            // 轉換為張數（百萬 × 10）
+            const issueShares = Math.round(row[4] * 10);
+            const startShares = Math.round(row[5] * 10);
+            const endShares = Math.round(row[6] * 10);
+            const convertedShares = startShares - endShares;
+            const changePct = ((startShares - endShares) / startShares * 100).toFixed(1);
+            const bgColor = idx % 2 === 0 ? '#fff' : '#fafafa';
+            
+            html += `
+                <tr style="background:${bgColor}; cursor:pointer;" onclick="document.getElementById('arbitrageCBSelect').value='${row[0]}'; loadArbitrageData('${row[0]}');">
+                    <td style="padding:10px; font-weight:600; color:#888;">${idx + 1}</td>
+                    <td style="padding:10px; font-weight:600;">${row[1]}</td>
+                    <td style="padding:10px; color:#666;">${row[2]} ${row[3]}</td>
+                    <td style="padding:10px; text-align:right;">${issueShares.toLocaleString()}</td>
+                    <td style="padding:10px; text-align:right;">${startShares.toLocaleString()}</td>
+                    <td style="padding:10px; text-align:right; color:#1976d2; font-weight:600;">${endShares.toLocaleString()}</td>
+                    <td style="padding:10px; text-align:right; color:#c62828;">${convertedShares.toLocaleString()}</td>
+                    <td style="padding:10px; text-align:right; color:#ff9800; font-weight:600;">${changePct}%</td>
+                </tr>`;
+        });
+        
+        html += '</tbody></table>';
+        container.innerHTML = html;
+        
+    } catch (error) {
+        console.error('載入熱門榜失敗:', error);
+        container.innerHTML = `<div style="padding:20px; text-align:center; color:#c62828;">載入失敗: ${error.message}</div>`;
+    }
+}
+
+// 監聽第六區塊展開事件
+document.addEventListener('click', function(e) {
+    if (e.target.closest('.section-arbitrage .right-section-header')) {
+        setTimeout(initArbitrageModule, 100);
+    }
+});
 
 // 系統啟動
 window.addEventListener('DOMContentLoaded', function() {

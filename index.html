@@ -1994,7 +1994,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
             </div>
         </div>
 
-        <!-- v3.97-cy 統一輸出：綜合評估結果 -->
+        <!-- v3.97-cz 統一輸出：綜合評估結果 -->
         <div id="step1Result" style="background:linear-gradient(135deg, #1565c0 0%, #0d47a1 100%); color:white; padding:16px; border-radius:12px; margin-bottom:12px;">
             <div style="font-size:12px; opacity:0.9; margin-bottom:10px; text-align:center;">
                 🎯 AI 綜合評估建議
@@ -9355,7 +9355,7 @@ function displayResult(r) {
         `;
     }
 
-    // ========== Step 1: 基礎數據分析（v3.97-cy 統一綜合評估） ==========
+    // ========== Step 1: 基礎數據分析（v3.97-cz 統一綜合評估） ==========
     const stockPrice = r.inputData.stockPrice || 0;
     const convPrice = r.inputData.actualConversionPrice || 0;
     const theoPrice = convPrice > 0 ? (stockPrice / convPrice * 100) : 0;
@@ -9383,7 +9383,7 @@ function displayResult(r) {
     // 標準差
     const recentStdDev = priceMethod.stdDev || 2;
     
-    // v3.97-cy 綜合溢價率 = 七維度加權×60% + 近期氛圍×40%
+    // v3.97-cz 綜合溢價率 = 七維度加權×60% + 近期氛圍×40%
     const DIM_WEIGHT = 0.6;
     const RECENT_WEIGHT = 0.4;
     const combinedLowPremium = dimLowPremium * DIM_WEIGHT + recentLowPremium * RECENT_WEIGHT;
@@ -11333,7 +11333,7 @@ function calcMarketAtmosphere(n = 5, guarantee = null) {
 
     if (sortedData.length === 0) return null;
 
-    // v3.97-cy 重大更新：整合最佳涵蓋率公式（83.2%涵蓋率）
+    // v3.97-cz 重大更新：整合最佳涵蓋率公式（83.2%涵蓋率）
     // 最佳參數：前3檔+前6檔，權重50:50，σ×2動態區間，倍數係數0.3
     const recent3 = sortedData.slice(0, Math.min(3, sortedData.length));
     const recent6 = sortedData.slice(0, Math.min(6, sortedData.length));
@@ -11354,7 +11354,7 @@ function calcMarketAtmosphere(n = 5, guarantee = null) {
         return Math.sqrt(variance);
     }
 
-    // === v3.97-cy 修正：得標價法改為「理論價 + 市場氛圍溢價」===
+    // === v3.97-cz 修正：得標價法改為「理論價 + 市場氛圍溢價」===
     // 核心邏輯：預測價 = 理論價 × (1 + 加權溢價率)
     // 溢價率用近期3/6檔的實際拍出溢價率加權計算
     
@@ -11462,7 +11462,7 @@ function calcMarketAtmosphere(n = 5, guarantee = null) {
             recent6: { minPremium: minPrem6, avgPremium: avgPrem6, multiple: mult6, count: recent6.length },
             recent9: { minPremium: minPrem9, avgPremium: avgPrem9, multiple: mult9, count: recent9.length }
         },
-        // v3.97-cy 新增：最佳涵蓋率公式結果（得標價法）
+        // v3.97-cz 新增：最佳涵蓋率公式結果（得標價法）
         priceMethod: {
             weightedMinPrice: weightedMinPrice,
             weightedAvgPrice: weightedAvgPrice,
@@ -14275,77 +14275,84 @@ function updateLiveAIPrediction(theoPrice, issueSize, guarantee, broker, industr
     // 查表取得預期得標價（這是核心預測）
     const priceExpect = getExpectedPriceByMult(multResult.estimatedMult);
 
-    // ===== 智能判別：選擇計算方法 =====
-    // v3.75 重新設計：三種策略基於「最低得標~平均得標」區間
-    // 保守型 = 預期最低得標（門檻價，有機會得標）
-    // 平衡型 = (最低+平均)/2（最佳性價比）
-    // 積極型 = 預期平均得標（穩定得標）
+    // ===== v3.97-cz 重新設計：基於投標倍數對應溢價率 + 近期氛圍 =====
+    // 核心邏輯：
+    // 1. 投標倍數 → 對應歷史溢價率區間
+    // 2. 近期氛圍 → 調整溢價率
+    // 3. 建議價 = 理論價 × (1 + 綜合溢價率)
 
     let aggressivePrice, balancedPrice, conservativePrice;
     let aggressivePremium, balancedPremium, conservativePremium;
     let calcMethod = '';
     let methodNote = '';
 
-    // 核心數據：從投標倍數查表取得合理區間
-    const expectedMinBid = priceExpect.minPrice;  // 預期最低得標（保守基準）
-    const expectedAvgBid = priceExpect.avgPrice;  // 預期平均得標（積極基準）
-    const priceGap = priceExpect.gap;             // 差距（約1.5-2元）
+    // 核心數據：從投標倍數查表取得合理區間（用於顯示參考）
+    const expectedMinBid = priceExpect.minPrice;
+    const expectedAvgBid = priceExpect.avgPrice;
+    const priceGap = priceExpect.gap;
 
-    // v3.81 修正：智能處理不同理論價情況
-    // 核心原則：建議出價 >= max(底標, 理論價)，且三種策略要有合理差距
-    const minBidFloor = Math.max(floorPrice, theoPrice);
-
-    // 三種策略定義
-    if (expectedMinBid >= theoPrice) {
-        // 正常情況：查表價格 >= 理論價，直接使用查表結果
-        conservativePrice = Math.max(expectedMinBid, floorPrice);
-        aggressivePrice = Math.max(expectedAvgBid, floorPrice);
-        balancedPrice = (conservativePrice + aggressivePrice) / 2;
-
-        calcMethod = '查表法';
-        methodNote = `投標倍數${multResult.estimatedMult.toFixed(2)}x對應歷史區間`;
+    // === Step 1: 投標倍數 → 對應溢價率 ===
+    // 建立投標倍數與溢價率的對照表（基於歷史統計）
+    const estMult = multResult.estimatedMult;
+    let baseLowPremium, baseAvgPremium;
+    
+    if (estMult >= 4.0) {
+        // 非常熱絡：溢價率 8~12%
+        baseLowPremium = 8;
+        baseAvgPremium = 12;
+    } else if (estMult >= 3.5) {
+        // 熱絡：溢價率 6~10%
+        baseLowPremium = 6;
+        baseAvgPremium = 10;
+    } else if (estMult >= 3.0) {
+        // 偏熱：溢價率 5~8%
+        baseLowPremium = 5;
+        baseAvgPremium = 8;
+    } else if (estMult >= 2.5) {
+        // 普通：溢價率 4~6%
+        baseLowPremium = 4;
+        baseAvgPremium = 6;
+    } else if (estMult >= 2.0) {
+        // 偏冷：溢價率 2~4%
+        baseLowPremium = 2;
+        baseAvgPremium = 4;
     } else {
-        // 高理論價情況：查表價格 < 理論價
-        // v3.81 優化：回測發現100-110元區間得標率只有58.9%，需要更積極
-
-        // 根據理論價區間調整縮減係數
-        let scaleFactor = 0.5;  // 基礎縮減係數
-        let extraPremium = 0;   // 額外溢價補償
-
-        if (theoPrice >= 100 && theoPrice < 110) {
-            // 100-110元區間：回測得標率最低，需要更積極
-            scaleFactor = 0.7;  // 提高縮減係數
-            extraPremium = 1.5; // 額外+1.5元
-        } else if (theoPrice >= 110 && theoPrice < 115) {
-            scaleFactor = 0.6;
-            extraPremium = 1.0;
-        } else if (theoPrice >= 115) {
-            scaleFactor = 0.5;  // 超高理論價維持原邏輯
-        }
-
-        const histMinPremium = ((expectedMinBid / 100) - 1) * 100 * scaleFactor;
-        const histAvgPremium = ((expectedAvgBid / 100) - 1) * 100 * scaleFactor;
-
-        // 確保區間差距至少是 priceGap * 0.8
-        const minSpread = priceGap * 0.8;
-
-        conservativePrice = Math.max(theoPrice * (1 + histMinPremium / 100) + extraPremium, theoPrice, floorPrice);
-        aggressivePrice = Math.max(
-            theoPrice * (1 + histAvgPremium / 100) + extraPremium,
-            conservativePrice + minSpread,
-            floorPrice
-        );
-        balancedPrice = (conservativePrice + aggressivePrice) / 2;
-
-        calcMethod = '溢價率法';
-        methodNote = `理論價${theoPrice.toFixed(1)}元較高，套用優化溢價率`;
+        // 冷清：溢價率 0~2%
+        baseLowPremium = 0;
+        baseAvgPremium = 2;
     }
 
-    // 計算溢價率（相對於底標或理論價）
-    const basePrice = Math.max(theoPrice, floorPrice);
-    conservativePremium = ((conservativePrice / basePrice) - 1) * 100;
-    balancedPremium = ((balancedPrice / basePrice) - 1) * 100;
-    aggressivePremium = ((aggressivePrice / basePrice) - 1) * 100;
+    // === Step 2: 近期氛圍調整 ===
+    // 從 momentumInfo 取得近期氛圍調整
+    let atmosphereAdj = 0;
+    if (multResult.momentumInfo) {
+        // momentumInfo.adjustment 是倍數調整，轉換為溢價率調整
+        // 每多 0.1 倍 → 溢價率 +0.5%
+        atmosphereAdj = multResult.momentumInfo.adjustment * 5;
+    }
+
+    // === Step 3: 計算綜合溢價率 ===
+    const finalLowPremium = baseLowPremium + atmosphereAdj;
+    const finalAvgPremium = baseAvgPremium + atmosphereAdj;
+    const finalMidPremium = (finalLowPremium + finalAvgPremium) / 2;
+
+    // === Step 4: 計算三策略價格 ===
+    const minBidFloor = Math.max(floorPrice, theoPrice);
+    
+    conservativePrice = Math.max(theoPrice * (1 + finalLowPremium / 100), minBidFloor);
+    balancedPrice = Math.max(theoPrice * (1 + finalMidPremium / 100), minBidFloor);
+    aggressivePrice = Math.max(theoPrice * (1 + finalAvgPremium / 100), minBidFloor);
+
+    // 計算溢價率（相對於理論價）
+    conservativePremium = finalLowPremium;
+    balancedPremium = finalMidPremium;
+    aggressivePremium = finalAvgPremium;
+
+    calcMethod = '倍數溢價法';
+    methodNote = `${estMult.toFixed(2)}倍→溢價${finalLowPremium.toFixed(1)}~${finalAvgPremium.toFixed(1)}%`;
+    if (atmosphereAdj !== 0) {
+        methodNote += `（氛圍${atmosphereAdj >= 0 ? '+' : ''}${atmosphereAdj.toFixed(1)}%）`;
+    }
 
     // v3.75 保留排序確保順序正確（保守 < 平衡 < 積極）
     const priceArray = [

@@ -2065,24 +2065,24 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
             </div>
         </div>
 
-        <!-- 得標均價法 - 有加權 (v3.97-cu 最佳涵蓋率公式) -->
+        <!-- 得標均價法 - 有加權 (v3.97-cv 理論價+加權溢價率) -->
         <div id="step1PriceWeight" class="step1-panel" style="display:none;">
             <div style="background:linear-gradient(135deg, #c62828 0%, #b71c1c 100%); color:white; padding:12px; border-radius:10px; margin-bottom:10px;">
                 <div style="font-size:11px; opacity:0.9; margin-bottom:8px; text-align:center;">
                     📊 得標均價法（有加權）
-                    <span style="background:rgba(255,255,255,0.3); padding:1px 6px; border-radius:8px; font-size:9px; margin-left:4px;">83%涵蓋率</span>
+                    <span style="background:rgba(255,255,255,0.3); padding:1px 6px; border-radius:8px; font-size:9px; margin-left:4px;">理論價+溢價</span>
                 </div>
-                <!-- v3.97-cu: 顯示加權計算細節 -->
+                <!-- v3.97-cv: 顯示溢價率計算細節 -->
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
                     <div style="background:rgba(255,255,255,0.15); padding:6px; border-radius:6px; text-align:center;">
-                        <div style="font-size:9px; opacity:0.8;">加權平均得標價</div>
+                        <div style="font-size:9px; opacity:0.8;">加權溢價率</div>
                         <div style="font-size:14px; font-weight:bold;" id="step1PriceWeightAvg">--</div>
                         <div style="font-size:8px; opacity:0.7;">(前3檔50%+前6檔50%)</div>
                     </div>
                     <div style="background:rgba(255,255,255,0.15); padding:6px; border-radius:6px; text-align:center;">
                         <div style="font-size:9px; opacity:0.8;">倍數調整</div>
                         <div style="font-size:14px; font-weight:bold;" id="step1PriceWeightMultAdj">--</div>
-                        <div style="font-size:8px; opacity:0.7;">(倍數-2.5)×0.3</div>
+                        <div style="font-size:8px; opacity:0.7;">(倍數-2.5)×0.5%</div>
                     </div>
                 </div>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
@@ -2092,12 +2092,13 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
                     </div>
                     <div style="text-align:center;">
                         <div style="font-size:9px; opacity:0.8;">動態區間 (σ×2)</div>
-                        <div style="font-size:13px; font-weight:bold;" id="step1PriceWeightMargin">±--元</div>
+                        <div style="font-size:13px; font-weight:bold;" id="step1PriceWeightMargin">±--%</div>
                     </div>
                 </div>
                 <div style="text-align:center; margin-bottom:6px;">
                     <div style="font-size:10px; opacity:0.8;">預測得標價 <span id="step1PriceWeightAdj" style="background:rgba(255,255,255,0.3); padding:1px 6px; border-radius:4px; font-size:9px;"></span></div>
                     <div style="font-size:18px; font-weight:bold;" id="step1PriceWeightRate">--</div>
+                    <div style="font-size:9px; opacity:0.7;">= 理論價 × (1 + 預測溢價率)</div>
                 </div>
                 <div style="text-align:center; background:rgba(255,255,255,0.2); padding:8px; border-radius:6px;">
                     <div style="font-size:10px; opacity:0.8;">建議區間（動態σ）</div>
@@ -9464,22 +9465,22 @@ function displayResult(r) {
     document.getElementById('step1PriceNoWeightRange').textContent = 
         (priceNoWeightLow > 0) ? `${priceNoWeightLow.toFixed(2)}~${priceNoWeightHigh.toFixed(2)}元` : '--';
 
-    // 4. 得標均價法 - 有加權 (v3.97-cu 最佳涵蓋率公式)
-    // 從 calcMarketAtmosphere 取得 priceMethod 數據
+    // 4. 得標均價法 - 有加權 (v3.97-cv 修正：理論價 + 加權溢價率)
+    // 從 calcMarketAtmosphere 取得 priceMethod 數據（現為溢價率）
     const atmosphere = calcMarketAtmosphere(6, r.inputData?.guarantee || null);
     const priceMethod = atmosphere?.priceMethod || {};
     
-    // v3.97-cu 最佳參數：前3檔+前6檔 50:50，倍數係數0.3，σ×2動態區間
-    const weightedMinPriceNew = priceMethod.weightedMinPrice || weightedLowBid;
-    const predictedPrice = priceMethod.predictedMinPrice || weightedMinPriceNew;
-    const dynamicMargin = priceMethod.dynamicMargin || 3;
-    const multAdjustment = priceMethod.multAdjustment || 0;
+    // v3.97-cv：priceMethod 現在存的是溢價率(%)
+    const weightedMinPrem = priceMethod.weightedMinPrice || 0;  // 加權最低溢價率(%)
+    const multPremAdj = priceMethod.multAdjustment || 0;  // 倍數調整(%)
+    const predictedPrem = priceMethod.predictedMinPrice || weightedMinPrem;  // 預測溢價率(%)
+    const dynamicPremMargin = priceMethod.dynamicMargin || 2;  // 動態區間(%)
     const weightedMult = priceMethod.weightedMultiple || 0;
-    const stdDev = priceMethod.stdDev || 0;
     
-    // 計算建議區間（預測價 ± 動態margin）
-    const priceWeightLow = predictedPrice - dynamicMargin;
-    const priceWeightHigh = predictedPrice + dynamicMargin;
+    // 用理論價計算實際得標價
+    const predictedPrice = theoPrice * (1 + predictedPrem / 100);
+    const priceWeightLow = theoPrice * (1 + (predictedPrem - dynamicPremMargin) / 100);
+    const priceWeightHigh = theoPrice * (1 + (predictedPrem + dynamicPremMargin) / 100);
     
     // 更新 UI 元素
     document.getElementById('step1PriceWeightRate').textContent = 
@@ -9487,24 +9488,24 @@ function displayResult(r) {
     document.getElementById('step1PriceWeightRange').textContent = 
         (priceWeightLow > 0) ? `${priceWeightLow.toFixed(2)}~${priceWeightHigh.toFixed(2)}元` : '--';
     
-    // v3.97-cu 新增：顯示加權計算細節
+    // v3.97-cv 修正：顯示溢價率計算細節
     const step1PriceWeightAvg = document.getElementById('step1PriceWeightAvg');
     const step1PriceWeightMultAdj = document.getElementById('step1PriceWeightMultAdj');
     const step1PriceWeightMult = document.getElementById('step1PriceWeightMult');
     const step1PriceWeightMargin = document.getElementById('step1PriceWeightMargin');
     
     if (step1PriceWeightAvg) {
-        step1PriceWeightAvg.textContent = weightedMinPriceNew > 0 ? `${weightedMinPriceNew.toFixed(2)}元` : '--';
+        step1PriceWeightAvg.textContent = weightedMinPrem > 0 ? `${weightedMinPrem.toFixed(2)}%` : '--';
     }
     if (step1PriceWeightMultAdj) {
-        const sign = multAdjustment >= 0 ? '+' : '';
-        step1PriceWeightMultAdj.textContent = `${sign}${multAdjustment.toFixed(2)}元`;
+        const sign = multPremAdj >= 0 ? '+' : '';
+        step1PriceWeightMultAdj.textContent = `${sign}${multPremAdj.toFixed(2)}%`;
     }
     if (step1PriceWeightMult) {
         step1PriceWeightMult.textContent = weightedMult > 0 ? `${weightedMult.toFixed(2)}x` : '--';
     }
     if (step1PriceWeightMargin) {
-        step1PriceWeightMargin.textContent = dynamicMargin > 0 ? `±${dynamicMargin.toFixed(1)}元` : '--';
+        step1PriceWeightMargin.textContent = dynamicPremMargin > 0 ? `±${dynamicPremMargin.toFixed(1)}%` : '--';
     }
 
     // v3.97-as-cs: 顯示調整係數資訊
@@ -11432,7 +11433,7 @@ function calcMarketAtmosphere(n = 5, guarantee = null) {
 
     if (sortedData.length === 0) return null;
 
-    // v3.97-cu 重大更新：整合最佳涵蓋率公式（83.2%涵蓋率）
+    // v3.97-cv 重大更新：整合最佳涵蓋率公式（83.2%涵蓋率）
     // 最佳參數：前3檔+前6檔，權重50:50，σ×2動態區間，倍數係數0.3
     const recent3 = sortedData.slice(0, Math.min(3, sortedData.length));
     const recent6 = sortedData.slice(0, Math.min(6, sortedData.length));
@@ -11453,45 +11454,53 @@ function calcMarketAtmosphere(n = 5, guarantee = null) {
         return Math.sqrt(variance);
     }
 
-    // === v3.97-cu 最佳涵蓋率公式 ===
-    // 權重：50:50（前3檔和前6檔各半）
-    const W1 = 0.5, W2 = 0.5;
+    // === v3.97-cv 修正：得標價法改為「理論價 + 市場氛圍溢價」===
+    // 核心邏輯：預測價 = 理論價 × (1 + 加權溢價率)
+    // 溢價率用近期3/6檔的實際拍出溢價率加權計算
     
-    // 最低得標價加權平均
-    const minPrice3 = calcAvg(recent3, 'minBidPrice');
-    const minPrice6 = calcAvg(recent6, 'minBidPrice');
-    const weightedMinPrice = minPrice3 * W1 + minPrice6 * W2;
+    const W1 = 0.5, W2 = 0.5;  // 權重：50:50
     
-    // 平均得標價加權平均
-    const avgPrice3 = calcAvg(recent3, 'avgBidPrice');
-    const avgPrice6 = calcAvg(recent6, 'avgBidPrice');
-    const weightedAvgPrice = avgPrice3 * W1 + avgPrice6 * W2;
+    // 計算近期溢價率（這才是市場氛圍的體現）
+    const minPrem3_new = calcAvg(recent3, 'minPremium');
+    const minPrem6_new = calcAvg(recent6, 'minPremium');
+    const weightedMinPremRate = (minPrem3_new * W1 + minPrem6_new * W2) / 100;  // 轉為小數
     
-    // 投標倍數加權平均
+    const avgPrem3_new = calcAvg(recent3, 'avgPremium');
+    const avgPrem6_new = calcAvg(recent6, 'avgPremium');
+    const weightedAvgPremRate = (avgPrem3_new * W1 + avgPrem6_new * W2) / 100;  // 轉為小數
+    
+    // 投標倍數加權平均（用於調整溢價率）
     const mult3 = calcAvg(recent3, 'bidMultiple');
     const mult6 = calcAvg(recent6, 'bidMultiple');
     const weightedMultiple = mult3 * W1 + mult6 * W2;
     
-    // 投標倍數調整（基準2.5倍，倍數係數0.3）
+    // 投標倍數對溢價率的調整（基準2.5倍，每多1倍加0.5%溢價）
     const BASE_MULT = 2.5;
-    const MULT_FACTOR = 0.3;
-    const multAdjustment = (weightedMultiple - BASE_MULT) * MULT_FACTOR;
+    const PREM_PER_MULT = 0.005;  // 每多1倍加0.5%
+    const multPremAdj = (weightedMultiple - BASE_MULT) * PREM_PER_MULT;
     
-    // 預測得標價 = 加權平均 + 倍數調整
-    const predictedMinPrice = weightedMinPrice + multAdjustment;
-    const predictedAvgPrice = weightedAvgPrice + multAdjustment;
+    // 最終加權溢價率 = 歷史溢價率 + 倍數調整
+    const finalMinPremRate = weightedMinPremRate + multPremAdj;
+    const finalAvgPremRate = weightedAvgPremRate + multPremAdj;
     
-    // 標準差動態區間（σ×2，限制3~8元）
+    // 標準差（用溢價率的標準差）
+    const premStdDev = calcStdDev(recent6, 'minPremium') / 100;  // 轉為小數
     const STD_MULT = 2.0;
-    const MIN_MARGIN = 3.0;
-    const MAX_MARGIN = 8.0;
-    const stdDev = calcStdDev(recent6, 'minBidPrice');
-    let dynamicMargin = stdDev * STD_MULT;
-    dynamicMargin = Math.max(MIN_MARGIN, Math.min(MAX_MARGIN, dynamicMargin));
+    const MIN_PREM_MARGIN = 0.01;  // 最小1%
+    const MAX_PREM_MARGIN = 0.04;  // 最大4%
+    let dynamicPremMargin = premStdDev * STD_MULT;
+    dynamicPremMargin = Math.max(MIN_PREM_MARGIN, Math.min(MAX_PREM_MARGIN, dynamicPremMargin));
     
-    // 建議投標區間
-    const suggestedPriceMin = predictedMinPrice - dynamicMargin;
-    const suggestedPriceMax = predictedMinPrice + dynamicMargin;
+    // 向後兼容：保留舊變數名（但值已改為溢價率相關）
+    const weightedMinPrice = minPrem3_new * W1 + minPrem6_new * W2;  // 加權最低溢價率(%)
+    const weightedAvgPrice = avgPrem3_new * W1 + avgPrem6_new * W2;  // 加權平均溢價率(%)
+    const multAdjustment = multPremAdj * 100;  // 倍數調整(%)
+    const predictedMinPrice = weightedMinPrice + multAdjustment;  // 預測溢價率(%)
+    const predictedAvgPrice = weightedAvgPrice + multAdjustment;
+    const stdDev = premStdDev * 100;  // 標準差(%)
+    const dynamicMargin = dynamicPremMargin * 100;  // 動態區間(%)
+    const suggestedPriceMin = predictedMinPrice - dynamicMargin;  // 下限溢價率(%)
+    const suggestedPriceMax = predictedMinPrice + dynamicMargin;  // 上限溢價率(%)
     
     // === 向後兼容：保留溢價率計算 ===
     const minPrem3 = calcAvg(recent3, 'minPremium');
@@ -11552,7 +11561,7 @@ function calcMarketAtmosphere(n = 5, guarantee = null) {
             recent6: { minPremium: minPrem6, avgPremium: avgPrem6, multiple: mult6, count: recent6.length },
             recent9: { minPremium: minPrem9, avgPremium: avgPrem9, multiple: mult9, count: recent9.length }
         },
-        // v3.97-cu 新增：最佳涵蓋率公式結果（得標價法）
+        // v3.97-cv 新增：最佳涵蓋率公式結果（得標價法）
         priceMethod: {
             weightedMinPrice: weightedMinPrice,
             weightedAvgPrice: weightedAvgPrice,

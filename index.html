@@ -4,9 +4,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97-as-cp (純CSV版)</title>
+<title>AI智能可轉債競拍系統 v3.97-as-cq (純CSV版)</title>
+<!-- v3.97-as-cq: 修正 Step 1 明細顯示正確的維度表格 -->
 <!-- v3.97-as-cp: Step 1 改為 2x2 標籤切換（溢價率/得標均價 × 無加權/有加權）-->
-<!-- v3.97-as-co: 移除 displayResult 中重複的 AI 智能競拍預測區塊 -->
 
 <!-- v3.97-as-ca: 改為從 data/00_cb/ 載入 CSV 檔案 -->
 
@@ -1676,7 +1676,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.97-as-cp)...</div>
+    <div>🔄 系統啟動中 (v3.97-as-cq)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
@@ -9371,11 +9371,24 @@ function displayResult(r) {
     // 預設顯示有加權（因為系統建議使用加權結果）
     switchStep1Weight('weight');
 
-    // Step 1 詳細分析內容（各維度加權明細）
-    const marketSentiment = document.getElementById('marketSentiment');
-    if (marketSentiment) {
-        document.getElementById('step1DetailContent').innerHTML = marketSentiment.innerHTML;
-    }
+    // v3.97-as-cq: Step 1 詳細分析內容（各維度加權明細）
+    // 延遲執行以確保 hiddenDimensionTables 已經渲染
+    setTimeout(() => {
+        const premiumTable = document.getElementById('premiumDimensionTable');
+        const priceTable = document.getElementById('priceDimensionTable');
+        const step1Detail = document.getElementById('step1DetailContent');
+        
+        if (step1Detail && (premiumTable || priceTable)) {
+            let detailHTML = '';
+            if (premiumTable) {
+                detailHTML += premiumTable.innerHTML;
+            }
+            if (priceTable) {
+                detailHTML += priceTable.innerHTML;
+            }
+            step1Detail.innerHTML = detailHTML || '<div style="color:#666;">無維度明細資料</div>';
+        }
+    }, 100);
 
     // ========== Step 2: 市場氛圍調整（近期熱度法） ==========
     const momentum = document.getElementById('marketMomentumResult');
@@ -10241,6 +10254,36 @@ function displayResult(r) {
     ${generateConditionSummaryHTML(r)}
 
     <!-- v3.97-as-co: 移除重複的 majorPlayerHTML，已整合到 Step 3 -->
+
+    <!-- v3.97-as-cq: 隱藏的維度表格供 Step 1 明細引用 -->
+    <div id="hiddenDimensionTables" style="display:none;">
+        <div id="premiumDimensionTable">
+            <div style="font-weight:bold; color:#1976d2; margin-bottom:8px;">📈 溢價率分析法 - 各維度明細</div>
+            <div style="overflow-x:auto;">
+                <table class="data-table" style="font-size:12px;">
+                    <thead><tr>
+                        <th>維度</th><th>條件</th>
+                        <th>最低<br>溢價</th><th>平均<br>溢價</th>
+                        <th>權重</th><th>加權<br>最低</th><th>加權<br>平均</th>
+                    </tr></thead>
+                    <tbody>${premiumRows}</tbody>
+                </table>
+            </div>
+        </div>
+        <div id="priceDimensionTable" style="margin-top:15px;">
+            <div style="font-weight:bold; color:#e65100; margin-bottom:8px;">📊 得標均價法 - 各維度明細</div>
+            <div style="overflow-x:auto;">
+                <table class="data-table" style="font-size:12px;">
+                    <thead><tr>
+                        <th>維度</th><th>條件</th>
+                        <th>最低<br>得標</th><th>平均<br>得標</th>
+                        <th>權重</th><th>加權<br>最低</th><th>加權<br>平均</th>
+                    </tr></thead>
+                    <tbody>${priceRows}</tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 
     <div style="text-align:center;margin-top:25px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
         <button onclick="location.reload()" class="calculate-btn" style="width:180px; background:#555;">🔄 重新評估</button>

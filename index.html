@@ -1990,107 +1990,67 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
                 </div>
             </div>
             <div style="text-align:center; margin-top:8px; font-size:10px; opacity:0.8;">
-                理論價≥97.5採用溢價率法，&lt;97.5採用得標均價法
+                系統綜合近期氛圍與歷史數據自動評估
             </div>
         </div>
 
-        <!-- 標籤切換區 -->
-        <div style="margin-bottom:12px;">
-            <!-- 方法切換標籤 -->
-            <div style="display:flex; gap:8px; margin-bottom:8px;">
-                <button id="step1TabPremium" onclick="switchStep1Tab('premium')" 
-                    style="flex:1; padding:10px; border:2px solid #1976d2; border-radius:8px; background:#1976d2; color:white; font-weight:bold; font-size:13px; cursor:pointer; transition:all 0.3s;">
-                    📈 溢價率分析法
-                </button>
-                <button id="step1TabPrice" onclick="switchStep1Tab('price')" 
-                    style="flex:1; padding:10px; border:2px solid #e65100; border-radius:8px; background:white; color:#e65100; font-weight:bold; font-size:13px; cursor:pointer; transition:all 0.3s;">
-                    📊 得標均價法
-                </button>
+        <!-- v3.97-cy 統一輸出：綜合評估結果 -->
+        <div id="step1Result" style="background:linear-gradient(135deg, #1565c0 0%, #0d47a1 100%); color:white; padding:16px; border-radius:12px; margin-bottom:12px;">
+            <div style="font-size:12px; opacity:0.9; margin-bottom:10px; text-align:center;">
+                🎯 AI 綜合評估建議
             </div>
-            <!-- 加權切換標籤 -->
-            <div style="display:flex; gap:8px;">
-                <button id="step1TabNoWeight" onclick="switchStep1Weight('noweight')" 
-                    style="flex:1; padding:8px; border:2px solid #666; border-radius:6px; background:#666; color:white; font-size:12px; cursor:pointer; transition:all 0.3s;">
-                    📊 無加權（純歷史平均）
-                </button>
-                <button id="step1TabWeight" onclick="switchStep1Weight('weight')" 
-                    style="flex:1; padding:8px; border:2px solid #7b1fa2; border-radius:6px; background:white; color:#7b1fa2; font-size:12px; cursor:pointer; transition:all 0.3s;">
-                    ⚖️ 有加權（維度加權）
-                </button>
-            </div>
-        </div>
-
-        <!-- 溢價率法 - 無加權 -->
-        <div id="step1PremiumNoWeight" class="step1-panel" style="display:block;">
-            <div style="background:linear-gradient(135deg, #1976d2 0%, #1565c0 100%); color:white; padding:12px; border-radius:10px; margin-bottom:10px;">
-                <div style="font-size:11px; opacity:0.9; margin-bottom:8px; text-align:center;">📈 溢價率分析法（無加權）</div>
-                <div style="text-align:center; margin-bottom:6px;">
-                    <div style="font-size:10px; opacity:0.8;">歷史平均溢價率</div>
-                    <div style="font-size:18px; font-weight:bold;" id="step1PremNoWeightRate">--</div>
+            
+            <!-- 綜合溢價率 -->
+            <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.15); padding:10px; border-radius:8px; margin-bottom:12px;">
+                <div style="text-align:center; flex:1;">
+                    <div style="font-size:10px; opacity:0.8;">七維度加權溢價</div>
+                    <div style="font-size:16px; font-weight:bold;" id="step1DimPremium">--%</div>
                 </div>
-                <div style="text-align:center; background:rgba(255,255,255,0.2); padding:8px; border-radius:6px;">
-                    <div style="font-size:10px; opacity:0.8;">建議區間</div>
-                    <div style="font-size:16px; font-weight:bold;" id="step1PremNoWeightRange">--</div>
+                <div style="font-size:18px; opacity:0.6;">+</div>
+                <div style="text-align:center; flex:1;">
+                    <div style="font-size:10px; opacity:0.8;">近期氛圍溢價</div>
+                    <div style="font-size:16px; font-weight:bold;" id="step1RecentPremium">--%</div>
+                </div>
+                <div style="font-size:18px; opacity:0.6;">=</div>
+                <div style="text-align:center; flex:1;">
+                    <div style="font-size:10px; opacity:0.8;">綜合溢價率</div>
+                    <div style="font-size:18px; font-weight:bold; color:#ffeb3b;" id="step1CombinedPremium">--%</div>
                 </div>
             </div>
-        </div>
-
-        <!-- 溢價率法 - 有加權 -->
-        <div id="step1PremiumWeight" class="step1-panel" style="display:none;">
-            <div style="background:linear-gradient(135deg, #7b1fa2 0%, #6a1b9a 100%); color:white; padding:12px; border-radius:10px; margin-bottom:10px;">
-                <div style="font-size:11px; opacity:0.9; margin-bottom:8px; text-align:center;">📈 溢價率分析法（有加權）</div>
-                <div style="text-align:center; margin-bottom:6px;">
-                    <div style="font-size:10px; opacity:0.8;">加權平均溢價率</div>
-                    <div style="font-size:18px; font-weight:bold;" id="step1PremWeightRate">--</div>
-                </div>
-                <div style="text-align:center; background:rgba(255,255,255,0.2); padding:8px; border-radius:6px;">
-                    <div style="font-size:10px; opacity:0.8;">建議區間</div>
-                    <div style="font-size:16px; font-weight:bold;" id="step1PremWeightRange">--</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 得標均價法 - 無加權 (v3.97-cx 三策略價) -->
-        <div id="step1PriceNoWeight" class="step1-panel" style="display:none;">
-            <div style="background:linear-gradient(135deg, #e65100 0%, #bf360c 100%); color:white; padding:12px; border-radius:10px; margin-bottom:10px;">
-                <div style="font-size:11px; opacity:0.9; margin-bottom:8px; text-align:center;">
-                    📊 得標均價法（無加權）
-                    <span style="background:rgba(255,255,255,0.3); padding:1px 6px; border-radius:8px; font-size:9px; margin-left:4px;">三策略價</span>
-                </div>
-                <div style="text-align:center; margin-bottom:6px;">
-                    <div style="font-size:10px; opacity:0.8;">建議投標價 <span id="step1PriceNoWeightAdj" style="background:rgba(255,255,255,0.3); padding:1px 6px; border-radius:4px; font-size:9px;"></span></div>
-                    <div style="font-size:20px; font-weight:bold;" id="step1PriceNoWeightRate">--</div>
-                    <div style="font-size:9px; opacity:0.7;">保守 / 穩健 / 積極</div>
-                </div>
-                <div style="text-align:center; background:rgba(255,255,255,0.2); padding:8px; border-radius:6px;">
-                    <div style="font-size:12px; font-weight:bold;" id="step1PriceNoWeightRange">--</div>
+            
+            <!-- 三策略價格 -->
+            <div style="text-align:center; margin-bottom:8px;">
+                <div style="font-size:11px; opacity:0.8; margin-bottom:6px;">建議投標價</div>
+                <div style="display:flex; justify-content:center; align-items:baseline; gap:8px;">
+                    <div style="text-align:center;">
+                        <div style="font-size:10px; opacity:0.7;">保守</div>
+                        <div style="font-size:22px; font-weight:bold; color:#81c784;" id="step1PriceConservative">--</div>
+                    </div>
+                    <div style="font-size:16px; opacity:0.5;">/</div>
+                    <div style="text-align:center;">
+                        <div style="font-size:10px; opacity:0.7;">穩健</div>
+                        <div style="font-size:28px; font-weight:bold; color:#fff;" id="step1PriceBalanced">--</div>
+                    </div>
+                    <div style="font-size:16px; opacity:0.5;">/</div>
+                    <div style="text-align:center;">
+                        <div style="font-size:10px; opacity:0.7;">積極</div>
+                        <div style="font-size:22px; font-weight:bold; color:#ff8a65;" id="step1PriceAggressive">--</div>
+                    </div>
+                    <div style="font-size:14px; opacity:0.8; margin-left:4px;">元</div>
                 </div>
             </div>
-        </div>
-
-        <!-- 得標均價法 - 有加權 (v3.97-cx 保守/穩健/積極) -->
-        <div id="step1PriceWeight" class="step1-panel" style="display:none;">
-            <div style="background:linear-gradient(135deg, #c62828 0%, #b71c1c 100%); color:white; padding:12px; border-radius:10px; margin-bottom:10px;">
-                <div style="font-size:11px; opacity:0.9; margin-bottom:8px; text-align:center;">
-                    📊 得標均價法（有加權）
-                    <span style="background:rgba(255,255,255,0.3); padding:1px 6px; border-radius:8px; font-size:9px; margin-left:4px;">三策略價</span>
+            
+            <!-- 評估說明 -->
+            <div style="background:rgba(255,255,255,0.1); padding:8px; border-radius:6px; text-align:center;">
+                <div style="font-size:10px; opacity:0.9;" id="step1EvalNote">
+                    評估依據：理論價 × (1 + 綜合溢價率) ± 標準差調整
                 </div>
-                <div style="text-align:center; margin-bottom:6px;">
-                    <div style="font-size:10px; opacity:0.8;">建議投標價 <span id="step1PriceWeightAdj" style="background:rgba(255,255,255,0.3); padding:1px 6px; border-radius:4px; font-size:9px;"></span></div>
-                    <div style="font-size:20px; font-weight:bold;" id="step1PriceWeightRate">--</div>
-                    <div style="font-size:9px; opacity:0.7;">保守 / 穩健 / 積極</div>
-                </div>
-                <div style="text-align:center; background:rgba(255,255,255,0.2); padding:8px; border-radius:6px;">
-                    <div style="font-size:12px; font-weight:bold;" id="step1PriceWeightRange">--</div>
-                </div>
-                <!-- 調整說明 -->
-                <div id="step1PriceAdjustmentNote" style="margin-top:8px; font-size:10px; opacity:0.9; text-align:center; background:rgba(255,255,255,0.15); padding:6px; border-radius:4px;"></div>
             </div>
         </div>
 
         <div style="text-align:center; font-size:11px; color:#1565c0; margin-bottom:10px;">
-            💡 無加權為整體歷史平均，有加權考量產業、信評、規模、券商等維度<br>
-            <span style="color:#e65100;">⚠️ 加權目的：避免單一標的異常值影響整體判斷</span>
+            💡 綜合溢價率 = 七維度加權×60% + 近期氛圍×40%<br>
+            <span style="color:#e65100;">⚠️ 保守適合穩健投資人，積極適合追求得標率</span>
         </div>
 
         <!-- 可收合的詳細分析 -->
@@ -9395,7 +9355,7 @@ function displayResult(r) {
         `;
     }
 
-    // ========== Step 1: 基礎數據分析 ==========
+    // ========== Step 1: 基礎數據分析（v3.97-cy 統一綜合評估） ==========
     const stockPrice = r.inputData.stockPrice || 0;
     const convPrice = r.inputData.actualConversionPrice || 0;
     const theoPrice = convPrice > 0 ? (stockPrice / convPrice * 100) : 0;
@@ -9403,123 +9363,80 @@ function displayResult(r) {
 
     // 填充理論價與方法
     document.getElementById('step1TheoPrice').textContent = theoPrice > 0 ? theoPrice.toFixed(2) + '元' : '--';
-    const methodName = usePremiumMethod ? '溢價率分析法' : '得標均價分析法';
+    const methodName = '綜合評估法';
     document.getElementById('step1MethodName').textContent = methodName;
     document.getElementById('step1MethodLabel').textContent = methodName;
 
-    // 從 r 中取得數據
-    const avgPremium = parseFloat(r.totalAvgPremium) || 0;  // 加權平均溢價率
-    const lowPremium = parseFloat(r.totalLowPremium) || 0;  // 加權最低溢價率
-    const weightedLowBid = parseFloat(r.weightedLowBidPrice) || 0;  // 加權最低得標價
-    const weightedAvgBid = parseFloat(r.weightedAvgBidPrice) || 0;  // 加權平均得標價
+    // 從 r 中取得七維度加權數據
+    const dimAvgPremium = parseFloat(r.totalAvgPremium) || 0;  // 七維度加權平均溢價率
+    const dimLowPremium = parseFloat(r.totalLowPremium) || 0;  // 七維度加權最低溢價率
 
-    // 無加權數據（整體歷史平均）
-    const noWeightAvgPremium = parseFloat(r.overallAvgPremium) || avgPremium;
-    const noWeightLowPremium = parseFloat(r.overallLowPremium) || lowPremium;
-    const noWeightAvgBid = parseFloat(r.overallAvgBidPrice) || weightedAvgBid;
-    const noWeightLowBid = parseFloat(r.overallLowBidPrice) || weightedLowBid;
-
-    // v3.97-as-cp: 填充 4 個面板數據
-    // 1. 溢價率法 - 無加權
-    const premNoWeightLow = theoPrice * (1 + noWeightLowPremium / 100);
-    const premNoWeightHigh = theoPrice * (1 + noWeightAvgPremium / 100);
-    document.getElementById('step1PremNoWeightRate').textContent = 
-        `${noWeightLowPremium.toFixed(2)}% ~ ${noWeightAvgPremium.toFixed(2)}%`;
-    document.getElementById('step1PremNoWeightRange').textContent = 
-        (premNoWeightLow > 0) ? `${premNoWeightLow.toFixed(2)}~${premNoWeightHigh.toFixed(2)}元` : '--';
-
-    // 2. 溢價率法 - 有加權
-    const premWeightLow = theoPrice * (1 + lowPremium / 100);
-    const premWeightHigh = theoPrice * (1 + avgPremium / 100);
-    document.getElementById('step1PremWeightRate').textContent = 
-        `${lowPremium.toFixed(2)}% ~ ${avgPremium.toFixed(2)}%`;
-    document.getElementById('step1PremWeightRange').textContent = 
-        (premWeightLow > 0) ? `${premWeightLow.toFixed(2)}~${premWeightHigh.toFixed(2)}元` : '--';
-
-    // 3. 得標均價法 - 無加權（v3.97-cx：同樣用理論價+溢價率，但用整體歷史平均）
-    // 用整體歷史平均溢價率（不分維度加權）
-    const overallAvgPremium = noWeightAvgPremium || avgPremium || 8;  // 整體平均溢價率
-    const overallLowPremium = noWeightLowPremium || lowPremium || 6;  // 整體最低溢價率
-    
-    // 計算三價格（保守用最低溢價、穩健用平均、積極再加一點）
-    const noWeightConservative = theoPrice * (1 + overallLowPremium / 100);
-    const noWeightBalanced = theoPrice * (1 + (overallLowPremium + overallAvgPremium) / 2 / 100);
-    const noWeightAggressive = theoPrice * (1 + overallAvgPremium / 100);
-    
-    document.getElementById('step1PriceNoWeightRate').innerHTML = 
-        `<span style="color:#81c784;">${noWeightConservative.toFixed(0)}</span> / <span style="font-size:1.1em;">${noWeightBalanced.toFixed(0)}</span> / <span style="color:#ff8a65;">${noWeightAggressive.toFixed(0)}</span>元`;
-    document.getElementById('step1PriceNoWeightRange').innerHTML = 
-        `保守 ${noWeightConservative.toFixed(2)} / 穩健 ${noWeightBalanced.toFixed(2)} / 積極 ${noWeightAggressive.toFixed(2)}`;
-
-    // 4. 得標均價法 - 有加權（v3.97-cx 優化：保守/穩健/積極三價格）
     // 取得近期市場氛圍數據
     const atmosphere = calcMarketAtmosphere(6, r.inputData?.guarantee || null);
     const priceMethod = atmosphere?.priceMethod || {};
     
     // 近期加權溢價率（前3檔50% + 前6檔50%）
-    const recentWeightedPremium = priceMethod.weightedMinPrice || 0;  // 這是溢價率(%)
+    const recentLowPremium = priceMethod.weightedMinPrice || 0;
+    const recentAvgPremium = priceMethod.weightedAvgPrice || 0;
     // 近期加權倍數
     const recentWeightedMult = priceMethod.weightedMultiple || 2.5;
     // 標準差
     const recentStdDev = priceMethod.stdDev || 2;
     
-    // v3.97-cx 公式：
-    // 基礎預測價 = 理論價 × (1 + 近期加權溢價率) + (加權倍數 - 2.5) × 0.3
-    const basePredictedPrice = theoPrice * (1 + recentWeightedPremium / 100);
-    const multAdjustment = (recentWeightedMult - 2.5) * 0.3;
-    const predictedPrice = basePredictedPrice + multAdjustment;
+    // v3.97-cy 綜合溢價率 = 七維度加權×60% + 近期氛圍×40%
+    const DIM_WEIGHT = 0.6;
+    const RECENT_WEIGHT = 0.4;
+    const combinedLowPremium = dimLowPremium * DIM_WEIGHT + recentLowPremium * RECENT_WEIGHT;
+    const combinedAvgPremium = dimAvgPremium * DIM_WEIGHT + recentAvgPremium * RECENT_WEIGHT;
+    const combinedMidPremium = (combinedLowPremium + combinedAvgPremium) / 2;
     
-    // 用標準差計算三個策略價格（限制調整幅度1~3元）
-    const adjustUnit = Math.min(3, Math.max(1, recentStdDev * 0.8));
+    // 倍數調整（基準2.5倍，每多1倍加0.3%溢價）
+    const multPremiumAdj = (recentWeightedMult - 2.5) * 0.3;
     
-    // 保守/穩健/積極三價格
-    const priceConservative = predictedPrice - adjustUnit;  // 保守：預測價 - 調整單位
-    const priceBalanced = predictedPrice;                    // 穩健：預測價
-    const priceAggressive = predictedPrice + adjustUnit;     // 積極：預測價 + 調整單位
+    // 最終綜合溢價率
+    const finalLowPremium = combinedLowPremium + multPremiumAdj;
+    const finalMidPremium = combinedMidPremium + multPremiumAdj;
+    const finalAvgPremium = combinedAvgPremium + multPremiumAdj;
     
-    // 更新UI - 顯示三個價格
-    document.getElementById('step1PriceWeightRate').innerHTML = 
-        `<span style="color:#81c784;">${priceConservative.toFixed(0)}</span> / <span style="font-size:1.1em;">${priceBalanced.toFixed(0)}</span> / <span style="color:#ff8a65;">${priceAggressive.toFixed(0)}</span>元`;
-    document.getElementById('step1PriceWeightRange').innerHTML = 
-        `保守 ${priceConservative.toFixed(2)} / 穩健 ${priceBalanced.toFixed(2)} / 積極 ${priceAggressive.toFixed(2)}`;
+    // 計算三策略價格
+    const priceConservative = theoPrice * (1 + finalLowPremium / 100);
+    const priceBalanced = theoPrice * (1 + finalMidPremium / 100);
+    const priceAggressive = theoPrice * (1 + finalAvgPremium / 100);
     
-    // 保存三價格供後續使用
-    window.priceMethodResult = {
+    // 更新 UI - 溢價率顯示
+    const step1DimPremium = document.getElementById('step1DimPremium');
+    const step1RecentPremium = document.getElementById('step1RecentPremium');
+    const step1CombinedPremium = document.getElementById('step1CombinedPremium');
+    
+    if (step1DimPremium) step1DimPremium.textContent = dimLowPremium > 0 ? `${dimLowPremium.toFixed(1)}%` : '--%';
+    if (step1RecentPremium) step1RecentPremium.textContent = recentLowPremium > 0 ? `${recentLowPremium.toFixed(1)}%` : '--%';
+    if (step1CombinedPremium) step1CombinedPremium.textContent = `${finalMidPremium.toFixed(1)}%`;
+    
+    // 更新 UI - 三策略價格
+    const step1PriceConservative = document.getElementById('step1PriceConservative');
+    const step1PriceBalanced = document.getElementById('step1PriceBalanced');
+    const step1PriceAggressive = document.getElementById('step1PriceAggressive');
+    
+    if (step1PriceConservative) step1PriceConservative.textContent = priceConservative > 0 ? priceConservative.toFixed(0) : '--';
+    if (step1PriceBalanced) step1PriceBalanced.textContent = priceBalanced > 0 ? priceBalanced.toFixed(0) : '--';
+    if (step1PriceAggressive) step1PriceAggressive.textContent = priceAggressive > 0 ? priceAggressive.toFixed(0) : '--';
+    
+    // 更新評估說明
+    const step1EvalNote = document.getElementById('step1EvalNote');
+    if (step1EvalNote) {
+        step1EvalNote.innerHTML = `理論價 ${theoPrice.toFixed(2)}元 × (1 + ${finalMidPremium.toFixed(1)}%) = ${priceBalanced.toFixed(2)}元`;
+    }
+    
+    // 保存結果供後續使用
+    window.step1Result = {
+        theoPrice: theoPrice,
+        dimPremium: dimLowPremium,
+        recentPremium: recentLowPremium,
+        combinedPremium: finalMidPremium,
         conservative: priceConservative,
         balanced: priceBalanced,
-        aggressive: priceAggressive,
-        adjustUnit: adjustUnit
+        aggressive: priceAggressive
     };
-
-    // v3.97-as-cs: 顯示調整係數資訊
-    const adjPct = r.priceMethodAdjustmentPct || '0';
-    const adjReason = r.adjustmentReason || '';
-    const adjNote = document.getElementById('step1PriceAdjustmentNote');
-    const adjBadgeNo = document.getElementById('step1PriceNoWeightAdj');
-    const adjBadgeW = document.getElementById('step1PriceWeightAdj');
-    
-    if (parseFloat(adjPct) > 0) {
-        const adjText = `+${adjPct}%`;
-        if (adjBadgeNo) adjBadgeNo.textContent = adjText;
-        if (adjBadgeW) adjBadgeW.textContent = adjText;
-        if (adjNote) {
-            adjNote.innerHTML = `⚡ 已套用歷史落差調整 +${adjPct}%<br><span style="font-size:9px; opacity:0.8;">${adjReason}</span>`;
-            adjNote.style.display = 'block';
-        }
-    } else {
-        if (adjBadgeNo) adjBadgeNo.textContent = '';
-        if (adjBadgeW) adjBadgeW.textContent = '';
-        if (adjNote) adjNote.style.display = 'none';
-    }
-
-    // 根據系統採用的方法設定預設標籤
-    if (usePremiumMethod) {
-        switchStep1Tab('premium');
-    } else {
-        switchStep1Tab('price');
-    }
-    // 預設顯示有加權（因為系統建議使用加權結果）
-    switchStep1Weight('weight');
 
     // v3.97-as-cr: 延遲更新明細，確保表格已渲染
     setTimeout(() => {
@@ -11416,7 +11333,7 @@ function calcMarketAtmosphere(n = 5, guarantee = null) {
 
     if (sortedData.length === 0) return null;
 
-    // v3.97-cx 重大更新：整合最佳涵蓋率公式（83.2%涵蓋率）
+    // v3.97-cy 重大更新：整合最佳涵蓋率公式（83.2%涵蓋率）
     // 最佳參數：前3檔+前6檔，權重50:50，σ×2動態區間，倍數係數0.3
     const recent3 = sortedData.slice(0, Math.min(3, sortedData.length));
     const recent6 = sortedData.slice(0, Math.min(6, sortedData.length));
@@ -11437,7 +11354,7 @@ function calcMarketAtmosphere(n = 5, guarantee = null) {
         return Math.sqrt(variance);
     }
 
-    // === v3.97-cx 修正：得標價法改為「理論價 + 市場氛圍溢價」===
+    // === v3.97-cy 修正：得標價法改為「理論價 + 市場氛圍溢價」===
     // 核心邏輯：預測價 = 理論價 × (1 + 加權溢價率)
     // 溢價率用近期3/6檔的實際拍出溢價率加權計算
     
@@ -11545,7 +11462,7 @@ function calcMarketAtmosphere(n = 5, guarantee = null) {
             recent6: { minPremium: minPrem6, avgPremium: avgPrem6, multiple: mult6, count: recent6.length },
             recent9: { minPremium: minPrem9, avgPremium: avgPrem9, multiple: mult9, count: recent9.length }
         },
-        // v3.97-cx 新增：最佳涵蓋率公式結果（得標價法）
+        // v3.97-cy 新增：最佳涵蓋率公式結果（得標價法）
         priceMethod: {
             weightedMinPrice: weightedMinPrice,
             weightedAvgPrice: weightedAvgPrice,

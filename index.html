@@ -4,9 +4,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97-as-cq (純CSV版)</title>
+<title>AI智能可轉債競拍系統 v3.97-as-cr (純CSV版)</title>
+<!-- v3.97-as-cr: Step 1 明細動態跟隨標籤切換 -->
 <!-- v3.97-as-cq: 修正 Step 1 明細顯示正確的維度表格 -->
-<!-- v3.97-as-cp: Step 1 改為 2x2 標籤切換（溢價率/得標均價 × 無加權/有加權）-->
 
 <!-- v3.97-as-ca: 改為從 data/00_cb/ 載入 CSV 檔案 -->
 
@@ -1676,7 +1676,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.97-as-cq)...</div>
+    <div>🔄 系統啟動中 (v3.97-as-cr)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
@@ -6193,14 +6193,15 @@ function toggleSupplyDetail(type) {
     }
 }
 
-// v3.97-as-cp: Step 1 標籤切換狀態
+// v3.97-as-cr: Step 1 標籤切換狀態
 let step1CurrentMethod = 'premium'; // 'premium' 或 'price'
 let step1CurrentWeight = 'noweight'; // 'noweight' 或 'weight'
 
-// v3.97-as-cp: 切換分析方法（溢價率法/得標均價法）
+// v3.97-as-cr: 切換分析方法（溢價率法/得標均價法）
 function switchStep1Tab(method) {
     step1CurrentMethod = method;
     updateStep1Panel();
+    updateStep1Detail(); // 更新明細
     
     // 更新按鈕樣式
     const premBtn = document.getElementById('step1TabPremium');
@@ -6219,10 +6220,11 @@ function switchStep1Tab(method) {
     }
 }
 
-// v3.97-as-cp: 切換加權模式（無加權/有加權）
+// v3.97-as-cr: 切換加權模式（無加權/有加權）
 function switchStep1Weight(weight) {
     step1CurrentWeight = weight;
     updateStep1Panel();
+    updateStep1Detail(); // 更新明細
     
     // 更新按鈕樣式
     const noWeightBtn = document.getElementById('step1TabNoWeight');
@@ -6241,7 +6243,7 @@ function switchStep1Weight(weight) {
     }
 }
 
-// v3.97-as-cp: 更新顯示的面板
+// v3.97-as-cr: 更新顯示的面板
 function updateStep1Panel() {
     // 隱藏所有面板
     document.querySelectorAll('.step1-panel').forEach(p => p.style.display = 'none');
@@ -6253,6 +6255,55 @@ function updateStep1Panel() {
     
     const panel = document.getElementById(panelId);
     if (panel) panel.style.display = 'block';
+}
+
+// v3.97-as-cr: 更新明細內容（跟隨標籤切換）
+function updateStep1Detail() {
+    const step1Detail = document.getElementById('step1DetailContent');
+    if (!step1Detail) return;
+    
+    // 根據當前選擇決定顯示哪個表格
+    const methodName = step1CurrentMethod === 'premium' ? '溢價率分析法' : '得標均價法';
+    const weightName = step1CurrentWeight === 'noweight' ? '無加權' : '有加權';
+    const tableId = step1CurrentMethod === 'premium' ? 'premiumDimensionTable' : 'priceDimensionTable';
+    
+    const table = document.getElementById(tableId);
+    if (table) {
+        // 動態生成標題
+        const icon = step1CurrentMethod === 'premium' ? '📈' : '📊';
+        const color = step1CurrentMethod === 'premium' ? '#1976d2' : '#e65100';
+        const weightIcon = step1CurrentWeight === 'noweight' ? '📊' : '⚖️';
+        
+        let html = `
+            <div style="font-weight:bold; color:${color}; margin-bottom:10px; display:flex; align-items:center; gap:8px;">
+                <span>${icon} ${methodName}</span>
+                <span style="background:${step1CurrentWeight === 'weight' ? '#7b1fa2' : '#666'}; color:white; padding:2px 8px; border-radius:4px; font-size:11px;">
+                    ${weightIcon} ${weightName}
+                </span>
+            </div>
+        `;
+        
+        // 取得表格內容
+        const tableContent = table.querySelector('table');
+        if (tableContent) {
+            html += `<div style="overflow-x:auto;">${tableContent.outerHTML}</div>`;
+        }
+        
+        // 加權說明
+        if (step1CurrentWeight === 'noweight') {
+            html += `<div style="margin-top:10px; padding:8px; background:#f5f5f5; border-radius:6px; font-size:11px; color:#666;">
+                💡 無加權模式：各維度數據為該條件下的歷史平均值，未經權重調整
+            </div>`;
+        } else {
+            html += `<div style="margin-top:10px; padding:8px; background:#f3e5f5; border-radius:6px; font-size:11px; color:#7b1fa2;">
+                ⚖️ 有加權模式：根據各維度的權重（產業35%+券商25%+信評20%+規模10%+理論價10%）加權計算
+            </div>`;
+        }
+        
+        step1Detail.innerHTML = html;
+    } else {
+        step1Detail.innerHTML = '<div style="color:#666;">載入中...</div>';
+    }
 }
 
 // v3.55 新增：年度績效排行
@@ -9371,24 +9422,10 @@ function displayResult(r) {
     // 預設顯示有加權（因為系統建議使用加權結果）
     switchStep1Weight('weight');
 
-    // v3.97-as-cq: Step 1 詳細分析內容（各維度加權明細）
-    // 延遲執行以確保 hiddenDimensionTables 已經渲染
+    // v3.97-as-cr: 延遲更新明細，確保表格已渲染
     setTimeout(() => {
-        const premiumTable = document.getElementById('premiumDimensionTable');
-        const priceTable = document.getElementById('priceDimensionTable');
-        const step1Detail = document.getElementById('step1DetailContent');
-        
-        if (step1Detail && (premiumTable || priceTable)) {
-            let detailHTML = '';
-            if (premiumTable) {
-                detailHTML += premiumTable.innerHTML;
-            }
-            if (priceTable) {
-                detailHTML += priceTable.innerHTML;
-            }
-            step1Detail.innerHTML = detailHTML || '<div style="color:#666;">無維度明細資料</div>';
-        }
-    }, 100);
+        updateStep1Detail();
+    }, 150);
 
     // ========== Step 2: 市場氛圍調整（近期熱度法） ==========
     const momentum = document.getElementById('marketMomentumResult');

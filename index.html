@@ -9767,63 +9767,12 @@ function displayResult(r) {
         updateStep1Detail();
     }, 150);
 
-    // ========== Step 2: 市場氛圍調整（近期熱度法） ==========
-    const momentum = document.getElementById('marketMomentumResult');
-    if (momentum) {
-        document.getElementById('step2Momentum').innerHTML = momentum.innerHTML;
-    }
+    // v3.97-cu: 舊Step 2/3已移除，改用新的整合版Step 3（在Step 4之後執行）
 
-    // 從市場動能中提取熱度數據
-    const momentumText = momentum ? momentum.innerText : '';
-    let heatLevel = '😐 普通';
-
-    if (momentumText.includes('熱絡') || momentumText.includes('火熱') || momentumText.includes('積極')) {
-        heatLevel = '🔥 熱絡';
-    } else if (momentumText.includes('冷清') || momentumText.includes('低迷') || momentumText.includes('保守')) {
-        heatLevel = '❄️ 冷清';
-    }
-
-    document.getElementById('step2HeatLevel').textContent = heatLevel;
-
-    // 從近10檔數據計算
-    const recentPremium = parseFloat(r.recentAvgPremium) || avgPremium;
-    const recentMultiple = parseFloat(r.recentAvgMultiple) || 0;
-
-    document.getElementById('step2HeatPremium').textContent = recentPremium > 0 ? recentPremium.toFixed(2) + '%' : '--';
-    document.getElementById('step2HeatMultiple').textContent = recentMultiple > 0 ? recentMultiple.toFixed(2) + 'x' : '--';
-
-    // 熱度法建議區間
-    const heatLow = theoPrice * (1 + (recentPremium - 2) / 100);
-    const heatHigh = theoPrice * (1 + recentPremium / 100);
-    document.getElementById('step2HeatRange').textContent =
-        (heatLow > 0 && heatHigh > 0) ? `${heatLow.toFixed(2)}~${heatHigh.toFixed(2)}元` : '--';
-
-    // ========== Step 3: AI智能競拍預測（完整v3.73區塊） ==========
-    // v3.97o 修正：主動調用 updateLiveAIPrediction 確保 Step 3 有完整內容
-    // 從 r.inputData 中取得所需參數
+    // 取得inputData供後續使用
     const inputData = r.inputData || {};
-    const aiTheoPrice = theoPrice > 0 ? theoPrice : 0;
-    const aiIssueSize = parseFloat(inputData.issueSize) || 0;
-    const aiGuarantee = inputData.guarantee || '無擔保';
-    const aiBroker = inputData.broker || '';
-    const aiIndustry = inputData.industry || '';
-    const aiRating = inputData.rating || '';
 
-    // 先調用 updateLiveAIPrediction 確保 liveAIPrediction 有內容
-    if (typeof updateLiveAIPrediction === 'function' && aiTheoPrice > 0) {
-        updateLiveAIPrediction(aiTheoPrice, aiIssueSize, aiGuarantee, aiBroker, aiIndustry, aiRating);
-    }
-
-    // 然後從 liveAIPrediction 複製完整內容到 Step 3
-    const liveAIPredictionEl = document.getElementById('liveAIPrediction');
-    const step3AIBlock = document.getElementById('step3AIBlock');
-    if (liveAIPredictionEl && step3AIBlock && liveAIPredictionEl.innerHTML.trim()) {
-        step3AIBlock.innerHTML = liveAIPredictionEl.innerHTML;
-    } else if (step3AIBlock) {
-        step3AIBlock.innerHTML = '<div style="color:#999; text-align:center; padding:20px;">AI智能競拍預測載入中...</div>';
-    }
-
-    // ========== Step 4: 最強大腦分析法（四維度滾動加權） ==========
+    // ========== Step 2(原Step 4): 最強大腦分析法（四維度滾動加權） ==========
     // v3.97q 全新設計：產業30% + 市場氛圍25% + 理論價20% + 信評25%
 
     // 取得當前標的條件
@@ -14278,11 +14227,7 @@ function updateLiveAIPrediction(theoPrice, issueSize, guarantee, broker, industr
     </div>
     `;
 
-    // v3.97m 新增：同步更新 Step 3 的 AI 智能競拍預測區塊
-    const step3AIBlock = document.getElementById('step3AIBlock');
-    if (step3AIBlock) {
-        step3AIBlock.innerHTML = container.innerHTML;
-    }
+    // v3.97-cu: step3AIBlock已移除，改用新的Step 3 AI智能預測模組
 
     // v3.75 新增：同步更新主力模擬出價（傳入完整條件參數）
     updateMajorPlayerSimulation({

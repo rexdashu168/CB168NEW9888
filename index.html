@@ -4,9 +4,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97-as-cr (純CSV版)</title>
+<title>AI智能可轉債競拍系統 v3.97-as-ct (涵蓋率測試版)</title>
+<!-- v3.97-as-ct: 新增前3/6檔投標倍數加權涵蓋率測試工具 -->
+<!-- v3.97-as-cs: 得標均價法加入歷史落差調整係數（理論價<90:+5%, <95:+3%, <97.5:+2%）-->
 <!-- v3.97-as-cr: Step 1 明細動態跟隨標籤切換 -->
-<!-- v3.97-as-cq: 修正 Step 1 明細顯示正確的維度表格 -->
 
 <!-- v3.97-as-ca: 改為從 data/00_cb/ 載入 CSV 檔案 -->
 
@@ -1676,14 +1677,17 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.97-as-cr)...</div>
+    <div>🔄 系統啟動中 (v3.97-as-cs)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
 <div class="container" style="display: none;">
     <div class="header">
         <h1>🤖 AI智能可轉債競拍系統</h1>
-        <span class="version-badge">v3.97-zs-ag 標題+產業+對齊</span>
+        <span class="version-badge">v3.97-as-ct 涵蓋率測試版</span>
+        <button onclick="batchTestCoverage()" style="background:#e65100; color:white; border:none; padding:5px 10px; border-radius:15px; font-size:11px; cursor:pointer; margin-left:8px;">🧪 基礎測試</button>
+        <button onclick="batchTestWithStdDev()" style="background:#7b1fa2; color:white; border:none; padding:5px 10px; border-radius:15px; font-size:11px; cursor:pointer; margin-left:4px;">📈 進階測試(σ)</button>
+        <button onclick="testCoverageByGuarantee()" style="background:#1565c0; color:white; border:none; padding:5px 10px; border-radius:15px; font-size:11px; cursor:pointer; margin-left:4px;">📊 分擔保</button>
         <div class="subtitle">
             <span>Rex大叔的168台股投資教室</span>
             <span style="color:#ddd">|</span>
@@ -2054,7 +2058,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
             <div style="background:linear-gradient(135deg, #e65100 0%, #bf360c 100%); color:white; padding:12px; border-radius:10px; margin-bottom:10px;">
                 <div style="font-size:11px; opacity:0.9; margin-bottom:8px; text-align:center;">📊 得標均價法（無加權）</div>
                 <div style="text-align:center; margin-bottom:6px;">
-                    <div style="font-size:10px; opacity:0.8;">歷史平均得標價</div>
+                    <div style="font-size:10px; opacity:0.8;">歷史平均得標價 <span id="step1PriceNoWeightAdj" style="background:rgba(255,255,255,0.3); padding:1px 6px; border-radius:4px; font-size:9px;"></span></div>
                     <div style="font-size:18px; font-weight:bold;" id="step1PriceNoWeightRate">--</div>
                 </div>
                 <div style="text-align:center; background:rgba(255,255,255,0.2); padding:8px; border-radius:6px;">
@@ -2069,13 +2073,15 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
             <div style="background:linear-gradient(135deg, #c62828 0%, #b71c1c 100%); color:white; padding:12px; border-radius:10px; margin-bottom:10px;">
                 <div style="font-size:11px; opacity:0.9; margin-bottom:8px; text-align:center;">📊 得標均價法（有加權）</div>
                 <div style="text-align:center; margin-bottom:6px;">
-                    <div style="font-size:10px; opacity:0.8;">加權平均得標價</div>
+                    <div style="font-size:10px; opacity:0.8;">加權平均得標價 <span id="step1PriceWeightAdj" style="background:rgba(255,255,255,0.3); padding:1px 6px; border-radius:4px; font-size:9px;"></span></div>
                     <div style="font-size:18px; font-weight:bold;" id="step1PriceWeightRate">--</div>
                 </div>
                 <div style="text-align:center; background:rgba(255,255,255,0.2); padding:8px; border-radius:6px;">
                     <div style="font-size:10px; opacity:0.8;">建議區間</div>
                     <div style="font-size:16px; font-weight:bold;" id="step1PriceWeightRange">--</div>
                 </div>
+                <!-- 調整說明 -->
+                <div id="step1PriceAdjustmentNote" style="margin-top:8px; font-size:10px; opacity:0.9; text-align:center; background:rgba(255,255,255,0.15); padding:6px; border-radius:4px;"></div>
             </div>
         </div>
 
@@ -9223,8 +9229,33 @@ function calculateEvaluation(d) {
     }
 
     // === 得標價格分析法計算 ===
-    const weightedLowBidPrice = wLowBid > 0 ? wLowBid : floorPrice;
-    const weightedAvgBidPrice = wAvgBid > 0 ? wAvgBid : floorPrice + 2;
+    // v3.97-as-cs: 加入歷史落差調整係數
+    // 根據理論價區間決定調整係數（基於歷史數據分析：平均得標價往往低於實際成交價）
+    let priceMethodAdjustment = 0;
+    let adjustmentReason = '';
+    
+    if (theo < 90) {
+        // 極低理論價：歷史落差較大，調整 +5%
+        priceMethodAdjustment = 0.05;
+        adjustmentReason = '極低理論價區間，歷史落差較大';
+    } else if (theo < 95) {
+        // 低理論價：調整 +3%
+        priceMethodAdjustment = 0.03;
+        adjustmentReason = '低理論價區間';
+    } else if (theo < 97.5) {
+        // 邊界理論價：調整 +2%
+        priceMethodAdjustment = 0.02;
+        adjustmentReason = '邊界理論價區間';
+    }
+    // 理論價 >= 97.5 時使用溢價率法，不需要調整
+    
+    // 原始加權得標價
+    const rawWeightedLowBidPrice = wLowBid > 0 ? wLowBid : floorPrice;
+    const rawWeightedAvgBidPrice = wAvgBid > 0 ? wAvgBid : floorPrice + 2;
+    
+    // 加入調整係數後的得標價
+    const weightedLowBidPrice = rawWeightedLowBidPrice * (1 + priceMethodAdjustment);
+    const weightedAvgBidPrice = rawWeightedAvgBidPrice * (1 + priceMethodAdjustment);
     const bidGap = weightedAvgBidPrice - weightedLowBidPrice;
 
     // 確保不低於底標價格
@@ -9300,6 +9331,11 @@ function calculateEvaluation(d) {
         // === 得標價格分析法結果 ===
         weightedLowBidPrice: safeFixed(weightedLowBidPrice),
         weightedAvgBidPrice: safeFixed(weightedAvgBidPrice),
+        rawWeightedLowBidPrice: safeFixed(rawWeightedLowBidPrice),  // v3.97-as-cs: 未調整的原始值
+        rawWeightedAvgBidPrice: safeFixed(rawWeightedAvgBidPrice),  // v3.97-as-cs: 未調整的原始值
+        priceMethodAdjustment: priceMethodAdjustment,  // v3.97-as-cs: 調整係數
+        priceMethodAdjustmentPct: (priceMethodAdjustment * 100).toFixed(0),  // v3.97-as-cs: 調整百分比
+        adjustmentReason: adjustmentReason,  // v3.97-as-cs: 調整原因
         impliedLowPremium: safeFixed(impliedLowPremium),
         impliedAvgPremium: safeFixed(impliedAvgPremium),
         priceBidPrices: {
@@ -9412,6 +9448,27 @@ function displayResult(r) {
         weightedLowBid > 0 ? `${weightedLowBid.toFixed(2)} ~ ${weightedAvgBid.toFixed(2)}元` : '--';
     document.getElementById('step1PriceWeightRange').textContent = 
         (priceWeightLow > 0) ? `${priceWeightLow.toFixed(2)}~${priceWeightHigh.toFixed(2)}元` : '--';
+
+    // v3.97-as-cs: 顯示調整係數資訊
+    const adjPct = r.priceMethodAdjustmentPct || '0';
+    const adjReason = r.adjustmentReason || '';
+    const adjNote = document.getElementById('step1PriceAdjustmentNote');
+    const adjBadgeNo = document.getElementById('step1PriceNoWeightAdj');
+    const adjBadgeW = document.getElementById('step1PriceWeightAdj');
+    
+    if (parseFloat(adjPct) > 0) {
+        const adjText = `+${adjPct}%`;
+        if (adjBadgeNo) adjBadgeNo.textContent = adjText;
+        if (adjBadgeW) adjBadgeW.textContent = adjText;
+        if (adjNote) {
+            adjNote.innerHTML = `⚡ 已套用歷史落差調整 +${adjPct}%<br><span style="font-size:9px; opacity:0.8;">${adjReason}</span>`;
+            adjNote.style.display = 'block';
+        }
+    } else {
+        if (adjBadgeNo) adjBadgeNo.textContent = '';
+        if (adjBadgeW) adjBadgeW.textContent = '';
+        if (adjNote) adjNote.style.display = 'none';
+    }
 
     // 根據系統採用的方法設定預設標籤
     if (usePremiumMethod) {
@@ -11401,6 +11458,542 @@ function calcMarketAtmosphere(n = 5, guarantee = null) {
         caseCount: recentCases.length,
         guarantee: guarantee
     };
+}
+
+// ==========================================
+// v3.97-ct 新增：涵蓋率測試工具
+// ==========================================
+
+/**
+ * v3.97-ct 涵蓋率測試：測試不同檔數和權重組合的預測準確度
+ * 
+ * 核心邏輯：用「前N檔」的加權平均得標價來預測，檢查實際最低得標價是否落在區間內
+ * Rex大叔觀點：市場熱度是拍出來的價格，已包含當下氛圍傾向
+ * 
+ * @param {Object} config - 測試配置
+ * @param {number} config.n1 - 第一組檔數（如3）
+ * @param {number} config.n2 - 第二組檔數（如6）
+ * @param {number} config.w1 - 第一組權重（如0.6 = 60%）
+ * @param {number} config.w2 - 第二組權重（如0.4 = 40%）
+ * @param {number} config.marginLow - 下限margin（如-2 = 預測值-2元）
+ * @param {number} config.marginHigh - 上限margin（如+3 = 預測值+3元）
+ * @param {string} config.method - 'price'(得標價) 或 'premium'(溢價率)
+ * @returns {Object} 測試結果
+ */
+function testCoverageRate(config = {}) {
+    const { 
+        n1 = 3, 
+        n2 = 6, 
+        w1 = 0.6, 
+        w2 = 0.4,
+        marginLow = -2,
+        marginHigh = 3,
+        method = 'price'  // v3.97-ct: 預設用得標價法
+    } = config;
+    
+    if (!auctionRawData || auctionRawData.length === 0) {
+        console.log('❌ 無競拍資料可供測試');
+        return null;
+    }
+    
+    // 按開標日期排序（舊→新）
+    const sortedData = [...auctionRawData]
+        .filter(d => {
+            if (!d.openDate) return false;
+            if (method === 'price') {
+                // 得標價法：需要有最低得標價
+                return d.minBidPrice !== null && d.minBidPrice !== undefined && d.minBidPrice > 0;
+            } else {
+                // 溢價率法：需要有最低溢價
+                return d.minPremium !== null && d.minPremium !== undefined;
+            }
+        })
+        .sort((a, b) => {
+            const parseDate = (dateStr) => {
+                if (!dateStr) return new Date(0);
+                if (typeof dateStr === 'number') return new Date((dateStr - 25569) * 86400 * 1000);
+                const parts = String(dateStr).split(/[\/\-]/);
+                if (parts.length >= 3) return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+                return new Date(dateStr);
+            };
+            return parseDate(a.openDate) - parseDate(b.openDate);  // 升序：舊的在前
+        });
+    
+    const minSampleSize = Math.max(n1, n2);
+    let covered = 0;
+    let total = 0;
+    const details = [];
+    
+    // 從第 minSampleSize+1 檔開始測試
+    for (let i = minSampleSize; i < sortedData.length; i++) {
+        const current = sortedData[i];
+        
+        // 取得實際值
+        const actualValue = method === 'price' ? current.minBidPrice : current.minPremium;
+        if (actualValue === null || isNaN(actualValue)) continue;
+        
+        // 取前N1檔和前N2檔
+        const prevData = sortedData.slice(0, i);
+        const recentN1 = prevData.slice(-n1);
+        const recentN2 = prevData.slice(-n2);
+        
+        if (recentN1.length < n1 || recentN2.length < n2) continue;
+        
+        // 計算各組平均值（得標價或溢價率）
+        const field = method === 'price' ? 'minBidPrice' : 'minPremium';
+        const avgN1 = recentN1.reduce((s, d) => s + (d[field] || 0), 0) / recentN1.length;
+        const avgN2 = recentN2.reduce((s, d) => s + (d[field] || 0), 0) / recentN2.length;
+        
+        // 加權預測值
+        const predicted = avgN1 * w1 + avgN2 * w2;
+        
+        // 預測區間
+        const rangeMin = predicted + marginLow;
+        const rangeMax = predicted + marginHigh;
+        
+        // 檢查是否涵蓋
+        const isCovered = actualValue >= rangeMin && actualValue <= rangeMax;
+        
+        if (isCovered) covered++;
+        total++;
+        
+        details.push({
+            name: current.cbName || current.name,
+            date: current.openDate,
+            actual: actualValue,
+            predicted: predicted,
+            rangeMin: rangeMin,
+            rangeMax: rangeMax,
+            covered: isCovered,
+            avgN1: avgN1,
+            avgN2: avgN2
+        });
+    }
+    
+    const coverageRate = total > 0 ? (covered / total * 100) : 0;
+    const methodLabel = method === 'price' ? '得標價' : '溢價率';
+    const unit = method === 'price' ? '元' : '%';
+    
+    console.log(`📊 涵蓋率測試 [${methodLabel}法] [${n1}檔×${(w1*100).toFixed(0)}% + ${n2}檔×${(w2*100).toFixed(0)}%] 區間[${marginLow}~+${marginHigh}${unit}]`);
+    console.log(`   涵蓋: ${covered}/${total} = ${coverageRate.toFixed(1)}%`);
+    
+    return {
+        config: { n1, n2, w1, w2, marginLow, marginHigh, method },
+        covered: covered,
+        total: total,
+        coverageRate: coverageRate,
+        details: details
+    };
+}
+
+/**
+ * v3.97-ct 批次測試：系統性測試多種權重組合
+ * Rex大叔觀點：用得標價法更合理，因為市場熱度就是拍出來的價格
+ */
+function batchTestCoverage() {
+    console.log('========================================');
+    console.log('🧪 v3.97-ct 批次涵蓋率測試開始');
+    console.log('========================================');
+    
+    const results = [];
+    
+    // 測試不同的檔數組合
+    const combos = [
+        { n1: 3, n2: 6, label: '3檔+6檔' },
+        { n1: 3, n2: 9, label: '3檔+9檔' },
+        { n1: 6, n2: 9, label: '6檔+9檔' },
+        { n1: 3, n2: 3, label: '純3檔' },
+        { n1: 6, n2: 6, label: '純6檔' },
+        { n1: 9, n2: 9, label: '純9檔' }
+    ];
+    
+    // 測試不同的權重比例
+    const weights = [
+        { w1: 1.0, w2: 0.0, label: '100:0' },
+        { w1: 0.7, w2: 0.3, label: '70:30' },
+        { w1: 0.6, w2: 0.4, label: '60:40' },
+        { w1: 0.5, w2: 0.5, label: '50:50' },
+        { w1: 0.4, w2: 0.6, label: '40:60' }
+    ];
+    
+    // 得標價法的區間margin（單位：元）
+    const priceMargins = [
+        { low: -1, high: 2, label: '[-1,+2]' },
+        { low: -2, high: 2, label: '[-2,+2]' },
+        { low: -2, high: 3, label: '[-2,+3]' },
+        { low: -3, high: 3, label: '[-3,+3]' },
+        { low: -1, high: 3, label: '[-1,+3]' }
+    ];
+    
+    console.log('\n📈 === 得標價法測試 ===');
+    console.log('（用前N檔平均得標價預測，區間單位：元）\n');
+    
+    // 執行得標價法測試
+    for (const combo of combos) {
+        for (const weight of weights) {
+            if (combo.n1 === combo.n2 && weight.w1 !== 1.0) continue;
+            
+            for (const margin of priceMargins) {
+                const result = testCoverageRate({
+                    n1: combo.n1,
+                    n2: combo.n2,
+                    w1: weight.w1,
+                    w2: weight.w2,
+                    marginLow: margin.low,
+                    marginHigh: margin.high,
+                    method: 'price'
+                });
+                
+                if (result) {
+                    results.push({
+                        method: '得標價',
+                        combo: combo.label,
+                        weight: weight.label,
+                        margin: margin.label,
+                        rate: result.coverageRate,
+                        covered: result.covered,
+                        total: result.total
+                    });
+                }
+            }
+        }
+    }
+    
+    // 排序：涵蓋率由高到低
+    results.sort((a, b) => b.rate - a.rate);
+    
+    // 輸出前20名
+    console.log('\n🏆 涵蓋率排行榜 (前20名) - 得標價法');
+    console.log('排名 | 檔數組合 | 權重比 | 區間(元) | 涵蓋率 | 涵蓋/總數');
+    console.log('-----|---------|--------|----------|--------|----------');
+    
+    results.slice(0, 20).forEach((r, i) => {
+        console.log(`${String(i+1).padStart(4)} | ${r.combo.padEnd(8)} | ${r.weight.padEnd(6)} | ${r.margin.padEnd(8)} | ${r.rate.toFixed(1).padStart(5)}% | ${r.covered}/${r.total}`);
+    });
+    
+    // 找出最佳組合
+    const best = results[0];
+    console.log('\n✨ 最佳組合:');
+    console.log(`   ${best.combo} × ${best.weight} × ${best.margin}`);
+    console.log(`   涵蓋率: ${best.rate.toFixed(1)}% (${best.covered}/${best.total})`);
+    
+    console.log('\n========================================');
+    console.log('🧪 批次測試完成');
+    console.log('========================================');
+    
+    window.coverageTestResults = results;
+    return results;
+}
+
+/**
+ * v3.97-ct 分擔保類型測試
+ */
+function testCoverageByGuarantee() {
+    console.log('\n========================================');
+    console.log('🧪 分擔保類型涵蓋率測試（得標價法）');
+    console.log('========================================');
+    
+    const config = { n1: 3, n2: 6, w1: 0.6, w2: 0.4, marginLow: -2, marginHigh: 3, method: 'price' };
+    
+    // 保存原始資料
+    const originalData = [...auctionRawData];
+    
+    // 全部
+    console.log('\n📊 全部標的:');
+    window.auctionRawData = originalData;
+    const allResult = testCoverageRate(config);
+    
+    // 有擔保
+    console.log('\n📊 有擔保標的:');
+    window.auctionRawData = originalData.filter(d => d.guarantee === '有擔保');
+    const securedResult = testCoverageRate(config);
+    
+    // 無擔保
+    console.log('\n📊 無擔保標的:');
+    window.auctionRawData = originalData.filter(d => d.guarantee === '無擔保');
+    const unsecuredResult = testCoverageRate(config);
+    
+    // 恢復原始資料
+    window.auctionRawData = originalData;
+    
+    console.log('\n📋 摘要比較 (得標價法):');
+    console.log(`全部: ${allResult?.coverageRate?.toFixed(1) || '-'}% (${allResult?.covered || 0}/${allResult?.total || 0})`);
+    console.log(`有擔保: ${securedResult?.coverageRate?.toFixed(1) || '-'}% (${securedResult?.covered || 0}/${securedResult?.total || 0})`);
+    console.log(`無擔保: ${unsecuredResult?.coverageRate?.toFixed(1) || '-'}% (${unsecuredResult?.covered || 0}/${unsecuredResult?.total || 0})`);
+    
+    return { all: allResult, secured: securedResult, unsecured: unsecuredResult };
+}
+
+/**
+ * v3.97-ct 細分市場氛圍測試（找出最佳的檔數權重組合）
+ */
+function findBestWeightCombo() {
+    console.log('\n========================================');
+    console.log('🎯 尋找最佳檔數權重組合');
+    console.log('========================================');
+    
+    const results = [];
+    
+    // 更細緻的權重測試
+    for (let w1 = 0.3; w1 <= 1.0; w1 += 0.1) {
+        const w2 = 1 - w1;
+        
+        // 3+6檔組合
+        const r36 = testCoverageRate({ n1: 3, n2: 6, w1, w2, marginLow: -2, marginHigh: 3, method: 'price' });
+        if (r36) results.push({ combo: '3+6', w1, w2, rate: r36.coverageRate, covered: r36.covered, total: r36.total });
+        
+        // 3+9檔組合
+        const r39 = testCoverageRate({ n1: 3, n2: 9, w1, w2, marginLow: -2, marginHigh: 3, method: 'price' });
+        if (r39) results.push({ combo: '3+9', w1, w2, rate: r39.coverageRate, covered: r39.covered, total: r39.total });
+    }
+    
+    results.sort((a, b) => b.rate - a.rate);
+    
+    console.log('\n🏆 最佳權重組合 (區間[-2,+3]元):');
+    console.log('排名 | 組合 | 權重 | 涵蓋率');
+    console.log('-----|------|------|--------');
+    
+    results.slice(0, 10).forEach((r, i) => {
+        console.log(`${String(i+1).padStart(4)} | ${r.combo.padEnd(4)} | ${(r.w1*100).toFixed(0)}:${(r.w2*100).toFixed(0)} | ${r.rate.toFixed(1)}%`);
+    });
+    
+    const best = results[0];
+    console.log(`\n✨ 建議採用: ${best.combo}檔, 權重 ${(best.w1*100).toFixed(0)}:${(best.w2*100).toFixed(0)}, 涵蓋率 ${best.rate.toFixed(1)}%`);
+    
+    return results;
+}
+
+// ==========================================
+// v3.97-ct 新增：投標倍數加權 + 標準差動態區間測試
+// Rex大叔觀點：雖不中亦不遠矣，避免離譜預估
+// ==========================================
+
+/**
+ * v3.97-ct 進階涵蓋率測試：投標倍數加權 + 標準差動態區間
+ * 
+ * 核心邏輯：
+ * 1. 用前N檔「平均得標價」作為基準預測
+ * 2. 用前N檔「投標倍數」加權調整（熱→往上調，冷→往下調）
+ * 3. 用前N檔「標準差」決定區間寬度（波動大→區間寬）
+ * 
+ * @param {Object} config - 測試配置
+ */
+function testCoverageWithStdDev(config = {}) {
+    const { 
+        n1 = 3,           // 近期檔數
+        n2 = 6,           // 中期檔數
+        w1 = 0.6,         // 近期權重
+        w2 = 0.4,         // 中期權重
+        stdMultiplier = 1.0,  // 標準差倍數（用於調整區間寬度）
+        minMargin = 1.5,  // 最小區間margin（避免區間太窄）
+        maxMargin = 5.0   // 最大區間margin（避免區間太寬）
+    } = config;
+    
+    if (!auctionRawData || auctionRawData.length === 0) {
+        console.log('❌ 無競拍資料可供測試');
+        return null;
+    }
+    
+    // 按開標日期排序（舊→新）
+    const sortedData = [...auctionRawData]
+        .filter(d => d.openDate && d.minBidPrice > 0 && d.bidMultiple > 0)
+        .sort((a, b) => {
+            const parseDate = (dateStr) => {
+                if (!dateStr) return new Date(0);
+                if (typeof dateStr === 'number') return new Date((dateStr - 25569) * 86400 * 1000);
+                const parts = String(dateStr).split(/[\/\-]/);
+                if (parts.length >= 3) return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+                return new Date(dateStr);
+            };
+            return parseDate(a.openDate) - parseDate(b.openDate);
+        });
+    
+    const minSampleSize = Math.max(n1, n2);
+    let covered = 0;
+    let total = 0;
+    const details = [];
+    
+    for (let i = minSampleSize; i < sortedData.length; i++) {
+        const current = sortedData[i];
+        const actualPrice = current.minBidPrice;
+        
+        if (!actualPrice || actualPrice <= 0) continue;
+        
+        const prevData = sortedData.slice(0, i);
+        const recentN1 = prevData.slice(-n1);
+        const recentN2 = prevData.slice(-n2);
+        
+        if (recentN1.length < n1 || recentN2.length < n2) continue;
+        
+        // === 計算加權平均得標價 ===
+        const avgPriceN1 = recentN1.reduce((s, d) => s + d.minBidPrice, 0) / recentN1.length;
+        const avgPriceN2 = recentN2.reduce((s, d) => s + d.minBidPrice, 0) / recentN2.length;
+        const weightedAvgPrice = avgPriceN1 * w1 + avgPriceN2 * w2;
+        
+        // === 計算加權平均投標倍數 ===
+        const avgMultN1 = recentN1.reduce((s, d) => s + d.bidMultiple, 0) / recentN1.length;
+        const avgMultN2 = recentN2.reduce((s, d) => s + d.bidMultiple, 0) / recentN2.length;
+        const weightedAvgMult = avgMultN1 * w1 + avgMultN2 * w2;
+        
+        // === 計算標準差（用於動態區間）===
+        const allPrices = prevData.slice(-n2).map(d => d.minBidPrice);
+        const mean = allPrices.reduce((s, p) => s + p, 0) / allPrices.length;
+        const variance = allPrices.reduce((s, p) => s + Math.pow(p - mean, 2), 0) / allPrices.length;
+        const stdDev = Math.sqrt(variance);
+        
+        // === 投標倍數調整係數 ===
+        // 基準倍數 2.5，高於則往上調，低於則往下調
+        const baseMult = 2.5;
+        const multAdjustment = (weightedAvgMult - baseMult) * 0.5;  // 每偏離1倍，調整0.5元
+        
+        // === 預測價格（加權平均 + 倍數調整）===
+        const predicted = weightedAvgPrice + multAdjustment;
+        
+        // === 動態區間（基於標準差）===
+        let dynamicMargin = stdDev * stdMultiplier;
+        dynamicMargin = Math.max(minMargin, Math.min(maxMargin, dynamicMargin));
+        
+        const rangeMin = predicted - dynamicMargin;
+        const rangeMax = predicted + dynamicMargin;
+        
+        // 檢查是否涵蓋
+        const isCovered = actualPrice >= rangeMin && actualPrice <= rangeMax;
+        
+        if (isCovered) covered++;
+        total++;
+        
+        details.push({
+            name: current.cbName || current.name,
+            date: current.openDate,
+            actual: actualPrice,
+            predicted: predicted,
+            rangeMin: rangeMin,
+            rangeMax: rangeMax,
+            covered: isCovered,
+            avgPrice: weightedAvgPrice,
+            avgMult: weightedAvgMult,
+            multAdj: multAdjustment,
+            stdDev: stdDev,
+            margin: dynamicMargin
+        });
+    }
+    
+    const coverageRate = total > 0 ? (covered / total * 100) : 0;
+    
+    console.log(`📊 進階測試 [${n1}+${n2}檔, ${(w1*100).toFixed(0)}:${(w2*100).toFixed(0)}] σ×${stdMultiplier} 區間[${minMargin}~${maxMargin}]`);
+    console.log(`   涵蓋: ${covered}/${total} = ${coverageRate.toFixed(1)}%`);
+    
+    return {
+        config: { n1, n2, w1, w2, stdMultiplier, minMargin, maxMargin },
+        covered,
+        total,
+        coverageRate,
+        details
+    };
+}
+
+/**
+ * v3.97-ct 批次測試：投標倍數加權 + 標準差動態區間
+ */
+function batchTestWithStdDev() {
+    console.log('========================================');
+    console.log('🧪 v3.97-ct 進階涵蓋率測試（倍數加權+標準差）');
+    console.log('========================================');
+    console.log('核心邏輯：');
+    console.log('  1. 加權平均得標價 = 前3檔×w1 + 前6檔×w2');
+    console.log('  2. 倍數調整 = (加權倍數 - 2.5) × 0.5元');
+    console.log('  3. 動態區間 = 標準差 × σ倍數');
+    console.log('========================================\n');
+    
+    const results = [];
+    
+    // 測試不同的權重組合
+    const weightCombos = [
+        { w1: 0.7, w2: 0.3, label: '70:30' },
+        { w1: 0.6, w2: 0.4, label: '60:40' },
+        { w1: 0.5, w2: 0.5, label: '50:50' }
+    ];
+    
+    // 測試不同的標準差倍數
+    const stdMultipliers = [0.8, 1.0, 1.2, 1.5, 2.0];
+    
+    // 測試不同的最小/最大margin
+    const marginConfigs = [
+        { min: 1.0, max: 4.0, label: '[1,4]' },
+        { min: 1.5, max: 5.0, label: '[1.5,5]' },
+        { min: 2.0, max: 6.0, label: '[2,6]' }
+    ];
+    
+    for (const wc of weightCombos) {
+        for (const sm of stdMultipliers) {
+            for (const mc of marginConfigs) {
+                const result = testCoverageWithStdDev({
+                    n1: 3, n2: 6,
+                    w1: wc.w1, w2: wc.w2,
+                    stdMultiplier: sm,
+                    minMargin: mc.min,
+                    maxMargin: mc.max
+                });
+                
+                if (result) {
+                    results.push({
+                        weight: wc.label,
+                        stdMult: sm,
+                        margin: mc.label,
+                        rate: result.coverageRate,
+                        covered: result.covered,
+                        total: result.total
+                    });
+                }
+            }
+        }
+    }
+    
+    results.sort((a, b) => b.rate - a.rate);
+    
+    console.log('\n🏆 涵蓋率排行榜 (前15名) - 倍數加權+標準差');
+    console.log('排名 | 權重比 | σ倍數 | 區間限制 | 涵蓋率 | 涵蓋/總數');
+    console.log('-----|--------|-------|----------|--------|----------');
+    
+    results.slice(0, 15).forEach((r, i) => {
+        console.log(`${String(i+1).padStart(4)} | ${r.weight.padEnd(6)} | ${r.stdMult.toFixed(1).padStart(5)} | ${r.margin.padEnd(8)} | ${r.rate.toFixed(1).padStart(5)}% | ${r.covered}/${r.total}`);
+    });
+    
+    const best = results[0];
+    console.log('\n✨ 最佳組合:');
+    console.log(`   權重: ${best.weight}, σ倍數: ${best.stdMult}, 區間限制: ${best.margin}`);
+    console.log(`   涵蓋率: ${best.rate.toFixed(1)}% (${best.covered}/${best.total})`);
+    
+    // 顯示未涵蓋的案例分析
+    const bestResult = testCoverageWithStdDev({
+        n1: 3, n2: 6,
+        w1: parseFloat(best.weight.split(':')[0]) / 100,
+        w2: parseFloat(best.weight.split(':')[1]) / 100,
+        stdMultiplier: best.stdMult,
+        minMargin: parseFloat(best.margin.match(/\d+\.?\d*/)[0]),
+        maxMargin: parseFloat(best.margin.match(/\d+\.?\d*/g)[1])
+    });
+    
+    if (bestResult) {
+        const missed = bestResult.details.filter(d => !d.covered);
+        console.log(`\n⚠️ 未涵蓋案例 (${missed.length}檔):`);
+        console.log('標的 | 實際 | 預測 | 區間 | 偏離');
+        console.log('-----|------|------|------|------');
+        
+        missed.slice(0, 10).forEach(m => {
+            const deviation = m.actual < m.rangeMin ? 
+                `低${(m.rangeMin - m.actual).toFixed(1)}` : 
+                `高${(m.actual - m.rangeMax).toFixed(1)}`;
+            console.log(`${(m.name || '').substring(0, 6).padEnd(6)} | ${m.actual.toFixed(1)} | ${m.predicted.toFixed(1)} | ${m.rangeMin.toFixed(1)}~${m.rangeMax.toFixed(1)} | ${deviation}`);
+        });
+    }
+    
+    console.log('\n========================================');
+    console.log('🧪 進階測試完成');
+    console.log('========================================');
+    
+    window.stdDevTestResults = results;
+    return results;
 }
 
 /**

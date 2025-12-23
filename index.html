@@ -4,9 +4,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.97-as-cn (純CSV版)</title>
-<!-- v3.97-as-cn: 移除 Excel fallback，純 CSV 模式 -->
-<!-- v3.97-as-cm: 統一表格樣式（字體13px, padding 10px 6px）+ 券商簡化顯示 + 橫向滾動 -->
+<title>AI智能可轉債競拍系統 v3.97-as-cp (純CSV版)</title>
+<!-- v3.97-as-cp: Step 1 改為 2x2 標籤切換（溢價率/得標均價 × 無加權/有加權）-->
+<!-- v3.97-as-co: 移除 displayResult 中重複的 AI 智能競拍預測區塊 -->
 
 <!-- v3.97-as-ca: 改為從 data/00_cb/ 載入 CSV 檔案 -->
 
@@ -1676,7 +1676,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.97-as-cn)...</div>
+    <div>🔄 系統啟動中 (v3.97-as-cp)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
@@ -1967,7 +1967,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     </div>
 </div>
 
-<!-- Step 1: 基礎數據分析（溢價率法/得標均價法，有加權與無加權） -->
+<!-- Step 1: 基礎數據分析（溢價率法/得標均價法 × 無加權/有加權） -->
 <div class="step-section" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border: 2px solid #2196f3; border-radius: 12px; padding: 15px; margin-bottom: 15px;">
     <div style="display:flex; align-items:center; margin-bottom:12px; padding-bottom:10px; border-bottom:2px solid #2196f3;">
         <span style="background:#2196f3; color:white; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; margin-right:10px;">1</span>
@@ -1975,7 +1975,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
         <span style="font-size:11px; color:#666; margin-left:auto;" id="step1MethodLabel">--</span>
     </div>
     <div id="step1Content">
-        <!-- 理論價與方法 -->
+        <!-- 理論價顯示 -->
         <div style="background:linear-gradient(135deg, #1565c0 0%, #0d47a1 100%); color:white; padding:12px; border-radius:10px; margin-bottom:12px;">
             <div style="display:flex; align-items:center; justify-content:center; gap:15px; flex-wrap:wrap;">
                 <div style="text-align:center;">
@@ -1993,33 +1993,92 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
             </div>
         </div>
 
-        <!-- 無加權 vs 有加權 並列 -->
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
-            <!-- 無加權 -->
-            <div style="background:linear-gradient(135deg, #1976d2 0%, #1565c0 100%); color:white; padding:12px; border-radius:10px;">
-                <div style="font-size:11px; opacity:0.9; margin-bottom:8px; text-align:center;">📊 無加權（純歷史平均）</div>
+        <!-- 標籤切換區 -->
+        <div style="margin-bottom:12px;">
+            <!-- 方法切換標籤 -->
+            <div style="display:flex; gap:8px; margin-bottom:8px;">
+                <button id="step1TabPremium" onclick="switchStep1Tab('premium')" 
+                    style="flex:1; padding:10px; border:2px solid #1976d2; border-radius:8px; background:#1976d2; color:white; font-weight:bold; font-size:13px; cursor:pointer; transition:all 0.3s;">
+                    📈 溢價率分析法
+                </button>
+                <button id="step1TabPrice" onclick="switchStep1Tab('price')" 
+                    style="flex:1; padding:10px; border:2px solid #e65100; border-radius:8px; background:white; color:#e65100; font-weight:bold; font-size:13px; cursor:pointer; transition:all 0.3s;">
+                    📊 得標均價法
+                </button>
+            </div>
+            <!-- 加權切換標籤 -->
+            <div style="display:flex; gap:8px;">
+                <button id="step1TabNoWeight" onclick="switchStep1Weight('noweight')" 
+                    style="flex:1; padding:8px; border:2px solid #666; border-radius:6px; background:#666; color:white; font-size:12px; cursor:pointer; transition:all 0.3s;">
+                    📊 無加權（純歷史平均）
+                </button>
+                <button id="step1TabWeight" onclick="switchStep1Weight('weight')" 
+                    style="flex:1; padding:8px; border:2px solid #7b1fa2; border-radius:6px; background:white; color:#7b1fa2; font-size:12px; cursor:pointer; transition:all 0.3s;">
+                    ⚖️ 有加權（維度加權）
+                </button>
+            </div>
+        </div>
+
+        <!-- 溢價率法 - 無加權 -->
+        <div id="step1PremiumNoWeight" class="step1-panel" style="display:block;">
+            <div style="background:linear-gradient(135deg, #1976d2 0%, #1565c0 100%); color:white; padding:12px; border-radius:10px; margin-bottom:10px;">
+                <div style="font-size:11px; opacity:0.9; margin-bottom:8px; text-align:center;">📈 溢價率分析法（無加權）</div>
                 <div style="text-align:center; margin-bottom:6px;">
                     <div style="font-size:10px; opacity:0.8;">歷史平均溢價率</div>
-                    <div style="font-size:16px; font-weight:bold;" id="step1NoWeightPremium">--</div>
+                    <div style="font-size:18px; font-weight:bold;" id="step1PremNoWeightRate">--</div>
                 </div>
                 <div style="text-align:center; background:rgba(255,255,255,0.2); padding:8px; border-radius:6px;">
                     <div style="font-size:10px; opacity:0.8;">建議區間</div>
-                    <div style="font-size:14px; font-weight:bold;" id="step1NoWeightRange">--</div>
-                </div>
-            </div>
-            <!-- 有加權 -->
-            <div style="background:linear-gradient(135deg, #7b1fa2 0%, #6a1b9a 100%); color:white; padding:12px; border-radius:10px;">
-                <div style="font-size:11px; opacity:0.9; margin-bottom:8px; text-align:center;">⚖️ 有加權（維度加權）</div>
-                <div style="text-align:center; margin-bottom:6px;">
-                    <div style="font-size:10px; opacity:0.8;">加權平均溢價率</div>
-                    <div style="font-size:16px; font-weight:bold;" id="step1WeightPremium">--</div>
-                </div>
-                <div style="text-align:center; background:rgba(255,255,255,0.2); padding:8px; border-radius:6px;">
-                    <div style="font-size:10px; opacity:0.8;">建議區間</div>
-                    <div style="font-size:14px; font-weight:bold;" id="step1WeightRange">--</div>
+                    <div style="font-size:16px; font-weight:bold;" id="step1PremNoWeightRange">--</div>
                 </div>
             </div>
         </div>
+
+        <!-- 溢價率法 - 有加權 -->
+        <div id="step1PremiumWeight" class="step1-panel" style="display:none;">
+            <div style="background:linear-gradient(135deg, #7b1fa2 0%, #6a1b9a 100%); color:white; padding:12px; border-radius:10px; margin-bottom:10px;">
+                <div style="font-size:11px; opacity:0.9; margin-bottom:8px; text-align:center;">📈 溢價率分析法（有加權）</div>
+                <div style="text-align:center; margin-bottom:6px;">
+                    <div style="font-size:10px; opacity:0.8;">加權平均溢價率</div>
+                    <div style="font-size:18px; font-weight:bold;" id="step1PremWeightRate">--</div>
+                </div>
+                <div style="text-align:center; background:rgba(255,255,255,0.2); padding:8px; border-radius:6px;">
+                    <div style="font-size:10px; opacity:0.8;">建議區間</div>
+                    <div style="font-size:16px; font-weight:bold;" id="step1PremWeightRange">--</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 得標均價法 - 無加權 -->
+        <div id="step1PriceNoWeight" class="step1-panel" style="display:none;">
+            <div style="background:linear-gradient(135deg, #e65100 0%, #bf360c 100%); color:white; padding:12px; border-radius:10px; margin-bottom:10px;">
+                <div style="font-size:11px; opacity:0.9; margin-bottom:8px; text-align:center;">📊 得標均價法（無加權）</div>
+                <div style="text-align:center; margin-bottom:6px;">
+                    <div style="font-size:10px; opacity:0.8;">歷史平均得標價</div>
+                    <div style="font-size:18px; font-weight:bold;" id="step1PriceNoWeightRate">--</div>
+                </div>
+                <div style="text-align:center; background:rgba(255,255,255,0.2); padding:8px; border-radius:6px;">
+                    <div style="font-size:10px; opacity:0.8;">建議區間</div>
+                    <div style="font-size:16px; font-weight:bold;" id="step1PriceNoWeightRange">--</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 得標均價法 - 有加權 -->
+        <div id="step1PriceWeight" class="step1-panel" style="display:none;">
+            <div style="background:linear-gradient(135deg, #c62828 0%, #b71c1c 100%); color:white; padding:12px; border-radius:10px; margin-bottom:10px;">
+                <div style="font-size:11px; opacity:0.9; margin-bottom:8px; text-align:center;">📊 得標均價法（有加權）</div>
+                <div style="text-align:center; margin-bottom:6px;">
+                    <div style="font-size:10px; opacity:0.8;">加權平均得標價</div>
+                    <div style="font-size:18px; font-weight:bold;" id="step1PriceWeightRate">--</div>
+                </div>
+                <div style="text-align:center; background:rgba(255,255,255,0.2); padding:8px; border-radius:6px;">
+                    <div style="font-size:10px; opacity:0.8;">建議區間</div>
+                    <div style="font-size:16px; font-weight:bold;" id="step1PriceWeightRange">--</div>
+                </div>
+            </div>
+        </div>
+
         <div style="text-align:center; font-size:11px; color:#1565c0; margin-bottom:10px;">
             💡 無加權為整體歷史平均，有加權考量產業、信評、規模、券商等維度<br>
             <span style="color:#e65100;">⚠️ 加權目的：避免單一標的異常值影響整體判斷</span>
@@ -6134,6 +6193,68 @@ function toggleSupplyDetail(type) {
     }
 }
 
+// v3.97-as-cp: Step 1 標籤切換狀態
+let step1CurrentMethod = 'premium'; // 'premium' 或 'price'
+let step1CurrentWeight = 'noweight'; // 'noweight' 或 'weight'
+
+// v3.97-as-cp: 切換分析方法（溢價率法/得標均價法）
+function switchStep1Tab(method) {
+    step1CurrentMethod = method;
+    updateStep1Panel();
+    
+    // 更新按鈕樣式
+    const premBtn = document.getElementById('step1TabPremium');
+    const priceBtn = document.getElementById('step1TabPrice');
+    
+    if (method === 'premium') {
+        premBtn.style.background = '#1976d2';
+        premBtn.style.color = 'white';
+        priceBtn.style.background = 'white';
+        priceBtn.style.color = '#e65100';
+    } else {
+        premBtn.style.background = 'white';
+        premBtn.style.color = '#1976d2';
+        priceBtn.style.background = '#e65100';
+        priceBtn.style.color = 'white';
+    }
+}
+
+// v3.97-as-cp: 切換加權模式（無加權/有加權）
+function switchStep1Weight(weight) {
+    step1CurrentWeight = weight;
+    updateStep1Panel();
+    
+    // 更新按鈕樣式
+    const noWeightBtn = document.getElementById('step1TabNoWeight');
+    const weightBtn = document.getElementById('step1TabWeight');
+    
+    if (weight === 'noweight') {
+        noWeightBtn.style.background = '#666';
+        noWeightBtn.style.color = 'white';
+        weightBtn.style.background = 'white';
+        weightBtn.style.color = '#7b1fa2';
+    } else {
+        noWeightBtn.style.background = 'white';
+        noWeightBtn.style.color = '#666';
+        weightBtn.style.background = '#7b1fa2';
+        weightBtn.style.color = 'white';
+    }
+}
+
+// v3.97-as-cp: 更新顯示的面板
+function updateStep1Panel() {
+    // 隱藏所有面板
+    document.querySelectorAll('.step1-panel').forEach(p => p.style.display = 'none');
+    
+    // 顯示對應面板
+    const panelId = 'step1' + 
+        (step1CurrentMethod === 'premium' ? 'Premium' : 'Price') + 
+        (step1CurrentWeight === 'noweight' ? 'NoWeight' : 'Weight');
+    
+    const panel = document.getElementById(panelId);
+    if (panel) panel.style.display = 'block';
+}
+
 // v3.55 新增：年度績效排行
 let yearlyRankingData = {};
 
@@ -9208,37 +9329,47 @@ function displayResult(r) {
     const noWeightAvgBid = parseFloat(r.overallAvgBidPrice) || weightedAvgBid;
     const noWeightLowBid = parseFloat(r.overallLowBidPrice) || weightedLowBid;
 
-    // 計算價格區間
-    let noWeightLow, noWeightHigh, weightLow, weightHigh;
+    // v3.97-as-cp: 填充 4 個面板數據
+    // 1. 溢價率法 - 無加權
+    const premNoWeightLow = theoPrice * (1 + noWeightLowPremium / 100);
+    const premNoWeightHigh = theoPrice * (1 + noWeightAvgPremium / 100);
+    document.getElementById('step1PremNoWeightRate').textContent = 
+        `${noWeightLowPremium.toFixed(2)}% ~ ${noWeightAvgPremium.toFixed(2)}%`;
+    document.getElementById('step1PremNoWeightRange').textContent = 
+        (premNoWeightLow > 0) ? `${premNoWeightLow.toFixed(2)}~${premNoWeightHigh.toFixed(2)}元` : '--';
 
+    // 2. 溢價率法 - 有加權
+    const premWeightLow = theoPrice * (1 + lowPremium / 100);
+    const premWeightHigh = theoPrice * (1 + avgPremium / 100);
+    document.getElementById('step1PremWeightRate').textContent = 
+        `${lowPremium.toFixed(2)}% ~ ${avgPremium.toFixed(2)}%`;
+    document.getElementById('step1PremWeightRange').textContent = 
+        (premWeightLow > 0) ? `${premWeightLow.toFixed(2)}~${premWeightHigh.toFixed(2)}元` : '--';
+
+    // 3. 得標均價法 - 無加權
+    const priceNoWeightLow = noWeightLowBid > 0 ? noWeightLowBid : premNoWeightLow;
+    const priceNoWeightHigh = noWeightAvgBid > 0 ? noWeightAvgBid : premNoWeightHigh;
+    document.getElementById('step1PriceNoWeightRate').textContent = 
+        noWeightLowBid > 0 ? `${noWeightLowBid.toFixed(2)} ~ ${noWeightAvgBid.toFixed(2)}元` : '--';
+    document.getElementById('step1PriceNoWeightRange').textContent = 
+        (priceNoWeightLow > 0) ? `${priceNoWeightLow.toFixed(2)}~${priceNoWeightHigh.toFixed(2)}元` : '--';
+
+    // 4. 得標均價法 - 有加權
+    const priceWeightLow = weightedLowBid > 0 ? weightedLowBid : premWeightLow;
+    const priceWeightHigh = weightedAvgBid > 0 ? weightedAvgBid : premWeightHigh;
+    document.getElementById('step1PriceWeightRate').textContent = 
+        weightedLowBid > 0 ? `${weightedLowBid.toFixed(2)} ~ ${weightedAvgBid.toFixed(2)}元` : '--';
+    document.getElementById('step1PriceWeightRange').textContent = 
+        (priceWeightLow > 0) ? `${priceWeightLow.toFixed(2)}~${priceWeightHigh.toFixed(2)}元` : '--';
+
+    // 根據系統採用的方法設定預設標籤
     if (usePremiumMethod) {
-        // 溢價率法
-        noWeightLow = theoPrice * (1 + noWeightLowPremium / 100);
-        noWeightHigh = theoPrice * (1 + noWeightAvgPremium / 100);
-        weightLow = theoPrice * (1 + lowPremium / 100);
-        weightHigh = theoPrice * (1 + avgPremium / 100);
-
-        document.getElementById('step1NoWeightPremium').textContent =
-            `${noWeightLowPremium.toFixed(2)}% ~ ${noWeightAvgPremium.toFixed(2)}%`;
-        document.getElementById('step1WeightPremium').textContent =
-            `${lowPremium.toFixed(2)}% ~ ${avgPremium.toFixed(2)}%`;
+        switchStep1Tab('premium');
     } else {
-        // 得標均價法
-        noWeightLow = noWeightLowBid > 0 ? noWeightLowBid : theoPrice * (1 + noWeightLowPremium / 100);
-        noWeightHigh = noWeightAvgBid > 0 ? noWeightAvgBid : theoPrice * (1 + noWeightAvgPremium / 100);
-        weightLow = weightedLowBid > 0 ? weightedLowBid : theoPrice * (1 + lowPremium / 100);
-        weightHigh = weightedAvgBid > 0 ? weightedAvgBid : theoPrice * (1 + avgPremium / 100);
-
-        document.getElementById('step1NoWeightPremium').textContent =
-            noWeightLowBid > 0 ? `${noWeightLowBid.toFixed(2)} ~ ${noWeightAvgBid.toFixed(2)}` : '--';
-        document.getElementById('step1WeightPremium').textContent =
-            weightedLowBid > 0 ? `${weightedLowBid.toFixed(2)} ~ ${weightedAvgBid.toFixed(2)}` : '--';
+        switchStep1Tab('price');
     }
-
-    document.getElementById('step1NoWeightRange').textContent =
-        (noWeightLow > 0 && noWeightHigh > 0) ? `${noWeightLow.toFixed(2)}~${noWeightHigh.toFixed(2)}元` : '--';
-    document.getElementById('step1WeightRange').textContent =
-        (weightLow > 0 && weightHigh > 0) ? `${weightLow.toFixed(2)}~${weightHigh.toFixed(2)}元` : '--';
+    // 預設顯示有加權（因為系統建議使用加權結果）
+    switchStep1Weight('weight');
 
     // Step 1 詳細分析內容（各維度加權明細）
     const marketSentiment = document.getElementById('marketSentiment');
@@ -10109,7 +10240,7 @@ function displayResult(r) {
 
     ${generateConditionSummaryHTML(r)}
 
-    ${r.majorPlayerResult ? generateMajorPlayerHTML(r.majorPlayerResult, r.floorPrice, r.theoreticalPrice, r.guarantee) : ''}
+    <!-- v3.97-as-co: 移除重複的 majorPlayerHTML，已整合到 Step 3 -->
 
     <div style="text-align:center;margin-top:25px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
         <button onclick="location.reload()" class="calculate-btn" style="width:180px; background:#555;">🔄 重新評估</button>

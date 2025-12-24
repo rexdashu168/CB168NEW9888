@@ -19776,23 +19776,23 @@ async function loadMarginData() {
 
     const allData = {};
 
-    // v3.97-dl: 只載入 2025 年度檔案（先確認可以正常讀取）
+    // v3.97-dq: 只載入 2025 年度檔案
     const years = ['2025'];
     const fileConfigs = [
         { 
             prefix: 'data/tpxlenging_', 
             market: '上市', 
-            // 嘗試多種可能的欄位名稱
-            marginCols: ['融資餘額', '融資餘額(張)', '資餘額'],
-            shortCols: ['融券餘額', '融券餘額(張)', '券餘額'],
-            codeCols: ['代號', '股票代號', '證券代號']
+            // 精確匹配欄位名稱
+            marginCol: '資餘額',  // 融資餘額
+            shortCol: '券餘額',   // 融券餘額
+            codeCol: '代號'
         },
         { 
             prefix: 'data/otclenging_', 
             market: '上櫃',
-            marginCols: ['資餘額', '融資餘額', '融資餘額(張)'],
-            shortCols: ['券餘額', '融券餘額', '融券餘額(張)'],
-            codeCols: ['代號', '股票代號', '證券代號']
+            marginCol: '資餘額',
+            shortCol: '券餘額',
+            codeCol: '代號'
         }
     ];
 
@@ -19841,34 +19841,28 @@ async function loadMarginData() {
                     const rawData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
                     if (rawData.length < 2) continue;
 
-                    // 找出欄位位置（嘗試多種可能的欄位名稱）
+                    // v3.97-dq: 精確匹配欄位名稱
                     const headers = rawData[0];
                     let codeIdx = -1, marginIdx = -1, shortIdx = -1;
 
                     headers.forEach((h, idx) => {
                         const col = String(h || '').trim();
-                        // 代號欄位
-                        if (config.codeCols.some(c => col.includes(c) || c.includes(col))) {
-                            if (codeIdx < 0) codeIdx = idx;
-                        }
-                        // 融資餘額欄位
-                        if (config.marginCols.some(c => col.includes(c) || c.includes(col))) {
-                            if (marginIdx < 0) marginIdx = idx;
-                        }
-                        // 融券餘額欄位
-                        if (config.shortCols.some(c => col.includes(c) || c.includes(col))) {
-                            if (shortIdx < 0) shortIdx = idx;
-                        }
+                        // 精確匹配
+                        if (col === config.codeCol) codeIdx = idx;
+                        if (col === config.marginCol) marginIdx = idx;
+                        if (col === config.shortCol) shortIdx = idx;
                     });
 
                     // 顯示第一個工作表的欄位偵錯資訊
                     if (sheetName === recentSheets[0]) {
                         console.log(`${config.market} 欄位: ${headers.join(', ')}`);
-                        console.log(`找到欄位位置 - 代號:${codeIdx}, 融資:${marginIdx}, 融券:${shortIdx}`);
+                        console.log(`找到欄位位置 - 代號:${codeIdx}, 融資(${config.marginCol}):${marginIdx}, 融券(${config.shortCol}):${shortIdx}`);
                     }
 
                     if (codeIdx < 0 || marginIdx < 0 || shortIdx < 0) {
-                        console.warn(`${config.market} ${sheetName} 缺少必要欄位`);
+                        if (sheetName === recentSheets[0]) {
+                            console.warn(`${config.market} ${sheetName} 缺少必要欄位 - 代號:${codeIdx}, 融資:${marginIdx}, 融券:${shortIdx}`);
+                        }
                         continue;
                     }
 

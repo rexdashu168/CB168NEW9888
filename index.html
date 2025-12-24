@@ -4,10 +4,30 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.98c (集成預測引擎版)</title>
+<title>AI智能可轉債競拍系統 v3.98d (分區間溢價率版)</title>
+<!-- v3.98d: 核心重構！改用「分區間溢價率法」作為預測核心 -->
+<!-- 
+     關鍵洞察：不同理論價區間有完全不同的溢價率分布
+     <90: 平均溢價22%, 90-95: 12.7%, 95-100: 7.6%, 100-105: 6.3%, 
+     105-110: 4.2%, 110-115: 0.4%, >115: -9.2%
+
+```
+ 核心變更：
+ 1. 新增 calcSegmentPremiumPrediction - 分區間溢價率法（權重40%）
+ 2. 新增 calcSegmentMA - 分區間近期熱度（權重30%）
+ 3. 原有維度加權溢價率降為輔助（權重20%）
+ 4. 擔保調整（權重10%）
+ 5. 策略價格基於分區間標準差計算，更精準
+```
+
+–>
+
 <!-- v3.98c: 修正集成預測引擎的m.value.toFixed錯誤，加強所有數值運算的安全檢查 -->
+
 <!-- v3.98b: 修正step0Reminder的null錯誤 -->
+
 <!-- v3.98a: 集成預測引擎優化版 - 基於304筆歷史資料統計分析優化 -->
+
 <!-- 核心優化：
      1. 新增集成預測引擎 v2.0 (Ensemble Engine) - 整合4種預測方法，MAE≈3.4元
      2. 新增MA10市場熱度指標 - 追蹤近10檔競拍趨勢
@@ -17,10 +37,15 @@
      研究發現：投標倍數為最強預測因子(相關係數0.736)，但截標前無法取得
      集成方法可有效降低單一方法的預測風險
 -->
+
 <!-- v3.97-cw: 第五區塊改為「台股熱門交易」- 漲跌幅排行/計量強勢/計量弱勢 -->
+
 <!-- v3.97-cu: 精簡為三大核心模組 - Step1基礎數據 + Step2最強大腦 + Step3 AI智能預測 -->
+
 <!-- v3.97-ct: 新增AI智慧核心模組 - 異常值處理、信心度量化、氛圍偏離警示、雙軌整合預測 -->
+
 <!-- v3.97-as-cs: 得標均價法加入歷史落差調整係數（理論價<90:+5%, <95:+3%, <97.5:+2%）-->
+
 <!-- v3.97-as-cr: Step 1 明細動態跟隨標籤切換 -->
 
 <!-- v3.97-as-ca: 改為從 data/00_cb/ 載入 CSV 檔案 -->
@@ -2439,14 +2464,19 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
                     <div style="font-size:14px; font-weight:bold;" id="step3Method3">--元</div>
                 </div>
                 <div style="text-align:center; background:rgba(255,255,255,0.15); padding:8px; border-radius:6px;">
-                    <div style="font-size:9px; opacity:0.8;">分層模型</div>
+                    <div style="font-size:9px; opacity:0.8;">擔保調整</div>
                     <div style="font-size:14px; font-weight:bold;" id="step3Method4">--元</div>
                 </div>
             </div>
             
+            <!-- 分區間資訊提示 -->
+            <div id="step3SegmentInfo" style="text-align:center; font-size:11px; opacity:0.9; margin-bottom:8px; padding:6px; background:rgba(255,255,255,0.1); border-radius:4px;">
+                理論價區間: <span id="step3SegmentName">--</span> | 區間平均溢價: <span id="step3SegmentPremium">--%</span>
+            </div>
+            
             <!-- 集成結果 -->
             <div style="text-align:center; background:rgba(255,255,255,0.25); padding:12px; border-radius:8px; margin-bottom:12px;">
-                <div style="font-size:11px; margin-bottom:4px;">🎯 集成預測價格（MAE ≈ 3.4元）</div>
+                <div style="font-size:11px; margin-bottom:4px;">🎯 分區間集成預測價格</div>
                 <div style="font-size:28px; font-weight:bold;" id="step3EnsemblePrice">--元</div>
                 <div style="font-size:10px; opacity:0.8; margin-top:4px;">方法間標準差: <span id="step3EnsembleStd">--</span>元</div>
             </div>
@@ -3481,122 +3511,221 @@ const AICore = {
             };
         },
         
-        // 分層模型預測（按理論價區間，研究發現訓練MAE=3.19元）
-        calcSegmentPrediction: function(theoPrice, guaranteeType, auctionData) {
-            if (!auctionData || auctionData.length === 0) return null;
+        // v3.98d 重新設計：分區間溢價率法（核心方法）
+        // 關鍵洞察：不同理論價區間有完全不同的溢價率分布
+        // <90: 平均溢價22%, 90-95: 12.7%, 95-100: 7.6%, 100-105: 6.3%, 105-110: 4.2%, 110-115: 0.4%, >115: -9.2%
+        calcSegmentPremiumPrediction: function(theoPrice, guaranteeType, auctionData) {
+            if (!auctionData || auctionData.length === 0 || theoPrice <= 0) return null;
             
-            // 理論價區間定義
-            let segment = '';
-            if (theoPrice < 95) segment = '<95';
-            else if (theoPrice < 100) segment = '95-100';
-            else if (theoPrice < 105) segment = '100-105';
-            else if (theoPrice < 110) segment = '105-110';
-            else segment = '>=110';
+            // 細化理論價區間定義（7個區間）
+            const getSegment = (theo) => {
+                if (theo < 90) return '<90';
+                if (theo < 95) return '90-95';
+                if (theo < 100) return '95-100';
+                if (theo < 105) return '100-105';
+                if (theo < 110) return '105-110';
+                if (theo < 115) return '110-115';
+                return '>=115';
+            };
             
-            // 過濾同區間且同擔保類型的歷史案例
+            const targetSegment = getSegment(theoPrice);
+            
+            // 過濾同區間的歷史案例（擔保類型可選）
             const filtered = auctionData.filter(d => {
                 const theo = parseFloat(d['理論價']) || 0;
-                const guar = d['擔保'] || '';
                 const minBid = parseFloat(d['最低得標']) || 0;
                 
-                if (minBid <= 0) return false;
+                if (minBid <= 0 || theo <= 0) return false;
                 
-                // 檢查擔保類型
-                const isGuaranteed = (guar === '有擔保' || guar === '有');
-                const targetGuaranteed = (guaranteeType === '有擔保' || guaranteeType === '有');
-                if (isGuaranteed !== targetGuaranteed) return false;
-                
-                // 檢查理論價區間
-                let dSegment = '';
-                if (theo < 95) dSegment = '<95';
-                else if (theo < 100) dSegment = '95-100';
-                else if (theo < 105) dSegment = '100-105';
-                else if (theo < 110) dSegment = '105-110';
-                else dSegment = '>=110';
-                
-                return dSegment === segment;
+                return getSegment(theo) === targetSegment;
             });
             
-            if (filtered.length < 3) return null;
+            // 如果同區間樣本不足，嘗試擴大到相鄰區間
+            let expandedFiltered = filtered;
+            if (filtered.length < 5) {
+                const allSegments = ['<90', '90-95', '95-100', '100-105', '105-110', '110-115', '>=115'];
+                const targetIdx = allSegments.indexOf(targetSegment);
+                
+                expandedFiltered = auctionData.filter(d => {
+                    const theo = parseFloat(d['理論價']) || 0;
+                    const minBid = parseFloat(d['最低得標']) || 0;
+                    if (minBid <= 0 || theo <= 0) return false;
+                    
+                    const dSegment = getSegment(theo);
+                    const dIdx = allSegments.indexOf(dSegment);
+                    
+                    // 允許相鄰區間
+                    return Math.abs(dIdx - targetIdx) <= 1;
+                });
+            }
             
-            const prices = filtered.map(d => parseFloat(d['最低得標']));
-            const mean = prices.reduce((a, b) => a + b, 0) / prices.length;
-            const std = Math.sqrt(prices.reduce((sum, p) => sum + Math.pow(p - mean, 2), 0) / prices.length);
+            if (expandedFiltered.length < 3) return null;
+            
+            // 計算該區間的溢價率統計
+            const premiums = expandedFiltered.map(d => {
+                const theo = parseFloat(d['理論價']) || 0;
+                const minBid = parseFloat(d['最低得標']) || 0;
+                return theo > 0 ? ((minBid / theo) - 1) * 100 : 0;
+            });
+            
+            const avgPremium = premiums.reduce((a, b) => a + b, 0) / premiums.length;
+            const stdPremium = Math.sqrt(premiums.reduce((sum, p) => sum + Math.pow(p - avgPremium, 2), 0) / premiums.length);
+            
+            // 用該區間的平均溢價率乘以當前理論價
+            const predictedPrice = theoPrice * (1 + avgPremium / 100);
             
             return {
-                segment: segment,
-                mean: mean,
-                std: std,
-                count: filtered.length,
-                // 計算隱含溢價率
-                impliedPremium: theoPrice > 0 ? ((mean / theoPrice) - 1) * 100 : 0
+                segment: targetSegment,
+                sampleCount: expandedFiltered.length,
+                exactSegmentCount: filtered.length,
+                avgPremium: avgPremium,
+                stdPremium: stdPremium,
+                predictedPrice: predictedPrice,
+                // 策略價格
+                conservative: theoPrice * (1 + (avgPremium - 0.618 * stdPremium) / 100),
+                balanced: predictedPrice,
+                aggressive: theoPrice * (1 + (avgPremium + 0.618 * stdPremium) / 100),
+                ultimate: theoPrice * (1 + (avgPremium + 1.236 * stdPremium) / 100)
             };
         },
         
-        // 集成預測（等權重組合多種方法）
-        // 研究發現等權重集成MAE=3.435元，是最優策略之一
+        // v3.98d 重新設計：分區間MA熱度（只看同區間的近期案例）
+        calcSegmentMA: function(theoPrice, auctionData, n = 10) {
+            if (!auctionData || auctionData.length === 0 || theoPrice <= 0) return null;
+            
+            const getSegment = (theo) => {
+                if (theo < 90) return '<90';
+                if (theo < 95) return '90-95';
+                if (theo < 100) return '95-100';
+                if (theo < 105) return '100-105';
+                if (theo < 110) return '105-110';
+                if (theo < 115) return '110-115';
+                return '>=115';
+            };
+            
+            const targetSegment = getSegment(theoPrice);
+            
+            // 按日期排序（最新在前）
+            const sorted = [...auctionData]
+                .filter(d => {
+                    const theo = parseFloat(d['理論價']) || 0;
+                    const minBid = parseFloat(d['最低得標']) || 0;
+                    return minBid > 0 && theo > 0 && getSegment(theo) === targetSegment;
+                })
+                .sort((a, b) => new Date(b['開標日期']) - new Date(a['開標日期']));
+            
+            if (sorted.length < 3) return null;
+            
+            // 取該區間最近N檔
+            const recent = sorted.slice(0, Math.min(n, sorted.length));
+            
+            const premiums = recent.map(d => {
+                const theo = parseFloat(d['理論價']) || 0;
+                const minBid = parseFloat(d['最低得標']) || 0;
+                return theo > 0 ? ((minBid / theo) - 1) * 100 : 0;
+            });
+            
+            const avgPremium = premiums.reduce((a, b) => a + b, 0) / premiums.length;
+            const predictedPrice = theoPrice * (1 + avgPremium / 100);
+            
+            return {
+                segment: targetSegment,
+                count: recent.length,
+                avgPremium: avgPremium,
+                predictedPrice: predictedPrice
+            };
+        },
+        
+        // v3.98d 重新設計：集成預測（以分區間溢價率法為核心）
         calcEnsemblePrediction: function(params) {
             const { theoPrice, guarantee, auctionData, dimensions } = params;
             
+            if (!theoPrice || theoPrice <= 0) return null;
+            
             const predictions = [];
-            const weights = [];
             
-            // 方法1: 溢價率法預測
-            if (dimensions && dimensions.totalLowPremium) {
+            // 方法1: 分區間溢價率法（核心方法，權重最高）
+            const segmentPred = this.calcSegmentPremiumPrediction(theoPrice, guarantee, auctionData);
+            if (segmentPred && segmentPred.predictedPrice > 0) {
+                predictions.push({ 
+                    name: '分區間溢價率', 
+                    value: segmentPred.predictedPrice, 
+                    weight: 0.40,
+                    detail: `${segmentPred.segment}區間 溢價${segmentPred.avgPremium.toFixed(1)}% (${segmentPred.sampleCount}筆)`
+                });
+            }
+            
+            // 方法2: 分區間近期熱度（同區間的MA）
+            const segmentMA = this.calcSegmentMA(theoPrice, auctionData, 10);
+            if (segmentMA && segmentMA.predictedPrice > 0) {
+                predictions.push({ 
+                    name: '區間近期熱度', 
+                    value: segmentMA.predictedPrice, 
+                    weight: 0.30,
+                    detail: `${segmentMA.segment}區間近${segmentMA.count}檔 溢價${segmentMA.avgPremium.toFixed(1)}%`
+                });
+            }
+            
+            // 方法3: 原有溢價率法（維度加權）- 作為補充
+            if (dimensions && typeof dimensions.totalLowPremium === 'number' && !isNaN(dimensions.totalLowPremium)) {
                 const premiumPred = theoPrice * (1 + dimensions.totalLowPremium / 100);
-                predictions.push({ name: '溢價率法', value: premiumPred, weight: 0.25 });
-                weights.push(0.25);
+                if (premiumPred > 0) {
+                    predictions.push({ 
+                        name: '維度加權溢價', 
+                        value: premiumPred, 
+                        weight: 0.20,
+                        detail: `加權溢價率 ${dimensions.totalLowPremium.toFixed(1)}%`
+                    });
+                }
             }
             
-            // 方法2: 得標均價法預測
-            if (dimensions && dimensions.weightedLowBidPrice) {
-                predictions.push({ name: '得標均價法', value: dimensions.weightedLowBidPrice, weight: 0.25 });
-                weights.push(0.25);
-            }
-            
-            // 方法3: MA10移動平均
-            const ma10 = this.calcMA10(auctionData);
-            if (ma10 && ma10.value > 0) {
-                predictions.push({ name: 'MA10熱度', value: ma10.value, weight: 0.25 });
-                weights.push(0.25);
-            }
-            
-            // 方法4: 分層模型
-            const segment = this.calcSegmentPrediction(theoPrice, guarantee, auctionData);
-            if (segment && segment.mean > 0) {
-                predictions.push({ name: '分層模型', value: segment.mean, weight: 0.25 });
-                weights.push(0.25);
+            // 方法4: 擔保類型調整
+            const isGuaranteed = (guarantee === '有擔保' || guarantee === '有');
+            if (segmentPred && segmentPred.predictedPrice > 0) {
+                // 有擔保通常溢價更高約1-2%
+                const guarAdj = isGuaranteed ? 1.01 : 1.0;
+                const guarPred = segmentPred.predictedPrice * guarAdj;
+                predictions.push({ 
+                    name: '擔保調整', 
+                    value: guarPred, 
+                    weight: 0.10,
+                    detail: isGuaranteed ? '有擔保+1%' : '無擔保基準'
+                });
             }
             
             if (predictions.length === 0) return null;
             
             // 正規化權重
-            const totalWeight = weights.reduce((a, b) => a + b, 0);
-            const normalizedWeights = weights.map(w => w / totalWeight);
-            
-            // 計算加權平均
-            let ensembleValue = 0;
-            predictions.forEach((p, i) => {
-                p.normalizedWeight = normalizedWeights[i];
-                ensembleValue += p.value * normalizedWeights[i];
+            const totalWeight = predictions.reduce((sum, p) => sum + p.weight, 0);
+            predictions.forEach(p => {
+                p.normalizedWeight = p.weight / totalWeight;
             });
             
-            // 計算標準差（用於信心度）
-            const variance = predictions.reduce((sum, p, i) => 
-                sum + normalizedWeights[i] * Math.pow(p.value - ensembleValue, 2), 0
+            // 計算加權平均
+            let ensembleValue = predictions.reduce((sum, p) => sum + p.value * p.normalizedWeight, 0);
+            
+            // 計算方法間標準差
+            const variance = predictions.reduce((sum, p) => 
+                sum + p.normalizedWeight * Math.pow(p.value - ensembleValue, 2), 0
             );
             const ensembleStd = Math.sqrt(variance);
+            
+            // 使用分區間的標準差來計算策略價格（更精準）
+            const strategyStd = segmentPred ? segmentPred.stdPremium * theoPrice / 100 : ensembleStd;
             
             return {
                 value: ensembleValue,
                 std: ensembleStd,
                 methods: predictions,
                 methodCount: predictions.length,
-                // 生成策略價格
-                conservative: Math.max(100, ensembleValue - 0.618 * ensembleStd),
+                // 策略價格（基於分區間標準差）
+                conservative: Math.max(100, ensembleValue - 0.618 * strategyStd),
                 balanced: ensembleValue,
-                aggressive: ensembleValue + 0.618 * ensembleStd,
-                ultimate: ensembleValue + 1.236 * ensembleStd
+                aggressive: ensembleValue + 0.618 * strategyStd,
+                ultimate: ensembleValue + 1.236 * strategyStd,
+                // 額外資訊
+                segment: segmentPred ? segmentPred.segment : null,
+                segmentPremium: segmentPred ? segmentPred.avgPremium : null
             };
         },
         
@@ -3611,8 +3740,9 @@ const AICore = {
                 const weightStr = (m && typeof m.normalizedWeight === 'number') 
                     ? (m.normalizedWeight * 100).toFixed(0) + '%' 
                     : '--%';
+                const detailStr = m.detail ? ` <span style="font-size:10px;color:#888;">${m.detail}</span>` : '';
                 return `<div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px dashed #eee;">
-                    <span>${m.name || '未知'}</span>
+                    <span>${m.name || '未知'}${detailStr}</span>
                     <span style="font-weight:600;">${valueStr} (${weightStr})</span>
                 </div>`;
             }).join('');
@@ -11110,7 +11240,7 @@ function displayResult(r) {
             }
         }
         
-        // ========== v3.98a 新增：集成預測引擎 ==========
+        // ========== v3.98d 重新設計：分區間集成預測引擎 ==========
         if (window.AICore.ensemble) {
             // 準備集成預測所需參數
             const ensembleParams = {
@@ -11118,14 +11248,24 @@ function displayResult(r) {
                 guarantee: step3Guarantee,
                 auctionData: window.auctionDataCache,
                 dimensions: {
-                    totalLowPremium: r ? r.totalLowPremium : null,
-                    weightedLowBidPrice: r ? r.weightedLowBidPrice : null
+                    totalLowPremium: r ? parseFloat(r.totalLowPremium) : null,
+                    weightedLowBidPrice: r ? parseFloat(r.weightedLowBidPrice) : null
                 }
             };
             
             const ensembleResult = window.AICore.ensemble.calcEnsemblePrediction(ensembleParams);
             
             if (ensembleResult && ensembleResult.methods && ensembleResult.methods.length > 0) {
+                // 更新分區間資訊
+                if (ensembleResult.segment) {
+                    updateElement('step3SegmentName', ensembleResult.segment);
+                    updateElement('step3SegmentPremium', 
+                        typeof ensembleResult.segmentPremium === 'number' 
+                            ? ensembleResult.segmentPremium.toFixed(2) + '%' 
+                            : '--%'
+                    );
+                }
+                
                 // 更新各方法預測值 - 加入安全檢查
                 ensembleResult.methods.forEach((m, i) => {
                     if (m && typeof m.value === 'number' && !isNaN(m.value)) {
@@ -11134,6 +11274,11 @@ function displayResult(r) {
                         updateElement(`step3Method${i + 1}`, '--元');
                     }
                 });
+                
+                // 填充剩餘的方法欄位（如果方法數少於4個）
+                for (let i = ensembleResult.methods.length; i < 4; i++) {
+                    updateElement(`step3Method${i + 1}`, '--元');
+                }
                 
                 // 更新集成結果 - 加入安全檢查
                 if (typeof ensembleResult.value === 'number' && !isNaN(ensembleResult.value)) {
@@ -11150,25 +11295,16 @@ function displayResult(r) {
                     updateElement('step3EnsembleStd', '--');
                 }
                 
-                console.log('🧠 v3.98c 集成預測引擎結果:', ensembleResult);
+                console.log('🧠 v3.98d 分區間集成預測結果:', ensembleResult);
             } else {
                 // 集成預測失敗時顯示預設值
+                updateElement('step3SegmentName', '--');
+                updateElement('step3SegmentPremium', '--%');
                 for (let i = 1; i <= 4; i++) {
                     updateElement(`step3Method${i}`, '--元');
                 }
                 updateElement('step3EnsemblePrice', '--元');
                 updateElement('step3EnsembleStd', '--');
-            }
-            
-            // 計算MA10和分層模型供顯示
-            const ma10 = window.AICore.ensemble.calcMA10(window.auctionDataCache);
-            const segment = window.AICore.ensemble.calcSegmentPrediction(step3TheoPrice, step3Guarantee, window.auctionDataCache);
-            
-            if (ma10) {
-                console.log('📊 MA10市場熱度:', ma10);
-            }
-            if (segment) {
-                console.log('📊 分層模型預測:', segment);
             }
         }
         

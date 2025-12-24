@@ -21462,126 +21462,99 @@ window.weeklyBalanceData = {
 window.marginData = {
     loaded: false,
     loading: false,
-    data: {}  // { stockCode: { date: { marginBalance, marginChange, shortBalance, shortChange, shortCover }, ... } }
+    data: {}  // { stockCode: { date: { marginBalance, marginBuy, marginSell, shortBalance, shortBuy, shortSell }, ... } }
 };
 
 /**
- * v3.97-eb: 載入融資融券資料
- * 優先使用 SQLite (margin_2025.db)，沒有才用 Excel
+ * v3.98f-7: 載入融資融券資料（使用 SQLite DB）
+ * 檔案：tpxlenging_YYYY_combined.db
+ * 結構：tpxlenging 表 (日期, 代號, 名稱, 融資買進, 融資賣出, 融資現金償還, 融資餘額, 融券買進, 融券賣出, 融券現券償還, 融券餘額)
  */
 async function loadMarginData() {
     if (window.marginData.loaded || window.marginData.loading) return;
     window.marginData.loading = true;
 
-    console.log('📊 載入融資融券資料...');
+    console.log('📊 載入融資融券資料(SQLite)...');
     const startTime = Date.now();
 
     const allData = {};
-
-    // v3.97-eb: 優先嘗試 SQLite
+    
+    // 確保 sql.js 已初始化
+    let SQL;
     try {
-        const dbResponse = await fetch('data/margin_2025.db');
-        if (dbResponse.ok) {
-            console.log('   使用 SQLite 資料庫...');
-            
-            // 確保 sql.js 已初始化
-            let SQL;
-            if (window.kanbanSQL) {
-                SQL = window.kanbanSQL;
-            } else {
-                SQL = await initSqlJs({
-                    locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}`
-                });
+        if (window.kanbanSQL) {
+            SQL = window.kanbanSQL;
+        } else {
+            SQL = await initSqlJs({
+                locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}`
+            });
+            window.kanbanSQL = SQL;
+        }
+    } catch (e) {
+        console.error('❌ SQL.js 初始化失敗:', e);
+        window.marginData.loading = false;
+        return;
+    }
+
+    // v3.98f-7: 載入多年度 DB 檔案
+    const dbFiles = [
+        'data/tpxlenging_2025_combined.db',
+        'data/tpxlenging_2024_combined.db',
+        'data/tpxlenging_2023_combined.db',
+        'data/tpxlenging_2022_combined.db'
+    ];
+    
+    let totalRecords = 0;
+    
+    for (const dbFile of dbFiles) {
+        try {
+            const response = await fetch(dbFile);
+            if (!response.ok) {
+                console.log(`   ⏭️ ${dbFile} 不存在，跳過`);
+                continue;
             }
             
-            const buffer = await dbResponse.arrayBuffer();
+            const buffer = await response.arrayBuffer();
             const db = new SQL.Database(new Uint8Array(buffer));
             
             // 查詢所有資料
             const results = db.exec(`
-                SELECT date, code, margin_balance, short_balance
-                FROM margin_data
-                ORDER BY code, date
+                SELECT 日期, 代號, 名稱, 融資買進, 融資賣出, 融資餘額, 融券買進, 融券賣出, 融券餘額
+                FROM tpxlenging
+                ORDER BY 代號, 日期
             `);
             
             if (results.length > 0) {
+                let fileRecords = 0;
                 for (const row of results[0].values) {
-                    const [dateStr, code, marginBalance, shortBalance] = row;
+                    const [dateRaw, code, name, marginBuy, marginSell, marginBalance, shortBuy, shortSell, shortBalance] = row;
                     if (!code) continue;
                     
-                    if (!allData[code]) allData[code] = {};
-                    allData[code][dateStr] = {
+                    // 日期格式轉換：20250102 → 2025/01/02
+                    const dateStr = String(dateRaw);
+                    const formattedDate = `${dateStr.substring(0,4)}/${dateStr.substring(4,6)}/${dateStr.substring(6,8)}`;
+                    
+                    const codeStr = String(code);
+                    if (!allData[codeStr]) allData[codeStr] = {};
+                    
+                    allData[codeStr][formattedDate] = {
                         marginBalance: marginBalance || 0,
-                        shortBalance: shortBalance || 0
+                        marginBuy: marginBuy || 0,
+                        marginSell: marginSell || 0,
+                        shortBalance: shortBalance || 0,
+                        shortBuy: shortBuy || 0,
+                        shortSell: shortSell || 0,
+                        name: name || ''
                     };
+                    fileRecords++;
                 }
+                totalRecords += fileRecords;
+                console.log(`   ✅ ${dbFile}: ${fileRecords.toLocaleString()} 筆`);
             }
             
             db.close();
-            
-            window.marginData.data = allData;
-            window.marginData.loaded = true;
-            window.marginData.loading = false;
-            
-            console.log(`✅ 融資融券完成(SQLite): ${Object.keys(allData).length} 檔, ${Date.now() - startTime}ms`);
-            return;
-        }
-    } catch (e) {
-        console.log('   SQLite 載入失敗，改用 Excel...', e.message);
-    }
-
-    // 備用方案：使用 Excel
-    const fileConfigs = [
-        { prefix: 'data/tpxlenging_2025.xlsx', market: '上市' },
-        { prefix: 'data/otclenging_2025.xlsx', market: '上櫃' }
-    ];
-
-    for (const config of fileConfigs) {
-        try {
-            const response = await fetch(config.prefix);
-            if (!response.ok) continue;
-
-            const workbook = XLSX.read(await response.arrayBuffer(), { type: 'array' });
-            
-            // 只載入最近30天（效能優先）
-            const validSheets = workbook.SheetNames.filter(name => /^\d{8}$/.test(name)).sort().slice(-30);
-            if (validSheets.length === 0) continue;
-
-            let addedCount = 0;
-            for (const sheetName of validSheets) {
-                const rawData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 });
-                if (rawData.length < 2) continue;
-
-                // 找欄位位置
-                const headers = rawData[0];
-                let codeIdx = -1, marginIdx = -1, shortIdx = -1;
-                headers.forEach((h, idx) => {
-                    const col = String(h || '').trim();
-                    if (col === '代號') codeIdx = idx;
-                    if (col === '資餘額') marginIdx = idx;
-                    if (col === '券餘額') shortIdx = idx;
-                });
-
-                if (codeIdx < 0 || marginIdx < 0 || shortIdx < 0) continue;
-
-                const dateStr = `${sheetName.substring(0,4)}/${sheetName.substring(4,6)}/${sheetName.substring(6,8)}`;
-
-                for (let i = 1; i < rawData.length; i++) {
-                    const row = rawData[i];
-                    let code = String(row[codeIdx] || '').trim().replace(/\.0*$/, '');
-                    if (!code) continue;
-
-                    if (!allData[code]) allData[code] = {};
-                    allData[code][dateStr] = {
-                        marginBalance: parseInt(row[marginIdx]) || 0,
-                        shortBalance: parseInt(row[shortIdx]) || 0
-                    };
-                    addedCount++;
-                }
-            }
-            console.log(`   ${config.market}: ${validSheets.length}天, ${addedCount}筆`);
-        } catch (err) {
-            console.warn(`❌ ${config.market} 載入失敗:`, err.message);
+        } catch (e) {
+            console.warn(`   ❌ ${dbFile} 載入失敗:`, e.message);
         }
     }
 
@@ -21589,7 +21562,7 @@ async function loadMarginData() {
     window.marginData.loaded = true;
     window.marginData.loading = false;
 
-    console.log(`✅ 融資融券完成: ${Object.keys(allData).length} 檔, ${Date.now() - startTime}ms`);
+    console.log(`✅ 融資融券載入完成: ${Object.keys(allData).length} 檔股票, ${totalRecords.toLocaleString()} 筆記錄, ${Date.now() - startTime}ms`);
 }
 
 /**
@@ -24530,13 +24503,18 @@ async function loadArbitrageData(cbCode) {
             if (window.marginData.loaded) {
                 const stockMargin = window.marginData.data[stockCode];
                 if (stockMargin) {
+                    // v3.98f-7: 轉換為陣列格式，包含完整買賣資料
                     marginData = Object.entries(stockMargin).map(([dateStr, data]) => {
                         const dateNum = parseInt(dateStr.replace(/\//g, ''));
                         return {
                             date: dateNum,
                             dateStr: dateStr,
                             marginBalance: data.marginBalance || 0,
-                            shortBalance: data.shortBalance || 0
+                            marginBuy: data.marginBuy || 0,
+                            marginSell: data.marginSell || 0,
+                            shortBalance: data.shortBalance || 0,
+                            shortBuy: data.shortBuy || 0,
+                            shortSell: data.shortSell || 0
                         };
                     }).filter(d => !isNaN(d.date)).sort((a, b) => a.date - b.date);
                 }
@@ -24872,12 +24850,19 @@ function renderMarginTable(marginData, days) {
         // 券資比
         const shortRatio = d.marginBalance > 0 ? (d.shortBalance / d.marginBalance * 100).toFixed(2) : 0;
         
-        // 格式化日期 (MM/DD)
-        const dateStr = d.date ? d.date.substring(5).replace('-', '/') : '-';
+        // v3.98f-7: 格式化日期 (MM/DD) - 使用 dateStr 欄位
+        let displayDate = '-';
+        if (d.dateStr) {
+            // 格式：2025/01/02 → 01/02
+            const parts = d.dateStr.split('/');
+            if (parts.length >= 3) {
+                displayDate = `${parts[1]}/${parts[2]}`;
+            }
+        }
         
         // 融資行
         buyRows += `<tr>
-            <td style="padding:6px 4px; border:1px solid #eee; text-align:center;">${dateStr}</td>
+            <td style="padding:6px 4px; border:1px solid #eee; text-align:center;">${displayDate}</td>
             <td style="padding:6px 4px; border:1px solid #eee; text-align:right;">${(d.marginBuy || 0).toLocaleString()}</td>
             <td style="padding:6px 4px; border:1px solid #eee; text-align:right;">${(d.marginSell || 0).toLocaleString()}</td>
             <td style="padding:6px 4px; border:1px solid #eee; text-align:right;">${(d.marginBalance || 0).toLocaleString()}</td>
@@ -24886,7 +24871,7 @@ function renderMarginTable(marginData, days) {
         
         // 融券行
         shortRows += `<tr>
-            <td style="padding:6px 4px; border:1px solid #eee; text-align:center;">${dateStr}</td>
+            <td style="padding:6px 4px; border:1px solid #eee; text-align:center;">${displayDate}</td>
             <td style="padding:6px 4px; border:1px solid #eee; text-align:right;">${(d.shortSell || 0).toLocaleString()}</td>
             <td style="padding:6px 4px; border:1px solid #eee; text-align:right;">${(d.shortBuy || 0).toLocaleString()}</td>
             <td style="padding:6px 4px; border:1px solid #eee; text-align:right;">${(d.shortBalance || 0).toLocaleString()}</td>

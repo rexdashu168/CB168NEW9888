@@ -2192,7 +2192,7 @@ button:active, .clickable:active {
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.98g 線性預測模型版)...</div>
+    <div>🔄 系統啟動中 (v3.98h 擔保分離模型版)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
@@ -2200,7 +2200,7 @@ button:active, .clickable:active {
     <!-- v3.98g 修改：頂部標題置中 + 統計數據 -->
     <div class="header">
         <h1>🏠 Rex大叔的168台股投資研究室</h1>
-        <span class="version-badge">v3.98g 線性預測模型版</span>
+        <span class="version-badge">v3.98h 擔保分離模型版</span>
         <div class="subtitle">
             <span id="headerSubtitle">載入中...</span>
             <span style="color:#ddd">|</span>
@@ -8186,7 +8186,7 @@ function calculateGlobalMarketStats() {
 }
 
 // v3.52 修改：增加排除前三高的統計 + 擔保類型細分統計
-function getStatsSmart(category, val) {
+function getStatsSmart(category, val, guaranteeType = null) {
     let stats = {
         low: 0,
         avg: 0,
@@ -8199,7 +8199,9 @@ function getStatsSmart(category, val) {
         guaranteedAuctionData: null,
         guaranteedInquiryData: null,
         unguaranteedAuctionData: null,
-        unguaranteedInquiryData: null
+        unguaranteedInquiryData: null,
+        // v3.98h 新增：記錄使用的擔保類型
+        usedGuaranteeType: guaranteeType
     };
     let filterFn = null;
     let rangeLabel = "";
@@ -8317,8 +8319,18 @@ function getStatsSmart(category, val) {
     }
 
     if (filterFn) {
-        // === 競拍數據統計（全部）===
-        const auctionFiltered = auctionRawData.filter(filterFn);
+        // v3.98h: 如果指定了擔保類型，先篩選對應的數據
+        let auctionFilteredBase = auctionRawData.filter(filterFn);
+        let targetAuctionData = auctionFilteredBase;
+        
+        if (guaranteeType === '有擔保') {
+            targetAuctionData = auctionFilteredBase.filter(d => (d.guarantee || '').includes('有'));
+        } else if (guaranteeType === '無擔保') {
+            targetAuctionData = auctionFilteredBase.filter(d => (d.guarantee || '').includes('無'));
+        }
+        
+        // === 競拍數據統計（依擔保類型）===
+        const auctionFiltered = targetAuctionData;
         let sumLowP = 0, sumAvgP = 0, sumLowPr = 0, sumAvgPr = 0, sumH = 0, sumL = 0, countM = 0, count = 0;
 
         auctionFiltered.forEach(d => {
@@ -8340,14 +8352,15 @@ function getStatsSmart(category, val) {
                 '平均得標價': sumAvgPr / count,
                 '平均掛牌最高': countM > 0 ? sumH / countM : 0,
                 '平均掛牌最低': countM > 0 ? sumL / countM : 0,
-                '樣本數': count
+                '樣本數': count,
+                '擔保類型': guaranteeType || '全部'
             };
             if(rangeLabel) stats.rawData['區間名稱'] = rangeLabel;
             stats.low = stats.rawData['平均最低溢價'];
             stats.avg = stats.rawData['平均溢價'];
         }
 
-        // === v3.52 新增：競拍排除前三高的計算 ===
+        // === v3.52 新增：競拍排除前三高的計算（使用同樣的擔保篩選）===
         const auctionWithMarket = auctionFiltered.filter(d => d.marketHigh > 0 && d.marketLow > 0);
         if (auctionWithMarket.length > 3) {
             // 按掛牌最高排序，排除前三名
@@ -14292,12 +14305,16 @@ function calculateEvaluation(d) {
         w: totalBaseWeight > 0 ? x.baseW / totalBaseWeight : 0
     }));
 
+    // v3.98h: 取得擔保類型用於數據分離
+    const guaranteeType = d.guarantee || null;
+
     // === 計算各維度數據（兩種方法都要）===
     let wL=0, wA=0, resDims={};
     let wLowBid=0, wAvgBid=0; // 得標價格分析法用
 
     dims.forEach(x=>{
-        const s = getStatsSmart(x.c, x.v), coef = getWeightCoefficient(x.k, x.v);
+        // v3.98h: 傳入擔保類型，讓維度數據依據擔保類型分離計算
+        const s = getStatsSmart(x.c, x.v, guaranteeType), coef = getWeightCoefficient(x.k, x.v);
 
         // 溢價率數據
         resDims[x.k] = {
@@ -14330,10 +14347,10 @@ function calculateEvaluation(d) {
     let tL = (wL*objR)+((d.subjectiveLowPremium||0)*subR);
     let tA = (wA*objR)+((d.subjectiveAvgPremium||0)*subR);
 
-    // v3.72 新增：擔保調整因素（不作為維度，而是最終調整）
-    const guaranteeAdj = (d.guarantee === '有擔保') ? 1.0 : 0;
-    tL += guaranteeAdj;
-    tA += guaranteeAdj;
+    // v3.98h: 移除擔保調整（已整合進維度數據分離計算）
+    // 原本：有擔保 +1.0%，無擔保 +0%
+    // 現在：六維度數據已依據擔保類型分別計算，不需額外調整
+    const guaranteeAdj = 0;  // 保留變數但不調整，避免影響其他地方
 
     const gap = tA-tL;
 
@@ -15493,15 +15510,8 @@ function displayResult(r) {
         </tr>`;
     }
 
-    // v3.72 新增：擔保調整行
-    if(r.guaranteeAdj > 0) {
-        premiumRows+=`<tr style="background:#e8f5e9">
-            <td>🛡️ 擔保</td><td>有擔保</td>
-            <td colspan="3" style="text-align:center; color:#2e7d32;">籌碼集中效應調整</td>
-            <td>+${r.guaranteeAdj.toFixed(1)}</td>
-            <td>+${r.guaranteeAdj.toFixed(1)}</td>
-        </tr>`;
-    }
+    // v3.98h: 移除擔保調整行，改為在標題顯示數據來源
+    // 因為六維度數據已依據擔保類型分離計算，不再需要額外調整行
 
     // v3.73 修正：合計行增加原始數值的簡單平均
     const avgLow = dimCount > 0 ? (sumLow / dimCount).toFixed(2) : '-';
@@ -15596,6 +15606,9 @@ function displayResult(r) {
         <h3 style="color:#1976d2;">📈 分析法一：溢價率分析法</h3>
         <p style="color:#666; font-size:13px; margin-bottom:10px;">
             適用情境：理論價 ≥ 95元時，在理論價基礎上加上歷史平均溢價率計算投標價
+            <span style="display:inline-block; background:${r.inputData.guarantee === '有擔保' ? '#e8f5e9' : '#fce4ec'}; padding:2px 8px; border-radius:4px; margin-left:8px; font-weight:600; color:${r.inputData.guarantee === '有擔保' ? '#2e7d32' : '#c62828'};">
+                數據來源：${r.inputData.guarantee === '有擔保' ? '有擔保案例' : r.inputData.guarantee === '無擔保' ? '無擔保案例' : '全部案例'}
+            </span>
         </p>
 
         <!-- 溢價率法核心數據 -->

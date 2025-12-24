@@ -2686,33 +2686,33 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     </div>
     <div class="right-section-content collapsed" id="stockRankingSection">
 
-        <!-- v3.97-cz: 簡化版 - 台股熱門交易 -->
+        <!-- v3.97-dw: 排序按鈕 - 加入高亮狀態 -->
         <div style="background:#fff; border-radius:12px; padding:12px 16px; margin-bottom:12px; box-shadow:0 2px 8px rgba(0,0,0,0.06);">
             <!-- 排行類型切換 -->
             <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
                 <span style="font-size:12px; color:#666; margin-right:4px;">排序：</span>
-                <button type="button" onclick="sortHotStockTable('Value_M', 'desc')"
-                    style="padding:8px 12px; border:1px solid #1976d2; border-radius:6px; background:#1976d2; color:white; cursor:pointer; font-weight:600; font-size:12px;">
+                <button type="button" id="hotSortValue" class="hot-sort-btn active" data-field="Value_M" data-dir="desc" onclick="sortHotStockBtn('Value_M', 'desc', this)"
+                    style="padding:8px 12px; border:2px solid #1976d2; border-radius:6px; background:#1976d2; color:white; cursor:pointer; font-weight:600; font-size:12px;">
                     💰 成交值
                 </button>
-                <button type="button" onclick="sortHotStockTable('Change_1D', 'desc')"
-                    style="padding:8px 12px; border:1px solid #c62828; border-radius:6px; background:white; color:#c62828; cursor:pointer; font-weight:500; font-size:12px;">
+                <button type="button" id="hotSortChange" class="hot-sort-btn" data-field="Change_1D" data-dir="desc" onclick="sortHotStockBtn('Change_1D', 'desc', this)"
+                    style="padding:8px 12px; border:2px solid #ddd; border-radius:6px; background:white; color:#666; cursor:pointer; font-weight:500; font-size:12px;">
                     📈 漲幅
                 </button>
-                <button type="button" onclick="sortHotStockTable('Strength', 'desc')"
-                    style="padding:8px 12px; border:1px solid #ff9800; border-radius:6px; background:white; color:#ff9800; cursor:pointer; font-weight:500; font-size:12px;">
+                <button type="button" id="hotSortStrong" class="hot-sort-btn" data-field="Strength" data-dir="desc" onclick="sortHotStockBtn('Strength', 'desc', this)"
+                    style="padding:8px 12px; border:2px solid #ddd; border-radius:6px; background:white; color:#666; cursor:pointer; font-weight:500; font-size:12px;">
                     💪 強勢
                 </button>
-                <button type="button" onclick="sortHotStockTable('Strength', 'asc')"
-                    style="padding:8px 12px; border:1px solid #2e7d32; border-radius:6px; background:white; color:#2e7d32; cursor:pointer; font-weight:500; font-size:12px;">
+                <button type="button" id="hotSortWeak" class="hot-sort-btn" data-field="Strength" data-dir="asc" onclick="sortHotStockBtn('Strength', 'asc', this)"
+                    style="padding:8px 12px; border:2px solid #ddd; border-radius:6px; background:white; color:#666; cursor:pointer; font-weight:500; font-size:12px;">
                     📉 弱勢
                 </button>
-                <button type="button" onclick="sortHotStockTable('Margin_Change', 'desc')"
-                    style="padding:8px 12px; border:1px solid #e91e63; border-radius:6px; background:white; color:#e91e63; cursor:pointer; font-weight:500; font-size:12px;">
+                <button type="button" id="hotSortMargin" class="hot-sort-btn" data-field="Margin_Change" data-dir="desc" onclick="sortHotStockBtn('Margin_Change', 'desc', this)"
+                    style="padding:8px 12px; border:2px solid #ddd; border-radius:6px; background:white; color:#666; cursor:pointer; font-weight:500; font-size:12px;">
                     🔥 融資增
                 </button>
-                <button type="button" onclick="sortHotStockTable('Short_Balance', 'desc')"
-                    style="padding:8px 12px; border:1px solid #9c27b0; border-radius:6px; background:white; color:#9c27b0; cursor:pointer; font-weight:500; font-size:12px;">
+                <button type="button" id="hotSortShort" class="hot-sort-btn" data-field="Short_Balance" data-dir="desc" onclick="sortHotStockBtn('Short_Balance', 'desc', this)"
+                    style="padding:8px 12px; border:2px solid #ddd; border-radius:6px; background:white; color:#666; cursor:pointer; font-weight:500; font-size:12px;">
                     ⚡ 高融券
                 </button>
             </div>
@@ -7915,8 +7915,12 @@ function toggleRightSection(sectionId, headerElement) {
         // v3.97-zs-bp: 移除自動選擇，讓用戶自己選擇CB
         // 價格走勢和基本資料區塊展開時不再自動載入第一筆
         
-        // v3.97-dt: 第五區塊展開時載入股票排行
+        // v3.97-dw: 第五區塊展開時載入股票排行，同時觸發融資融券載入
         if (sectionId === 'stockRankingSection') {
+            // 背景載入融資融券（如果還沒載入）
+            if (!window.marginData?.loaded && !window.marginData?.loading) {
+                loadMarginData();
+            }
             setTimeout(() => {
                 if (typeof renderHotStockTable === 'function') {
                     renderHotStockTable();
@@ -19013,6 +19017,30 @@ async function loadIndustryData() {
  * @param {string} field - 排序欄位
  * @param {string} [forceDir] - 強制指定排序方向 ('asc' 或 'desc')
  */
+// v3.97-dw: 排序按鈕點擊處理（帶高亮狀態）
+function sortHotStockBtn(field, dir, btnElement) {
+    hotStockSortField = field;
+    hotStockSortDir = dir;
+    
+    // 更新所有按鈕狀態
+    document.querySelectorAll('.hot-sort-btn').forEach(btn => {
+        btn.classList.remove('active');
+        btn.style.background = 'white';
+        btn.style.color = '#666';
+        btn.style.borderColor = '#ddd';
+    });
+    
+    // 高亮當前按鈕
+    if (btnElement) {
+        btnElement.classList.add('active');
+        btnElement.style.background = '#1976d2';
+        btnElement.style.color = 'white';
+        btnElement.style.borderColor = '#1976d2';
+    }
+    
+    renderHotStockTable();
+}
+
 function sortHotStockTable(field, forceDir) {
     if (forceDir) {
         // 強制指定方向

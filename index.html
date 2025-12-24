@@ -2828,6 +2828,19 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
             </div>
         </div>
 
+        <!-- v3.97-ec: 轉換價值分析區塊 -->
+        <div id="conversionValueSection" style="display:none; background:#fff; border-radius:12px; padding:16px; margin-bottom:12px;">
+            <div style="font-size:14px; font-weight:600; color:#333; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+                <span style="font-size:18px;">📊</span> 轉換價值分析
+            </div>
+            <!-- 轉換價值摘要 -->
+            <div id="convValueSummary" style="margin-bottom:12px;"></div>
+            <!-- 轉換溢價率走勢圖 -->
+            <div id="convValueChart" style="min-height:200px;"></div>
+            <!-- 每日明細表格 -->
+            <div id="convValueTable" style="margin-top:12px; max-height:300px; overflow-y:auto;"></div>
+        </div>
+
         <!-- 轉換熱門榜 (預設隱藏) -->
         <div id="arbitrageHotList" style="display:none; background:#fff; border-radius:12px; overflow:hidden;">
             <!-- 動態載入 -->
@@ -22754,6 +22767,7 @@ async function loadArbitrageData(cbCode) {
         document.getElementById('arbitrageSummary').style.display = 'none';
         document.getElementById('arbitrageHotList').style.display = 'none';
         document.getElementById('arbitragePeriodSelector').style.display = 'none';
+        document.getElementById('conversionValueSection').style.display = 'none';
         document.getElementById('arbitrageChart').innerHTML = `
             <div style="text-align:center; color:#999; padding:60px 20px;">
                 <div style="font-size:48px; margin-bottom:12px;">💎</div>
@@ -22843,6 +22857,9 @@ async function loadArbitrageData(cbCode) {
         
         // 繪製圖表
         displayArbitrageChart(filteredCbData, marginData);
+        
+        // v3.97-ec: 顯示轉換價值分析
+        displayConversionValueAnalysis(cbCode, cbInfo);
         
     } catch (error) {
         console.error('載入套利資料失敗:', error);
@@ -23187,6 +23204,124 @@ function displayArbitrageChart(cbData, marginData) {
  * 載入轉換熱門榜
  * 支援排序和篩選
  */
+/**
+ * v3.97-ec: 顯示轉換價值分析
+ * 仿照 XQ 的轉換價值畫面
+ */
+async function displayConversionValueAnalysis(cbCode, cbInfo) {
+    const section = document.getElementById('conversionValueSection');
+    const summaryDiv = document.getElementById('convValueSummary');
+    const chartDiv = document.getElementById('convValueChart');
+    const tableDiv = document.getElementById('convValueTable');
+    
+    if (!cbCode || !cbInfo) {
+        section.style.display = 'none';
+        return;
+    }
+    
+    section.style.display = 'block';
+    
+    // 從看板資料取得 CB 價格歷史
+    const stockCode = cbInfo.stockCode;
+    const convPrice = cbInfo.convPrice || 0;
+    const convRatio = convPrice > 0 ? (100 / convPrice) : 0;  // 每張CB可換幾股
+    const redemptionPrice = convPrice * 1.3;  // 130% 強制贖回價
+    
+    // 嘗試從看板資料取得最新價格
+    let cbPrice = 0;
+    let stockPrice = 0;
+    let cbPriceHistory = [];
+    
+    // 從 kanbanData 取得 CB 價格
+    if (window.kanbanData?.loaded) {
+        const cbKanban = window.kanbanData.data.find(k => k.cbCode === cbCode);
+        if (cbKanban) {
+            cbPrice = cbKanban.cbPrice || 0;
+            stockPrice = cbKanban.stockPrice || 0;
+        }
+    }
+    
+    // 計算轉換價值和溢價率
+    const conversionValue = stockPrice * convRatio;  // 轉換價值 = 股價 × 換股比例
+    const premiumRate = conversionValue > 0 ? ((cbPrice - conversionValue) / conversionValue * 100) : 0;
+    
+    // 轉換價值狀態判斷
+    let convStatus = '價外';
+    let convStatusColor = '#666';
+    let convStatusIcon = '⚪';
+    
+    if (stockPrice >= redemptionPrice) {
+        convStatus = '觸及贖回';
+        convStatusColor = '#c62828';
+        convStatusIcon = '🔴';
+    } else if (stockPrice >= convPrice) {
+        convStatus = '價內';
+        convStatusColor = '#4caf50';
+        convStatusIcon = '🟢';
+    } else if (stockPrice >= convPrice * 0.9) {
+        convStatus = '接近轉換價';
+        convStatusColor = '#ff9800';
+        convStatusIcon = '🟡';
+    }
+    
+    // 顯示摘要
+    summaryDiv.innerHTML = `
+        <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-bottom:12px;">
+            <div style="text-align:center; padding:12px 8px; background:linear-gradient(135deg, #e3f2fd, #fff); border-radius:8px; border:1px solid #1976d2;">
+                <div style="font-size:11px; color:#1976d2;">CB收盤價</div>
+                <div style="font-size:20px; font-weight:700; color:#1976d2;">${cbPrice > 0 ? cbPrice.toFixed(2) : '-'}</div>
+                <div style="font-size:10px; color:#888;">元</div>
+            </div>
+            <div style="text-align:center; padding:12px 8px; background:linear-gradient(135deg, #fff3e0, #fff); border-radius:8px; border:1px solid #ff9800;">
+                <div style="font-size:11px; color:#e65100;">標的股價</div>
+                <div style="font-size:20px; font-weight:700; color:#e65100;">${stockPrice > 0 ? stockPrice.toFixed(2) : '-'}</div>
+                <div style="font-size:10px; color:#888;">元</div>
+            </div>
+            <div style="text-align:center; padding:12px 8px; background:linear-gradient(135deg, #e8f5e9, #fff); border-radius:8px; border:1px solid #4caf50;">
+                <div style="font-size:11px; color:#2e7d32;">轉換價值</div>
+                <div style="font-size:20px; font-weight:700; color:#2e7d32;">${conversionValue > 0 ? conversionValue.toFixed(2) : '-'}</div>
+                <div style="font-size:10px; color:#888;">元</div>
+            </div>
+            <div style="text-align:center; padding:12px 8px; background:linear-gradient(135deg, ${premiumRate > 20 ? '#ffebee' : premiumRate > 0 ? '#fff3e0' : '#e8f5e9'}, #fff); border-radius:8px; border:1px solid ${premiumRate > 20 ? '#c62828' : premiumRate > 0 ? '#ff9800' : '#4caf50'};">
+                <div style="font-size:11px; color:${premiumRate > 20 ? '#c62828' : premiumRate > 0 ? '#e65100' : '#2e7d32'};">轉換溢價率</div>
+                <div style="font-size:20px; font-weight:700; color:${premiumRate > 20 ? '#c62828' : premiumRate > 0 ? '#e65100' : '#2e7d32'};">${premiumRate.toFixed(2)}%</div>
+                <div style="font-size:10px; color:#888;">${premiumRate > 30 ? '偏高' : premiumRate > 15 ? '適中' : '偏低'}</div>
+            </div>
+        </div>
+        
+        <!-- 關鍵價格線 -->
+        <div style="background:#f8f9fa; border-radius:8px; padding:12px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+            <div style="text-align:center; flex:1; min-width:100px;">
+                <div style="font-size:11px; color:#888;">轉換價</div>
+                <div style="font-size:16px; font-weight:600; color:#333;">${convPrice.toFixed(2)}</div>
+            </div>
+            <div style="text-align:center; flex:1; min-width:100px;">
+                <div style="font-size:11px; color:#888;">130%贖回價</div>
+                <div style="font-size:16px; font-weight:600; color:#c62828;">${redemptionPrice.toFixed(2)}</div>
+            </div>
+            <div style="text-align:center; flex:1; min-width:100px;">
+                <div style="font-size:11px; color:#888;">換股比例</div>
+                <div style="font-size:16px; font-weight:600; color:#666;">${convRatio.toFixed(4)}</div>
+            </div>
+            <div style="text-align:center; flex:1; min-width:100px; padding:8px; background:${convStatusColor}15; border-radius:6px;">
+                <div style="font-size:11px; color:#888;">轉換狀態</div>
+                <div style="font-size:16px; font-weight:600; color:${convStatusColor};">${convStatusIcon} ${convStatus}</div>
+            </div>
+        </div>
+    `;
+    
+    // 如果有每日價格資料，顯示圖表和表格
+    // 目前先顯示提示，日後可以整合看板歷史資料
+    chartDiv.innerHTML = `
+        <div style="text-align:center; padding:20px; color:#888; font-size:13px;">
+            <div style="margin-bottom:8px;">📈 轉換溢價率走勢</div>
+            <div style="font-size:12px; color:#aaa;">（需整合看板歷史資料）</div>
+        </div>
+    `;
+    
+    tableDiv.innerHTML = '';
+}
+
 let hotListSortField = 'convertedPct';
 let hotListSortDir = 'desc';
 

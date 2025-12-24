@@ -19133,43 +19133,37 @@ async function loadHotStockData() {
         const tseDb = new window.hotStockSQL.Database(new Uint8Array(tseBuffer));
         const otcDb = new window.hotStockSQL.Database(new Uint8Array(otcBuffer));
         
-        // 載入融資融券資料（可選）
+        // v3.97-dv: 使用已載入的融資融券資料（來自 Excel 檔案）
         let marginMap = {};
-        try {
-            const marginResponse = await fetch('data/margin_2025.db');
-            if (marginResponse.ok) {
-                const marginBuffer = await marginResponse.arrayBuffer();
-                const marginDb = new window.hotStockSQL.Database(new Uint8Array(marginBuffer));
-                
-                // 取得最新日期的融資融券資料
-                const marginData = marginDb.exec(`
-                    SELECT Code,
-                           Margin_Balance,
-                           Margin_Buy - Margin_Sell - Margin_Cash as Margin_Change,
-                           Short_Balance,
-                           CASE WHEN Margin_Balance > 0 
-                                THEN ROUND(Short_Balance * 100.0 / Margin_Balance, 2) 
-                                ELSE 0 END as Short_Ratio
-                    FROM margin 
-                    WHERE Date = (SELECT MAX(Date) FROM margin)
-                `)[0];
-                
-                if (marginData) {
-                    marginData.values.forEach(row => {
-                        const code = String(row[0]);
-                        marginMap[code] = {
-                            Margin_Balance: row[1] || 0,
-                            Margin_Change: row[2] || 0,
-                            Short_Balance: row[3] || 0,
-                            Short_Ratio: row[4] || 0
-                        };
-                    });
-                    console.log(`融資融券資料載入: ${Object.keys(marginMap).length} 檔`);
+        if (window.marginData?.loaded && window.marginData?.data) {
+            // 將 marginData 轉換為 marginMap 格式
+            for (const [code, dateData] of Object.entries(window.marginData.data)) {
+                // 取最新日期的資料
+                const dates = Object.keys(dateData).sort();
+                if (dates.length > 0) {
+                    const latestDate = dates[dates.length - 1];
+                    const latest = dateData[latestDate];
+                    
+                    // 計算融資增減（與前一日比較）
+                    let marginChange = 0;
+                    if (dates.length > 1) {
+                        const prevDate = dates[dates.length - 2];
+                        const prev = dateData[prevDate];
+                        marginChange = (latest.marginBalance || 0) - (prev.marginBalance || 0);
+                    }
+                    
+                    marginMap[code] = {
+                        Margin_Balance: latest.marginBalance || 0,
+                        Margin_Change: marginChange,
+                        Short_Balance: latest.shortBalance || 0,
+                        Short_Ratio: latest.marginBalance > 0 ? 
+                            Math.round(latest.shortBalance * 100 / latest.marginBalance * 100) / 100 : 0
+                    };
                 }
-                marginDb.close();
             }
-        } catch (e) {
-            console.warn('融資融券資料載入失敗:', e);
+            console.log(`融資融券資料載入: ${Object.keys(marginMap).length} 檔`);
+        } else {
+            console.log('融資融券資料尚未載入，功能五將顯示部分欄位為空');
         }
         
         // 查詢上市資料
@@ -19416,6 +19410,14 @@ async function renderHotStockTable() {
             return hotStockSortDir === 'desc' ? '▼' : '▲';
         }
         return '↕';
+    };
+    
+    // v3.97-dv: 格式化漲跌幅
+    const fmtChg = (val) => {
+        if (val === null || val === undefined) return '-';
+        const num = parseFloat(val);
+        if (isNaN(num)) return '-';
+        return (num > 0 ? '+' : '') + num.toFixed(2) + '%';
     };
     
     // 可排序表頭樣式

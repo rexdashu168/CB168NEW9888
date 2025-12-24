@@ -4,7 +4,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.98a (集成預測引擎版)</title>
+<title>AI智能可轉債競拍系統 v3.98b (集成預測引擎版)</title>
+<!-- v3.98b: 修正step0Reminder的null錯誤 -->
 <!-- v3.98a: 集成預測引擎優化版 - 基於304筆歷史資料統計分析優化 -->
 <!-- 核心優化：
      1. 新增集成預測引擎 v2.0 (Ensemble Engine) - 整合4種預測方法，MAE≈3.4元
@@ -10417,16 +10418,19 @@ function displayResult(r) {
         }
     }, 100);
 
-    // Step 0: Rex大叔提醒
+    // Step 0: Rex大叔提醒 - v3.98a修正：加入安全檢查
     const reminderContent = document.getElementById('reminderContent');
-    if (reminderContent && reminderContent.innerHTML.trim()) {
-        document.getElementById('step0Reminder').innerHTML = reminderContent.innerHTML;
-    } else {
-        document.getElementById('step0Reminder').innerHTML = `
-            <div>• 競拍投標價格應以<b>截標日13:30收盤價</b>計算的理論價為基準</div>
-            <div>• 溢價率會隨市場氛圍變動，熱門標的溢價較高</div>
-            <div>• 建議價格僅供參考，請根據自身風險承受度調整</div>
-        `;
+    const step0ReminderEl = document.getElementById('step0Reminder');
+    if (step0ReminderEl) {
+        if (reminderContent && reminderContent.innerHTML.trim()) {
+            step0ReminderEl.innerHTML = reminderContent.innerHTML;
+        } else {
+            step0ReminderEl.innerHTML = `
+                <div>• 競拍投標價格應以<b>截標日13:30收盤價</b>計算的理論價為基準</div>
+                <div>• 溢價率會隨市場氛圍變動，熱門標的溢價較高</div>
+                <div>• 建議價格僅供參考，請根據自身風險承受度調整</div>
+            `;
+        }
     }
 
     // ========== Step 1: 基礎數據分析 ==========

@@ -4,7 +4,35 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.98f-4 (策略邏輯修正版)</title>
+<title>AI智能可轉債競拍系統 v3.98f-21 (雙軌預測升級版)</title>
+<!-- v3.98f-21: 條件相似案例雙軌預測模組 -->
+<!-- 
+     ═══════════════════════════════════════════════════════════════
+     v3.98f-21 Rex大叔核心升級：雙軌預測整合
+     
+     📊 核心洞察：
+     投標倍數相關係數 0.73 → 給 70% 權重
+     溢價率相關係數較低 → 給 30% 權重
+     
+     🎯 條件相似定義：
+     1. 同擔保類型（有擔保/無擔保）
+     2. 同產業別
+     3. 信評±1（如TCRI 4 → 抓3~5）
+     
+     ⚖️ 加權公式：
+     近3檔 × 50% + 近6檔 × 30% + 近9檔 × 20%
+     
+     📈 雙軌整合：
+     最終預測 = 投標倍數法預測價 × 70% + 溢價率法預測價 × 30%
+     
+     🔢 信心度係數：
+     ≥9檔 = 100%（完整樣本）
+     6-8檔 = 90%（略有不足）
+     3-5檔 = 75%（樣本偏少）
+     1-2檔 = 50%（嚴重不足）
+     0檔 = 改用整體市場數據
+     ═══════════════════════════════════════════════════════════════
+-->
 <!-- v3.98f-4: Rex大叔策略邏輯修正 + 異常模組調整機制 -->
 <!-- 
      ═══════════════════════════════════════════════════════════════
@@ -4650,6 +4678,311 @@ const AICore = {
                         ? '⚠️ 預測為異常低熱度，可考慮保守出價' 
                         : '正常熱度，使用標準預測')
             };
+        },
+        
+        // ========== v3.98f-21 新增：條件相似案例雙軌預測模組 ==========
+        // Rex大叔核心洞察：
+        // 1. 投標倍數相關係數 0.73 → 給 70% 權重
+        // 2. 溢價率相關係數較低 → 給 30% 權重
+        // 3. 條件相似 = 同擔保 + 同產業 + 信評±1
+        // 4. 近3/6/9檔加權 5:3:2
+        // 5. 樣本不足時給予信心度扣分
+        
+        // 信心度係數對照表
+        confidenceTable: {
+            9: { coefficient: 1.00, label: '完整樣本', color: '#2e7d32' },
+            6: { coefficient: 0.90, label: '略有不足', color: '#558b2f' },
+            3: { coefficient: 0.75, label: '樣本偏少', color: '#f57c00' },
+            1: { coefficient: 0.50, label: '嚴重不足', color: '#c62828' },
+            0: { coefficient: 0.00, label: '無法預測', color: '#666' }
+        },
+        
+        // 取得信心度係數
+        getConfidenceCoef: function(sampleCount) {
+            if (sampleCount >= 9) return this.confidenceTable[9];
+            if (sampleCount >= 6) return this.confidenceTable[6];
+            if (sampleCount >= 3) return this.confidenceTable[3];
+            if (sampleCount >= 1) return this.confidenceTable[1];
+            return this.confidenceTable[0];
+        },
+        
+        // 計算條件相似案例（核心函數）
+        calcSimilarCases: function(params) {
+            const { industry, guarantee, creditRating, auctionData } = params;
+            
+            if (!auctionData || auctionData.length === 0) {
+                return { success: false, message: '無競拍資料' };
+            }
+            
+            const rating = parseInt(creditRating) || 5;
+            const ratingMin = Math.max(1, rating - 1);
+            const ratingMax = Math.min(9, rating + 1);
+            const guarType = (guarantee === '有擔保' || guarantee === '有') ? '有擔保' : '無擔保';
+            
+            // 按截標日排序（最新在前）
+            const sorted = [...auctionData].sort((a, b) => 
+                new Date(b['截標日'] || b['開標日期']) - new Date(a['截標日'] || a['開標日期'])
+            );
+            
+            // 篩選條件相似案例
+            const similarCases = sorted.filter(d => {
+                // 1. 擔保類型必須相同
+                const dGuarantee = d['擔保'] || d['擔保類型'] || '無擔保';
+                const dGuarType = (dGuarantee === '有擔保' || dGuarantee === '有') ? '有擔保' : '無擔保';
+                if (dGuarType !== guarType) return false;
+                
+                // 2. 產業必須相同
+                const dIndustry = d['產業分類'] || d['產業'] || '';
+                if (!dIndustry || !industry) return false;
+                if (dIndustry !== industry && !dIndustry.includes(industry) && !industry.includes(dIndustry)) return false;
+                
+                // 3. 信評在±1範圍內
+                const dRating = parseInt(d['信用評等'] || d['信評'] || d['TCRI']) || 99;
+                if (dRating < ratingMin || dRating > ratingMax) return false;
+                
+                // 4. 必須有有效的投標倍數和最低得標
+                const dMult = parseFloat(d['投標倍數']) || 0;
+                const dMinBid = parseFloat(d['最低得標']) || 0;
+                const dTheo = parseFloat(d['理論價']) || 0;
+                if (dMult <= 0 || dMinBid <= 0) return false;
+                
+                return true;
+            });
+            
+            // 計算溢價率
+            const calcPremium = (row) => {
+                const theo = parseFloat(row['理論價']) || 0;
+                const minBid = parseFloat(row['最低得標']) || 0;
+                return theo > 0 ? ((minBid / theo) - 1) * 100 : 0;
+            };
+            
+            // 計算近N檔平均
+            const calcAvg = (cases, n, field) => {
+                const subset = cases.slice(0, n);
+                if (subset.length === 0) return null;
+                
+                let values;
+                if (field === 'mult') {
+                    values = subset.map(d => parseFloat(d['投標倍數']) || 0).filter(v => v > 0);
+                } else if (field === 'prem') {
+                    values = subset.map(d => calcPremium(d)).filter(v => !isNaN(v));
+                } else if (field === 'minBid') {
+                    values = subset.map(d => parseFloat(d['最低得標']) || 0).filter(v => v > 0);
+                }
+                
+                return values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : null;
+            };
+            
+            // 近3/6/9檔統計
+            const recent3 = {
+                count: Math.min(3, similarCases.length),
+                avgMult: calcAvg(similarCases, 3, 'mult'),
+                avgPrem: calcAvg(similarCases, 3, 'prem'),
+                avgMinBid: calcAvg(similarCases, 3, 'minBid'),
+                cases: similarCases.slice(0, 3).map(d => ({
+                    name: d['名稱'] || d['CB名稱'],
+                    date: d['截標日'] || d['開標日期'],
+                    mult: parseFloat(d['投標倍數']) || 0,
+                    prem: calcPremium(d),
+                    minBid: parseFloat(d['最低得標']) || 0,
+                    theo: parseFloat(d['理論價']) || 0,
+                    rating: d['信用評等'] || d['信評'] || d['TCRI']
+                }))
+            };
+            
+            const recent6 = {
+                count: Math.min(6, similarCases.length),
+                avgMult: calcAvg(similarCases, 6, 'mult'),
+                avgPrem: calcAvg(similarCases, 6, 'prem'),
+                avgMinBid: calcAvg(similarCases, 6, 'minBid')
+            };
+            
+            const recent9 = {
+                count: Math.min(9, similarCases.length),
+                avgMult: calcAvg(similarCases, 9, 'mult'),
+                avgPrem: calcAvg(similarCases, 9, 'prem'),
+                avgMinBid: calcAvg(similarCases, 9, 'minBid')
+            };
+            
+            // 5:3:2 加權計算
+            const calcWeighted = (v3, v6, v9) => {
+                const weights = [];
+                const values = [];
+                
+                if (v3 !== null) { weights.push(5); values.push(v3); }
+                if (v6 !== null) { weights.push(3); values.push(v6); }
+                if (v9 !== null) { weights.push(2); values.push(v9); }
+                
+                if (weights.length === 0) return null;
+                
+                const totalWeight = weights.reduce((a, b) => a + b, 0);
+                return values.reduce((sum, v, i) => sum + v * weights[i], 0) / totalWeight;
+            };
+            
+            const weightedMult = calcWeighted(recent3.avgMult, recent6.avgMult, recent9.avgMult);
+            const weightedPrem = calcWeighted(recent3.avgPrem, recent6.avgPrem, recent9.avgPrem);
+            
+            // 信心度評估
+            const confidence = this.getConfidenceCoef(similarCases.length);
+            
+            return {
+                success: true,
+                totalCount: similarCases.length,
+                conditions: {
+                    industry: industry,
+                    guarantee: guarType,
+                    ratingRange: `${ratingMin}~${ratingMax}`,
+                    targetRating: rating
+                },
+                recent3: recent3,
+                recent6: recent6,
+                recent9: recent9,
+                weighted: {
+                    mult: weightedMult,
+                    prem: weightedPrem
+                },
+                confidence: confidence
+            };
+        },
+        
+        // 雙軌預測：投標倍數法(70%) + 溢價率法(30%)
+        calcDualTrackPrediction: function(params) {
+            const { theoPrice, industry, guarantee, creditRating, auctionData } = params;
+            
+            if (!theoPrice || theoPrice <= 0) {
+                return { success: false, message: '理論價無效' };
+            }
+            
+            // Step 1: 取得條件相似案例
+            const similarResult = this.calcSimilarCases({
+                industry, guarantee, creditRating, auctionData
+            });
+            
+            if (!similarResult.success || similarResult.totalCount === 0) {
+                return { 
+                    success: false, 
+                    message: '找不到條件相似案例',
+                    fallback: true  // 標記需要使用整體市場數據
+                };
+            }
+            
+            // Step 2A: 投標倍數法預測價格
+            let multMethodPrice = null;
+            let multMethodDetail = null;
+            
+            if (similarResult.weighted.mult !== null) {
+                // 用加權投標倍數查表得到預期價格
+                const expectedMult = similarResult.weighted.mult;
+                const priceByMult = this.getExpectedPriceByMult(expectedMult);
+                
+                multMethodPrice = priceByMult.minPrice;
+                multMethodDetail = {
+                    weightedMult: expectedMult,
+                    expectedMinPrice: priceByMult.minPrice,
+                    expectedAvgPrice: priceByMult.avgPrice,
+                    range: priceByMult.range
+                };
+            }
+            
+            // Step 2B: 溢價率法預測價格
+            let premMethodPrice = null;
+            let premMethodDetail = null;
+            
+            if (similarResult.weighted.prem !== null) {
+                const expectedPrem = similarResult.weighted.prem;
+                premMethodPrice = theoPrice * (1 + expectedPrem / 100);
+                premMethodDetail = {
+                    weightedPrem: expectedPrem,
+                    theoPrice: theoPrice,
+                    expectedPrice: premMethodPrice
+                };
+            }
+            
+            // Step 3: 雙軌整合（70% 投標倍數 + 30% 溢價率）
+            let finalPrice = null;
+            let integrationDetail = null;
+            
+            if (multMethodPrice !== null && premMethodPrice !== null) {
+                // 兩種方法都有效
+                finalPrice = multMethodPrice * 0.7 + premMethodPrice * 0.3;
+                integrationDetail = {
+                    method: 'dual',
+                    multWeight: 0.7,
+                    premWeight: 0.3,
+                    multContribution: multMethodPrice * 0.7,
+                    premContribution: premMethodPrice * 0.3
+                };
+            } else if (multMethodPrice !== null) {
+                // 只有投標倍數法有效
+                finalPrice = multMethodPrice;
+                integrationDetail = {
+                    method: 'mult_only',
+                    note: '溢價率資料不足，僅用投標倍數法'
+                };
+            } else if (premMethodPrice !== null) {
+                // 只有溢價率法有效
+                finalPrice = premMethodPrice;
+                integrationDetail = {
+                    method: 'prem_only',
+                    note: '投標倍數資料不足，僅用溢價率法'
+                };
+            }
+            
+            if (finalPrice === null) {
+                return {
+                    success: false,
+                    message: '無法計算預測價格',
+                    similarCases: similarResult
+                };
+            }
+            
+            // Step 4: 套用信心度係數
+            const confidence = similarResult.confidence;
+            
+            return {
+                success: true,
+                // 最終預測結果
+                finalPrice: finalPrice,
+                confidence: confidence,
+                // 詳細資料
+                similarCases: similarResult,
+                multMethod: {
+                    price: multMethodPrice,
+                    weight: 0.7,
+                    detail: multMethodDetail
+                },
+                premMethod: {
+                    price: premMethodPrice,
+                    weight: 0.3,
+                    detail: premMethodDetail
+                },
+                integration: integrationDetail,
+                // 統計摘要
+                summary: {
+                    sampleCount: similarResult.totalCount,
+                    weightedMult: similarResult.weighted.mult,
+                    weightedPrem: similarResult.weighted.prem,
+                    confidenceLabel: confidence.label,
+                    confidenceCoef: confidence.coefficient
+                }
+            };
+        },
+        
+        // 投標倍數查表（對應 BIDMULT_TO_PRICE_TABLE）
+        getExpectedPriceByMult: function(mult) {
+            if (mult < 1) {
+                return { range: '<1倍', minPrice: 101.00, avgPrice: 102.07, gap: 1.07 };
+            } else if (mult < 1.5) {
+                return { range: '1-1.5倍', minPrice: 101.00, avgPrice: 102.54, gap: 1.54 };
+            } else if (mult < 2) {
+                return { range: '1.5-2倍', minPrice: 102.66, avgPrice: 104.82, gap: 2.16 };
+            } else if (mult < 3) {
+                return { range: '2-3倍', minPrice: 106.10, avgPrice: 108.30, gap: 2.20 };
+            } else if (mult < 5) {
+                return { range: '3-5倍', minPrice: 109.91, avgPrice: 111.60, gap: 1.69 };
+            } else {
+                return { range: '>5倍', minPrice: 112.87, avgPrice: 114.74, gap: 1.87 };
+            }
         }
     },
     
@@ -18617,6 +18950,140 @@ function updateLiveAIPrediction(theoPrice, issueSize, guarantee, broker, industr
         ` : ''}
     </div>
     `;
+
+    // v3.98f-21 新增：條件相似案例雙軌預測
+    if (window.AICore && window.AICore.anomaly && typeof window.auctionDataCache !== 'undefined' && window.auctionDataCache.length > 0) {
+        const dualTrackResult = window.AICore.anomaly.calcDualTrackPrediction({
+            theoPrice: theoPrice,
+            industry: industry ? industry.split(' ')[0] : '',
+            guarantee: guarType,
+            creditRating: rating,
+            auctionData: window.auctionDataCache
+        });
+        
+        if (dualTrackResult.success) {
+            const sc = dualTrackResult.similarCases;
+            const conf = dualTrackResult.confidence;
+            
+            // 建立案例明細HTML
+            let casesHTML = '';
+            if (sc.recent3.cases && sc.recent3.cases.length > 0) {
+                casesHTML = sc.recent3.cases.map((c, i) => `
+                    <div style="display:flex; justify-content:space-between; padding:3px 6px; background:${i % 2 === 0 ? '#f8fafc' : '#fff'}; border-radius:3px; font-size:10px;">
+                        <span style="color:#666;">${c.name || '-'}</span>
+                        <span>
+                            <span style="color:#7c3aed; font-weight:bold;">${c.mult ? c.mult.toFixed(2) : '-'}倍</span>
+                            <span style="color:#666; margin-left:6px;">${c.prem ? c.prem.toFixed(1) : '-'}%</span>
+                            <span style="color:#059669; margin-left:6px;">${c.minBid ? c.minBid.toFixed(2) : '-'}元</span>
+                        </span>
+                    </div>
+                `).join('');
+            }
+            
+            // 雙軌預測區塊HTML
+            const dualTrackHTML = `
+            <div style="background:linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border:2px solid #f59e0b; border-radius:10px; padding:12px; margin-top:12px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <div style="font-size:13px; font-weight:bold; color:#b45309;">
+                        🎯 條件相似案例雙軌預測 <span style="font-size:10px; font-weight:normal;">v3.98f-21</span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <span style="font-size:10px; padding:2px 8px; background:${conf.color}20; color:${conf.color}; border-radius:10px; font-weight:bold;">
+                            ${conf.label}
+                        </span>
+                        <span style="font-size:10px; color:#666;">
+                            n=${sc.totalCount}
+                        </span>
+                    </div>
+                </div>
+                
+                <!-- 篩選條件 -->
+                <div style="background:#fff; border-radius:6px; padding:8px; margin-bottom:10px; font-size:10px;">
+                    <div style="color:#666; margin-bottom:4px;">📋 篩選條件：</div>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                        <span style="padding:2px 6px; background:#dbeafe; color:#1d4ed8; border-radius:4px;">${sc.conditions.guarantee}</span>
+                        <span style="padding:2px 6px; background:#dcfce7; color:#166534; border-radius:4px;">${sc.conditions.industry || '未指定產業'}</span>
+                        <span style="padding:2px 6px; background:#fce7f3; color:#be185d; border-radius:4px;">信評 ${sc.conditions.ratingRange}</span>
+                    </div>
+                </div>
+                
+                <!-- 近3/6/9檔加權結果 -->
+                <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; margin-bottom:10px;">
+                    <div style="text-align:center; padding:8px; background:#fff; border-radius:6px; border:1px solid #fcd34d;">
+                        <div style="font-size:9px; color:#92400e;">近3檔 (50%)</div>
+                        <div style="font-size:14px; font-weight:bold; color:#b45309;">${sc.recent3.avgMult ? sc.recent3.avgMult.toFixed(2) : '-'}倍</div>
+                        <div style="font-size:9px; color:#666;">${sc.recent3.avgPrem ? sc.recent3.avgPrem.toFixed(1) : '-'}%</div>
+                    </div>
+                    <div style="text-align:center; padding:8px; background:#fff; border-radius:6px; border:1px solid #fcd34d;">
+                        <div style="font-size:9px; color:#92400e;">近6檔 (30%)</div>
+                        <div style="font-size:14px; font-weight:bold; color:#b45309;">${sc.recent6.avgMult ? sc.recent6.avgMult.toFixed(2) : '-'}倍</div>
+                        <div style="font-size:9px; color:#666;">${sc.recent6.avgPrem ? sc.recent6.avgPrem.toFixed(1) : '-'}%</div>
+                    </div>
+                    <div style="text-align:center; padding:8px; background:#fff; border-radius:6px; border:1px solid #fcd34d;">
+                        <div style="font-size:9px; color:#92400e;">近9檔 (20%)</div>
+                        <div style="font-size:14px; font-weight:bold; color:#b45309;">${sc.recent9.avgMult ? sc.recent9.avgMult.toFixed(2) : '-'}倍</div>
+                        <div style="font-size:9px; color:#666;">${sc.recent9.avgPrem ? sc.recent9.avgPrem.toFixed(1) : '-'}%</div>
+                    </div>
+                </div>
+                
+                <!-- 雙軌整合結果 -->
+                <div style="background:linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); border-radius:8px; padding:10px; color:white; margin-bottom:10px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <div style="font-size:11px; opacity:0.9;">🔀 雙軌整合預測</div>
+                        <div style="font-size:9px; opacity:0.8;">投標倍數70% + 溢價率30%</div>
+                    </div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; text-align:center;">
+                        <div>
+                            <div style="font-size:9px; opacity:0.8;">加權投標倍數</div>
+                            <div style="font-size:16px; font-weight:bold;">${sc.weighted.mult ? sc.weighted.mult.toFixed(2) : '-'}倍</div>
+                        </div>
+                        <div>
+                            <div style="font-size:9px; opacity:0.8;">加權溢價率</div>
+                            <div style="font-size:16px; font-weight:bold;">${sc.weighted.prem ? sc.weighted.prem.toFixed(1) : '-'}%</div>
+                        </div>
+                        <div style="background:rgba(255,255,255,0.2); border-radius:6px; padding:4px;">
+                            <div style="font-size:9px; opacity:0.9;">📍 預測價格</div>
+                            <div style="font-size:20px; font-weight:bold;">${dualTrackResult.finalPrice.toFixed(2)}</div>
+                        </div>
+                    </div>
+                    ${dualTrackResult.multMethod.price && dualTrackResult.premMethod.price ? `
+                    <div style="margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.3); font-size:9px; opacity:0.9;">
+                        倍數法: ${dualTrackResult.multMethod.price.toFixed(2)}元 × 70% = ${(dualTrackResult.multMethod.price * 0.7).toFixed(2)}｜
+                        溢價法: ${dualTrackResult.premMethod.price.toFixed(2)}元 × 30% = ${(dualTrackResult.premMethod.price * 0.3).toFixed(2)}
+                    </div>
+                    ` : ''}
+                </div>
+                
+                <!-- 相似案例明細 -->
+                ${casesHTML ? `
+                <details style="background:#fff; border-radius:6px; padding:8px;">
+                    <summary style="font-size:11px; color:#666; cursor:pointer;">📊 近3檔相似案例明細</summary>
+                    <div style="margin-top:6px;">
+                        ${casesHTML}
+                    </div>
+                </details>
+                ` : ''}
+                
+                <!-- 信心度說明 -->
+                <div style="margin-top:8px; padding:8px; background:#fffbeb; border-radius:6px; font-size:10px; color:#92400e;">
+                    💡 <b>信心度說明</b>：找到 <b>${sc.totalCount}</b> 檔條件相似案例，
+                    信心度 <b style="color:${conf.color};">${(conf.coefficient * 100).toFixed(0)}%</b>
+                    ${conf.coefficient < 1 ? `（${conf.label}，建議參考但需謹慎）` : '（完整樣本，預測可信度高）'}
+                </div>
+            </div>
+            `;
+            
+            container.innerHTML += dualTrackHTML;
+        } else if (dualTrackResult.fallback) {
+            // 找不到相似案例，顯示提示
+            container.innerHTML += `
+            <div style="background:#fef2f2; border:1px solid #fca5a5; border-radius:8px; padding:10px; margin-top:12px; font-size:11px; color:#991b1b;">
+                ⚠️ <b>條件相似案例不足</b>：找不到同時符合「${guarType}+${industry || '未指定產業'}+信評±1」的歷史案例，
+                建議放寬條件或參考整體市場數據。
+            </div>
+            `;
+        }
+    }
 
     // v3.97-cu: step3AIBlock已移除，改用新的Step 3 AI智能預測模組
 

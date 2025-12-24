@@ -7915,6 +7915,15 @@ function toggleRightSection(sectionId, headerElement) {
         // v3.97-zs-bp: 移除自動選擇，讓用戶自己選擇CB
         // 價格走勢和基本資料區塊展開時不再自動載入第一筆
         
+        // v3.97-dt: 第五區塊展開時載入股票排行
+        if (sectionId === 'stockRankingSection') {
+            setTimeout(() => {
+                if (typeof renderHotStockTable === 'function') {
+                    renderHotStockTable();
+                }
+            }, 100);
+        }
+        
         // v3.97-df: 第六區塊展開時初始化CB套利模組
         if (sectionId === 'arbitrageSection') {
             setTimeout(initArbitrageModule, 100);
@@ -22839,9 +22848,14 @@ function displayArbitrageSummary(cbData, marginData, cbInfo) {
             </div>`;
     } else {
         marginInfo = `
-            <div style="margin-top:12px; padding:12px; background:#fff3e0; border-radius:8px; text-align:center; font-size:12px; color:#e65100;">
-                ⚠️ 尚未載入融資融券資料，請確認 tpxlenging / otclenging 檔案
+            <div style="margin-top:12px; padding:12px; background:#f5f5f5; border-radius:8px; text-align:center; font-size:12px; color:#666;">
+                📊 融資融券資料載入中...（首次載入約需20秒）
             </div>`;
+        
+        // v3.97-du: 如果融資融券還沒載入，背景觸發載入
+        if (!window.marginData?.loaded && !window.marginData?.loading) {
+            loadMarginData();
+        }
     }
     
     const statusIcon = cbInfo?.isListed ? '🟢' : '⚫';

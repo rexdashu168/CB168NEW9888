@@ -2759,26 +2759,26 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     </div>
     <div class="right-section-content collapsed" id="arbitrageSection">
         
-        <!-- v3.97-dk: 重新設計的CB選擇器 -->
+        <!-- v3.97-ed: 重新設計的CB選擇器 - 簡化分類 -->
         <div style="background:#fff; border-radius:12px; padding:16px; margin-bottom:12px; box-shadow:0 2px 8px rgba(0,0,0,0.06);">
-            <!-- 狀態篩選標籤 - v3.97-ea 加強顏色區別 -->
-            <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
+            <!-- 狀態篩選標籤 -->
+            <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; align-items:center;">
                 <button type="button" class="arb-filter-tab active" data-filter="listed" onclick="filterArbitrageCB('listed', this)"
                     style="padding:8px 16px; border:2px solid #4caf50; border-radius:20px; background:#4caf50; color:white; cursor:pointer; font-weight:600; font-size:13px;">
                     🟢 掛牌中
                 </button>
-                <button type="button" class="arb-filter-tab" data-filter="delisted" onclick="filterArbitrageCB('delisted', this)"
+                <button type="button" class="arb-filter-tab" data-filter="delisted-recent" onclick="filterArbitrageCB('delisted-recent', this)"
                     style="padding:8px 16px; border:2px solid #ddd; border-radius:20px; background:white; color:#888; cursor:pointer; font-weight:600; font-size:13px;">
-                    ⚫ 已下市
+                    ⚫ 近3年下市
                 </button>
-                <button type="button" class="arb-filter-tab" data-filter="all" onclick="filterArbitrageCB('all', this)"
+                <button type="button" class="arb-filter-tab" data-filter="delisted-old" onclick="filterArbitrageCB('delisted-old', this)"
                     style="padding:8px 16px; border:2px solid #ddd; border-radius:20px; background:white; color:#888; cursor:pointer; font-weight:600; font-size:13px;">
-                    📋 全部
+                    📦 3年以上
                 </button>
                 <div style="margin-left:auto;">
                     <input type="text" id="arbitrageSearchInput" placeholder="🔍 搜尋代號/名稱..." 
                         oninput="searchArbitrageCB(this.value)"
-                        style="padding:8px 12px; border:1px solid #ddd; border-radius:8px; font-size:13px; width:160px;">
+                        style="padding:8px 12px; border:1px solid #ddd; border-radius:8px; font-size:13px; width:140px;">
                 </div>
             </div>
             
@@ -22565,6 +22565,10 @@ async function initArbitrageModule() {
             const balanceShares = latest.balanceShares || 0;
             const convertedPct = issueShares > 0 ? ((1 - balanceShares / issueShares) * 100) : 0;
             
+            // v3.97-ed: 取得最後資料日期（用於判斷下市時間）
+            const lastDateStr = latest.date || '';
+            const lastDate = lastDateStr ? parseInt(lastDateStr.replace(/\//g, '')) : 0;
+            
             arbitrageFullList.push({
                 cbCode,
                 cbName,
@@ -22575,7 +22579,8 @@ async function initArbitrageModule() {
                 convertedPct,
                 convPrice,
                 isListed,
-                historyCount: history.length
+                historyCount: history.length,
+                lastDate  // v3.97-ed: 最後資料日期
             });
         }
         
@@ -22608,11 +22613,9 @@ async function initArbitrageModule() {
 function filterArbitrageCB(filter, btnElement) {
     currentArbitrageFilter = filter;
     
-    // v3.97-ea: 更新按鈕狀態 - 加強顏色區別
+    // v3.97-ed: 更新按鈕狀態
     document.querySelectorAll('.arb-filter-tab').forEach(btn => {
         btn.classList.remove('active');
-        const f = btn.dataset.filter;
-        // 未選中狀態：白底+淺色邊框
         btn.style.background = 'white';
         btn.style.borderColor = '#ddd';
         btn.style.color = '#888';
@@ -22621,19 +22624,16 @@ function filterArbitrageCB(filter, btnElement) {
     if (btnElement) {
         btnElement.classList.add('active');
         if (filter === 'listed') {
-            // 掛牌中：綠色
             btnElement.style.background = '#4caf50';
             btnElement.style.borderColor = '#4caf50';
             btnElement.style.color = 'white';
-        } else if (filter === 'delisted') {
-            // 已下市：灰色
+        } else if (filter === 'delisted-recent') {
             btnElement.style.background = '#616161';
             btnElement.style.borderColor = '#616161';
             btnElement.style.color = 'white';
-        } else {
-            // 全部：紫色
-            btnElement.style.background = '#9c27b0';
-            btnElement.style.borderColor = '#9c27b0';
+        } else if (filter === 'delisted-old') {
+            btnElement.style.background = '#795548';
+            btnElement.style.borderColor = '#795548';
             btnElement.style.color = 'white';
         }
     }
@@ -22647,14 +22647,38 @@ function filterArbitrageCB(filter, btnElement) {
         return;
     }
     
+    // v3.97-ed: 計算三年前的日期
+    const now = new Date();
+    const threeYearsAgo = new Date(now.getFullYear() - 3, now.getMonth(), now.getDate());
+    const threeYearsAgoNum = parseInt(
+        `${threeYearsAgo.getFullYear()}${String(threeYearsAgo.getMonth()+1).padStart(2,'0')}${String(threeYearsAgo.getDate()).padStart(2,'0')}`
+    );
+    
     // 篩選清單
     if (filter === 'listed') {
         arbitrageCBList = arbitrageFullList.filter(c => c.isListed);
-    } else if (filter === 'delisted') {
-        arbitrageCBList = arbitrageFullList.filter(c => !c.isListed);
+    } else if (filter === 'delisted-recent') {
+        // 近三年下市：下市日期在三年內
+        arbitrageCBList = arbitrageFullList.filter(c => {
+            if (c.isListed) return false;
+            // 從 CB 代碼或資料判斷下市時間（使用最後資料日期）
+            const lastDate = c.lastDate || 0;
+            return lastDate >= threeYearsAgoNum;
+        });
+    } else if (filter === 'delisted-old') {
+        // 三年以上：下市日期超過三年
+        arbitrageCBList = arbitrageFullList.filter(c => {
+            if (c.isListed) return false;
+            const lastDate = c.lastDate || 0;
+            return lastDate < threeYearsAgoNum || lastDate === 0;
+        });
     } else {
         arbitrageCBList = [...arbitrageFullList];
     }
+    
+    // 清空搜尋框
+    const searchInput = document.getElementById('arbitrageSearchInput');
+    if (searchInput) searchInput.value = '';
     
     // 更新下拉選單
     updateArbitrageSelect();
@@ -22669,12 +22693,30 @@ function searchArbitrageCB(keyword) {
     
     if (!kw) {
         // 清空搜尋時恢復原本篩選
-        filterArbitrageCB(currentArbitrageFilter);
+        filterArbitrageCB(currentArbitrageFilter, document.querySelector(`.arb-filter-tab[data-filter="${currentArbitrageFilter}"]`));
         return;
     }
     
-    // 在所有CB中搜尋
-    arbitrageCBList = arbitrageFullList.filter(c => 
+    // v3.97-ed: 先套用當前篩選條件，再在範圍內搜尋
+    const now = new Date();
+    const threeYearsAgo = new Date(now.getFullYear() - 3, now.getMonth(), now.getDate());
+    const threeYearsAgoNum = parseInt(
+        `${threeYearsAgo.getFullYear()}${String(threeYearsAgo.getMonth()+1).padStart(2,'0')}${String(threeYearsAgo.getDate()).padStart(2,'0')}`
+    );
+    
+    let baseList = arbitrageFullList;
+    
+    // 根據當前篩選條件限定範圍
+    if (currentArbitrageFilter === 'listed') {
+        baseList = arbitrageFullList.filter(c => c.isListed);
+    } else if (currentArbitrageFilter === 'delisted-recent') {
+        baseList = arbitrageFullList.filter(c => !c.isListed && (c.lastDate || 0) >= threeYearsAgoNum);
+    } else if (currentArbitrageFilter === 'delisted-old') {
+        baseList = arbitrageFullList.filter(c => !c.isListed && ((c.lastDate || 0) < threeYearsAgoNum || (c.lastDate || 0) === 0));
+    }
+    
+    // 在範圍內搜尋
+    arbitrageCBList = baseList.filter(c => 
         c.cbCode.toLowerCase().includes(kw) || 
         c.cbName.toLowerCase().includes(kw) ||
         c.stockCode.toLowerCase().includes(kw) ||

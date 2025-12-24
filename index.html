@@ -8743,6 +8743,13 @@ function showRankingYear(year, event) {
         event.stopPropagation();
     }
 
+    // 檢查元素是否存在
+    const contentEl = document.getElementById('rankingContent');
+    if (!contentEl) {
+        console.log('rankingContent 元素不存在，跳過年度排行渲染');
+        return;
+    }
+
     // 更新tab狀態
     document.querySelectorAll('.ranking-tab').forEach(tab => {
         tab.classList.remove('active');
@@ -8836,7 +8843,7 @@ function showRankingYear(year, event) {
         📌 <strong>${year}年(${data.total}檔)：</strong>${data.summary}
     </div>`;
 
-    document.getElementById('rankingContent').innerHTML = html;
+    contentEl.innerHTML = html;
 }
 
 // v3.56 新增：月均成交真實績效分析
@@ -9085,7 +9092,12 @@ function showRealPerfYear(year, event) {
         📌 <strong>${year}年：</strong>${data.summary}
     </div>`;
 
-    document.getElementById('realperfContent').innerHTML = html;
+    const contentEl = document.getElementById('realperfContent');
+    if (contentEl) {
+        contentEl.innerHTML = html;
+    } else {
+        console.log('realperfContent 元素不存在，跳過渲染');
+    }
 }
 
 // v3.59 新增：競拍盈虧勝率分析
@@ -9309,7 +9321,12 @@ function showProfitLossYear(year, event) {
         以最低得標價計算，賣在掛牌高可獲利${data.avgProfitHigh.toFixed(1)}%，賣在掛牌低則${data.avgProfitLow >= 0 ? '仍有' + data.avgProfitLow.toFixed(1) + '%獲利空間' : '平均虧損' + Math.abs(data.avgProfitLow).toFixed(1) + '%'}。
     </div>`;
 
-    document.getElementById('profitlossContent').innerHTML = html;
+    const contentEl = document.getElementById('profitlossContent');
+    if (contentEl) {
+        contentEl.innerHTML = html;
+    } else {
+        console.log('profitlossContent 元素不存在，跳過渲染');
+    }
 }
 
 // ==========================================
@@ -9909,39 +9926,130 @@ function showTimePerformance(period, event) {
 // 【3】風險調整後績效數據生成
 function generateRiskAdjustedData() {
     const items = [];
+    const riskLevelGroups = { low: [], medium: [], high: [], extreme: [] };
     
     auctionRawData.forEach(d => {
         if (!d.minBidPrice || d.minBidPrice <= 0 || !d.marketHigh || !d.marketLow) return;
         
-        const returnRate = ((d.marketHigh - d.minBidPrice) / d.minBidPrice * 100);
+        // 基本報酬計算
+        const returnToHigh = ((d.marketHigh - d.minBidPrice) / d.minBidPrice * 100);
+        const returnToLow = ((d.marketLow - d.minBidPrice) / d.minBidPrice * 100);
         const amplitude = ((d.marketHigh - d.marketLow) / d.marketLow * 100);
-        const riskRewardRatio = amplitude > 0 ? returnRate / amplitude : 0;
+        
+        // 報酬/風險比：用最大報酬除以振幅（風險）
+        const riskRewardRatio = amplitude > 0 ? returnToHigh / amplitude : 0;
+        
+        // 最大回撤：從最高點到最低點的跌幅
         const maxDrawdown = d.marketHigh > 0 ? ((d.marketHigh - d.marketLow) / d.marketHigh * 100) : 0;
+        
+        // 破底：掛牌低是否跌破100元
         const breakEven = d.marketLow < 100;
         
-        items.push({
+        // 下行風險：如果掛牌低<最低得標價，損失多少
+        const downside = returnToLow < 0 ? Math.abs(returnToLow) : 0;
+        
+        // 上行/下行比
+        const upsideDownsideRatio = downside > 0 ? returnToHigh / downside : returnToHigh;
+        
+        // 風險等級分類
+        let riskLevel = 'low';
+        if (maxDrawdown > 30 || breakEven) {
+            riskLevel = 'extreme';
+        } else if (maxDrawdown > 20) {
+            riskLevel = 'high';
+        } else if (maxDrawdown > 10) {
+            riskLevel = 'medium';
+        }
+        
+        const item = {
             name: d.name,
             id: d.id,
+            year: d.year || new Date().getFullYear(),
             minBid: d.minBidPrice,
+            avgBid: d.avgBidPrice || d.minBidPrice,
             high: d.marketHigh,
             low: d.marketLow,
-            returnRate: returnRate,
+            returnToHigh: returnToHigh,
+            returnToLow: returnToLow,
             amplitude: amplitude,
             riskRewardRatio: riskRewardRatio,
             maxDrawdown: maxDrawdown,
-            breakEven: breakEven
-        });
+            breakEven: breakEven,
+            downside: downside,
+            upsideDownsideRatio: upsideDownsideRatio,
+            riskLevel: riskLevel,
+            guaranteed: d.guaranteed || false
+        };
+        
+        items.push(item);
+        riskLevelGroups[riskLevel].push(item);
     });
     
+    // 計算各種統計
     const breakEvenCount = items.filter(i => i.breakEven).length;
+    const positiveReturnCount = items.filter(i => i.returnToLow > 0).length;  // 最低價仍獲利
+    const guaranteedItems = items.filter(i => i.guaranteed);
+    const unguaranteedItems = items.filter(i => !i.guaranteed);
+    
+    // 計算有擔保/無擔保的風險差異
+    const gBreakEven = guaranteedItems.filter(i => i.breakEven).length;
+    const uBreakEven = unguaranteedItems.filter(i => i.breakEven).length;
     
     perfAnalysisData.riskAdjusted = {
         total: items.length,
+        // 報酬/風險比統計
         avgRiskReward: items.length > 0 ? items.reduce((s, i) => s + i.riskRewardRatio, 0) / items.length : 0,
+        medianRiskReward: items.length > 0 ? items.sort((a, b) => a.riskRewardRatio - b.riskRewardRatio)[Math.floor(items.length / 2)].riskRewardRatio : 0,
+        riskRewardStats: StatsHelper.calcStats(items.map(i => i.riskRewardRatio)),
+        
+        // 最大回撤統計
         avgDrawdown: items.length > 0 ? items.reduce((s, i) => s + i.maxDrawdown, 0) / items.length : 0,
+        medianDrawdown: items.length > 0 ? items.sort((a, b) => a.maxDrawdown - b.maxDrawdown)[Math.floor(items.length / 2)].maxDrawdown : 0,
+        drawdownStats: StatsHelper.calcStats(items.map(i => i.maxDrawdown)),
+        
+        // 破底統計
         breakEvenRate: items.length > 0 ? (breakEvenCount / items.length * 100) : 0,
         breakEvenCount: breakEvenCount,
-        details: items.sort((a, b) => b.riskRewardRatio - a.riskRewardRatio)
+        
+        // 保本率（最低價仍>成本）
+        safeRate: items.length > 0 ? (positiveReturnCount / items.length * 100) : 0,
+        safeCount: positiveReturnCount,
+        
+        // 上行/下行比
+        avgUpsideDownside: items.length > 0 ? items.reduce((s, i) => s + i.upsideDownsideRatio, 0) / items.length : 0,
+        
+        // 風險等級分布
+        riskLevelDist: {
+            low: riskLevelGroups.low.length,
+            medium: riskLevelGroups.medium.length,
+            high: riskLevelGroups.high.length,
+            extreme: riskLevelGroups.extreme.length
+        },
+        
+        // 擔保比較
+        guaranteeComparison: {
+            guaranteed: {
+                count: guaranteedItems.length,
+                breakEvenRate: guaranteedItems.length > 0 ? (gBreakEven / guaranteedItems.length * 100) : 0,
+                avgDrawdown: guaranteedItems.length > 0 ? guaranteedItems.reduce((s, i) => s + i.maxDrawdown, 0) / guaranteedItems.length : 0,
+                avgRiskReward: guaranteedItems.length > 0 ? guaranteedItems.reduce((s, i) => s + i.riskRewardRatio, 0) / guaranteedItems.length : 0
+            },
+            unguaranteed: {
+                count: unguaranteedItems.length,
+                breakEvenRate: unguaranteedItems.length > 0 ? (uBreakEven / unguaranteedItems.length * 100) : 0,
+                avgDrawdown: unguaranteedItems.length > 0 ? unguaranteedItems.reduce((s, i) => s + i.maxDrawdown, 0) / unguaranteedItems.length : 0,
+                avgRiskReward: unguaranteedItems.length > 0 ? unguaranteedItems.reduce((s, i) => s + i.riskRewardRatio, 0) / unguaranteedItems.length : 0
+            }
+        },
+        
+        // 詳細資料
+        details: items.sort((a, b) => b.riskRewardRatio - a.riskRewardRatio),
+        
+        // TOP10 最佳報酬/風險比
+        topRiskReward: items.sort((a, b) => b.riskRewardRatio - a.riskRewardRatio).slice(0, 10),
+        
+        // TOP10 最大回撤（風險最高）
+        worstDrawdown: items.sort((a, b) => b.maxDrawdown - a.maxDrawdown).slice(0, 10)
     };
 }
 
@@ -9951,9 +10059,14 @@ function showRiskAdjusted(type, event) {
     
     document.querySelectorAll('.risk-adj-tab').forEach(tab => {
         tab.classList.remove('active');
-        const tabMap = { 'ratio': '報酬/風險比', 'drawdown': '最大回撤', 'breakeven': '破底機率' };
-        if (tab.textContent === tabMap[type]) tab.classList.add('active');
+        tab.style.background = '#ffe0b2';
+        tab.style.color = '#e65100';
     });
+    if (event && event.target) {
+        event.target.classList.add('active');
+        event.target.style.background = '#ff9800';
+        event.target.style.color = 'white';
+    }
     
     const data = perfAnalysisData.riskAdjusted;
     const content = document.getElementById('riskAdjustedContent');
@@ -9963,41 +10076,315 @@ function showRiskAdjusted(type, event) {
         return;
     }
     
-    let html = `
-    <div class="perf-stat-grid">
-        <div class="perf-stat-card">
-            <div class="perf-stat-label">📊 樣本數</div>
-            <div class="perf-stat-value neutral">${data.total}</div>
-            <div class="perf-stat-sub">檔</div>
-        </div>
-        <div class="perf-stat-card">
-            <div class="perf-stat-label">⚖️ 平均報酬/風險比</div>
-            <div class="perf-stat-value ${data.avgRiskReward >= 1 ? 'positive' : 'negative'}">
-                ${data.avgRiskReward.toFixed(2)}
-            </div>
-            <div class="perf-stat-sub">${data.avgRiskReward >= 1 ? '報酬優於風險' : '需注意風險'}</div>
-        </div>
-        <div class="perf-stat-card">
-            <div class="perf-stat-label">📉 平均最大回撤</div>
-            <div class="perf-stat-value negative">-${data.avgDrawdown.toFixed(1)}%</div>
-            <div class="perf-stat-sub">從高點回落</div>
-        </div>
-        <div class="perf-stat-card">
-            <div class="perf-stat-label">⚠️ 破底機率</div>
-            <div class="perf-stat-value ${data.breakEvenRate < 20 ? 'positive' : 'negative'}">
-                ${data.breakEvenRate.toFixed(1)}%
-            </div>
-            <div class="perf-stat-sub">${data.breakEvenCount}/${data.total} 檔跌破100元</div>
-        </div>
-    </div>
+    let html = '';
     
-    <div class="perf-insight">
-        <strong>💡 風險分析：</strong>
-        平均報酬/風險比為 ${data.avgRiskReward.toFixed(2)}，${data.avgRiskReward >= 1 ? '整體報酬優於風險，值得參與' : '風險偏高，需謹慎選股'}。
-        有 ${data.breakEvenRate.toFixed(1)}% 的CB掛牌後曾跌破100元發行價，建議設定停損機制。
-    </div>`;
+    if (type === 'ratio') {
+        // 報酬/風險比分析
+        const stats = data.riskRewardStats || {};
+        const gc = data.guaranteeComparison;
+        
+        html = `
+        <div style="font-size:13px; font-weight:bold; color:#e65100; margin-bottom:12px;">
+            ⚖️ 報酬/風險比分析
+            <span style="font-size:11px; font-weight:normal; color:#888;">（最大報酬 ÷ 振幅）</span>
+        </div>
+        
+        <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-bottom:15px;">
+            <div style="text-align:center; padding:12px; background:#fff3e0; border-radius:8px;">
+                <div style="font-size:11px; color:#666;">樣本數</div>
+                <div style="font-size:22px; font-weight:bold; color:#e65100;">${data.total}</div>
+                <div style="font-size:10px; color:#888;">檔</div>
+            </div>
+            <div style="text-align:center; padding:12px; background:${data.avgRiskReward >= 1 ? '#e8f5e9' : '#ffebee'}; border-radius:8px;">
+                <div style="font-size:11px; color:#666;">平均報酬/風險比</div>
+                <div style="font-size:22px; font-weight:bold; color:${data.avgRiskReward >= 1 ? '#2e7d32' : '#c62828'};">
+                    ${data.avgRiskReward.toFixed(2)}
+                </div>
+                <div style="font-size:10px; color:#888;">${data.avgRiskReward >= 1 ? '報酬>風險' : '需注意'}</div>
+            </div>
+            <div style="text-align:center; padding:12px; background:#e3f2fd; border-radius:8px;">
+                <div style="font-size:11px; color:#666;">中位數</div>
+                <div style="font-size:22px; font-weight:bold; color:#1565c0;">${data.medianRiskReward.toFixed(2)}</div>
+            </div>
+            <div style="text-align:center; padding:12px; background:#f3e5f5; border-radius:8px;">
+                <div style="font-size:11px; color:#666;">上行/下行比</div>
+                <div style="font-size:22px; font-weight:bold; color:#7b1fa2;">${data.avgUpsideDownside.toFixed(1)}</div>
+                <div style="font-size:10px; color:#888;">倍</div>
+            </div>
+        </div>
+        
+        <!-- 報酬/風險比分布 -->
+        <div style="background:#f5f5f5; padding:12px; border-radius:8px; margin-bottom:12px;">
+            <div style="font-size:12px; font-weight:bold; color:#333; margin-bottom:8px;">📊 報酬/風險比分布</div>
+            <div style="display:flex; justify-content:space-between; font-size:11px; color:#666;">
+                <span>最小: ${stats.min ? stats.min.toFixed(2) : '-'}</span>
+                <span>25分位: ${stats.p25 ? stats.p25.toFixed(2) : '-'}</span>
+                <span>中位數: ${stats.median ? stats.median.toFixed(2) : '-'}</span>
+                <span>75分位: ${stats.p75 ? stats.p75.toFixed(2) : '-'}</span>
+                <span>最大: ${stats.max ? stats.max.toFixed(2) : '-'}</span>
+            </div>
+        </div>
+        
+        <!-- 有擔保 vs 無擔保比較 -->
+        <div style="background:#fff8e1; padding:12px; border-radius:8px; margin-bottom:12px;">
+            <div style="font-size:12px; font-weight:bold; color:#f57c00; margin-bottom:10px;">🛡️ 擔保類型風險比較</div>
+            <table style="width:100%; font-size:12px; border-collapse:collapse;">
+                <tr style="background:#ffe0b2;">
+                    <th style="padding:8px; text-align:center;">類型</th>
+                    <th style="padding:8px; text-align:center;">檔數</th>
+                    <th style="padding:8px; text-align:center;">報酬/風險比</th>
+                    <th style="padding:8px; text-align:center;">平均回撤</th>
+                    <th style="padding:8px; text-align:center;">破底率</th>
+                </tr>
+                <tr style="background:white;">
+                    <td style="padding:8px; text-align:center; font-weight:bold;">🛡️ 有擔保</td>
+                    <td style="padding:8px; text-align:center;">${gc.guaranteed.count}</td>
+                    <td style="padding:8px; text-align:center; color:${gc.guaranteed.avgRiskReward >= gc.unguaranteed.avgRiskReward ? '#2e7d32' : '#666'}; font-weight:bold;">
+                        ${gc.guaranteed.avgRiskReward.toFixed(2)}
+                    </td>
+                    <td style="padding:8px; text-align:center; color:#c62828;">-${gc.guaranteed.avgDrawdown.toFixed(1)}%</td>
+                    <td style="padding:8px; text-align:center; color:${gc.guaranteed.breakEvenRate < gc.unguaranteed.breakEvenRate ? '#2e7d32' : '#c62828'}; font-weight:bold;">
+                        ${gc.guaranteed.breakEvenRate.toFixed(1)}%
+                    </td>
+                </tr>
+                <tr style="background:#fafafa;">
+                    <td style="padding:8px; text-align:center; font-weight:bold;">📋 無擔保</td>
+                    <td style="padding:8px; text-align:center;">${gc.unguaranteed.count}</td>
+                    <td style="padding:8px; text-align:center; color:${gc.unguaranteed.avgRiskReward > gc.guaranteed.avgRiskReward ? '#2e7d32' : '#666'}; font-weight:bold;">
+                        ${gc.unguaranteed.avgRiskReward.toFixed(2)}
+                    </td>
+                    <td style="padding:8px; text-align:center; color:#c62828;">-${gc.unguaranteed.avgDrawdown.toFixed(1)}%</td>
+                    <td style="padding:8px; text-align:center; color:${gc.unguaranteed.breakEvenRate > gc.guaranteed.breakEvenRate ? '#c62828' : '#2e7d32'}; font-weight:bold;">
+                        ${gc.unguaranteed.breakEvenRate.toFixed(1)}%
+                    </td>
+                </tr>
+            </table>
+        </div>
+        
+        <!-- TOP5 最佳報酬/風險比 -->
+        <div style="background:#e8f5e9; padding:12px; border-radius:8px; margin-bottom:12px;">
+            <div style="font-size:12px; font-weight:bold; color:#2e7d32; margin-bottom:8px;">🏆 TOP5 最佳報酬/風險比</div>
+            <table style="width:100%; font-size:11px; border-collapse:collapse;">
+                <tr style="background:#c8e6c9;">
+                    <th style="padding:6px;">排名</th>
+                    <th style="padding:6px;">CB名稱</th>
+                    <th style="padding:6px;">報酬/風險比</th>
+                    <th style="padding:6px;">最大報酬</th>
+                    <th style="padding:6px;">振幅</th>
+                </tr>
+                ${data.topRiskReward.slice(0, 5).map((item, idx) => `
+                <tr style="background:white;">
+                    <td style="padding:6px; text-align:center; font-weight:bold; color:#ff9800;">${idx + 1}</td>
+                    <td style="padding:6px;">${item.name}</td>
+                    <td style="padding:6px; text-align:center; font-weight:bold; color:#2e7d32;">${item.riskRewardRatio.toFixed(2)}</td>
+                    <td style="padding:6px; text-align:center; color:#2e7d32;">+${item.returnToHigh.toFixed(1)}%</td>
+                    <td style="padding:6px; text-align:center;">${item.amplitude.toFixed(1)}%</td>
+                </tr>
+                `).join('')}
+            </table>
+        </div>`;
+        
+        // 統計說明
+        html += StatsHelper.generateStatsNote(
+            data.details.map(d => ({ count: 1, avgAmp: d.riskRewardRatio * 100 })),
+            { title: '報酬/風險比統計', valueField: 'avgAmp', countField: 'count' }
+        );
+        
+    } else if (type === 'drawdown') {
+        // 最大回撤分析
+        const stats = data.drawdownStats || {};
+        const rld = data.riskLevelDist;
+        
+        html = `
+        <div style="font-size:13px; font-weight:bold; color:#e65100; margin-bottom:12px;">
+            📉 最大回撤分析
+            <span style="font-size:11px; font-weight:normal; color:#888;">（從高點到低點的跌幅）</span>
+        </div>
+        
+        <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-bottom:15px;">
+            <div style="text-align:center; padding:12px; background:#fff3e0; border-radius:8px;">
+                <div style="font-size:11px; color:#666;">樣本數</div>
+                <div style="font-size:22px; font-weight:bold; color:#e65100;">${data.total}</div>
+            </div>
+            <div style="text-align:center; padding:12px; background:#ffebee; border-radius:8px;">
+                <div style="font-size:11px; color:#666;">平均回撤</div>
+                <div style="font-size:22px; font-weight:bold; color:#c62828;">-${data.avgDrawdown.toFixed(1)}%</div>
+            </div>
+            <div style="text-align:center; padding:12px; background:#e3f2fd; border-radius:8px;">
+                <div style="font-size:11px; color:#666;">中位數回撤</div>
+                <div style="font-size:22px; font-weight:bold; color:#1565c0;">-${data.medianDrawdown.toFixed(1)}%</div>
+            </div>
+            <div style="text-align:center; padding:12px; background:#e8f5e9; border-radius:8px;">
+                <div style="font-size:11px; color:#666;">保本率</div>
+                <div style="font-size:22px; font-weight:bold; color:#2e7d32;">${data.safeRate.toFixed(1)}%</div>
+                <div style="font-size:10px; color:#888;">最低仍獲利</div>
+            </div>
+        </div>
+        
+        <!-- 風險等級分布 -->
+        <div style="background:#fff8e1; padding:12px; border-radius:8px; margin-bottom:12px;">
+            <div style="font-size:12px; font-weight:bold; color:#f57c00; margin-bottom:10px;">🎚️ 風險等級分布</div>
+            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px;">
+                <div style="text-align:center; padding:10px; background:#e8f5e9; border-radius:6px; border:2px solid #4caf50;">
+                    <div style="font-size:20px; font-weight:bold; color:#2e7d32;">${rld.low}</div>
+                    <div style="font-size:11px; color:#666;">低風險</div>
+                    <div style="font-size:9px; color:#888;">回撤<10%</div>
+                    <div style="font-size:10px; color:#2e7d32; font-weight:bold;">${(rld.low / data.total * 100).toFixed(0)}%</div>
+                </div>
+                <div style="text-align:center; padding:10px; background:#fff3e0; border-radius:6px; border:2px solid #ff9800;">
+                    <div style="font-size:20px; font-weight:bold; color:#f57c00;">${rld.medium}</div>
+                    <div style="font-size:11px; color:#666;">中風險</div>
+                    <div style="font-size:9px; color:#888;">10-20%</div>
+                    <div style="font-size:10px; color:#f57c00; font-weight:bold;">${(rld.medium / data.total * 100).toFixed(0)}%</div>
+                </div>
+                <div style="text-align:center; padding:10px; background:#ffebee; border-radius:6px; border:2px solid #f44336;">
+                    <div style="font-size:20px; font-weight:bold; color:#e53935;">${rld.high}</div>
+                    <div style="font-size:11px; color:#666;">高風險</div>
+                    <div style="font-size:9px; color:#888;">20-30%</div>
+                    <div style="font-size:10px; color:#e53935; font-weight:bold;">${(rld.high / data.total * 100).toFixed(0)}%</div>
+                </div>
+                <div style="text-align:center; padding:10px; background:#f3e5f5; border-radius:6px; border:2px solid #9c27b0;">
+                    <div style="font-size:20px; font-weight:bold; color:#7b1fa2;">${rld.extreme}</div>
+                    <div style="font-size:11px; color:#666;">極高風險</div>
+                    <div style="font-size:9px; color:#888;">>30%或破底</div>
+                    <div style="font-size:10px; color:#7b1fa2; font-weight:bold;">${(rld.extreme / data.total * 100).toFixed(0)}%</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- TOP5 最大回撤 -->
+        <div style="background:#ffebee; padding:12px; border-radius:8px; margin-bottom:12px;">
+            <div style="font-size:12px; font-weight:bold; color:#c62828; margin-bottom:8px;">⚠️ TOP5 最大回撤（風險最高）</div>
+            <table style="width:100%; font-size:11px; border-collapse:collapse;">
+                <tr style="background:#ffcdd2;">
+                    <th style="padding:6px;">排名</th>
+                    <th style="padding:6px;">CB名稱</th>
+                    <th style="padding:6px;">最大回撤</th>
+                    <th style="padding:6px;">掛牌高</th>
+                    <th style="padding:6px;">掛牌低</th>
+                </tr>
+                ${data.worstDrawdown.slice(0, 5).map((item, idx) => `
+                <tr style="background:white;">
+                    <td style="padding:6px; text-align:center; font-weight:bold; color:#c62828;">${idx + 1}</td>
+                    <td style="padding:6px;">${item.name}</td>
+                    <td style="padding:6px; text-align:center; font-weight:bold; color:#c62828;">-${item.maxDrawdown.toFixed(1)}%</td>
+                    <td style="padding:6px; text-align:center;">${item.high.toFixed(1)}</td>
+                    <td style="padding:6px; text-align:center; color:${item.low < 100 ? '#c62828' : '#333'};">${item.low.toFixed(1)}</td>
+                </tr>
+                `).join('')}
+            </table>
+        </div>
+        
+        <!-- 投資建議 -->
+        <div style="background:linear-gradient(135deg, #fff3e0, #ffe0b2); padding:12px; border-radius:8px; border-left:4px solid #ff9800;">
+            <div style="font-size:12px; font-weight:bold; color:#e65100; margin-bottom:6px;">💡 風險控制建議</div>
+            <div style="font-size:11px; color:#333; line-height:1.6;">
+                • 平均最大回撤為 <b>${data.avgDrawdown.toFixed(1)}%</b>，建議設定停損在 <b>-${Math.min(data.avgDrawdown * 0.8, 15).toFixed(0)}%</b> 左右<br>
+                • 約 <b>${(rld.low / data.total * 100).toFixed(0)}%</b> 的CB屬於低風險（回撤<10%），可優先考慮<br>
+                • 有擔保CB破底率較低，風險承受度較低者可優先選擇<br>
+                • 高風險CB（回撤>20%）占 <b>${((rld.high + rld.extreme) / data.total * 100).toFixed(0)}%</b>，需格外謹慎
+            </div>
+        </div>`;
+        
+    } else if (type === 'breakeven') {
+        // 破底機率分析
+        const gc = data.guaranteeComparison;
+        
+        html = `
+        <div style="font-size:13px; font-weight:bold; color:#e65100; margin-bottom:12px;">
+            ⚠️ 破底機率分析
+            <span style="font-size:11px; font-weight:normal; color:#888;">（掛牌後跌破100元發行價）</span>
+        </div>
+        
+        <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-bottom:15px;">
+            <div style="text-align:center; padding:12px; background:#fff3e0; border-radius:8px;">
+                <div style="font-size:11px; color:#666;">樣本數</div>
+                <div style="font-size:22px; font-weight:bold; color:#e65100;">${data.total}</div>
+            </div>
+            <div style="text-align:center; padding:12px; background:${data.breakEvenRate < 15 ? '#e8f5e9' : '#ffebee'}; border-radius:8px;">
+                <div style="font-size:11px; color:#666;">破底機率</div>
+                <div style="font-size:22px; font-weight:bold; color:${data.breakEvenRate < 15 ? '#2e7d32' : '#c62828'};">
+                    ${data.breakEvenRate.toFixed(1)}%
+                </div>
+            </div>
+            <div style="text-align:center; padding:12px; background:#ffebee; border-radius:8px;">
+                <div style="font-size:11px; color:#666;">破底檔數</div>
+                <div style="font-size:22px; font-weight:bold; color:#c62828;">${data.breakEvenCount}</div>
+                <div style="font-size:10px; color:#888;">/ ${data.total} 檔</div>
+            </div>
+            <div style="text-align:center; padding:12px; background:#e8f5e9; border-radius:8px;">
+                <div style="font-size:11px; color:#666;">安全檔數</div>
+                <div style="font-size:22px; font-weight:bold; color:#2e7d32;">${data.total - data.breakEvenCount}</div>
+                <div style="font-size:10px; color:#888;">未破底</div>
+            </div>
+        </div>
+        
+        <!-- 擔保類型破底比較 -->
+        <div style="background:#fff8e1; padding:12px; border-radius:8px; margin-bottom:12px;">
+            <div style="font-size:12px; font-weight:bold; color:#f57c00; margin-bottom:10px;">🛡️ 擔保類型破底率比較</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+                <div style="text-align:center; padding:15px; background:white; border-radius:8px; border:2px solid ${gc.guaranteed.breakEvenRate < gc.unguaranteed.breakEvenRate ? '#4caf50' : '#e0e0e0'};">
+                    <div style="font-size:14px; font-weight:bold; color:#2e7d32; margin-bottom:5px;">🛡️ 有擔保</div>
+                    <div style="font-size:28px; font-weight:bold; color:${gc.guaranteed.breakEvenRate < 10 ? '#2e7d32' : '#f57c00'};">
+                        ${gc.guaranteed.breakEvenRate.toFixed(1)}%
+                    </div>
+                    <div style="font-size:11px; color:#666;">${gc.guaranteed.count} 檔</div>
+                    ${gc.guaranteed.breakEvenRate < gc.unguaranteed.breakEvenRate ? '<div style="margin-top:5px; font-size:11px; color:#4caf50; font-weight:bold;">✓ 較安全</div>' : ''}
+                </div>
+                <div style="text-align:center; padding:15px; background:white; border-radius:8px; border:2px solid ${gc.unguaranteed.breakEvenRate < gc.guaranteed.breakEvenRate ? '#4caf50' : '#e0e0e0'};">
+                    <div style="font-size:14px; font-weight:bold; color:#1565c0; margin-bottom:5px;">📋 無擔保</div>
+                    <div style="font-size:28px; font-weight:bold; color:${gc.unguaranteed.breakEvenRate < 15 ? '#f57c00' : '#c62828'};">
+                        ${gc.unguaranteed.breakEvenRate.toFixed(1)}%
+                    </div>
+                    <div style="font-size:11px; color:#666;">${gc.unguaranteed.count} 檔</div>
+                    ${gc.unguaranteed.breakEvenRate < gc.guaranteed.breakEvenRate ? '<div style="margin-top:5px; font-size:11px; color:#4caf50; font-weight:bold;">✓ 較安全</div>' : ''}
+                </div>
+            </div>
+            <div style="margin-top:10px; text-align:center; font-size:11px; color:#666;">
+                差異：${Math.abs(gc.guaranteed.breakEvenRate - gc.unguaranteed.breakEvenRate).toFixed(1)}%
+                （${gc.guaranteed.breakEvenRate < gc.unguaranteed.breakEvenRate ? '有擔保較安全' : '無擔保較安全'}）
+            </div>
+        </div>
+        
+        <!-- 破底案例列表 -->
+        <div style="background:#ffebee; padding:12px; border-radius:8px; margin-bottom:12px;">
+            <div style="font-size:12px; font-weight:bold; color:#c62828; margin-bottom:8px;">
+                📋 近期破底案例 <span style="font-weight:normal;">（掛牌低 < 100元）</span>
+            </div>
+            <div style="max-height:150px; overflow-y:auto;">
+                <table style="width:100%; font-size:11px; border-collapse:collapse;">
+                    <tr style="background:#ffcdd2; position:sticky; top:0;">
+                        <th style="padding:6px;">CB名稱</th>
+                        <th style="padding:6px;">掛牌高</th>
+                        <th style="padding:6px;">掛牌低</th>
+                        <th style="padding:6px;">最大虧損</th>
+                    </tr>
+                    ${data.details.filter(d => d.breakEven).slice(0, 10).map(item => `
+                    <tr style="background:white;">
+                        <td style="padding:6px;">${item.name}</td>
+                        <td style="padding:6px; text-align:center;">${item.high.toFixed(1)}</td>
+                        <td style="padding:6px; text-align:center; color:#c62828; font-weight:bold;">${item.low.toFixed(1)}</td>
+                        <td style="padding:6px; text-align:center; color:#c62828;">${item.returnToLow.toFixed(1)}%</td>
+                    </tr>
+                    `).join('')}
+                </table>
+            </div>
+        </div>
+        
+        <!-- 風險提醒 -->
+        <div style="background:linear-gradient(135deg, #ffebee, #ffcdd2); padding:12px; border-radius:8px; border-left:4px solid #c62828;">
+            <div style="font-size:12px; font-weight:bold; color:#c62828; margin-bottom:6px;">⚠️ 破底風險提醒</div>
+            <div style="font-size:11px; color:#333; line-height:1.6;">
+                • 歷史上約 <b>${data.breakEvenRate.toFixed(0)}%</b> 的CB曾跌破100元發行價<br>
+                • 有擔保CB破底率 <b>${gc.guaranteed.breakEvenRate.toFixed(1)}%</b>，明顯低於無擔保的 <b>${gc.unguaranteed.breakEvenRate.toFixed(1)}%</b><br>
+                • 建議設定停損點位，避免重大虧損<br>
+                • 選擇有擔保CB可降低破底風險，但報酬空間可能較小
+            </div>
+        </div>`;
+    }
     
     content.innerHTML = html;
+}
 }
 
 // 【4】條件篩選績效數據生成
@@ -10158,47 +10545,181 @@ function showConditionPerf(type, event) {
 
 // 【5】投標決策指標數據生成
 function generateBidDecisionData() {
-    // 理論價區間績效
-    const theoGroups = { '<95': [], '95-100': [], '100-105': [], '105-110': [], '>110': [] };
+    // v3.98f-16: 完整的投標決策指標計算
+    
+    // 【1】理論價區間績效
+    const theoRanges = [
+        { key: '<95', label: '< 95元', min: 0, max: 95 },
+        { key: '95-100', label: '95-100元', min: 95, max: 100 },
+        { key: '100-105', label: '100-105元', min: 100, max: 105 },
+        { key: '105-110', label: '105-110元', min: 105, max: 110 },
+        { key: '110-115', label: '110-115元', min: 110, max: 115 },
+        { key: '>115', label: '> 115元', min: 115, max: 999 }
+    ];
+    
+    const theoGroups = {};
+    theoRanges.forEach(r => theoGroups[r.key] = []);
+    
     auctionRawData.forEach(d => {
         if (!d.minBidPrice || d.minBidPrice <= 0 || !d.marketHigh || !d.theoPrice) return;
-        const returnRate = ((d.marketHigh - d.minBidPrice) / d.minBidPrice * 100);
+        const returnToHigh = ((d.marketHigh - d.minBidPrice) / d.minBidPrice * 100);
+        const returnToLow = ((d.marketLow - d.minBidPrice) / d.minBidPrice * 100);
         const theo = d.theoPrice;
-        if (theo < 95) theoGroups['<95'].push(returnRate);
-        else if (theo < 100) theoGroups['95-100'].push(returnRate);
-        else if (theo < 105) theoGroups['100-105'].push(returnRate);
-        else if (theo < 110) theoGroups['105-110'].push(returnRate);
-        else theoGroups['>110'].push(returnRate);
+        
+        for (const r of theoRanges) {
+            if (theo >= r.min && theo < r.max) {
+                theoGroups[r.key].push({
+                    name: d.name,
+                    theo: theo,
+                    minBid: d.minBidPrice,
+                    high: d.marketHigh,
+                    low: d.marketLow,
+                    returnToHigh: returnToHigh,
+                    returnToLow: returnToLow,
+                    breakEven: d.marketLow < 100
+                });
+                break;
+            }
+        }
     });
     
-    const theoPerf = Object.entries(theoGroups).map(([range, returns]) => ({
-        range: range,
-        count: returns.length,
-        avgReturn: returns.length > 0 ? returns.reduce((s, r) => s + r, 0) / returns.length : 0
-    }));
+    const theoPerf = theoRanges.map(r => {
+        const items = theoGroups[r.key];
+        const winCount = items.filter(i => i.returnToLow > 0).length;  // 最低仍獲利
+        const breakEvenCount = items.filter(i => i.breakEven).length;
+        return {
+            range: r.label,
+            key: r.key,
+            count: items.length,
+            avgReturn: items.length > 0 ? items.reduce((s, i) => s + i.returnToHigh, 0) / items.length : 0,
+            avgReturnToLow: items.length > 0 ? items.reduce((s, i) => s + i.returnToLow, 0) / items.length : 0,
+            winRate: items.length > 0 ? (winCount / items.length * 100) : 0,
+            breakEvenRate: items.length > 0 ? (breakEvenCount / items.length * 100) : 0,
+            stats: StatsHelper.calcStats(items.map(i => i.returnToHigh)),
+            items: items
+        };
+    });
     
-    // 溢價率區間績效
-    const premiumGroups = { '負溢價': [], '0-5%': [], '5-10%': [], '10-15%': [], '>15%': [] };
+    // 【2】溢價率區間績效
+    const premiumRanges = [
+        { key: 'neg', label: '負溢價 (<0%)', min: -999, max: 0 },
+        { key: '0-3', label: '0-3%', min: 0, max: 3 },
+        { key: '3-6', label: '3-6%', min: 3, max: 6 },
+        { key: '6-10', label: '6-10%', min: 6, max: 10 },
+        { key: '10-15', label: '10-15%', min: 10, max: 15 },
+        { key: '>15', label: '> 15%', min: 15, max: 999 }
+    ];
+    
+    const premiumGroups = {};
+    premiumRanges.forEach(r => premiumGroups[r.key] = []);
+    
     auctionRawData.forEach(d => {
         if (!d.minBidPrice || d.minBidPrice <= 0 || !d.marketHigh || !d.theoPrice || d.theoPrice <= 0) return;
-        const returnRate = ((d.marketHigh - d.minBidPrice) / d.minBidPrice * 100);
+        const returnToHigh = ((d.marketHigh - d.minBidPrice) / d.minBidPrice * 100);
+        const returnToLow = ((d.marketLow - d.minBidPrice) / d.minBidPrice * 100);
         const premium = ((d.minBidPrice - d.theoPrice) / d.theoPrice * 100);
-        if (premium < 0) premiumGroups['負溢價'].push(returnRate);
-        else if (premium < 5) premiumGroups['0-5%'].push(returnRate);
-        else if (premium < 10) premiumGroups['5-10%'].push(returnRate);
-        else if (premium < 15) premiumGroups['10-15%'].push(returnRate);
-        else premiumGroups['>15%'].push(returnRate);
+        
+        for (const r of premiumRanges) {
+            if (premium >= r.min && premium < r.max) {
+                premiumGroups[r.key].push({
+                    name: d.name,
+                    premium: premium,
+                    theo: d.theoPrice,
+                    minBid: d.minBidPrice,
+                    high: d.marketHigh,
+                    low: d.marketLow,
+                    returnToHigh: returnToHigh,
+                    returnToLow: returnToLow,
+                    breakEven: d.marketLow < 100
+                });
+                break;
+            }
+        }
     });
     
-    const premiumPerf = Object.entries(premiumGroups).map(([range, returns]) => ({
-        range: range,
-        count: returns.length,
-        avgReturn: returns.length > 0 ? returns.reduce((s, r) => s + r, 0) / returns.length : 0
-    }));
+    const premiumPerf = premiumRanges.map(r => {
+        const items = premiumGroups[r.key];
+        const winCount = items.filter(i => i.returnToLow > 0).length;
+        const breakEvenCount = items.filter(i => i.breakEven).length;
+        return {
+            range: r.label,
+            key: r.key,
+            count: items.length,
+            avgReturn: items.length > 0 ? items.reduce((s, i) => s + i.returnToHigh, 0) / items.length : 0,
+            avgReturnToLow: items.length > 0 ? items.reduce((s, i) => s + i.returnToLow, 0) / items.length : 0,
+            avgPremium: items.length > 0 ? items.reduce((s, i) => s + i.premium, 0) / items.length : 0,
+            winRate: items.length > 0 ? (winCount / items.length * 100) : 0,
+            breakEvenRate: items.length > 0 ? (breakEvenCount / items.length * 100) : 0,
+            stats: StatsHelper.calcStats(items.map(i => i.returnToHigh)),
+            items: items
+        };
+    });
+    
+    // 【3】市場氛圍分析（用投標倍數作為市場熱度指標）
+    const atmosphereRanges = [
+        { key: 'cold', label: '冷清 (<2倍)', min: 0, max: 2 },
+        { key: 'normal', label: '一般 (2-5倍)', min: 2, max: 5 },
+        { key: 'warm', label: '溫熱 (5-10倍)', min: 5, max: 10 },
+        { key: 'hot', label: '火熱 (10-20倍)', min: 10, max: 20 },
+        { key: 'extreme', label: '瘋狂 (>20倍)', min: 20, max: 9999 }
+    ];
+    
+    const atmosphereGroups = {};
+    atmosphereRanges.forEach(r => atmosphereGroups[r.key] = []);
+    
+    auctionRawData.forEach(d => {
+        if (!d.minBidPrice || d.minBidPrice <= 0 || !d.marketHigh) return;
+        const bidMultiple = d.bidMultiple || d.multiple || 0;
+        if (bidMultiple <= 0) return;
+        
+        const returnToHigh = ((d.marketHigh - d.minBidPrice) / d.minBidPrice * 100);
+        const returnToLow = ((d.marketLow - d.minBidPrice) / d.minBidPrice * 100);
+        
+        for (const r of atmosphereRanges) {
+            if (bidMultiple >= r.min && bidMultiple < r.max) {
+                atmosphereGroups[r.key].push({
+                    name: d.name,
+                    multiple: bidMultiple,
+                    minBid: d.minBidPrice,
+                    avgBid: d.avgBidPrice || d.minBidPrice,
+                    high: d.marketHigh,
+                    low: d.marketLow,
+                    returnToHigh: returnToHigh,
+                    returnToLow: returnToLow,
+                    breakEven: d.marketLow < 100
+                });
+                break;
+            }
+        }
+    });
+    
+    const atmospherePerf = atmosphereRanges.map(r => {
+        const items = atmosphereGroups[r.key];
+        const winCount = items.filter(i => i.returnToLow > 0).length;
+        const breakEvenCount = items.filter(i => i.breakEven).length;
+        return {
+            range: r.label,
+            key: r.key,
+            count: items.length,
+            avgReturn: items.length > 0 ? items.reduce((s, i) => s + i.returnToHigh, 0) / items.length : 0,
+            avgReturnToLow: items.length > 0 ? items.reduce((s, i) => s + i.returnToLow, 0) / items.length : 0,
+            avgMultiple: items.length > 0 ? items.reduce((s, i) => s + i.multiple, 0) / items.length : 0,
+            winRate: items.length > 0 ? (winCount / items.length * 100) : 0,
+            breakEvenRate: items.length > 0 ? (breakEvenCount / items.length * 100) : 0,
+            stats: StatsHelper.calcStats(items.map(i => i.returnToHigh)),
+            items: items
+        };
+    });
+    
+    // 計算整體統計
+    const allItems = auctionRawData.filter(d => d.minBidPrice > 0 && d.marketHigh > 0);
+    const totalCount = allItems.length;
     
     perfAnalysisData.bidDecision = {
         theo: theoPerf,
-        premium: premiumPerf
+        premium: premiumPerf,
+        atmosphere: atmospherePerf,
+        totalCount: totalCount
     };
 }
 
@@ -10208,9 +10729,14 @@ function showBidDecision(type, event) {
     
     document.querySelectorAll('.bid-dec-tab').forEach(tab => {
         tab.classList.remove('active');
-        const tabMap = { 'theo': '理論價區間', 'premium': '溢價率區間', 'atmosphere': '市場氛圍' };
-        if (tab.textContent === tabMap[type]) tab.classList.add('active');
+        tab.style.background = '#ffcdd2';
+        tab.style.color = '#c62828';
     });
+    if (event && event.target) {
+        event.target.classList.add('active');
+        event.target.style.background = '#e53935';
+        event.target.style.color = 'white';
+    }
     
     const data = perfAnalysisData.bidDecision;
     const content = document.getElementById('bidDecisionContent');
@@ -10223,41 +10749,325 @@ function showBidDecision(type, event) {
     let html = '';
     
     if (type === 'theo') {
-        html = `<div style="font-size:12px; font-weight:700; color:#c62828; margin-bottom:8px;">🎯 理論價區間與平均報酬率</div>
-        <table class="perf-table"><thead><tr><th>理論價區間</th><th>檔數</th><th>平均報酬</th><th>投標建議</th></tr></thead><tbody>`;
-        data.theo.forEach(item => {
-            const advice = item.avgReturn > 15 ? '積極參與' : item.avgReturn > 5 ? '適度參與' : '謹慎評估';
-            const adviceColor = item.avgReturn > 15 ? '#4caf50' : item.avgReturn > 5 ? '#ff9800' : '#f44336';
-            html += `<tr><td>${item.range}</td><td>${item.count}</td>
-                <td class="${item.avgReturn >= 0 ? 'val-win' : 'val-lose'}">${item.avgReturn >= 0 ? '+' : ''}${item.avgReturn.toFixed(1)}%</td>
-                <td style="color:${adviceColor}; font-weight:600;">${advice}</td></tr>`;
-        });
-        html += `</tbody></table>
-        <div class="perf-insight">
-            <strong>💡 理論價建議：</strong>
-            歷史數據顯示，理論價越高的CB通常後續報酬也較佳，但需注意競爭激烈時溢價可能偏高。
+        // 理論價區間分析
+        const theoData = data.theo.filter(t => t.count > 0);
+        const bestTheo = theoData.reduce((a, b) => a.avgReturn > b.avgReturn ? a : b, { avgReturn: 0 });
+        const safestTheo = theoData.reduce((a, b) => a.winRate > b.winRate ? a : b, { winRate: 0 });
+        
+        html = `
+        <div style="font-size:13px; font-weight:bold; color:#c62828; margin-bottom:12px;">
+            🎯 理論價區間與投標績效
+            <span style="font-size:11px; font-weight:normal; color:#888;">（截標日理論價）</span>
+        </div>
+        
+        <!-- 摘要卡片 -->
+        <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-bottom:15px;">
+            <div style="text-align:center; padding:12px; background:#ffebee; border-radius:8px;">
+                <div style="font-size:11px; color:#666;">總樣本數</div>
+                <div style="font-size:22px; font-weight:bold; color:#c62828;">${data.totalCount}</div>
+            </div>
+            <div style="text-align:center; padding:12px; background:#e8f5e9; border-radius:8px;">
+                <div style="font-size:11px; color:#666;">最佳報酬區間</div>
+                <div style="font-size:16px; font-weight:bold; color:#2e7d32;">${bestTheo.range || '-'}</div>
+                <div style="font-size:12px; color:#4caf50;">+${bestTheo.avgReturn?.toFixed(1) || 0}%</div>
+            </div>
+            <div style="text-align:center; padding:12px; background:#e3f2fd; border-radius:8px;">
+                <div style="font-size:11px; color:#666;">最高勝率區間</div>
+                <div style="font-size:16px; font-weight:bold; color:#1565c0;">${safestTheo.range || '-'}</div>
+                <div style="font-size:12px; color:#2196f3;">${safestTheo.winRate?.toFixed(0) || 0}%</div>
+            </div>
+        </div>
+        
+        <!-- 詳細表格 -->
+        <div style="background:#fff; border-radius:8px; overflow:hidden; margin-bottom:12px;">
+            <table style="width:100%; font-size:12px; border-collapse:collapse;">
+                <tr style="background:linear-gradient(135deg, #c62828, #e53935); color:white;">
+                    <th style="padding:10px; text-align:center;">理論價區間</th>
+                    <th style="padding:10px; text-align:center;">檔數</th>
+                    <th style="padding:10px; text-align:center;">平均報酬</th>
+                    <th style="padding:10px; text-align:center;">勝率</th>
+                    <th style="padding:10px; text-align:center;">破底率</th>
+                    <th style="padding:10px; text-align:center;">投標建議</th>
+                </tr>
+                ${theoData.map((item, idx) => {
+                    let advice = '', adviceColor = '', adviceBg = '';
+                    if (item.avgReturn > 20 && item.winRate > 60) {
+                        advice = '🔥 強力推薦';
+                        adviceColor = '#2e7d32';
+                        adviceBg = '#e8f5e9';
+                    } else if (item.avgReturn > 10 && item.winRate > 50) {
+                        advice = '✓ 適度參與';
+                        adviceColor = '#ff9800';
+                        adviceBg = '#fff3e0';
+                    } else if (item.avgReturn > 5) {
+                        advice = '△ 謹慎評估';
+                        adviceColor = '#f57c00';
+                        adviceBg = '#fff8e1';
+                    } else {
+                        advice = '✗ 風險較高';
+                        adviceColor = '#c62828';
+                        adviceBg = '#ffebee';
+                    }
+                    return `
+                    <tr style="background:${idx % 2 === 0 ? 'white' : '#fafafa'};">
+                        <td style="padding:8px; text-align:center; font-weight:bold;">${item.range}</td>
+                        <td style="padding:8px; text-align:center;">${item.count}</td>
+                        <td style="padding:8px; text-align:center; color:${item.avgReturn >= 0 ? '#2e7d32' : '#c62828'}; font-weight:bold;">
+                            ${item.avgReturn >= 0 ? '+' : ''}${item.avgReturn.toFixed(1)}%
+                        </td>
+                        <td style="padding:8px; text-align:center; color:${item.winRate >= 50 ? '#2e7d32' : '#f57c00'};">
+                            ${item.winRate.toFixed(0)}%
+                        </td>
+                        <td style="padding:8px; text-align:center; color:${item.breakEvenRate < 10 ? '#2e7d32' : '#c62828'};">
+                            ${item.breakEvenRate.toFixed(0)}%
+                        </td>
+                        <td style="padding:8px; text-align:center; background:${adviceBg}; color:${adviceColor}; font-weight:bold;">
+                            ${advice}
+                        </td>
+                    </tr>`;
+                }).join('')}
+            </table>
+        </div>
+        
+        <!-- 投資建議 -->
+        <div style="background:linear-gradient(135deg, #ffebee, #ffcdd2); padding:12px; border-radius:8px; border-left:4px solid #c62828;">
+            <div style="font-size:12px; font-weight:bold; color:#c62828; margin-bottom:6px;">💡 理論價投標建議</div>
+            <div style="font-size:11px; color:#333; line-height:1.6;">
+                • 理論價 <b>${bestTheo.range || '較高區間'}</b> 的CB平均報酬最佳（+${bestTheo.avgReturn?.toFixed(1) || 0}%）<br>
+                • 理論價越高通常代表轉換價值越好，但競爭也較激烈<br>
+                • 理論價 < 100元的CB破底風險較高，需特別注意<br>
+                • 建議綜合考量理論價、競拍熱度與個人風險承受度
+            </div>
         </div>`;
+        
+        // 統計說明
+        html += StatsHelper.generateStatsNote(theoData, {
+            title: '理論價區間績效統計',
+            valueField: 'avgReturn',
+            countField: 'count'
+        });
+        
     } else if (type === 'premium') {
-        html = `<div style="font-size:12px; font-weight:700; color:#c62828; margin-bottom:8px;">📈 競拍溢價率與平均報酬率</div>
-        <table class="perf-table"><thead><tr><th>溢價率區間</th><th>檔數</th><th>平均報酬</th><th>成本效益</th></tr></thead><tbody>`;
-        data.premium.forEach(item => {
-            const eff = item.range === '負溢價' ? '最佳' : item.avgReturn > 10 ? '尚可' : '偏低';
-            const effColor = item.range === '負溢價' ? '#4caf50' : item.avgReturn > 10 ? '#ff9800' : '#f44336';
-            html += `<tr><td>${item.range}</td><td>${item.count}</td>
-                <td class="${item.avgReturn >= 0 ? 'val-win' : 'val-lose'}">${item.avgReturn >= 0 ? '+' : ''}${item.avgReturn.toFixed(1)}%</td>
-                <td style="color:${effColor}; font-weight:600;">${eff}</td></tr>`;
+        // 溢價率區間分析
+        const premiumData = data.premium.filter(p => p.count > 0);
+        const bestPremium = premiumData.reduce((a, b) => a.avgReturn > b.avgReturn ? a : b, { avgReturn: 0 });
+        
+        html = `
+        <div style="font-size:13px; font-weight:bold; color:#c62828; margin-bottom:12px;">
+            📈 競拍溢價率與投標績效
+            <span style="font-size:11px; font-weight:normal; color:#888;">（(最低得標價 - 理論價) / 理論價）</span>
+        </div>
+        
+        <!-- 摘要卡片 -->
+        <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-bottom:15px;">
+            <div style="text-align:center; padding:12px; background:#ffebee; border-radius:8px;">
+                <div style="font-size:11px; color:#666;">總樣本數</div>
+                <div style="font-size:22px; font-weight:bold; color:#c62828;">${data.totalCount}</div>
+            </div>
+            <div style="text-align:center; padding:12px; background:#e8f5e9; border-radius:8px;">
+                <div style="font-size:11px; color:#666;">最佳報酬區間</div>
+                <div style="font-size:16px; font-weight:bold; color:#2e7d32;">${bestPremium.range || '-'}</div>
+                <div style="font-size:12px; color:#4caf50;">+${bestPremium.avgReturn?.toFixed(1) || 0}%</div>
+            </div>
+            <div style="text-align:center; padding:12px; background:#fff3e0; border-radius:8px;">
+                <div style="font-size:11px; color:#666;">負溢價報酬</div>
+                <div style="font-size:16px; font-weight:bold; color:#ff9800;">
+                    ${premiumData.find(p => p.key === 'neg')?.avgReturn?.toFixed(1) || '-'}%
+                </div>
+            </div>
+        </div>
+        
+        <!-- 詳細表格 -->
+        <div style="background:#fff; border-radius:8px; overflow:hidden; margin-bottom:12px;">
+            <table style="width:100%; font-size:12px; border-collapse:collapse;">
+                <tr style="background:linear-gradient(135deg, #c62828, #e53935); color:white;">
+                    <th style="padding:10px; text-align:center;">溢價率區間</th>
+                    <th style="padding:10px; text-align:center;">檔數</th>
+                    <th style="padding:10px; text-align:center;">平均報酬</th>
+                    <th style="padding:10px; text-align:center;">勝率</th>
+                    <th style="padding:10px; text-align:center;">破底率</th>
+                    <th style="padding:10px; text-align:center;">成本效益</th>
+                </tr>
+                ${premiumData.map((item, idx) => {
+                    let eff = '', effColor = '', effBg = '';
+                    if (item.key === 'neg') {
+                        eff = '🌟 最佳';
+                        effColor = '#2e7d32';
+                        effBg = '#e8f5e9';
+                    } else if (item.avgReturn > 15) {
+                        eff = '✓ 良好';
+                        effColor = '#4caf50';
+                        effBg = '#f1f8e9';
+                    } else if (item.avgReturn > 8) {
+                        eff = '△ 尚可';
+                        effColor = '#ff9800';
+                        effBg = '#fff3e0';
+                    } else {
+                        eff = '✗ 偏低';
+                        effColor = '#c62828';
+                        effBg = '#ffebee';
+                    }
+                    return `
+                    <tr style="background:${idx % 2 === 0 ? 'white' : '#fafafa'};">
+                        <td style="padding:8px; text-align:center; font-weight:bold;">${item.range}</td>
+                        <td style="padding:8px; text-align:center;">${item.count}</td>
+                        <td style="padding:8px; text-align:center; color:${item.avgReturn >= 0 ? '#2e7d32' : '#c62828'}; font-weight:bold;">
+                            ${item.avgReturn >= 0 ? '+' : ''}${item.avgReturn.toFixed(1)}%
+                        </td>
+                        <td style="padding:8px; text-align:center; color:${item.winRate >= 50 ? '#2e7d32' : '#f57c00'};">
+                            ${item.winRate.toFixed(0)}%
+                        </td>
+                        <td style="padding:8px; text-align:center; color:${item.breakEvenRate < 10 ? '#2e7d32' : '#c62828'};">
+                            ${item.breakEvenRate.toFixed(0)}%
+                        </td>
+                        <td style="padding:8px; text-align:center; background:${effBg}; color:${effColor}; font-weight:bold;">
+                            ${eff}
+                        </td>
+                    </tr>`;
+                }).join('')}
+            </table>
+        </div>
+        
+        <!-- 投資建議 -->
+        <div style="background:linear-gradient(135deg, #ffebee, #ffcdd2); padding:12px; border-radius:8px; border-left:4px solid #c62828;">
+            <div style="font-size:12px; font-weight:bold; color:#c62828; margin-bottom:6px;">💡 溢價率投標建議</div>
+            <div style="font-size:11px; color:#333; line-height:1.6;">
+                • <b>負溢價</b>得標（低於理論價）的成本效益最佳，可積極爭取<br>
+                • 溢價率 <b>0-6%</b> 屬於合理範圍，後續報酬空間仍充足<br>
+                • 溢價率 <b>超過15%</b> 時需謹慎，可能已反映大部分利多<br>
+                • 熱門標的競爭激烈，寧可放棄也不宜過度追價
+            </div>
+        </div>`;
+        
+        // 統計說明
+        html += StatsHelper.generateStatsNote(premiumData, {
+            title: '溢價率區間績效統計',
+            valueField: 'avgReturn',
+            countField: 'count'
         });
-        html += `</tbody></table>
-        <div class="perf-insight">
-            <strong>💡 溢價率建議：</strong>
-            負溢價或低溢價得標的CB，後續報酬空間通常較大。高溢價(>15%)時需謹慎，可能已反映大部分利多。
-        </div>`;
+        
     } else if (type === 'atmosphere') {
-        html = `<div style="text-align:center; padding:30px; color:#888;">
-            <div style="font-size:24px; margin-bottom:8px;">📊</div>
-            <div>市場氛圍分析功能開發中</div>
-            <div style="font-size:11px; margin-top:8px;">將整合近期市場熱度與績效關聯</div>
+        // 市場氛圍分析
+        const atmData = data.atmosphere.filter(a => a.count > 0);
+        const bestAtm = atmData.reduce((a, b) => a.avgReturn > b.avgReturn ? a : b, { avgReturn: 0 });
+        const safestAtm = atmData.reduce((a, b) => a.winRate > b.winRate ? a : b, { winRate: 0 });
+        
+        html = `
+        <div style="font-size:13px; font-weight:bold; color:#c62828; margin-bottom:12px;">
+            🌡️ 市場氛圍與投標績效
+            <span style="font-size:11px; font-weight:normal; color:#888;">（以投標倍數衡量市場熱度）</span>
+        </div>
+        
+        <!-- 摘要卡片 -->
+        <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-bottom:15px;">
+            <div style="text-align:center; padding:12px; background:#ffebee; border-radius:8px;">
+                <div style="font-size:11px; color:#666;">有效樣本</div>
+                <div style="font-size:22px; font-weight:bold; color:#c62828;">${atmData.reduce((s, a) => s + a.count, 0)}</div>
+            </div>
+            <div style="text-align:center; padding:12px; background:#e8f5e9; border-radius:8px;">
+                <div style="font-size:11px; color:#666;">最佳報酬氛圍</div>
+                <div style="font-size:16px; font-weight:bold; color:#2e7d32;">${bestAtm.range || '-'}</div>
+                <div style="font-size:12px; color:#4caf50;">+${bestAtm.avgReturn?.toFixed(1) || 0}%</div>
+            </div>
+            <div style="text-align:center; padding:12px; background:#e3f2fd; border-radius:8px;">
+                <div style="font-size:11px; color:#666;">最高勝率氛圍</div>
+                <div style="font-size:16px; font-weight:bold; color:#1565c0;">${safestAtm.range || '-'}</div>
+                <div style="font-size:12px; color:#2196f3;">${safestAtm.winRate?.toFixed(0) || 0}%</div>
+            </div>
+        </div>
+        
+        <!-- 氛圍視覺化 -->
+        <div style="background:#fff8e1; padding:12px; border-radius:8px; margin-bottom:12px;">
+            <div style="font-size:12px; font-weight:bold; color:#f57c00; margin-bottom:10px;">🌡️ 市場熱度分布</div>
+            <div style="display:flex; gap:5px; align-items:flex-end; height:100px; margin-bottom:10px;">
+                ${atmData.map(item => {
+                    const height = Math.max(20, Math.min(100, item.count / Math.max(...atmData.map(a => a.count)) * 100));
+                    const colors = {
+                        'cold': '#90caf9',
+                        'normal': '#81c784',
+                        'warm': '#ffb74d',
+                        'hot': '#ff8a65',
+                        'extreme': '#e57373'
+                    };
+                    return `
+                    <div style="flex:1; display:flex; flex-direction:column; align-items:center;">
+                        <div style="width:100%; height:${height}px; background:${colors[item.key] || '#ccc'}; border-radius:4px 4px 0 0;"></div>
+                        <div style="font-size:10px; color:#666; margin-top:4px; text-align:center;">${item.count}</div>
+                    </div>`;
+                }).join('')}
+            </div>
+            <div style="display:flex; gap:5px;">
+                ${atmData.map(item => `
+                <div style="flex:1; text-align:center; font-size:9px; color:#666;">${item.range.split(' ')[0]}</div>
+                `).join('')}
+            </div>
+        </div>
+        
+        <!-- 詳細表格 -->
+        <div style="background:#fff; border-radius:8px; overflow:hidden; margin-bottom:12px;">
+            <table style="width:100%; font-size:12px; border-collapse:collapse;">
+                <tr style="background:linear-gradient(135deg, #c62828, #e53935); color:white;">
+                    <th style="padding:10px; text-align:center;">市場氛圍</th>
+                    <th style="padding:10px; text-align:center;">檔數</th>
+                    <th style="padding:10px; text-align:center;">平均倍數</th>
+                    <th style="padding:10px; text-align:center;">平均報酬</th>
+                    <th style="padding:10px; text-align:center;">勝率</th>
+                    <th style="padding:10px; text-align:center;">參與建議</th>
+                </tr>
+                ${atmData.map((item, idx) => {
+                    let advice = '', adviceColor = '', adviceBg = '';
+                    const icons = { 'cold': '❄️', 'normal': '🌤️', 'warm': '☀️', 'hot': '🔥', 'extreme': '💥' };
+                    if (item.avgReturn > 15 && item.winRate > 55) {
+                        advice = '✓ 值得參與';
+                        adviceColor = '#2e7d32';
+                        adviceBg = '#e8f5e9';
+                    } else if (item.avgReturn > 8) {
+                        advice = '△ 適度參與';
+                        adviceColor = '#ff9800';
+                        adviceBg = '#fff3e0';
+                    } else {
+                        advice = '✗ 謹慎評估';
+                        adviceColor = '#c62828';
+                        adviceBg = '#ffebee';
+                    }
+                    return `
+                    <tr style="background:${idx % 2 === 0 ? 'white' : '#fafafa'};">
+                        <td style="padding:8px; text-align:center; font-weight:bold;">
+                            ${icons[item.key] || ''} ${item.range}
+                        </td>
+                        <td style="padding:8px; text-align:center;">${item.count}</td>
+                        <td style="padding:8px; text-align:center;">${item.avgMultiple.toFixed(1)}倍</td>
+                        <td style="padding:8px; text-align:center; color:${item.avgReturn >= 0 ? '#2e7d32' : '#c62828'}; font-weight:bold;">
+                            ${item.avgReturn >= 0 ? '+' : ''}${item.avgReturn.toFixed(1)}%
+                        </td>
+                        <td style="padding:8px; text-align:center; color:${item.winRate >= 50 ? '#2e7d32' : '#f57c00'};">
+                            ${item.winRate.toFixed(0)}%
+                        </td>
+                        <td style="padding:8px; text-align:center; background:${adviceBg}; color:${adviceColor}; font-weight:bold;">
+                            ${advice}
+                        </td>
+                    </tr>`;
+                }).join('')}
+            </table>
+        </div>
+        
+        <!-- 投資建議 -->
+        <div style="background:linear-gradient(135deg, #ffebee, #ffcdd2); padding:12px; border-radius:8px; border-left:4px solid #c62828;">
+            <div style="font-size:12px; font-weight:bold; color:#c62828; margin-bottom:6px;">💡 市場氛圍投標建議</div>
+            <div style="font-size:11px; color:#333; line-height:1.6;">
+                • 市場 <b>${bestAtm.range || '適中熱度'}</b> 時平均報酬最佳（+${bestAtm.avgReturn?.toFixed(1) || 0}%）<br>
+                • 過冷（<2倍）可能代表標的品質較差，需特別檢視基本面<br>
+                • 過熱（>20倍）競爭激烈，溢價偏高，報酬空間可能受壓縮<br>
+                • 適度熱度（5-10倍）通常是較好的參與時機
+            </div>
         </div>`;
+        
+        // 統計說明
+        html += StatsHelper.generateStatsNote(atmData, {
+            title: '市場氛圍績效統計',
+            valueField: 'avgReturn',
+            countField: 'count'
+        });
     }
     
     content.innerHTML = html;

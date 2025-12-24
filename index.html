@@ -4,30 +4,23 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.98d (分區間溢價率版)</title>
-<!-- v3.98d: 核心重構！改用「分區間溢價率法」作為預測核心 -->
+<title>AI智能可轉債競拍系統 v3.98e (信評分層版)</title>
+<!-- v3.98e: 關鍵優化！高理論價區間(>=105)自動使用信評≤5的優良樣本 -->
 <!-- 
-     關鍵洞察：不同理論價區間有完全不同的溢價率分布
-     <90: 平均溢價22%, 90-95: 12.7%, 95-100: 7.6%, 100-105: 6.3%, 
-     105-110: 4.2%, 110-115: 0.4%, >115: -9.2%
-
-```
- 核心變更：
- 1. 新增 calcSegmentPremiumPrediction - 分區間溢價率法（權重40%）
- 2. 新增 calcSegmentMA - 分區間近期熱度（權重30%）
- 3. 原有維度加權溢價率降為輔助（權重20%）
- 4. 擔保調整（權重10%）
- 5. 策略價格基於分區間標準差計算，更精準
-```
-
-–>
-
-<!-- v3.98c: 修正集成預測引擎的m.value.toFixed錯誤，加強所有數值運算的安全檢查 -->
-
+     核心洞察（Rex大叔的寶貴發現）：
+     1. 投標倍數是最強預測因子（相關係數0.736），但截標前無法取得
+     2. 信評≤5的標的 → 投標意願高 → 投標倍數高 → 溢價率高
+     3. 110-115區間實證：信評≤5平均溢價+3.86%，信評>5平均溢價-1.01%
+     4. 高理論價區間的折價案例多為TCRI較差、無法拆解CB+選擇權的標的
+     
+     解決方案：
+     - 理論價>=105時，優先使用信評≤5的歷史樣本計算溢價率
+     - 這等同於間接利用投標倍數的預測能力（因為好信評→高倍數）
+-->
+<!-- v3.98d: 核心重構！改用「分區間溢價率法」作為預測核心 -->
+<!-- v3.98c: 修正集成預測引擎的m.value.toFixed錯誤 -->
 <!-- v3.98b: 修正step0Reminder的null錯誤 -->
-
-<!-- v3.98a: 集成預測引擎優化版 - 基於304筆歷史資料統計分析優化 -->
-
+<!-- v3.98a: 集成預測引擎優化版 -->
 <!-- 核心優化：
      1. 新增集成預測引擎 v2.0 (Ensemble Engine) - 整合4種預測方法，MAE≈3.4元
      2. 新增MA10市場熱度指標 - 追蹤近10檔競拍趨勢
@@ -37,15 +30,10 @@
      研究發現：投標倍數為最強預測因子(相關係數0.736)，但截標前無法取得
      集成方法可有效降低單一方法的預測風險
 -->
-
 <!-- v3.97-cw: 第五區塊改為「台股熱門交易」- 漲跌幅排行/計量強勢/計量弱勢 -->
-
 <!-- v3.97-cu: 精簡為三大核心模組 - Step1基礎數據 + Step2最強大腦 + Step3 AI智能預測 -->
-
 <!-- v3.97-ct: 新增AI智慧核心模組 - 異常值處理、信心度量化、氛圍偏離警示、雙軌整合預測 -->
-
 <!-- v3.97-as-cs: 得標均價法加入歷史落差調整係數（理論價<90:+5%, <95:+3%, <97.5:+2%）-->
-
 <!-- v3.97-as-cr: Step 1 明細動態跟隨標籤切換 -->
 
 <!-- v3.97-as-ca: 改為從 data/00_cb/ 載入 CSV 檔案 -->
@@ -3511,10 +3499,14 @@ const AICore = {
             };
         },
         
-        // v3.98d 重新設計：分區間溢價率法（核心方法）
-        // 關鍵洞察：不同理論價區間有完全不同的溢價率分布
-        // <90: 平均溢價22%, 90-95: 12.7%, 95-100: 7.6%, 100-105: 6.3%, 105-110: 4.2%, 110-115: 0.4%, >115: -9.2%
-        calcSegmentPremiumPrediction: function(theoPrice, guaranteeType, auctionData) {
+        // v3.98e 重新設計：分區間溢價率法（含信評過濾）
+        // 關鍵洞察：
+        // 1. 不同理論價區間有完全不同的溢價率分布
+        // 2. 高理論價區間(>=105)，信評≤5的優良標的溢價率明顯較高
+        // 3. 信評>5的標的在高理論價區間常出現折價
+        // 實證數據：
+        // 110-115區間：信評≤5平均溢價+3.86%，信評>5平均溢價-1.01%，差距4.87%
+        calcSegmentPremiumPrediction: function(theoPrice, guaranteeType, auctionData, ratingFilter = null) {
             if (!auctionData || auctionData.length === 0 || theoPrice <= 0) return null;
             
             // 細化理論價區間定義（7個區間）
@@ -3529,24 +3521,48 @@ const AICore = {
             };
             
             const targetSegment = getSegment(theoPrice);
+            const isHighTheo = theoPrice >= 105; // 高理論價區間
             
-            // 過濾同區間的歷史案例（擔保類型可選）
+            // 過濾同區間的歷史案例
             const filtered = auctionData.filter(d => {
                 const theo = parseFloat(d['理論價']) || 0;
                 const minBid = parseFloat(d['最低得標']) || 0;
                 
                 if (minBid <= 0 || theo <= 0) return false;
                 
-                return getSegment(theo) === targetSegment;
+                // 區間匹配
+                if (getSegment(theo) !== targetSegment) return false;
+                
+                // v3.98e 新增：高理論價區間時，優先使用信評較好的樣本
+                if (isHighTheo && ratingFilter === 'good') {
+                    const rating = parseFloat(d['信用評等']) || 99;
+                    if (rating > 5) return false; // 只保留信評≤5的優良標的
+                }
+                
+                return true;
             });
             
-            // 如果同區間樣本不足，嘗試擴大到相鄰區間
-            let expandedFiltered = filtered;
-            if (filtered.length < 5) {
+            // 如果信評過濾後樣本不足，放寬條件
+            let finalFiltered = filtered;
+            let usedGoodRating = (isHighTheo && ratingFilter === 'good' && filtered.length >= 3);
+            
+            if (filtered.length < 3) {
+                // 第一次放寬：取消信評過濾
+                finalFiltered = auctionData.filter(d => {
+                    const theo = parseFloat(d['理論價']) || 0;
+                    const minBid = parseFloat(d['最低得標']) || 0;
+                    if (minBid <= 0 || theo <= 0) return false;
+                    return getSegment(theo) === targetSegment;
+                });
+                usedGoodRating = false;
+            }
+            
+            // 如果同區間樣本仍不足，嘗試擴大到相鄰區間
+            if (finalFiltered.length < 5) {
                 const allSegments = ['<90', '90-95', '95-100', '100-105', '105-110', '110-115', '>=115'];
                 const targetIdx = allSegments.indexOf(targetSegment);
                 
-                expandedFiltered = auctionData.filter(d => {
+                finalFiltered = auctionData.filter(d => {
                     const theo = parseFloat(d['理論價']) || 0;
                     const minBid = parseFloat(d['最低得標']) || 0;
                     if (minBid <= 0 || theo <= 0) return false;
@@ -3557,12 +3573,13 @@ const AICore = {
                     // 允許相鄰區間
                     return Math.abs(dIdx - targetIdx) <= 1;
                 });
+                usedGoodRating = false;
             }
             
-            if (expandedFiltered.length < 3) return null;
+            if (finalFiltered.length < 3) return null;
             
             // 計算該區間的溢價率統計
-            const premiums = expandedFiltered.map(d => {
+            const premiums = finalFiltered.map(d => {
                 const theo = parseFloat(d['理論價']) || 0;
                 const minBid = parseFloat(d['最低得標']) || 0;
                 return theo > 0 ? ((minBid / theo) - 1) * 100 : 0;
@@ -3576,11 +3593,12 @@ const AICore = {
             
             return {
                 segment: targetSegment,
-                sampleCount: expandedFiltered.length,
+                sampleCount: finalFiltered.length,
                 exactSegmentCount: filtered.length,
                 avgPremium: avgPremium,
                 stdPremium: stdPremium,
                 predictedPrice: predictedPrice,
+                usedGoodRating: usedGoodRating, // v3.98e: 是否使用信評≤5的優良樣本
                 // 策略價格
                 conservative: theoPrice * (1 + (avgPremium - 0.618 * stdPremium) / 100),
                 balanced: predictedPrice,
@@ -3589,7 +3607,7 @@ const AICore = {
             };
         },
         
-        // v3.98d 重新設計：分區間MA熱度（只看同區間的近期案例）
+        // v3.98e 重新設計：分區間MA熱度（只看同區間的近期案例，高理論價區間過濾信評）
         calcSegmentMA: function(theoPrice, auctionData, n = 10) {
             if (!auctionData || auctionData.length === 0 || theoPrice <= 0) return null;
             
@@ -3636,22 +3654,31 @@ const AICore = {
             };
         },
         
-        // v3.98d 重新設計：集成預測（以分區間溢價率法為核心）
+        // v3.98e 重新設計：集成預測（以分區間溢價率法為核心，高理論價區間使用信評過濾）
+        // 關鍵洞察：
+        // 1. 投標倍數是最強預測因子（相關係數0.736），但截標前無法取得
+        // 2. 信評≤5的標的投標意願高 → 投標倍數高 → 溢價率高
+        // 3. 高理論價區間(>=105)使用信評≤5的樣本，避免被信評差的折價案例拉低
         calcEnsemblePrediction: function(params) {
-            const { theoPrice, guarantee, auctionData, dimensions } = params;
+            const { theoPrice, guarantee, auctionData, dimensions, creditRating } = params;
             
             if (!theoPrice || theoPrice <= 0) return null;
             
             const predictions = [];
+            const isHighTheo = theoPrice >= 105; // 高理論價區間
             
             // 方法1: 分區間溢價率法（核心方法，權重最高）
-            const segmentPred = this.calcSegmentPremiumPrediction(theoPrice, guarantee, auctionData);
+            // v3.98e: 高理論價區間時，使用信評≤5的優良樣本
+            const ratingFilter = isHighTheo ? 'good' : null;
+            const segmentPred = this.calcSegmentPremiumPrediction(theoPrice, guarantee, auctionData, ratingFilter);
+            
             if (segmentPred && segmentPred.predictedPrice > 0) {
+                const ratingNote = segmentPred.usedGoodRating ? ' 信評≤5' : '';
                 predictions.push({ 
                     name: '分區間溢價率', 
                     value: segmentPred.predictedPrice, 
                     weight: 0.40,
-                    detail: `${segmentPred.segment}區間 溢價${segmentPred.avgPremium.toFixed(1)}% (${segmentPred.sampleCount}筆)`
+                    detail: `${segmentPred.segment}區間${ratingNote} 溢價${segmentPred.avgPremium.toFixed(1)}% (${segmentPred.sampleCount}筆)`
                 });
             }
             
@@ -3725,7 +3752,9 @@ const AICore = {
                 ultimate: ensembleValue + 1.236 * strategyStd,
                 // 額外資訊
                 segment: segmentPred ? segmentPred.segment : null,
-                segmentPremium: segmentPred ? segmentPred.avgPremium : null
+                segmentPremium: segmentPred ? segmentPred.avgPremium : null,
+                usedGoodRating: segmentPred ? segmentPred.usedGoodRating : false,
+                isHighTheo: isHighTheo
             };
         },
         
@@ -11240,7 +11269,7 @@ function displayResult(r) {
             }
         }
         
-        // ========== v3.98d 重新設計：分區間集成預測引擎 ==========
+        // ========== v3.98e 重新設計：分區間集成預測引擎（含信評分層） ==========
         if (window.AICore.ensemble) {
             // 準備集成預測所需參數
             const ensembleParams = {
@@ -11256,9 +11285,11 @@ function displayResult(r) {
             const ensembleResult = window.AICore.ensemble.calcEnsemblePrediction(ensembleParams);
             
             if (ensembleResult && ensembleResult.methods && ensembleResult.methods.length > 0) {
-                // 更新分區間資訊
+                // 更新分區間資訊（v3.98e: 加入信評過濾提示）
                 if (ensembleResult.segment) {
-                    updateElement('step3SegmentName', ensembleResult.segment);
+                    const segmentText = ensembleResult.segment + 
+                        (ensembleResult.usedGoodRating ? ' (信評≤5優良)' : '');
+                    updateElement('step3SegmentName', segmentText);
                     updateElement('step3SegmentPremium', 
                         typeof ensembleResult.segmentPremium === 'number' 
                             ? ensembleResult.segmentPremium.toFixed(2) + '%' 

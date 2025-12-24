@@ -2761,18 +2761,18 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
         
         <!-- v3.97-dk: 重新設計的CB選擇器 -->
         <div style="background:#fff; border-radius:12px; padding:16px; margin-bottom:12px; box-shadow:0 2px 8px rgba(0,0,0,0.06);">
-            <!-- 狀態篩選標籤 -->
+            <!-- 狀態篩選標籤 - v3.97-ea 加強顏色區別 -->
             <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
                 <button type="button" class="arb-filter-tab active" data-filter="listed" onclick="filterArbitrageCB('listed', this)"
-                    style="padding:8px 16px; border:2px solid #4caf50; border-radius:20px; background:#e8f5e9; color:#2e7d32; cursor:pointer; font-weight:600; font-size:13px;">
+                    style="padding:8px 16px; border:2px solid #4caf50; border-radius:20px; background:#4caf50; color:white; cursor:pointer; font-weight:600; font-size:13px;">
                     🟢 掛牌中
                 </button>
                 <button type="button" class="arb-filter-tab" data-filter="delisted" onclick="filterArbitrageCB('delisted', this)"
-                    style="padding:8px 16px; border:2px solid #9e9e9e; border-radius:20px; background:white; color:#666; cursor:pointer; font-weight:600; font-size:13px;">
+                    style="padding:8px 16px; border:2px solid #ddd; border-radius:20px; background:white; color:#888; cursor:pointer; font-weight:600; font-size:13px;">
                     ⚫ 已下市
                 </button>
                 <button type="button" class="arb-filter-tab" data-filter="all" onclick="filterArbitrageCB('all', this)"
-                    style="padding:8px 16px; border:2px solid #9c27b0; border-radius:20px; background:white; color:#7b1fa2; cursor:pointer; font-weight:600; font-size:13px;">
+                    style="padding:8px 16px; border:2px solid #ddd; border-radius:20px; background:white; color:#888; cursor:pointer; font-weight:600; font-size:13px;">
                     📋 全部
                 </button>
                 <div style="margin-left:auto;">
@@ -19803,8 +19803,8 @@ window.marginData = {
 };
 
 /**
- * v3.97-dx 改進：載入融資融券資料（全部日期）
- * 從 tpxlenging (上市) 和 otclenging (上櫃) 檔案載入
+ * v3.97-eb: 載入融資融券資料
+ * 優先使用 SQLite (margin_2025.db)，沒有才用 Excel
  */
 async function loadMarginData() {
     if (window.marginData.loaded || window.marginData.loading) return;
@@ -19815,7 +19815,59 @@ async function loadMarginData() {
 
     const allData = {};
 
-    // v3.97-dx: 載入 2025 年度全部資料
+    // v3.97-eb: 優先嘗試 SQLite
+    try {
+        const dbResponse = await fetch('data/margin_2025.db');
+        if (dbResponse.ok) {
+            console.log('   使用 SQLite 資料庫...');
+            
+            // 確保 sql.js 已初始化
+            let SQL;
+            if (window.kanbanSQL) {
+                SQL = window.kanbanSQL;
+            } else {
+                SQL = await initSqlJs({
+                    locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}`
+                });
+            }
+            
+            const buffer = await dbResponse.arrayBuffer();
+            const db = new SQL.Database(new Uint8Array(buffer));
+            
+            // 查詢所有資料
+            const results = db.exec(`
+                SELECT date, code, margin_balance, short_balance
+                FROM margin_data
+                ORDER BY code, date
+            `);
+            
+            if (results.length > 0) {
+                for (const row of results[0].values) {
+                    const [dateStr, code, marginBalance, shortBalance] = row;
+                    if (!code) continue;
+                    
+                    if (!allData[code]) allData[code] = {};
+                    allData[code][dateStr] = {
+                        marginBalance: marginBalance || 0,
+                        shortBalance: shortBalance || 0
+                    };
+                }
+            }
+            
+            db.close();
+            
+            window.marginData.data = allData;
+            window.marginData.loaded = true;
+            window.marginData.loading = false;
+            
+            console.log(`✅ 融資融券完成(SQLite): ${Object.keys(allData).length} 檔, ${Date.now() - startTime}ms`);
+            return;
+        }
+    } catch (e) {
+        console.log('   SQLite 載入失敗，改用 Excel...', e.message);
+    }
+
+    // 備用方案：使用 Excel
     const fileConfigs = [
         { prefix: 'data/tpxlenging_2025.xlsx', market: '上市' },
         { prefix: 'data/otclenging_2025.xlsx', market: '上櫃' }
@@ -19828,8 +19880,8 @@ async function loadMarginData() {
 
             const workbook = XLSX.read(await response.arrayBuffer(), { type: 'array' });
             
-            // v3.97-dx: 載入全部日期（不限制30天）
-            const validSheets = workbook.SheetNames.filter(name => /^\d{8}$/.test(name)).sort();
+            // 只載入最近30天（效能優先）
+            const validSheets = workbook.SheetNames.filter(name => /^\d{8}$/.test(name)).sort().slice(-30);
             if (validSheets.length === 0) continue;
 
             let addedCount = 0;
@@ -22543,22 +22595,33 @@ async function initArbitrageModule() {
 function filterArbitrageCB(filter, btnElement) {
     currentArbitrageFilter = filter;
     
-    // 更新按鈕狀態
+    // v3.97-ea: 更新按鈕狀態 - 加強顏色區別
     document.querySelectorAll('.arb-filter-tab').forEach(btn => {
         btn.classList.remove('active');
+        const f = btn.dataset.filter;
+        // 未選中狀態：白底+淺色邊框
         btn.style.background = 'white';
-        btn.style.color = btn.dataset.filter === 'listed' ? '#2e7d32' : 
-                          btn.dataset.filter === 'delisted' ? '#666' : '#7b1fa2';
+        btn.style.borderColor = '#ddd';
+        btn.style.color = '#888';
     });
     
     if (btnElement) {
         btnElement.classList.add('active');
         if (filter === 'listed') {
-            btnElement.style.background = '#e8f5e9';
+            // 掛牌中：綠色
+            btnElement.style.background = '#4caf50';
+            btnElement.style.borderColor = '#4caf50';
+            btnElement.style.color = 'white';
         } else if (filter === 'delisted') {
-            btnElement.style.background = '#f5f5f5';
+            // 已下市：灰色
+            btnElement.style.background = '#616161';
+            btnElement.style.borderColor = '#616161';
+            btnElement.style.color = 'white';
         } else {
-            btnElement.style.background = '#f3e5f5';
+            // 全部：紫色
+            btnElement.style.background = '#9c27b0';
+            btnElement.style.borderColor = '#9c27b0';
+            btnElement.style.color = 'white';
         }
     }
     
@@ -22809,6 +22872,62 @@ function displayArbitrageSummary(cbData, marginData, cbInfo) {
     const periodChange = first.balance - latest.balance;
     const periodChangePct = first.balance > 0 ? ((periodChange / first.balance) * 100).toFixed(1) : 0;
     
+    // v3.97-dz: 計算轉換動能（累積轉換壓力）
+    // 邏輯：連續下降的週數越多、累積下降量越大 = 出貨壓力越大
+    let consecutiveDecline = 0;  // 連續下降週數
+    let totalDeclineShares = 0;  // 累積下降張數
+    let declineWeeks = 0;        // 總下降週數
+    
+    for (let i = cbData.length - 1; i > 0; i--) {
+        const change = cbData[i-1].balance - cbData[i].balance;
+        if (change > 0) {
+            // 餘額下降（轉換中）
+            if (consecutiveDecline === cbData.length - 1 - i) {
+                consecutiveDecline++;
+            }
+            totalDeclineShares += change;
+            declineWeeks++;
+        }
+    }
+    
+    // 轉換動能分數 (0-100)
+    // 考慮: 連續下降週數、累積轉換比例、轉換速度
+    const avgWeeklyDecline = declineWeeks > 0 ? totalDeclineShares / declineWeeks : 0;
+    const declineRatio = issueShares > 0 ? (totalDeclineShares / issueShares * 100) : 0;
+    const momentum = Math.min(100, Math.round(
+        (consecutiveDecline * 10) +           // 連續性加分 (最多50分)
+        (declineRatio * 0.5) +                 // 累積轉換比例 (最多50分)
+        (avgWeeklyDecline > 1000 ? 10 : 0)     // 大量轉換加分
+    ));
+    
+    // 動能等級判定
+    let momentumLevel = '低';
+    let momentumColor = '#666';
+    let momentumIcon = '😴';
+    let momentumDesc = '轉換平緩';
+    
+    if (momentum >= 70) {
+        momentumLevel = '極高';
+        momentumColor = '#c62828';
+        momentumIcon = '🚀';
+        momentumDesc = '積極拉抬出貨中';
+    } else if (momentum >= 50) {
+        momentumLevel = '高';
+        momentumColor = '#e65100';
+        momentumIcon = '🔥';
+        momentumDesc = '加速轉換出場';
+    } else if (momentum >= 30) {
+        momentumLevel = '中';
+        momentumColor = '#ff9800';
+        momentumIcon = '⚡';
+        momentumDesc = '穩定轉換中';
+    } else if (momentum >= 10) {
+        momentumLevel = '低';
+        momentumColor = '#2196f3';
+        momentumIcon = '📊';
+        momentumDesc = '小量觀察';
+    }
+    
     // 換股比例 & 約當股票張數
     const convPrice = cbInfo?.convPrice || latest.convPrice || 0;
     const convRatio = convPrice > 0 ? (100000 / convPrice) : 0;
@@ -22906,6 +23025,25 @@ function displayArbitrageSummary(cbData, marginData, cbInfo) {
                 <div style="font-size:14px; color:${stageColor}; font-weight:600;">${stageIcon} ${stage}</div>
             </div>
         </div>
+        
+        <!-- v3.97-dz: 轉換動能指標 -->
+        <div style="background:linear-gradient(135deg, ${momentumColor}15, ${momentumColor}05); border-left:4px solid ${momentumColor}; border-radius:8px; padding:12px 16px; margin-bottom:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <div style="font-size:12px; color:#666;">轉換動能</div>
+                    <div style="font-size:20px; font-weight:700; color:${momentumColor};">
+                        ${momentumIcon} ${momentum}分 <span style="font-size:14px;">(${momentumLevel})</span>
+                    </div>
+                    <div style="font-size:12px; color:#888;">${momentumDesc}</div>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-size:11px; color:#888;">連續下降 <b style="color:${momentumColor};">${consecutiveDecline}</b> 週</div>
+                    <div style="font-size:11px; color:#888;">累積轉換 <b style="color:${momentumColor};">${totalDeclineShares.toLocaleString()}</b> 張</div>
+                    <div style="font-size:11px; color:#888;">週均轉換 <b style="color:${momentumColor};">${Math.round(avgWeeklyDecline).toLocaleString()}</b> 張</div>
+                </div>
+            </div>
+        </div>
+        
         <div style="display:grid; grid-template-columns:repeat(5, 1fr); gap:10px;">
             <div style="text-align:center; padding:12px 8px; background:#f8f9fa; border-radius:8px;">
                 <div style="font-size:11px; color:#888;">發行張數</div>

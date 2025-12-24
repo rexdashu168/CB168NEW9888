@@ -4,7 +4,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.98b (集成預測引擎版)</title>
+<title>AI智能可轉債競拍系統 v3.98c (集成預測引擎版)</title>
+<!-- v3.98c: 修正集成預測引擎的m.value.toFixed錯誤，加強所有數值運算的安全檢查 -->
 <!-- v3.98b: 修正step0Reminder的null錯誤 -->
 <!-- v3.98a: 集成預測引擎優化版 - 基於304筆歷史資料統計分析優化 -->
 <!-- 核心優化：
@@ -3601,29 +3602,48 @@ const AICore = {
         
         // 生成集成預測報告
         generateReport: function(ensembleResult) {
-            if (!ensembleResult) return '';
+            if (!ensembleResult || !ensembleResult.methods) return '';
             
-            let methodsHtml = ensembleResult.methods.map(m => 
-                `<div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px dashed #eee;">
-                    <span>${m.name}</span>
-                    <span style="font-weight:600;">${m.value.toFixed(2)}元 (${(m.normalizedWeight * 100).toFixed(0)}%)</span>
-                </div>`
-            ).join('');
+            let methodsHtml = ensembleResult.methods.map(m => {
+                const valueStr = (m && typeof m.value === 'number' && !isNaN(m.value)) 
+                    ? m.value.toFixed(2) + '元' 
+                    : '--元';
+                const weightStr = (m && typeof m.normalizedWeight === 'number') 
+                    ? (m.normalizedWeight * 100).toFixed(0) + '%' 
+                    : '--%';
+                return `<div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px dashed #eee;">
+                    <span>${m.name || '未知'}</span>
+                    <span style="font-weight:600;">${valueStr} (${weightStr})</span>
+                </div>`;
+            }).join('');
+            
+            const valueStr = (typeof ensembleResult.value === 'number' && !isNaN(ensembleResult.value))
+                ? ensembleResult.value.toFixed(2) + '元'
+                : '--元';
+            const stdStr = (typeof ensembleResult.std === 'number')
+                ? ensembleResult.std.toFixed(2) + '元'
+                : '--元';
+            const conservStr = (typeof ensembleResult.conservative === 'number')
+                ? ensembleResult.conservative.toFixed(2)
+                : '--';
+            const ultStr = (typeof ensembleResult.ultimate === 'number')
+                ? ensembleResult.ultimate.toFixed(2)
+                : '--';
             
             return `
                 <div style="background:#f0f7ff; border:1px solid #1976d2; border-radius:8px; padding:12px; margin-top:10px;">
                     <div style="font-weight:bold; color:#1565c0; margin-bottom:8px;">
-                        🧠 集成預測引擎 v2.0 (${ensembleResult.methodCount}種方法)
+                        🧠 集成預測引擎 v2.0 (${ensembleResult.methodCount || 0}種方法)
                     </div>
                     ${methodsHtml}
                     <div style="margin-top:8px; padding-top:8px; border-top:2px solid #1976d2;">
                         <div style="display:flex; justify-content:space-between; align-items:center;">
                             <span style="font-weight:bold;">集成預測價格</span>
-                            <span style="font-size:18px; font-weight:bold; color:#0d47a1;">${ensembleResult.value.toFixed(2)}元</span>
+                            <span style="font-size:18px; font-weight:bold; color:#0d47a1;">${valueStr}</span>
                         </div>
                         <div style="font-size:11px; color:#666; margin-top:4px;">
-                            方法間標準差: ${ensembleResult.std.toFixed(2)}元 | 
-                            策略區間: ${ensembleResult.conservative.toFixed(2)} ~ ${ensembleResult.ultimate.toFixed(2)}元
+                            方法間標準差: ${stdStr} | 
+                            策略區間: ${conservStr} ~ ${ultStr}元
                         </div>
                     </div>
                 </div>`;
@@ -11105,23 +11125,39 @@ function displayResult(r) {
             
             const ensembleResult = window.AICore.ensemble.calcEnsemblePrediction(ensembleParams);
             
-            if (ensembleResult) {
-                // 更新各方法預測值
+            if (ensembleResult && ensembleResult.methods && ensembleResult.methods.length > 0) {
+                // 更新各方法預測值 - 加入安全檢查
                 ensembleResult.methods.forEach((m, i) => {
-                    updateElement(`step3Method${i + 1}`, m.value.toFixed(2) + '元');
+                    if (m && typeof m.value === 'number' && !isNaN(m.value)) {
+                        updateElement(`step3Method${i + 1}`, m.value.toFixed(2) + '元');
+                    } else {
+                        updateElement(`step3Method${i + 1}`, '--元');
+                    }
                 });
                 
-                // 更新集成結果
-                updateElement('step3EnsemblePrice', ensembleResult.value.toFixed(2) + '元');
-                updateElement('step3EnsembleStd', ensembleResult.std.toFixed(2));
+                // 更新集成結果 - 加入安全檢查
+                if (typeof ensembleResult.value === 'number' && !isNaN(ensembleResult.value)) {
+                    updateElement('step3EnsemblePrice', ensembleResult.value.toFixed(2) + '元');
+                    updateElement('step3EnsembleStd', (ensembleResult.std || 0).toFixed(2));
+                    
+                    // 更新策略價格
+                    updateElement('step3StratConservative', (ensembleResult.conservative || 100).toFixed(2));
+                    updateElement('step3StratBalanced', (ensembleResult.balanced || ensembleResult.value).toFixed(2));
+                    updateElement('step3StratAggressive', (ensembleResult.aggressive || ensembleResult.value).toFixed(2));
+                    updateElement('step3StratUltimate', (ensembleResult.ultimate || ensembleResult.value).toFixed(2));
+                } else {
+                    updateElement('step3EnsemblePrice', '--元');
+                    updateElement('step3EnsembleStd', '--');
+                }
                 
-                // 更新策略價格
-                updateElement('step3StratConservative', ensembleResult.conservative.toFixed(2));
-                updateElement('step3StratBalanced', ensembleResult.balanced.toFixed(2));
-                updateElement('step3StratAggressive', ensembleResult.aggressive.toFixed(2));
-                updateElement('step3StratUltimate', ensembleResult.ultimate.toFixed(2));
-                
-                console.log('🧠 v3.98a 集成預測引擎結果:', ensembleResult);
+                console.log('🧠 v3.98c 集成預測引擎結果:', ensembleResult);
+            } else {
+                // 集成預測失敗時顯示預設值
+                for (let i = 1; i <= 4; i++) {
+                    updateElement(`step3Method${i}`, '--元');
+                }
+                updateElement('step3EnsemblePrice', '--元');
+                updateElement('step3EnsembleStd', '--');
             }
             
             // 計算MA10和分層模型供顯示

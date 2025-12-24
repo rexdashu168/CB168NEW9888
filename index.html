@@ -375,6 +375,51 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     color: white;
 }
 
+/* v3.98f-4: 閃電帶入下拉選單樣式優化 */
+#quickSelect {
+    width: 100%;
+    min-width: 320px;
+    font-size: 14px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+#quickSelect option {
+    padding: 10px 12px;
+    font-size: 13px;
+    white-space: nowrap;
+    line-height: 1.8;
+}
+/* 競拍選項 - 橘色系背景 */
+#quickSelect optgroup[id*="Auction"] {
+    background: #fff8e1;
+    color: #e65100;
+    font-weight: bold;
+}
+#quickSelect optgroup[id*="Auction"] option {
+    background: #fff8e1;
+    color: #333;
+    border-left: 4px solid #ff9800;
+    padding-left: 12px;
+}
+/* 詢圈選項 - 藍色系背景 */
+#quickSelect optgroup[id*="Inquiry"] {
+    background: #e3f2fd;
+    color: #1565c0;
+    font-weight: bold;
+}
+#quickSelect optgroup[id*="Inquiry"] option {
+    background: #e3f2fd;
+    color: #333;
+    border-left: 4px solid #2196f3;
+    padding-left: 12px;
+}
+/* 近期完成 - 灰色系背景 */
+#quickSelect optgroup[id*="recent"] option {
+    background: #f5f5f5;
+    color: #666;
+}
+
 /* v3.97-as-ce: 移除舊的 ranking-period CSS，改用 inline style */
 
 /* 基本資料查詢標籤樣式 */
@@ -1987,20 +2032,22 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
         <h3 style="color: #f57c00; border-left-color: #ff9800;">⚡ 閃電帶入</h3>
         <div class="form-group" style="margin-bottom: 10px;">
             <label style="color: #e65100;">選擇案件，自動帶入所有條件</label>
-            <select id="quickSelect" style="border: 2px solid #ffc107; font-weight: bold;">
+            <select id="quickSelect" style="border: 2px solid #ffc107; font-weight: bold; font-size: 14px; padding: 10px;">
                 <option value="">-- 請選擇案件 --</option>
-                <optgroup label="🔥 即將競拍（有時程且未完成）" id="upcomingAuctionGroup"></optgroup>
-                <optgroup label="📋 即將詢圈（有時程且未完成）" id="upcomingInquiryGroup"></optgroup>
-                <optgroup label="⏳ 承銷中-競拍（尚未確定時程）" id="pendingAuctionGroup"></optgroup>
-                <optgroup label="⏳ 承銷中-詢圈（尚未確定時程）" id="pendingInquiryGroup"></optgroup>
-                <optgroup label="✅ 近期完成競拍（1-3個月參考）" id="recentAuctionGroup"></optgroup>
-                <optgroup label="✅ 近期完成詢圈（1-3個月參考）" id="recentInquiryGroup"></optgroup>
+                <optgroup label="🔥 即將競拍" id="upcomingAuctionGroup" style="background:#fff3e0; color:#e65100;"></optgroup>
+                <optgroup label="📋 即將詢圈" id="upcomingInquiryGroup" style="background:#e3f2fd; color:#1565c0;"></optgroup>
+                <optgroup label="⏳ 承銷中-競拍" id="pendingAuctionGroup" style="background:#fff8e1;"></optgroup>
+                <optgroup label="⏳ 承銷中-詢圈" id="pendingInquiryGroup" style="background:#e8f5e9;"></optgroup>
+                <optgroup label="✅ 近期完成競拍" id="recentAuctionGroup" style="background:#fafafa;"></optgroup>
+                <optgroup label="✅ 近期完成詢圈" id="recentInquiryGroup" style="background:#fafafa;"></optgroup>
             </select>
         </div>
         <div id="quickSelectInfo" style="display:none; background:#fff; padding:10px; border-radius:6px; margin-top:8px; font-size:13px; border-left:4px solid #ff9800;"></div>
         <div id="modelCompareResult" style="display:none; background:#e8f5e9; padding:10px; border-radius:6px; margin-top:8px; font-size:13px; border-left:4px solid #4caf50;"></div>
-        <div style="font-size:12px; color:#795548; margin-top:8px;">
-            💡 選擇後自動帶入條件，競拍案件請於截標日13:30前確認收盤價
+        <div style="font-size:12px; color:#795548; margin-top:8px; display:flex; gap:15px; align-items:center;">
+            <span>💡 選擇後自動帶入條件</span>
+            <span style="background:#fff3e0; padding:2px 8px; border-radius:4px; color:#e65100; font-weight:bold;">🔥競拍</span>
+            <span style="background:#e3f2fd; padding:2px 8px; border-radius:4px; color:#1565c0; font-weight:bold;">📋詢圈</span>
         </div>
     </div>
 
@@ -12657,38 +12704,48 @@ function initQuickSelect() {
         const isAuction = c.auctionType && (c.auctionType.includes('競拍') || c.auctionType === '競拍');
         const isInquiry = c.auctionType && (c.auctionType.includes('詢圈') || c.auctionType === '詢圈');
 
+        // v3.98f-4: 簡化選項文字，單列顯示
+        const guaranteeText = c.guarantee ? ` | ${c.guarantee}` : '';
+        
         if (isAuction) {
             if (isCompleted) {
-                // ✅ 已完成競拍 → 放到「近期完成競拍」分組
-                option.textContent = `✅ ${c.cbName} | ${c.industry} | ${priceLabel}${convInfo}${scheduleInfo}`;
+                // ✅ 已完成競拍
+                option.textContent = `${c.cbName} | ${c.industry} | ${priceLabel}${guaranteeText}`;
+                option.style.cssText = 'background:#fafafa; color:#666; padding:8px;';
                 if (recentAuctionGroup) recentAuctionGroup.appendChild(option);
             } else if (hasSchedule) {
                 // 🔥 即將競拍
-                option.textContent = `🔥 ${c.cbName} | ${c.industry} | ${priceLabel}${convInfo}${scheduleInfo}`;
+                option.textContent = `${c.cbName} | ${c.industry} | ${priceLabel}${guaranteeText}${scheduleInfo}`;
+                option.style.cssText = 'background:#fff3e0; color:#e65100; font-weight:bold; padding:8px;';
                 if (upcomingAuctionGroup) upcomingAuctionGroup.appendChild(option);
             } else {
-                // ⏳ 承銷中-競拍（尚未確定時程）
-                option.textContent = `⏳ ${c.cbName} | ${c.industry} | ${priceLabel}${convInfo}`;
+                // ⏳ 承銷中-競拍
+                option.textContent = `${c.cbName} | ${c.industry} | ${priceLabel}${guaranteeText}`;
+                option.style.cssText = 'background:#fff8e1; padding:8px;';
                 if (pendingAuctionGroup) pendingAuctionGroup.appendChild(option);
             }
         } else if (isInquiry) {
-            // 詢圈
+            // 詢圈 - 藍色系
             if (isCompleted) {
-                // ✅ 已完成詢圈 → 放到「近期完成詢圈」分組
-                option.textContent = `✅ ${c.cbName} | ${c.industry} | ${c.guarantee || '-'}${scheduleInfo}`;
+                // ✅ 已完成詢圈
+                option.textContent = `${c.cbName} | ${c.industry}${guaranteeText}`;
+                option.style.cssText = 'background:#fafafa; color:#666; padding:8px;';
                 if (recentInquiryGroup) recentInquiryGroup.appendChild(option);
             } else if (hasSchedule) {
                 // 📋 即將詢圈
-                option.textContent = `📋 ${c.cbName} | ${c.industry} | ${c.guarantee || '-'}${scheduleInfo}`;
+                option.textContent = `${c.cbName} | ${c.industry}${guaranteeText}${scheduleInfo}`;
+                option.style.cssText = 'background:#e3f2fd; color:#1565c0; font-weight:bold; padding:8px;';
                 if (upcomingInquiryGroup) upcomingInquiryGroup.appendChild(option);
             } else {
-                // ⏳ 承銷中-詢圈（尚未確定時程）
-                option.textContent = `⏳ ${c.cbName} | ${c.industry} | ${c.guarantee || '-'}`;
+                // ⏳ 承銷中-詢圈
+                option.textContent = `${c.cbName} | ${c.industry}${guaranteeText}`;
+                option.style.cssText = 'background:#e8f5e9; padding:8px;';
                 if (pendingInquiryGroup) pendingInquiryGroup.appendChild(option);
             }
         } else {
             // 未設定類型的，預設放到競拍承銷中
-            option.textContent = `⏳ ${c.cbName} | ${c.industry} | ${priceLabel}${convInfo}`;
+            option.textContent = `${c.cbName} | ${c.industry} | ${priceLabel}`;
+            option.style.cssText = 'background:#fff8e1; padding:8px;';
             if (pendingAuctionGroup) pendingAuctionGroup.appendChild(option);
         }
     });

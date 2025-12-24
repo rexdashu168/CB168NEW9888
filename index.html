@@ -19760,7 +19760,7 @@ window.marginData = {
 };
 
 /**
- * v3.97-zs-az 新增：載入融資融券資料
+ * v3.97-dl 改進：載入融資融券資料
  * 從 tpxlenging (上市) 和 otclenging (上櫃) 檔案載入
  */
 async function loadMarginData() {
@@ -19771,52 +19771,102 @@ async function loadMarginData() {
 
     const allData = {};
 
-    // v3.97-di: 修正路徑為 data/ 根目錄，檔名為 tpxlenging / otclenging
-    const years = ['2025', '2024', '2023', '2022', '2021', '2020', '2019', '2018', '2017'];
+    // v3.97-dl: 只載入 2025 年度檔案（先確認可以正常讀取）
+    const years = ['2025'];
     const fileConfigs = [
-        { prefix: 'data/tpxlenging_', market: '上市', cols: { margin: '融資餘額', short: '融券餘額', cover: '現券償還' } },
-        { prefix: 'data/otclenging_', market: '上櫃', cols: { margin: '資餘額', short: '券餘額', cover: '券償' } }
+        { 
+            prefix: 'data/tpxlenging_', 
+            market: '上市', 
+            // 嘗試多種可能的欄位名稱
+            marginCols: ['融資餘額', '融資餘額(張)', '資餘額'],
+            shortCols: ['融券餘額', '融券餘額(張)', '券餘額'],
+            codeCols: ['代號', '股票代號', '證券代號']
+        },
+        { 
+            prefix: 'data/otclenging_', 
+            market: '上櫃',
+            marginCols: ['資餘額', '融資餘額', '融資餘額(張)'],
+            shortCols: ['券餘額', '融券餘額', '融券餘額(張)'],
+            codeCols: ['代號', '股票代號', '證券代號']
+        }
     ];
 
     let loadedFiles = { tpx: 0, otc: 0 };
+    let totalRecords = 0;
 
     for (const config of fileConfigs) {
         for (const year of years) {
-            // v3.97-di: 修正檔名格式，實際檔名為 tpxlenging_2025.xlsx
             const filePath = `${config.prefix}${year}.xlsx`;
             try {
+                console.log(`嘗試載入: ${filePath}`);
                 const response = await fetch(filePath);
                 if (!response.ok) {
                     console.warn(`⚠️ ${config.market}融資融券 ${year} 檔案不存在: ${filePath}`);
                     continue;
                 }
 
-                const workbook = XLSX.read(await response.arrayBuffer(), { type: 'array' });
+                const arrayBuffer = await response.arrayBuffer();
+                console.log(`檔案大小: ${(arrayBuffer.byteLength / 1024 / 1024).toFixed(2)} MB`);
+                
+                const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+                console.log(`工作表數量: ${workbook.SheetNames.length}`);
+                console.log(`前5個工作表: ${workbook.SheetNames.slice(0, 5).join(', ')}`);
 
                 // 取得所有日期工作表（YYYYMMDD格式）
                 const validSheets = workbook.SheetNames.filter(name => /^\d{8}$/.test(name)).sort();
+                console.log(`有效日期工作表: ${validSheets.length} 個`);
+
+                if (validSheets.length === 0) {
+                    // 如果沒有日期格式的工作表，嘗試讀取第一個工作表看看結構
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const sampleData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+                    if (sampleData.length > 0) {
+                        console.log(`第一個工作表欄位: ${sampleData[0]?.join(', ')}`);
+                    }
+                    continue;
+                }
 
                 let addedCount = 0;
-                for (const sheetName of validSheets) {
+                // 只處理最近30個交易日（加快載入）
+                const recentSheets = validSheets.slice(-30);
+                
+                for (const sheetName of recentSheets) {
                     const sheet = workbook.Sheets[sheetName];
                     const rawData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
                     if (rawData.length < 2) continue;
 
-                    // 找出欄位位置
+                    // 找出欄位位置（嘗試多種可能的欄位名稱）
                     const headers = rawData[0];
-                    let codeIdx = -1, marginIdx = -1, shortIdx = -1, coverIdx = -1;
+                    let codeIdx = -1, marginIdx = -1, shortIdx = -1;
 
                     headers.forEach((h, idx) => {
                         const col = String(h || '').trim();
-                        if (col === '代號') codeIdx = idx;
-                        if (col === config.cols.margin) marginIdx = idx;
-                        if (col === config.cols.short) shortIdx = idx;
-                        if (col === config.cols.cover) coverIdx = idx;
+                        // 代號欄位
+                        if (config.codeCols.some(c => col.includes(c) || c.includes(col))) {
+                            if (codeIdx < 0) codeIdx = idx;
+                        }
+                        // 融資餘額欄位
+                        if (config.marginCols.some(c => col.includes(c) || c.includes(col))) {
+                            if (marginIdx < 0) marginIdx = idx;
+                        }
+                        // 融券餘額欄位
+                        if (config.shortCols.some(c => col.includes(c) || c.includes(col))) {
+                            if (shortIdx < 0) shortIdx = idx;
+                        }
                     });
 
-                    if (codeIdx < 0) continue;
+                    // 顯示第一個工作表的欄位偵錯資訊
+                    if (sheetName === recentSheets[0]) {
+                        console.log(`${config.market} 欄位: ${headers.join(', ')}`);
+                        console.log(`找到欄位位置 - 代號:${codeIdx}, 融資:${marginIdx}, 融券:${shortIdx}`);
+                    }
 
-                    // 轉換日期格式
+                    if (codeIdx < 0 || marginIdx < 0 || shortIdx < 0) {
+                        console.warn(`${config.market} ${sheetName} 缺少必要欄位`);
+                        continue;
+                    }
+
+                    // 轉換日期格式 20250106 -> 2025/01/06
                     const dateStr = `${sheetName.substring(0, 4)}/${sheetName.substring(4, 6)}/${sheetName.substring(6, 8)}`;
 
                     // 處理每一列
@@ -19825,19 +19875,17 @@ async function loadMarginData() {
                         let code = String(row[codeIdx] || '').trim();
                         if (!code) continue;
 
-                        // v3.97-zs-bc: 標準化代號格式（移除可能的小數點）
+                        // 標準化代號格式
                         code = code.replace(/\.0*$/, '');
 
                         const marginBalance = parseInt(row[marginIdx]) || 0;
                         const shortBalance = parseInt(row[shortIdx]) || 0;
-                        const shortCover = parseInt(row[coverIdx]) || 0;
 
                         if (!allData[code]) allData[code] = {};
 
                         allData[code][dateStr] = {
                             marginBalance,
-                            shortBalance,
-                            shortCover
+                            shortBalance
                         };
                         addedCount++;
                     }
@@ -19845,8 +19893,9 @@ async function loadMarginData() {
 
                 if (config.prefix.includes('tpx')) loadedFiles.tpx++;
                 else loadedFiles.otc++;
-
-                console.log(`✅ ${config.market} ${year}: ${validSheets.length} 個交易日, ${addedCount} 筆資料`);
+                
+                totalRecords += addedCount;
+                console.log(`✅ ${config.market} ${year}: ${recentSheets.length} 個交易日, ${addedCount} 筆資料`);
 
             } catch (err) {
                 console.warn(`❌ 載入 ${filePath} 失敗:`, err.message);
@@ -19874,15 +19923,26 @@ async function loadMarginData() {
     window.marginData.loaded = true;
     window.marginData.loading = false;
 
-    // v3.97-zs-bc: 顯示載入統計
+    // v3.97-dl: 顯示載入統計
     const stockCodes = Object.keys(allData);
-    console.log(`✅ 融資融券載入完成: ${stockCodes.length} 檔股票 (上市${loadedFiles.tpx}檔/上櫃${loadedFiles.otc}檔), ${Date.now() - startTime}ms`);
+    const elapsed = Date.now() - startTime;
+    console.log(`✅ 融資融券載入完成: ${stockCodes.length} 檔股票, ${totalRecords} 筆資料, ${elapsed}ms`);
+    console.log(`   上市檔案: ${loadedFiles.tpx}, 上櫃檔案: ${loadedFiles.otc}`);
 
-    // 列出部分股票代號供參考
+    // 列出前10個股票代號
+    if (stockCodes.length > 0) {
+        console.log(`   前10個股票: ${stockCodes.slice(0, 10).join(', ')}`);
+    }
 
-    // 檢查特定股票是否存在
-    ['6223', '2330', '2317', '3008'].forEach(code => {
-        console.log(`   ${code}: ${allData[code] ? '✅ 有資料' : '❌ 無資料'}`);
+    // 檢查特定股票是否存在（常見股票）
+    ['6223', '2330', '2317', '3008', '2303', '2454'].forEach(code => {
+        const data = allData[code];
+        if (data) {
+            const dates = Object.keys(data);
+            console.log(`   ${code}: ✅ ${dates.length} 個交易日`);
+        } else {
+            console.log(`   ${code}: ❌ 無資料`);
+        }
     });
 }
 
@@ -22414,12 +22474,27 @@ async function initArbitrageModule() {
     select.innerHTML = '<option value="">載入CB清單中...</option>';
     
     try {
-        // 確保週餘額資料已載入
+        // v3.97-dm: 加入超時機制，避免無限等待
+        const timeout = (ms) => new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('載入超時')), ms)
+        );
+        
+        // 確保週餘額資料已載入（最多等待 30 秒）
         if (!window.weeklyBalanceData.loaded) {
             if (!window.weeklyBalanceData.loading) {
-                await loadWeeklyBalanceData();
-            } else {
-                await waitForDataLoaded(() => window.weeklyBalanceData.loaded);
+                loadWeeklyBalanceData(); // 不 await，讓它背景載入
+            }
+            
+            // 等待最多 30 秒
+            try {
+                await Promise.race([
+                    waitForDataLoaded(() => window.weeklyBalanceData.loaded),
+                    timeout(30000)
+                ]);
+            } catch (e) {
+                console.warn('週餘額資料載入超時或失敗');
+                select.innerHTML = '<option value="">資料載入中，請稍後重試...</option>';
+                return;
             }
         }
         
@@ -22542,6 +22617,15 @@ function filterArbitrageCB(filter, btnElement) {
         } else {
             btnElement.style.background = '#f3e5f5';
         }
+    }
+    
+    // v3.97-dm: 防止資料未載入時卡死
+    if (!arbitrageFullList || arbitrageFullList.length === 0) {
+        console.warn('CB清單尚未載入，無法篩選');
+        arbitrageCBList = [];
+        updateArbitrageSelect();
+        updateArbitrageCBCount();
+        return;
     }
     
     // 篩選清單
@@ -22709,29 +22793,36 @@ async function loadArbitrageData(cbCode) {
         // 取得股票代碼
         const stockCode = cbInfo.stockCode;
         
-        // 載入融資融券資料
+        // 載入融資融券資料（不阻塞，有就用沒有就算）
         let marginData = [];
         if (stockCode) {
-            // 確保融資融券資料已載入
-            if (!window.marginData.loaded) {
-                if (!window.marginData.loading) {
-                    await loadMarginData();
-                } else {
-                    await waitForDataLoaded(() => window.marginData.loaded);
-                }
+            // v3.97-dm: 不等待融資融券載入，有資料就用
+            if (!window.marginData.loaded && !window.marginData.loading) {
+                loadMarginData(); // 背景載入，不 await
             }
             
-            const stockMargin = window.marginData.data[stockCode];
-            if (stockMargin) {
-                marginData = Object.entries(stockMargin).map(([date, data]) => ({
-                    date: parseInt(date),
-                    marginBalance: data.marginBalance || 0,
-                    shortBalance: data.shortBalance || 0
-                })).sort((a, b) => a.date - b.date);
+            // 如果已有資料就使用
+            if (window.marginData.loaded) {
+                const stockMargin = window.marginData.data[stockCode];
+                if (stockMargin) {
+                    // v3.97-dl: 修正日期格式，key 是 YYYY/MM/DD 字串
+                    marginData = Object.entries(stockMargin).map(([dateStr, data]) => {
+                        // 轉換 2025/01/06 -> 20250106
+                        const dateNum = parseInt(dateStr.replace(/\//g, ''));
+                        return {
+                            date: dateNum,
+                            dateStr: dateStr,
+                            marginBalance: data.marginBalance || 0,
+                            shortBalance: data.shortBalance || 0
+                        };
+                    }).filter(d => !isNaN(d.date)).sort((a, b) => a.date - b.date);
                 
-                console.log(`載入 ${stockCode} 融資融券資料: ${marginData.length} 筆`);
+                    console.log(`載入 ${stockCode} 融資融券資料: ${marginData.length} 筆`);
+                } else {
+                    console.warn(`找不到 ${stockCode} 的融資融券資料`);
+                }
             } else {
-                console.warn(`找不到 ${stockCode} 的融資融券資料`);
+                console.log(`融資融券資料尚未載入完成，稍後會自動更新`);
             }
         }
         

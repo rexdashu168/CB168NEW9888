@@ -3861,6 +3861,193 @@ const StatsHelper = {
         </div>`;
         
         return html;
+    },
+    
+    // ==========================================
+    // v3.98f-19: 異常值處理模組
+    // ==========================================
+    
+    // 異常值偵測閾值設定
+    outlierThresholds: {
+        amplitude: { min: 5, max: 300 },      // 振幅合理範圍 5% ~ 300%
+        premium: { min: -30, max: 50 },       // 溢價率合理範圍 -30% ~ 50%
+        returnRate: { min: -50, max: 200 },   // 報酬率合理範圍 -50% ~ 200%
+        bidMultiple: { min: 0.5, max: 100 }   // 投標倍數合理範圍 0.5 ~ 100倍
+    },
+    
+    // 使用IQR法則偵測異常值
+    detectOutliersIQR: function(values, k = 1.5) {
+        if (!values || values.length < 4) return { outliers: [], normal: values, bounds: null };
+        
+        const sorted = [...values].sort((a, b) => a - b);
+        const n = sorted.length;
+        const q1 = sorted[Math.floor(n * 0.25)];
+        const q3 = sorted[Math.floor(n * 0.75)];
+        const iqr = q3 - q1;
+        
+        const lowerBound = q1 - k * iqr;
+        const upperBound = q3 + k * iqr;
+        
+        const outliers = [];
+        const normal = [];
+        
+        values.forEach((v, idx) => {
+            if (v < lowerBound || v > upperBound) {
+                outliers.push({ value: v, index: idx, type: v < lowerBound ? 'low' : 'high' });
+            } else {
+                normal.push(v);
+            }
+        });
+        
+        return {
+            outliers: outliers,
+            normal: normal,
+            bounds: { lower: lowerBound, upper: upperBound, q1, q3, iqr }
+        };
+    },
+    
+    // 使用固定閾值偵測異常值
+    detectOutliersByThreshold: function(values, field = 'amplitude') {
+        const threshold = this.outlierThresholds[field] || { min: -Infinity, max: Infinity };
+        
+        const outliers = [];
+        const normal = [];
+        
+        values.forEach((v, idx) => {
+            if (v < threshold.min || v > threshold.max) {
+                outliers.push({ 
+                    value: v, 
+                    index: idx, 
+                    type: v < threshold.min ? 'low' : 'high',
+                    severity: v < threshold.min ? 
+                        Math.abs(v - threshold.min) / Math.abs(threshold.min) :
+                        Math.abs(v - threshold.max) / threshold.max
+                });
+            } else {
+                normal.push(v);
+            }
+        });
+        
+        return {
+            outliers: outliers,
+            normal: normal,
+            threshold: threshold
+        };
+    },
+    
+    // 計算排除異常值後的統計量
+    calcStatsWithoutOutliers: function(values, field = 'amplitude') {
+        const detection = this.detectOutliersIQR(values);
+        const normalStats = this.calcStats(detection.normal);
+        const allStats = this.calcStats(values);
+        
+        return {
+            all: allStats,
+            normal: normalStats,
+            outliers: detection.outliers,
+            outlierCount: detection.outliers.length,
+            outlierRate: values.length > 0 ? (detection.outliers.length / values.length * 100) : 0,
+            bounds: detection.bounds,
+            impact: allStats && normalStats ? {
+                meanDiff: allStats.mean - normalStats.mean,
+                stdDiff: allStats.std - normalStats.std
+            } : null
+        };
+    },
+    
+    // 異常值降權計算（Winsorization）
+    winsorize: function(values, percentile = 0.05) {
+        if (!values || values.length < 4) return values;
+        
+        const sorted = [...values].sort((a, b) => a - b);
+        const n = sorted.length;
+        const lowerIdx = Math.floor(n * percentile);
+        const upperIdx = Math.floor(n * (1 - percentile));
+        
+        const lowerBound = sorted[lowerIdx];
+        const upperBound = sorted[upperIdx];
+        
+        return values.map(v => {
+            if (v < lowerBound) return lowerBound;
+            if (v > upperBound) return upperBound;
+            return v;
+        });
+    },
+    
+    // 生成異常值說明HTML
+    generateOutlierNote: function(data, options = {}) {
+        const {
+            field = 'amplitude',
+            fieldLabel = '振幅',
+            showList = true,
+            maxShowCount = 5
+        } = options;
+        
+        const values = Array.isArray(data) ? data.map(d => typeof d === 'number' ? d : d[field]).filter(v => typeof v === 'number') : [];
+        
+        if (values.length === 0) return '';
+        
+        const result = this.calcStatsWithoutOutliers(values, field);
+        
+        if (result.outlierCount === 0) return '';
+        
+        let html = `
+        <div style="background:linear-gradient(135deg, #fff3e0, #ffe0b2); border-radius:8px; padding:12px; margin-top:12px; border-left:4px solid #ff9800;">
+            <div style="font-size:12px; font-weight:bold; color:#e65100; margin-bottom:8px;">
+                ⚠️ 異常值偵測
+            </div>
+            <div style="font-size:11px; color:#555; line-height:1.6;">
+                <div style="margin-bottom:6px;">
+                    🔍 偵測到 <b style="color:#e65100;">${result.outlierCount}</b> 筆異常數據
+                    <span style="color:#888;">（占比 ${result.outlierRate.toFixed(1)}%）</span>
+                </div>
+                <div style="margin-bottom:6px;">
+                    📊 正常範圍：${result.bounds.lower.toFixed(1)}% ~ ${result.bounds.upper.toFixed(1)}%
+                </div>`;
+        
+        if (result.impact) {
+            const meanImpact = result.impact.meanDiff;
+            html += `
+                <div style="margin-bottom:6px;">
+                    📐 異常值影響：平均值${meanImpact > 0 ? '高估' : '低估'} <b>${Math.abs(meanImpact).toFixed(1)}%</b>
+                </div>`;
+        }
+        
+        if (showList && result.outliers.length > 0) {
+            const showOutliers = result.outliers.slice(0, maxShowCount);
+            html += `
+                <div style="margin-top:8px; padding:8px; background:#fff; border-radius:4px;">
+                    <div style="font-size:10px; color:#888; margin-bottom:4px;">異常案例：</div>
+                    <div style="font-size:10px; color:#e65100;">
+                        ${showOutliers.map(o => `${o.value.toFixed(1)}%(${o.type === 'high' ? '偏高' : '偏低'})`).join('、')}
+                        ${result.outliers.length > maxShowCount ? `...等${result.outliers.length}筆` : ''}
+                    </div>
+                </div>`;
+        }
+        
+        html += `
+                <div style="margin-top:8px; padding:8px; background:#ffebee; border-radius:4px; font-size:10px; color:#c62828;">
+                    💡 <b>建議</b>：這些極端案例可能受特殊因素影響，統計時已自動降權處理，但仍建議逐案檢視原因。
+                </div>
+            </div>
+        </div>`;
+        
+        return html;
+    },
+    
+    // 判斷單一數值是否為異常值
+    isOutlier: function(value, field = 'amplitude') {
+        const threshold = this.outlierThresholds[field];
+        if (!threshold) return false;
+        return value < threshold.min || value > threshold.max;
+    },
+    
+    // 取得異常值標記樣式
+    getOutlierBadge: function(value, field = 'amplitude') {
+        if (!this.isOutlier(value, field)) return '';
+        const threshold = this.outlierThresholds[field];
+        const isHigh = value > threshold.max;
+        return `<span style="display:inline-block; padding:1px 4px; background:${isHigh ? '#ffebee' : '#e3f2fd'}; color:${isHigh ? '#c62828' : '#1565c0'}; border-radius:3px; font-size:9px; margin-left:4px;">${isHigh ? '⚠️偏高' : '⚠️偏低'}</span>`;
     }
 };
 
@@ -12432,7 +12619,18 @@ function renderIndustryAnalysis() {
 
     // 只顯示前15個產業
     const topData = data.slice(0, 15);
+    
+    // v3.98f-19: 收集振幅數據用於異常值偵測
+    const ampValues = topData.filter(d => d.avgAmp > 0).map(d => d.avgAmp);
+    const outlierResult = StatsHelper.detectOutliersIQR(ampValues);
+    
     topData.forEach((d, idx) => {
+        // v3.98f-19: 檢查是否為異常值
+        const isOutlier = d.avgAmp > 0 && outlierResult.bounds && 
+            (d.avgAmp < outlierResult.bounds.lower || d.avgAmp > outlierResult.bounds.upper);
+        const outlierBadge = isOutlier ? 
+            `<span style="display:inline-block; padding:1px 4px; background:${d.avgAmp > outlierResult.bounds.upper ? '#fff3e0' : '#e3f2fd'}; color:${d.avgAmp > outlierResult.bounds.upper ? '#e65100' : '#1565c0'}; border-radius:3px; font-size:9px; margin-left:4px;">${d.avgAmp > outlierResult.bounds.upper ? '⚡偏高' : '❄️偏低'}</span>` : '';
+        
         const ampClass = d.avgAmp >= 80 ? 'amp-high' : (d.avgAmp < 30 ? 'amp-low' : '');
         const rankIcon = idx < 3 ? ['🥇', '🥈', '🥉'][idx] : '';
         const safeId = d.name.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '_');
@@ -12446,7 +12644,7 @@ function renderIndustryAnalysis() {
             <td>${d.ratio.toFixed(1)}%</td>
             <td style="color:#2e7d32;">${d.avgHigh > 0 ? d.avgHigh.toFixed(1) : '-'}</td>
             <td style="color:#c62828;">${d.avgLow > 0 ? d.avgLow.toFixed(1) : '-'}</td>
-            <td class="${ampClass}">${d.avgAmp > 0 ? d.avgAmp.toFixed(1) + '%' : '-'}</td>
+            <td class="${ampClass}">${d.avgAmp > 0 ? d.avgAmp.toFixed(1) + '%' : '-'}${outlierBadge}</td>
         </tr>
         <tr id="industry-detail-${idx}" style="display:none;">
             <td colspan="6" style="padding:0; background:#f5f5f5;">
@@ -12477,6 +12675,16 @@ function renderIndustryAnalysis() {
     });
 
     html += `</table></div>`;
+
+    // v3.98f-19: 加入異常值說明
+    if (outlierResult.outliers && outlierResult.outliers.length > 0) {
+        html += StatsHelper.generateOutlierNote(ampValues, {
+            field: 'amplitude',
+            fieldLabel: '振幅',
+            showList: true,
+            maxShowCount: 3
+        });
+    }
 
     // v3.98f-13: 加入統計說明
     html += StatsHelper.generateStatsNote(data.filter(d => d.avgAmp > 0), {

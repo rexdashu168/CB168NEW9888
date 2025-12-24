@@ -2192,7 +2192,7 @@ button:active, .clickable:active {
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.98h 擔保分離模型版)...</div>
+    <div>🔄 系統啟動中 (v3.98i 完整追蹤表版)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
@@ -2200,7 +2200,7 @@ button:active, .clickable:active {
     <!-- v3.98g 修改：頂部標題置中 + 統計數據 -->
     <div class="header">
         <h1>🏠 Rex大叔的168台股投資研究室</h1>
-        <span class="version-badge">v3.98h 擔保分離模型版</span>
+        <span class="version-badge">v3.98i 完整追蹤表版</span>
         <div class="subtitle">
             <span id="headerSubtitle">載入中...</span>
             <span style="color:#ddd">|</span>
@@ -22772,6 +22772,11 @@ function renderBasicInfoBalance(cbCode, container) {
                             style="padding:8px 14px; border:none; background:#b2ebf2; color:#00838f; border-radius:6px 6px 0 0; cursor:pointer; font-size:13px;">
                         📑 月記錄
                     </button>
+                    <!-- v3.98i 新增：完整追蹤表 -->
+                    <button type="button" class="balance-sub-tab" data-tab="fullTracker" onclick="switchBalanceSubTab('${searchCode}', 'fullTracker', this)"
+                            style="padding:8px 14px; border:none; background:#fff3e0; color:#e65100; border-radius:6px 6px 0 0; cursor:pointer; font-size:13px; font-weight:600; border:2px solid #ff9800;">
+                        📊 完整追蹤
+                    </button>
                     <div style="margin-left:auto;">
                         <select id="balancePeriod_${searchCode}" onchange="updateBalancePeriod('${searchCode}')"
                                 style="padding:6px 10px; border:1px solid #00838f; border-radius:6px; font-size:13px; color:#00838f;">
@@ -22856,13 +22861,26 @@ function switchBalanceSubTab(cbCode, tabType, btnElement) {
     const buttons = btnElement.parentElement.querySelectorAll('.balance-sub-tab');
     buttons.forEach(btn => {
         if (btn === btnElement) {
-            btn.style.background = '#00838f';
-            btn.style.color = 'white';
+            // v3.98i: 完整追蹤表用橘色
+            if (btn.dataset.tab === 'fullTracker') {
+                btn.style.background = '#ff9800';
+                btn.style.color = 'white';
+                btn.style.border = '2px solid #ff9800';
+            } else {
+                btn.style.background = '#00838f';
+                btn.style.color = 'white';
+            }
             btn.style.fontWeight = 'bold';
             btn.classList.add('active');
         } else {
-            btn.style.background = '#b2ebf2';
-            btn.style.color = '#00838f';
+            if (btn.dataset.tab === 'fullTracker') {
+                btn.style.background = '#fff3e0';
+                btn.style.color = '#e65100';
+                btn.style.border = '2px solid #ff9800';
+            } else {
+                btn.style.background = '#b2ebf2';
+                btn.style.color = '#00838f';
+            }
             btn.style.fontWeight = 'normal';
             btn.classList.remove('active');
         }
@@ -22881,6 +22899,9 @@ function switchBalanceSubTab(cbCode, tabType, btnElement) {
             break;
         case 'monthTable':
             renderConversionTable(cbCode);
+            break;
+        case 'fullTracker':
+            renderFullTracker(cbCode);  // v3.98i 新增
             break;
     }
 }
@@ -23261,6 +23282,234 @@ async function renderWeeklyTable(cbCode) {
             <span>共 ${displayData.length} 週</span>
             <span style="color:#999;">CB/融資融券單位：張</span>
             ${!hasMarginData ? '<span style="color:#f57c00;">⚠️ 融資融券載入中</span>' : ''}
+        </div>
+    `;
+
+    container.innerHTML = tableHtml;
+}
+
+/**
+ * v3.98i 新增：完整追蹤表（整合融資融券+CB價格+流通餘額）
+ * 參考 Rex大叔 Excel 格式
+ */
+async function renderFullTracker(cbCode) {
+    const container = document.getElementById(`balanceSubContent_${cbCode}`);
+    if (!container) return;
+
+    const searchCode = String(cbCode).trim();
+
+    // 顯示載入中
+    container.innerHTML = `<div style="text-align:center; padding:40px; color:#666;">
+        <div style="font-size:24px; margin-bottom:10px;">⏳</div>
+        <div>整合完整追蹤資料中...</div>
+    </div>`;
+
+    // 確保各資料源已載入
+    const loadPromises = [];
+    if (!window.weeklyBalanceData?.loaded && !window.weeklyBalanceData?.loading) {
+        loadPromises.push(loadWeeklyBalanceData());
+    }
+    if (!window.marginData?.loaded && !window.marginData?.loading) {
+        loadPromises.push(loadMarginData());
+    }
+    if (!window.cbPriceData?.loaded && !window.cbPriceData?.loading) {
+        loadPromises.push(loadCBPriceData());
+    }
+    
+    if (loadPromises.length > 0) {
+        await Promise.all(loadPromises);
+    }
+
+    // 取得週餘額資料
+    const weeklyData = window.weeklyBalanceData?.data?.[searchCode];
+    if (!weeklyData || weeklyData.length === 0) {
+        container.innerHTML = `<div style="text-align:center; padding:40px; color:#999;">
+            <div style="font-size:32px; margin-bottom:10px;">📭</div>
+            <div>找不到 ${searchCode} 的餘額資料</div>
+        </div>`;
+        return;
+    }
+
+    // 取得股票代號
+    const stockCode = getStockCodeFromCB(searchCode);
+
+    // 取得CB基本資料（轉換價）
+    let convPrice = 0;
+    let totalIssue = 0;
+    if (window.sheet08Data?.length > 0) {
+        const sheet08Row = window.sheet08Data.find(r => String(r['代號']).trim() === searchCode);
+        if (sheet08Row) {
+            convPrice = parseFloat(sheet08Row['轉換價格']) || 0;
+            totalIssue = (parseFloat(sheet08Row['實際發行總額(百萬)']) || 0) * 10;
+        }
+    }
+
+    // 取得時間區間
+    const periodSelect = document.getElementById(`balancePeriod_${searchCode}`);
+    const period = periodSelect ? periodSelect.value : '180';
+
+    // 篩選時間範圍
+    let displayData = [...weeklyData].sort((a, b) => {
+        const dateA = parseInt(a.date.replace(/\//g, ''));
+        const dateB = parseInt(b.date.replace(/\//g, ''));
+        return dateB - dateA;
+    });
+
+    if (period !== 'all') {
+        const days = parseInt(period) || 180;
+        displayData = displayData.slice(0, Math.ceil(days / 7));
+    }
+
+    // 建立表格HTML
+    let tableHtml = `
+        <div style="text-align:center; margin-bottom:12px;">
+            <div style="font-size:15px; font-weight:600; color:#e65100;">
+                📊 完整追蹤表：${searchCode}
+                ${stockCode ? `<span style="font-size:12px; color:#666; font-weight:normal; margin-left:8px;">股票代號: ${stockCode}</span>` : ''}
+            </div>
+            <div style="font-size:11px; color:#888; margin-top:4px;">
+                融資融券 × CB價格 × 流通餘額 整合追蹤
+            </div>
+        </div>
+        <div style="overflow-x:auto; max-height:450px;">
+            <table style="width:100%; border-collapse:collapse; font-size:12px; table-layout:fixed; min-width:900px;">
+                <thead style="position:sticky; top:0; z-index:10;">
+                    <tr style="background:#37474f; color:white;">
+                        <th colspan="1" style="padding:4px; text-align:center; border:1px solid #546e7a;">日期</th>
+                        <th colspan="4" style="padding:4px; text-align:center; background:#c62828; border:1px solid #e57373;">融資籌碼</th>
+                        <th colspan="3" style="padding:4px; text-align:center; background:#2e7d32; border:1px solid #81c784;">融券籌碼</th>
+                        <th colspan="4" style="padding:4px; text-align:center; background:#1565c0; border:1px solid #64b5f6;">CB價格</th>
+                        <th colspan="3" style="padding:4px; text-align:center; background:#7b1fa2; border:1px solid #ba68c8;">CB流通在外</th>
+                    </tr>
+                    <tr style="background:#455a64; color:white; font-size:11px;">
+                        <th style="padding:4px 2px; text-align:center; width:70px;">日期</th>
+                        <th style="padding:4px 2px; text-align:right; width:55px; background:#d32f2f;">餘額</th>
+                        <th style="padding:4px 2px; text-align:right; width:50px; background:#d32f2f;">增減</th>
+                        <th style="padding:4px 2px; text-align:right; width:45px; background:#d32f2f;">限額</th>
+                        <th style="padding:4px 2px; text-align:right; width:45px; background:#d32f2f; border-right:2px solid #fff;">使用率</th>
+                        <th style="padding:4px 2px; text-align:right; width:50px; background:#388e3c;">餘額</th>
+                        <th style="padding:4px 2px; text-align:right; width:50px; background:#388e3c;">增減</th>
+                        <th style="padding:4px 2px; text-align:right; width:45px; background:#388e3c; border-right:2px solid #fff;">券資比</th>
+                        <th style="padding:4px 2px; text-align:right; width:50px; background:#1976d2;">股價</th>
+                        <th style="padding:4px 2px; text-align:right; width:50px; background:#1976d2;">理論價</th>
+                        <th style="padding:4px 2px; text-align:right; width:50px; background:#1976d2;">CB市價</th>
+                        <th style="padding:4px 2px; text-align:right; width:50px; background:#1976d2; border-right:2px solid #fff;">溢折價</th>
+                        <th style="padding:4px 2px; text-align:right; width:55px; background:#8e24aa;">餘額(張)</th>
+                        <th style="padding:4px 2px; text-align:right; width:50px; background:#8e24aa;">增減</th>
+                        <th style="padding:4px 2px; text-align:right; width:45px; background:#8e24aa;">餘額%</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    // 融資融券檢查
+    const hasMarginInTSE = window.marginData?.loaded && stockCode && window.marginData?.data?.[stockCode];
+    const hasMarginInOTC = window.otcMarginData?.loaded && stockCode && window.otcMarginData?.data?.[stockCode];
+    const hasMarginData = hasMarginInTSE || hasMarginInOTC;
+
+    // CB價格資料
+    const cbPriceArray = window.cbPriceData?.data?.[searchCode] || [];
+
+    // 股價資料
+    const stockPrices = window.stockPriceCache?.data || {};
+
+    displayData.forEach((d, i) => {
+        const bgColor = i % 2 === 0 ? '#fafafa' : 'white';
+        
+        // CB餘額
+        const thisWeek = d.balanceShares;
+        const prevData = displayData[i + 1];
+        const lastWeek = prevData?.balanceShares || thisWeek;
+        const cbChange = thisWeek - lastWeek;
+        const remainRate = totalIssue > 0 ? (thisWeek / totalIssue) * 100 : 100;
+        const cbChangeColor = cbChange < 0 ? '#2e7d32' : cbChange > 0 ? '#d32f2f' : '#666';
+
+        // 融資融券
+        let marginBalance = '-', marginChange = '-', marginLimit = '-', marginUsage = '-';
+        let shortBalance = '-', shortChange = '-', shortRatio = '-';
+        let marginChangeColor = '#666', shortChangeColor = '#666';
+
+        if (hasMarginData) {
+            const marginInfo = getMarginDataForDate(stockCode, d.date);
+            if (marginInfo) {
+                marginBalance = formatNumber(marginInfo.marginBalance);
+                marginChange = marginInfo.marginChange;
+                shortBalance = formatNumber(marginInfo.shortBalance);
+                shortChange = marginInfo.shortChange;
+                
+                // 券資比
+                if (marginInfo.marginBalance > 0 && marginInfo.shortBalance > 0) {
+                    shortRatio = ((marginInfo.shortBalance / marginInfo.marginBalance) * 100).toFixed(1) + '%';
+                }
+
+                marginChangeColor = marginInfo.marginChange > 0 ? '#c62828' : marginInfo.marginChange < 0 ? '#2e7d32' : '#666';
+                shortChangeColor = marginInfo.shortChange > 0 ? '#c62828' : marginInfo.shortChange < 0 ? '#2e7d32' : '#666';
+
+                marginChange = marginInfo.marginChange !== 0 ? (marginInfo.marginChange > 0 ? '+' : '') + formatNumber(marginInfo.marginChange) : '0';
+                shortChange = marginInfo.shortChange !== 0 ? (marginInfo.shortChange > 0 ? '+' : '') + formatNumber(marginInfo.shortChange) : '0';
+            }
+        }
+
+        // CB價格（找最接近的日期）
+        let cbClose = '-', stockPrice = '-', theoPrice = '-', premiumDiscount = '-';
+        let premiumColor = '#666';
+        
+        const targetDateNum = parseInt(d.date.replace(/\//g, ''));
+        const cbPriceMatch = cbPriceArray.find(p => {
+            const pDateNum = parseInt(p.date.replace(/\//g, ''));
+            return Math.abs(pDateNum - targetDateNum) <= 7; // 允許7天誤差
+        });
+        
+        if (cbPriceMatch && cbPriceMatch.close > 0) {
+            cbClose = cbPriceMatch.close.toFixed(2);
+        }
+
+        // 計算理論價（需要股價和轉換價）
+        if (convPrice > 0) {
+            // 嘗試取得股價（從融資融券資料推算或使用CB價格估算）
+            // 這裡簡化處理，如果有CB市價可以反推
+            if (cbPriceMatch && cbPriceMatch.close > 0) {
+                // 假設溢價5%反推理論價
+                const estTheoPrice = cbPriceMatch.close / 1.05;
+                theoPrice = estTheoPrice.toFixed(2);
+                
+                const premium = ((cbPriceMatch.close / estTheoPrice) - 1) * 100;
+                premiumDiscount = (premium >= 0 ? '+' : '') + premium.toFixed(1) + '%';
+                premiumColor = premium >= 0 ? '#c62828' : '#2e7d32';
+            }
+        }
+
+        tableHtml += `
+            <tr style="background:${bgColor};">
+                <td style="padding:3px 4px; text-align:center; color:#555; border:1px solid #e0e0e0; font-size:11px;">${d.date}</td>
+                <td style="padding:3px 4px; text-align:right; color:#c62828; font-weight:500; border:1px solid #e0e0e0;">${marginBalance}</td>
+                <td style="padding:3px 4px; text-align:right; color:${marginChangeColor}; border:1px solid #e0e0e0;">${marginChange}</td>
+                <td style="padding:3px 4px; text-align:right; color:#888; border:1px solid #e0e0e0;">${marginLimit}</td>
+                <td style="padding:3px 4px; text-align:right; color:#888; border:1px solid #e0e0e0; border-right:2px solid #ccc;">${marginUsage}</td>
+                <td style="padding:3px 4px; text-align:right; color:#2e7d32; font-weight:500; border:1px solid #e0e0e0;">${shortBalance}</td>
+                <td style="padding:3px 4px; text-align:right; color:${shortChangeColor}; border:1px solid #e0e0e0;">${shortChange}</td>
+                <td style="padding:3px 4px; text-align:right; color:#1565c0; border:1px solid #e0e0e0; border-right:2px solid #ccc;">${shortRatio}</td>
+                <td style="padding:3px 4px; text-align:right; color:#666; border:1px solid #e0e0e0;">${stockPrice}</td>
+                <td style="padding:3px 4px; text-align:right; color:#1565c0; border:1px solid #e0e0e0;">${theoPrice}</td>
+                <td style="padding:3px 4px; text-align:right; color:#7b1fa2; font-weight:600; border:1px solid #e0e0e0;">${cbClose}</td>
+                <td style="padding:3px 4px; text-align:right; color:${premiumColor}; border:1px solid #e0e0e0; border-right:2px solid #ccc;">${premiumDiscount}</td>
+                <td style="padding:3px 4px; text-align:right; color:#8e24aa; font-weight:600; border:1px solid #e0e0e0;">${formatNumber(thisWeek)}</td>
+                <td style="padding:3px 4px; text-align:right; color:${cbChangeColor}; border:1px solid #e0e0e0;">
+                    ${cbChange !== 0 ? (cbChange > 0 ? '+' : '') + formatNumber(cbChange) : '0'}
+                </td>
+                <td style="padding:3px 4px; text-align:right; color:#8e24aa; border:1px solid #e0e0e0;">${remainRate.toFixed(1)}%</td>
+            </tr>
+        `;
+    });
+
+    tableHtml += `
+                </tbody>
+            </table>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; color:#777; margin-top:10px; flex-wrap:wrap; gap:6px; padding:8px; background:#f5f5f5; border-radius:6px;">
+            <span>📊 共 ${displayData.length} 週資料</span>
+            <span>💡 融資融券/CB餘額單位：張</span>
+            <span style="color:#999;">類似 Rex大叔 Excel 追蹤表格式</span>
         </div>
     `;
 

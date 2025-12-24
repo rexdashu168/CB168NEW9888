@@ -4,23 +4,97 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.98e (信評分層版)</title>
-<!-- v3.98e: 關鍵優化！高理論價區間(>=105)自動使用信評≤5的優良樣本 -->
+<title>AI智能可轉債競拍系統 v3.98f-4 (策略邏輯修正版)</title>
+<!-- v3.98f-4: Rex大叔策略邏輯修正 + 異常模組調整機制 -->
 <!-- 
-     核心洞察（Rex大叔的寶貴發現）：
-     1. 投標倍數是最強預測因子（相關係數0.736），但截標前無法取得
-     2. 信評≤5的標的 → 投標意願高 → 投標倍數高 → 溢價率高
-     3. 110-115區間實證：信評≤5平均溢價+3.86%，信評>5平均溢價-1.01%
-     4. 高理論價區間的折價案例多為TCRI較差、無法拆解CB+選擇權的標的
+     ═══════════════════════════════════════════════════════════════
+     Rex大叔核心修正：
+
+```
+ 🛡️ 保守 = 最低成本得標 → μ - 0.618σ（往下）→ 得標機率~27%
+ ⚖️ 穩健 = 平衡點 → μ → 得標機率~50%
+ 🚀 積極 = 提高得標機率 → μ + 0.618σ（往上）→ 得標機率~73%
+ 🔥 極致 = 確保得標 → μ + 1.236σ → 得標機率~89%
+ 
+ 三道防線：
+ 1️⃣ 絕對下限：保守策略 >= max(100, 理論價)
+ 2️⃣ 絕對上限：極致策略 <= μ + 2σ
+ 3️⃣ 異常調整：高熱+1.5σ, 低熱-0.5σ
+ 
+ 「給出一個沒有行情的價格，不如不要預估！」
+ ═══════════════════════════════════════════════════════════════
+```
+
+–>
+
+```
+ ┌─────────────────────────────────────────────────────────┐
+ │ 面向一：七維度溢價率法（理論價決定方法選擇）           │
+ ├─────────────────────────────────────────────────────────┤
+ │ < 100 元  → 改用「平均得標價法」（底標100-105限制）    │
+ │ 100-110元 → 標準「溢價率法」（甜蜜區）                │
+ │ > 110 元  → 純「溢價率法」（平均值太低）              │
+ └─────────────────────────────────────────────────────────┘
+ 
+ ┌─────────────────────────────────────────────────────────┐
+ │ 面向二：七維度加權影響（各因素權重）                   │
+ └─────────────────────────────────────────────────────────┘
+ 
+ ┌─────────────────────────────────────────────────────────┐
+ │ 面向三：市場氛圍（近期整體熱度）                       │
+ └─────────────────────────────────────────────────────────┘
+ 
+ ┌─────────────────────────────────────────────────────────┐
+ │ 面向四：異常值預測（近期同產業5檔+10檔分析）⭐關鍵    │
+ │ - 近5檔同產業：平均倍數、平均溢價率                   │
+ │ - 近10檔同產業：平均倍數、平均溢價率                  │
+ │ - vs 產業歷史平均的差異                               │
+ └─────────────────────────────────────────────────────────┘
+ 
+ 精測一 12/23 驗證成功：
+ - 預測倍數 5.0~6.5 → 實際 5.99 ✓
+ - 預測溢價 10%~15% → 實際 11.16% ✓
+ - 創下無擔保CB最低得標價歷史新高 126.72 元！
+```
+
+–>
+
+<!-- v3.98f-2: Rex大叔核心洞察升級！加入「近期同產業案例」分析 -->
+
+<!-- 
+     核心洞察（精測一 12/23 驗證成功）：
      
-     解決方案：
-     - 理論價>=105時，優先使用信評≤5的歷史樣本計算溢價率
-     - 這等同於間接利用投標倍數的預測能力（因為好信評→高倍數）
+     1. 產業「長期平均」只是基礎，「近期同產業案例」才是預測的關鍵！
+     2. 精測一之所以5.99倍，是因為：
+        - 近期穎崴一(6515)倍數4.98表現優異
+        - AI半導體測試題材加持
+        - 近期市場整體氛圍熱（近10檔平均3.65倍）
+     
+     精測一預測驗證：
+     - 預測倍數：5.0~6.5 → 實際 5.99 ✓
+     - 預測溢價：10%~15% → 實際 11.16% ✓
+     - 創下無擔保CB最低得標價歷史新高 126.72 元！
+     
+     同日對照（五福一）：
+     - 同樣 TCRI 4，但觀光餐旅產業
+     - 預測倍數：3.0 → 實際 3.00 ✓
+     - 溢價率：9.7%（符合預期）
+     
+     異常預測公式升級：
+     預測倍數 = 基準(2.99) 
+              + 產業基礎調整
+              + 🔥近期同產業調整（最重要！）
+              + 信評調整
+              + 市場整體熱度調整
+              + 理論價區間調整
 -->
-<!-- v3.98d: 核心重構！改用「分區間溢價率法」作為預測核心 -->
-<!-- v3.98c: 修正集成預測引擎的m.value.toFixed錯誤 -->
-<!-- v3.98b: 修正step0Reminder的null錯誤 -->
-<!-- v3.98a: 集成預測引擎優化版 -->
+
+<!-- v3.98f: 異常預測模組基礎版 -->
+
+<!-- v3.98e: 高理論價區間自動使用信評≤5的優良樣本 -->
+
+<!-- v3.98d: 改用「分區間溢價率法」作為預測核心 -->
+
 <!-- 核心優化：
      1. 新增集成預測引擎 v2.0 (Ensemble Engine) - 整合4種預測方法，MAE≈3.4元
      2. 新增MA10市場熱度指標 - 追蹤近10檔競拍趨勢
@@ -30,10 +104,15 @@
      研究發現：投標倍數為最強預測因子(相關係數0.736)，但截標前無法取得
      集成方法可有效降低單一方法的預測風險
 -->
+
 <!-- v3.97-cw: 第五區塊改為「台股熱門交易」- 漲跌幅排行/計量強勢/計量弱勢 -->
+
 <!-- v3.97-cu: 精簡為三大核心模組 - Step1基礎數據 + Step2最強大腦 + Step3 AI智能預測 -->
+
 <!-- v3.97-ct: 新增AI智慧核心模組 - 異常值處理、信心度量化、氛圍偏離警示、雙軌整合預測 -->
+
 <!-- v3.97-as-cs: 得標均價法加入歷史落差調整係數（理論價<90:+5%, <95:+3%, <97.5:+2%）-->
+
 <!-- v3.97-as-cr: Step 1 明細動態跟隨標籤切換 -->
 
 <!-- v3.97-as-ca: 改為從 data/00_cb/ 載入 CSV 檔案 -->
@@ -2462,6 +2541,41 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
                 理論價區間: <span id="step3SegmentName">--</span> | 區間平均溢價: <span id="step3SegmentPremium">--%</span>
             </div>
             
+            <!-- v3.98f-2 新增：異常預測模組顯示 -->
+            <div id="step3AnomalyModule" style="display:none; background:linear-gradient(135deg, rgba(255,152,0,0.2), rgba(255,87,34,0.2)); border-radius:8px; padding:10px; margin-bottom:10px; border:1px solid rgba(255,152,0,0.5);">
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                    <span id="step3AnomalyIcon" style="font-size:18px;">🔥</span>
+                    <span style="font-weight:bold; font-size:12px;">異常預測模組</span>
+                    <span id="step3AnomalyHeatLevel" style="font-size:11px; padding:2px 6px; border-radius:4px; background:rgba(255,255,255,0.3);"></span>
+                </div>
+                <div style="font-size:11px; margin-bottom:4px;">
+                    預測投標倍數: <span id="step3PredictedMult" style="font-weight:bold; font-size:13px;">--</span>倍
+                </div>
+                <div id="step3AnomalyAdjustments" style="font-size:10px; opacity:0.9; line-height:1.5;"></div>
+                <div id="step3RecentIndustry" style="font-size:10px; margin-top:4px; padding-top:4px; border-top:1px solid rgba(255,255,255,0.2);"></div>
+                
+                <!-- v3.98f-3 新增：近5檔/10檔同產業統計 -->
+                <div id="step3IndustryStats" style="margin-top:8px; padding:8px; background:rgba(255,255,255,0.15); border-radius:6px; font-size:10px; display:none;">
+                    <div style="font-weight:bold; margin-bottom:4px;">📊 近期同產業統計</div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+                        <div style="padding:4px; background:rgba(255,255,255,0.1); border-radius:4px;">
+                            <div style="font-weight:bold; margin-bottom:2px;">近5檔</div>
+                            <div>倍數: <span id="step3Ind5Mult">--</span></div>
+                            <div>溢價: <span id="step3Ind5Prem">--%</span></div>
+                        </div>
+                        <div style="padding:4px; background:rgba(255,255,255,0.1); border-radius:4px;">
+                            <div style="font-weight:bold; margin-bottom:2px;">近10檔</div>
+                            <div>倍數: <span id="step3Ind10Mult">--</span></div>
+                            <div>溢價: <span id="step3Ind10Prem">--%</span></div>
+                        </div>
+                    </div>
+                    <div style="margin-top:4px; padding-top:4px; border-top:1px dashed rgba(255,255,255,0.2);">
+                        <div>歷史平均: 倍數 <span id="step3IndHistMult">--</span> | 溢價 <span id="step3IndHistPrem">--%</span></div>
+                        <div id="step3IndDiff" style="margin-top:2px;"></div>
+                    </div>
+                </div>
+            </div>
+            
             <!-- 集成結果 -->
             <div style="text-align:center; background:rgba(255,255,255,0.25); padding:12px; border-radius:8px; margin-bottom:12px;">
                 <div style="font-size:11px; margin-bottom:4px;">🎯 分區間集成預測價格</div>
@@ -2469,23 +2583,38 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
                 <div style="font-size:10px; opacity:0.8; margin-top:4px;">方法間標準差: <span id="step3EnsembleStd">--</span>元</div>
             </div>
             
+            <!-- v3.98f-3 新增：價格範圍限制提示 -->
+            <div id="step3PriceLimits" style="display:none; background:rgba(255,193,7,0.2); border:1px solid rgba(255,193,7,0.5); border-radius:6px; padding:8px; margin-bottom:10px; font-size:10px;">
+                <div style="font-weight:bold; margin-bottom:4px;">⚠️ 價格範圍限制</div>
+                <div>上限(μ+2σ): <span id="step3MaxPrice">--</span>元 | 下限: <span id="step3MinPrice">--</span>元</div>
+                <div id="step3LimitWarning" style="color:#f57c00; margin-top:4px;"></div>
+            </div>
+            
             <!-- 策略價格 -->
             <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:6px;">
-                <div style="text-align:center; background:rgba(76,175,80,0.3); padding:8px; border-radius:6px;">
+                <div id="step3StratConservativeBox" style="text-align:center; background:rgba(76,175,80,0.3); padding:8px; border-radius:6px;">
                     <div style="font-size:9px; opacity:0.9;">🛡️ 保守</div>
                     <div style="font-size:14px; font-weight:bold;" id="step3StratConservative">--</div>
+                    <div style="font-size:8px; opacity:0.7;" id="step3StratConservativeNote">μ-0.618σ</div>
+                    <div style="font-size:8px; color:#4caf50;" id="step3StratConservativeProb">得標~--%</div>
                 </div>
-                <div style="text-align:center; background:rgba(33,150,243,0.3); padding:8px; border-radius:6px;">
-                    <div style="font-size:9px; opacity:0.9;">⚖️ 平衡</div>
+                <div id="step3StratBalancedBox" style="text-align:center; background:rgba(33,150,243,0.3); padding:8px; border-radius:6px;">
+                    <div style="font-size:9px; opacity:0.9;">⚖️ 穩健</div>
                     <div style="font-size:14px; font-weight:bold;" id="step3StratBalanced">--</div>
+                    <div style="font-size:8px; opacity:0.7;" id="step3StratBalancedNote">μ</div>
+                    <div style="font-size:8px; color:#2196f3;" id="step3StratBalancedProb">得標~--%</div>
                 </div>
-                <div style="text-align:center; background:rgba(255,152,0,0.3); padding:8px; border-radius:6px;">
+                <div id="step3StratAggressiveBox" style="text-align:center; background:rgba(255,152,0,0.3); padding:8px; border-radius:6px;">
                     <div style="font-size:9px; opacity:0.9;">🚀 積極</div>
                     <div style="font-size:14px; font-weight:bold;" id="step3StratAggressive">--</div>
+                    <div style="font-size:8px; opacity:0.7;" id="step3StratAggressiveNote">μ+0.618σ</div>
+                    <div style="font-size:8px; color:#ff9800;" id="step3StratAggressiveProb">得標~--%</div>
                 </div>
-                <div style="text-align:center; background:rgba(244,67,54,0.3); padding:8px; border-radius:6px;">
+                <div id="step3StratUltimateBox" style="text-align:center; background:rgba(244,67,54,0.3); padding:8px; border-radius:6px;">
                     <div style="font-size:9px; opacity:0.9;">🔥 極致</div>
                     <div style="font-size:14px; font-weight:bold;" id="step3StratUltimate">--</div>
+                    <div style="font-size:8px; opacity:0.7;" id="step3StratUltimateNote">μ+1.236σ</div>
+                    <div style="font-size:8px; color:#f44336;" id="step3StratUltimateProb">得標~--%</div>
                 </div>
             </div>
         </div>
@@ -3474,6 +3603,274 @@ const AICore = {
         };
     },
     
+    // ========== v3.98f 新增：異常預測模組 (Anomaly Prediction Module) ==========
+    // 核心洞察：投標倍數是最強預測因子(相關係數0.736)，但截標前無法取得
+    // 解決方案：透過「產業類型」+「信評等級」+「近期熱度」間接預測投標倍數
+    anomaly: {
+        // 產業熱度基準（基於307筆歷史資料統計）
+        industryHeat: {
+            // 🔥熱門產業（平均倍數 > 3.0）
+            hot: ['電器電纜', '其他電子業', '居家生活', '資訊服務業', '電腦及週邊設備業',
+                  '電子零組件業', '觀光餐旅', '化學工業', '通信網路業', '半導體業'],
+            // ❄️冷門產業（平均倍數 < 2.5）
+            cold: ['紡織纖維', '電子通路業', '建材營造業', '航運業', '鋼鐵工業',
+                   '汽車工業', '綠能環保', '生技醫療業', '電機機械'],
+            // 產業平均倍數對照表
+            avgMultiplier: {
+                '電器電纜': 4.57, '其他電子業': 4.00, '居家生活': 3.57, '資訊服務業': 3.54,
+                '電腦及週邊設備業': 3.40, '電子零組件業': 3.38, '觀光餐旅': 3.21,
+                '化學工業': 3.15, '通信網路業': 3.13, '半導體業': 3.07,
+                '數位雲端': 2.97, '生技醫療業': 2.79, '電機機械': 2.74, '綠能環保': 2.58,
+                '汽車工業': 2.51, '鋼鐵工業': 2.18, '航運業': 2.06, '建材營造業': 1.95,
+                '電子通路業': 1.68, '紡織纖維': 1.65
+            },
+            // 產業溢價率對照表
+            avgPremium: {
+                '電器電纜': 11.5, '其他電子業': 11.3, '居家生活': 9.6, '資訊服務業': 2.5,
+                '電腦及週邊設備業': 7.3, '電子零組件業': 7.9, '觀光餐旅': 11.6,
+                '化學工業': 9.2, '通信網路業': 10.3, '半導體業': 9.5,
+                '數位雲端': 6.7, '生技醫療業': 5.2, '電機機械': 8.8, '綠能環保': 9.6,
+                '汽車工業': 10.6, '鋼鐵工業': 18.1, '航運業': 8.6, '建材營造業': 9.5,
+                '電子通路業': 6.1, '紡織纖維': 6.2
+            }
+        },
+        
+        // 預測投標倍數（v3.98f-2 升級：加入近期同產業分析）
+        // 核心洞察（Rex大叔）：
+        // 1. 產業「長期平均」只是基礎
+        // 2. 「近期同產業案例」才是預測的關鍵
+        // 3. 精測一之所以5.99倍，是因為近期穎崴一4.98表現優異 + AI題材加持
+        predictMultiplier: function(industry, creditRating, recentAvgMult, theoPrice, recentIndustryData) {
+            const baseMult = 2.99; // 整體平均
+            let predicted = baseMult;
+            let adjustments = [];
+            
+            // 1. 產業調整（基礎）
+            const industryMult = this.industryHeat.avgMultiplier[industry];
+            if (industryMult) {
+                const industryAdj = industryMult - baseMult;
+                predicted += industryAdj;
+                adjustments.push({factor: '產業基礎', value: industryAdj, detail: `${industry}歷史均值${industryMult.toFixed(2)}倍`});
+            } else if (this.industryHeat.hot.some(h => industry && industry.includes(h))) {
+                predicted += 0.5;
+                adjustments.push({factor: '產業基礎', value: 0.5, detail: '熱門類型+0.5'});
+            } else if (this.industryHeat.cold.some(c => industry && industry.includes(c))) {
+                predicted -= 0.3;
+                adjustments.push({factor: '產業基礎', value: -0.3, detail: '冷門類型-0.3'});
+            }
+            
+            // 2. 🔥近期同產業案例調整（最重要！Rex大叔核心洞察）
+            if (recentIndustryData && recentIndustryData.count >= 1) {
+                const recentIndMult = recentIndustryData.avgMult;
+                const historyMult = industryMult || baseMult;
+                const diff = recentIndMult - historyMult;
+                
+                if (diff > 1.0) {
+                    // 近期同產業表現遠超歷史平均
+                    predicted += diff * 0.8; // 給予80%權重
+                    adjustments.push({
+                        factor: '🔥近期同產業', 
+                        value: diff * 0.8, 
+                        detail: `近${recentIndustryData.count}檔同產業均值${recentIndMult.toFixed(2)}(遠超歷史)+${(diff*0.8).toFixed(2)}`
+                    });
+                } else if (diff > 0.3) {
+                    // 近期略優於歷史
+                    predicted += diff * 0.5;
+                    adjustments.push({
+                        factor: '近期同產業', 
+                        value: diff * 0.5, 
+                        detail: `近${recentIndustryData.count}檔同產業均值${recentIndMult.toFixed(2)}(略優)+${(diff*0.5).toFixed(2)}`
+                    });
+                } else if (diff < -0.5) {
+                    // 近期同產業表現不佳
+                    predicted += diff * 0.5;
+                    adjustments.push({
+                        factor: '近期同產業', 
+                        value: diff * 0.5, 
+                        detail: `近${recentIndustryData.count}檔同產業均值${recentIndMult.toFixed(2)}(偏冷)${(diff*0.5).toFixed(2)}`
+                    });
+                }
+            }
+            
+            // 3. 信評調整
+            const rating = parseFloat(creditRating) || 6;
+            if (rating <= 4) {
+                predicted += 0.7;
+                adjustments.push({factor: '信評', value: 0.7, detail: `TCRI ${rating}(極優)+0.7`});
+            } else if (rating <= 5) {
+                predicted += 0.5;
+                adjustments.push({factor: '信評', value: 0.5, detail: `TCRI ${rating}(優良)+0.5`});
+            } else if (rating >= 7) {
+                predicted -= 0.3;
+                adjustments.push({factor: '信評', value: -0.3, detail: `TCRI ${rating}(較差)-0.3`});
+            }
+            
+            // 4. 近期市場整體熱度調整
+            if (recentAvgMult) {
+                if (recentAvgMult >= 4.0) {
+                    predicted += 0.5;
+                    adjustments.push({factor: '市場熱度', value: 0.5, detail: `近10檔均值${recentAvgMult.toFixed(2)}(超熱)+0.5`});
+                } else if (recentAvgMult >= 3.5) {
+                    predicted += 0.3;
+                    adjustments.push({factor: '市場熱度', value: 0.3, detail: `近10檔均值${recentAvgMult.toFixed(2)}(熱)+0.3`});
+                } else if (recentAvgMult < 2.5) {
+                    predicted -= 0.3;
+                    adjustments.push({factor: '市場熱度', value: -0.3, detail: `近10檔均值${recentAvgMult.toFixed(2)}(冷)-0.3`});
+                }
+            }
+            
+            // 5. 理論價區間調整
+            if (theoPrice >= 90 && theoPrice <= 105) {
+                predicted += 0.2;
+                adjustments.push({factor: '理論價', value: 0.2, detail: `理論價${theoPrice.toFixed(1)}(甜蜜區)+0.2`});
+            } else if (theoPrice > 115) {
+                predicted -= 0.5;
+                adjustments.push({factor: '理論價', value: -0.5, detail: `理論價${theoPrice.toFixed(1)}(高風險)-0.5`});
+            }
+            
+            return {
+                predicted: Math.max(0.5, predicted),
+                base: baseMult,
+                adjustments: adjustments,
+                heatLevel: predicted >= 5.5 ? '🔥🔥超高熱' :
+                           predicted >= 5 ? '🔥超高熱' : 
+                           predicted >= 4 ? '🌡️高熱' : 
+                           predicted >= 2.5 ? '😐正常' : '❄️低熱'
+            };
+        },
+        
+        // 根據預測倍數計算溢價率
+        predictPremiumFromMultiplier: function(predictedMult) {
+            // 基於統計：倍數與溢價率的關係
+            // >=5倍: 12.36%, 4-5倍: 12.33%, 2-4倍: 8.97%, <2倍: 5.79%
+            if (predictedMult >= 5) return { premium: 12.36, confidence: 'high' };
+            if (predictedMult >= 4) return { premium: 12.33, confidence: 'high' };
+            if (predictedMult >= 2.5) return { premium: 8.97, confidence: 'medium' };
+            return { premium: 5.79, confidence: 'low' };
+        },
+        
+        // v3.98f-3 新增：近期同產業統計（5檔 + 10檔）
+        // Rex大叔核心洞察：近期同產業表現才是預測關鍵
+        calcRecentIndustryStats: function(industry, auctionData) {
+            if (!industry || !auctionData || auctionData.length === 0) return null;
+            
+            // 按日期排序（最新在前）
+            const sorted = [...auctionData].sort((a, b) => 
+                new Date(b['開標日期']) - new Date(a['開標日期'])
+            );
+            
+            // 篩選同產業
+            const sameIndustry = sorted.filter(d => {
+                const ind = d['產業分類'] || '';
+                return ind === industry || ind.includes(industry) || industry.includes(ind);
+            });
+            
+            if (sameIndustry.length === 0) return null;
+            
+            // 計算溢價率
+            const calcPremium = (row) => {
+                const theo = parseFloat(row['理論價']) || 0;
+                const low = parseFloat(row['最低得標']) || 0;
+                return theo > 0 ? ((low / theo) - 1) * 100 : 0;
+            };
+            
+            // 近5檔統計
+            const recent5 = sameIndustry.slice(0, 5);
+            const mults5 = recent5.map(d => parseFloat(d['投標倍數']) || 0).filter(m => m > 0);
+            const prems5 = recent5.map(d => calcPremium(d)).filter(p => !isNaN(p));
+            
+            // 近10檔統計
+            const recent10 = sameIndustry.slice(0, 10);
+            const mults10 = recent10.map(d => parseFloat(d['投標倍數']) || 0).filter(m => m > 0);
+            const prems10 = recent10.map(d => calcPremium(d)).filter(p => !isNaN(p));
+            
+            // 全體歷史統計
+            const multsAll = sameIndustry.map(d => parseFloat(d['投標倍數']) || 0).filter(m => m > 0);
+            const premsAll = sameIndustry.map(d => calcPremium(d)).filter(p => !isNaN(p));
+            
+            const avgMult5 = mults5.length > 0 ? mults5.reduce((a,b) => a+b, 0) / mults5.length : null;
+            const avgPrem5 = prems5.length > 0 ? prems5.reduce((a,b) => a+b, 0) / prems5.length : null;
+            const avgMult10 = mults10.length > 0 ? mults10.reduce((a,b) => a+b, 0) / mults10.length : null;
+            const avgPrem10 = prems10.length > 0 ? prems10.reduce((a,b) => a+b, 0) / prems10.length : null;
+            const avgMultAll = multsAll.length > 0 ? multsAll.reduce((a,b) => a+b, 0) / multsAll.length : null;
+            const avgPremAll = premsAll.length > 0 ? premsAll.reduce((a,b) => a+b, 0) / premsAll.length : null;
+            
+            return {
+                industry: industry,
+                // 近5檔
+                recent5: {
+                    count: recent5.length,
+                    avgMult: avgMult5,
+                    avgPrem: avgPrem5,
+                    cases: recent5.slice(0, 5).map(d => ({
+                        name: d['名稱'],
+                        date: d['開標日期'],
+                        mult: parseFloat(d['投標倍數']) || 0,
+                        prem: calcPremium(d),
+                        lowPrice: parseFloat(d['最低得標']) || 0
+                    }))
+                },
+                // 近10檔
+                recent10: {
+                    count: recent10.length,
+                    avgMult: avgMult10,
+                    avgPrem: avgPrem10,
+                    cases: recent10.slice(0, 10).map(d => ({
+                        name: d['名稱'],
+                        date: d['開標日期'],
+                        mult: parseFloat(d['投標倍數']) || 0,
+                        prem: calcPremium(d),
+                        lowPrice: parseFloat(d['最低得標']) || 0
+                    }))
+                },
+                // 全體歷史
+                history: {
+                    count: sameIndustry.length,
+                    avgMult: avgMultAll,
+                    avgPrem: avgPremAll
+                },
+                // 差異分析
+                diff5VsHistory: {
+                    mult: avgMult5 && avgMultAll ? avgMult5 - avgMultAll : null,
+                    prem: avgPrem5 && avgPremAll ? avgPrem5 - avgPremAll : null
+                },
+                diff10VsHistory: {
+                    mult: avgMult10 && avgMultAll ? avgMult10 - avgMultAll : null,
+                    prem: avgPrem10 && avgPremAll ? avgPrem10 - avgPremAll : null
+                }
+            };
+        },
+        
+        // 異常檢測：判斷是否為異常高熱或異常低熱
+        // v3.98f-2: 加入近期同產業資料分析
+        detectAnomaly: function(industry, creditRating, recentData, recentIndustryData) {
+            const multPred = this.predictMultiplier(
+                industry, 
+                creditRating, 
+                recentData ? recentData.avgMult : null,
+                recentData ? recentData.theoPrice : 100,
+                recentIndustryData // 新增：近期同產業資料
+            );
+            
+            const isAnomalyHot = multPred.predicted >= 5;
+            const isAnomalyCold = multPred.predicted < 2;
+            
+            return {
+                isAnomaly: isAnomalyHot || isAnomalyCold,
+                type: isAnomalyHot ? 'hot' : (isAnomalyCold ? 'cold' : 'normal'),
+                predictedMult: multPred.predicted,
+                heatLevel: multPred.heatLevel,
+                adjustments: multPred.adjustments,
+                recentIndustryData: recentIndustryData, // 新增：回傳近期同產業資料
+                recommendation: isAnomalyHot 
+                    ? '⚠️ 預測為異常高熱度，建議提高投標價格' 
+                    : (isAnomalyCold 
+                        ? '⚠️ 預測為異常低熱度，可考慮保守出價' 
+                        : '正常熱度，使用標準預測')
+            };
+        }
+    },
+    
     // ========== v3.98a 新增：集成預測引擎 (Ensemble Engine) ==========
     // 基於研究發現：集成方法MAE=3.44元 優於單一方法
     ensemble: {
@@ -3654,21 +4051,72 @@ const AICore = {
             };
         },
         
-        // v3.98e 重新設計：集成預測（以分區間溢價率法為核心，高理論價區間使用信評過濾）
-        // 關鍵洞察：
+        // v3.98f 重新設計：集成預測（整合異常預測模組）
+        // 核心洞察（Rex大叔）：
         // 1. 投標倍數是最強預測因子（相關係數0.736），但截標前無法取得
-        // 2. 信評≤5的標的投標意願高 → 投標倍數高 → 溢價率高
-        // 3. 高理論價區間(>=105)使用信評≤5的樣本，避免被信評差的折價案例拉低
+        // 2. 透過「產業+信評+近期熱度+近期同產業」間接預測投標倍數
+        // 3. 異常高熱度（預測倍數>=5）需要特別調高溢價預估
+        // 4. 精測一驗證：預測倍數5.0~6.5 → 實際5.99，預測溢價10%~15% → 實際11.16%
         calcEnsemblePrediction: function(params) {
-            const { theoPrice, guarantee, auctionData, dimensions, creditRating } = params;
+            const { theoPrice, guarantee, auctionData, dimensions, industry, creditRating } = params;
             
             if (!theoPrice || theoPrice <= 0) return null;
             
             const predictions = [];
-            const isHighTheo = theoPrice >= 105; // 高理論價區間
+            const isHighTheo = theoPrice >= 105;
             
-            // 方法1: 分區間溢價率法（核心方法，權重最高）
-            // v3.98e: 高理論價區間時，使用信評≤5的優良樣本
+            // ========== v3.98f-3 升級：計算近期同產業案例（5檔+10檔） ==========
+            let recentAvgMult = null;
+            let recentIndustryData = null;
+            let industryStats = null;  // 新增：完整的產業統計
+            
+            if (auctionData && auctionData.length > 0) {
+                const sorted = [...auctionData].sort((a, b) => 
+                    new Date(b['開標日期']) - new Date(a['開標日期'])
+                );
+                
+                // 近10檔整體市場熱度
+                const recent10 = sorted.slice(0, 10);
+                const mults = recent10.map(d => parseFloat(d['投標倍數']) || 0).filter(m => m > 0);
+                if (mults.length > 0) {
+                    recentAvgMult = mults.reduce((a, b) => a + b, 0) / mults.length;
+                }
+                
+                // 🔥v3.98f-3 升級：使用calcRecentIndustryStats計算完整產業統計
+                if (industry && window.AICore.anomaly) {
+                    industryStats = window.AICore.anomaly.calcRecentIndustryStats(industry, auctionData);
+                    
+                    // 轉換為recentIndustryData格式（向後相容）
+                    if (industryStats && industryStats.recent5) {
+                        recentIndustryData = {
+                            count: industryStats.recent5.count,
+                            avgMult: industryStats.recent5.avgMult,
+                            avgPrem: industryStats.recent5.avgPrem,
+                            cases: industryStats.recent5.cases.slice(0, 3).map(c => ({
+                                name: c.name,
+                                mult: c.mult
+                            }))
+                        };
+                    }
+                }
+            }
+            
+            // 異常預測（整合近期同產業資料）
+            let anomalyResult = null;
+            if (window.AICore.anomaly) {
+                anomalyResult = window.AICore.anomaly.detectAnomaly(
+                    industry, 
+                    creditRating, 
+                    { avgMult: recentAvgMult, theoPrice: theoPrice },
+                    recentIndustryData
+                );
+                // 附加完整產業統計到結果
+                if (anomalyResult) {
+                    anomalyResult.industryStats = industryStats;
+                }
+            }
+            
+            // 方法1: 分區間溢價率法（核心方法）
             const ratingFilter = isHighTheo ? 'good' : null;
             const segmentPred = this.calcSegmentPremiumPrediction(theoPrice, guarantee, auctionData, ratingFilter);
             
@@ -3677,39 +4125,50 @@ const AICore = {
                 predictions.push({ 
                     name: '分區間溢價率', 
                     value: segmentPred.predictedPrice, 
-                    weight: 0.40,
+                    weight: 0.35,
                     detail: `${segmentPred.segment}區間${ratingNote} 溢價${segmentPred.avgPremium.toFixed(1)}% (${segmentPred.sampleCount}筆)`
                 });
             }
             
-            // 方法2: 分區間近期熱度（同區間的MA）
+            // 方法2: 異常預測調整（v3.98f新增）
+            if (anomalyResult && anomalyResult.isAnomaly) {
+                const anomalyPremium = window.AICore.anomaly.predictPremiumFromMultiplier(anomalyResult.predictedMult);
+                const anomalyPred = theoPrice * (1 + anomalyPremium.premium / 100);
+                predictions.push({
+                    name: '異常模組',
+                    value: anomalyPred,
+                    weight: anomalyResult.type === 'hot' ? 0.25 : 0.15,
+                    detail: `${anomalyResult.heatLevel} 預測倍數${anomalyResult.predictedMult.toFixed(1)}→溢價${anomalyPremium.premium.toFixed(1)}%`
+                });
+            }
+            
+            // 方法3: 分區間近期熱度（同區間的MA）
             const segmentMA = this.calcSegmentMA(theoPrice, auctionData, 10);
             if (segmentMA && segmentMA.predictedPrice > 0) {
                 predictions.push({ 
                     name: '區間近期熱度', 
                     value: segmentMA.predictedPrice, 
-                    weight: 0.30,
+                    weight: 0.20,
                     detail: `${segmentMA.segment}區間近${segmentMA.count}檔 溢價${segmentMA.avgPremium.toFixed(1)}%`
                 });
             }
             
-            // 方法3: 原有溢價率法（維度加權）- 作為補充
+            // 方法4: 原有溢價率法（維度加權）
             if (dimensions && typeof dimensions.totalLowPremium === 'number' && !isNaN(dimensions.totalLowPremium)) {
                 const premiumPred = theoPrice * (1 + dimensions.totalLowPremium / 100);
                 if (premiumPred > 0) {
                     predictions.push({ 
                         name: '維度加權溢價', 
                         value: premiumPred, 
-                        weight: 0.20,
+                        weight: 0.10,
                         detail: `加權溢價率 ${dimensions.totalLowPremium.toFixed(1)}%`
                     });
                 }
             }
             
-            // 方法4: 擔保類型調整
+            // 方法5: 擔保類型調整
             const isGuaranteed = (guarantee === '有擔保' || guarantee === '有');
             if (segmentPred && segmentPred.predictedPrice > 0) {
-                // 有擔保通常溢價更高約1-2%
                 const guarAdj = isGuaranteed ? 1.01 : 1.0;
                 const guarPred = segmentPred.predictedPrice * guarAdj;
                 predictions.push({ 
@@ -3738,23 +4197,150 @@ const AICore = {
             const ensembleStd = Math.sqrt(variance);
             
             // 使用分區間的標準差來計算策略價格（更精準）
-            const strategyStd = segmentPred ? segmentPred.stdPremium * theoPrice / 100 : ensembleStd;
+            const segmentStdPremium = segmentPred ? segmentPred.stdPremium : 5.5; // 預設5.5%
+            const avgPremium = segmentPred ? segmentPred.avgPremium : 8;
+            
+            // ========== v3.98f-4 核心修正：Rex大叔正確的策略邏輯 ==========
+            // 保守 = 想用最低價格得標 → 往下
+            // 積極 = 想確保一定得標 → 往上
+            
+            // 計算策略標準差（以元為單位）
+            const strategyStd = segmentStdPremium * theoPrice / 100;
+            
+            // 異常模組調整
+            let anomalyAdjustment = 0;
+            if (anomalyResult) {
+                if (anomalyResult.type === 'hot' && anomalyResult.predictedMult >= 5) {
+                    // 異常高熱：上調 1.5σ
+                    anomalyAdjustment = 1.5 * strategyStd;
+                } else if (anomalyResult.type === 'hot') {
+                    // 高熱：上調 1σ
+                    anomalyAdjustment = 1.0 * strategyStd;
+                } else if (anomalyResult.type === 'cold') {
+                    // 低熱：下調 0.5σ
+                    anomalyAdjustment = -0.5 * strategyStd;
+                }
+            }
+            
+            // 調整後的基準價格
+            const adjustedBase = ensembleValue + anomalyAdjustment;
+            
+            // 原始策略價格計算（Rex大叔正確邏輯）
+            // 🛡️ 保守：最低成本得標 → μ - 0.618σ（往下）
+            // ⚖️ 穩健：平衡點 → μ
+            // 🚀 積極：提高得標機率 → μ + 0.618σ（往上）
+            // 🔥 極致：確保得標 → μ + 1.236σ（上限）
+            let conservativeRaw = adjustedBase - 0.618 * strategyStd;
+            let balancedRaw = adjustedBase;
+            let aggressiveRaw = adjustedBase + 0.618 * strategyStd;
+            let ultimateRaw = adjustedBase + 1.236 * strategyStd;
+            
+            // ========== 三道防線 ==========
+            
+            // 防線1：絕對下限（100元底標 + 理論價）
+            const absoluteMin = Math.max(100, theoPrice);
+            
+            // 防線2：絕對上限（μ + 2σ，超過沒意義）
+            const absoluteMax = theoPrice * (1 + (avgPremium + 2.0 * segmentStdPremium) / 100);
+            
+            // 防線3：保守策略特殊處理
+            // - 保守策略不可低於理論價
+            // - 理論價>=115時，保守策略至少為理論價
+            if (theoPrice >= 115) {
+                conservativeRaw = Math.max(theoPrice, conservativeRaw);
+            }
+            
+            // 應用上下限
+            const applyLimits = (price, min, max, strategyName) => {
+                let cappedType = null;
+                let finalPrice = price;
+                
+                if (price < min) {
+                    finalPrice = min;
+                    cappedType = 'min';
+                } else if (price > max) {
+                    finalPrice = max;
+                    cappedType = 'max';
+                }
+                
+                return { 
+                    value: finalPrice, 
+                    capped: cappedType, 
+                    original: price,
+                    diff: finalPrice - price
+                };
+            };
+            
+            const conservative = applyLimits(conservativeRaw, absoluteMin, absoluteMax, '保守');
+            const balanced = applyLimits(balancedRaw, absoluteMin, absoluteMax, '穩健');
+            const aggressive = applyLimits(aggressiveRaw, absoluteMin, absoluteMax, '積極');
+            const ultimate = applyLimits(ultimateRaw, absoluteMin, absoluteMax, '極致');
+            
+            // 檢查是否有策略價格超出範圍
+            const hasWarning = conservative.capped || balanced.capped || aggressive.capped || ultimate.capped;
+            
+            // 計算各策略的得標機率估算
+            const calcWinProb = (price) => {
+                // 基於常態分布估算
+                const zScore = (price - ensembleValue) / strategyStd;
+                // 簡化估算：z=-1約16%, z=0約50%, z=1約84%
+                if (zScore <= -1.5) return 5;
+                if (zScore <= -1) return 16;
+                if (zScore <= -0.5) return 31;
+                if (zScore <= 0) return 50;
+                if (zScore <= 0.5) return 69;
+                if (zScore <= 1) return 84;
+                if (zScore <= 1.5) return 93;
+                return 97;
+            };
             
             return {
                 value: ensembleValue,
                 std: ensembleStd,
                 methods: predictions,
                 methodCount: predictions.length,
-                // 策略價格（基於分區間標準差）
-                conservative: Math.max(100, ensembleValue - 0.618 * strategyStd),
-                balanced: ensembleValue,
-                aggressive: ensembleValue + 0.618 * strategyStd,
-                ultimate: ensembleValue + 1.236 * strategyStd,
+                // v3.98f-4 修正後策略價格（Rex大叔正確邏輯）
+                conservative: conservative.value,
+                balanced: balanced.value,
+                aggressive: aggressive.value,
+                ultimate: ultimate.value,
+                // 得標機率估算
+                winProb: {
+                    conservative: calcWinProb(conservative.value),
+                    balanced: calcWinProb(balanced.value),
+                    aggressive: calcWinProb(aggressive.value),
+                    ultimate: calcWinProb(ultimate.value)
+                },
+                // 上下限資訊
+                limits: {
+                    absoluteMax: absoluteMax,
+                    absoluteMin: absoluteMin,
+                    avgPremium: avgPremium,
+                    stdPremium: segmentStdPremium,
+                    anomalyAdjustment: anomalyAdjustment,
+                    // 各策略是否被限制
+                    conservativeCapped: conservative.capped,
+                    balancedCapped: balanced.capped,
+                    aggressiveCapped: aggressive.capped,
+                    ultimateCapped: ultimate.capped,
+                    hasWarning: hasWarning
+                },
+                // 原始計算值（供參考）
+                rawValues: {
+                    conservative: conservativeRaw,
+                    balanced: balancedRaw,
+                    aggressive: aggressiveRaw,
+                    ultimate: ultimateRaw
+                },
                 // 額外資訊
                 segment: segmentPred ? segmentPred.segment : null,
                 segmentPremium: segmentPred ? segmentPred.avgPremium : null,
                 usedGoodRating: segmentPred ? segmentPred.usedGoodRating : false,
-                isHighTheo: isHighTheo
+                isHighTheo: isHighTheo,
+                // v3.98f 新增：異常預測資訊
+                anomaly: anomalyResult,
+                predictedMultiplier: anomalyResult ? anomalyResult.predictedMult : null,
+                heatLevel: anomalyResult ? anomalyResult.heatLevel : null
             };
         },
         
@@ -11269,8 +11855,12 @@ function displayResult(r) {
             }
         }
         
-        // ========== v3.98e 重新設計：分區間集成預測引擎（含信評分層） ==========
+        // ========== v3.98f 重新設計：分區間集成預測引擎（含異常預測模組） ==========
         if (window.AICore.ensemble) {
+            // 取得產業和信評資訊
+            const cbIndustry = r ? r.inputData.industry : null;
+            const cbCreditRating = r ? r.inputData.creditRating : null;
+            
             // 準備集成預測所需參數
             const ensembleParams = {
                 theoPrice: step3TheoPrice,
@@ -11279,22 +11869,109 @@ function displayResult(r) {
                 dimensions: {
                     totalLowPremium: r ? parseFloat(r.totalLowPremium) : null,
                     weightedLowBidPrice: r ? parseFloat(r.weightedLowBidPrice) : null
-                }
+                },
+                industry: cbIndustry,
+                creditRating: cbCreditRating
             };
             
             const ensembleResult = window.AICore.ensemble.calcEnsemblePrediction(ensembleParams);
             
             if (ensembleResult && ensembleResult.methods && ensembleResult.methods.length > 0) {
-                // 更新分區間資訊（v3.98e: 加入信評過濾提示）
+                // 更新分區間資訊（v3.98f: 加入熱度等級提示）
                 if (ensembleResult.segment) {
-                    const segmentText = ensembleResult.segment + 
-                        (ensembleResult.usedGoodRating ? ' (信評≤5優良)' : '');
+                    let segmentText = ensembleResult.segment;
+                    if (ensembleResult.usedGoodRating) segmentText += ' (信評≤5)';
+                    if (ensembleResult.heatLevel) segmentText += ' ' + ensembleResult.heatLevel;
                     updateElement('step3SegmentName', segmentText);
                     updateElement('step3SegmentPremium', 
                         typeof ensembleResult.segmentPremium === 'number' 
                             ? ensembleResult.segmentPremium.toFixed(2) + '%' 
                             : '--%'
                     );
+                }
+                
+                // v3.98f-2 新增：顯示異常預測模組
+                const anomalyEl = document.getElementById('step3AnomalyModule');
+                if (anomalyEl && ensembleResult.anomaly) {
+                    const anomaly = ensembleResult.anomaly;
+                    
+                    // 只在異常情況下顯示（或可調整為永遠顯示）
+                    anomalyEl.style.display = 'block';
+                    
+                    // 根據熱度等級設定樣式
+                    if (anomaly.type === 'hot') {
+                        anomalyEl.style.background = 'linear-gradient(135deg, rgba(255,87,34,0.25), rgba(255,152,0,0.25))';
+                        anomalyEl.style.borderColor = 'rgba(255,87,34,0.6)';
+                        updateElement('step3AnomalyIcon', '🔥');
+                    } else if (anomaly.type === 'cold') {
+                        anomalyEl.style.background = 'linear-gradient(135deg, rgba(33,150,243,0.2), rgba(3,169,244,0.2))';
+                        anomalyEl.style.borderColor = 'rgba(33,150,243,0.5)';
+                        updateElement('step3AnomalyIcon', '❄️');
+                    } else {
+                        anomalyEl.style.background = 'linear-gradient(135deg, rgba(158,158,158,0.15), rgba(189,189,189,0.15))';
+                        anomalyEl.style.borderColor = 'rgba(158,158,158,0.4)';
+                        updateElement('step3AnomalyIcon', '📊');
+                    }
+                    
+                    updateElement('step3AnomalyHeatLevel', anomaly.heatLevel || '正常');
+                    updateElement('step3PredictedMult', anomaly.predictedMult ? anomaly.predictedMult.toFixed(2) : '--');
+                    
+                    // 顯示調整項目
+                    if (anomaly.adjustments && anomaly.adjustments.length > 0) {
+                        const adjHtml = anomaly.adjustments.map(adj => 
+                            `<span style="display:inline-block; margin-right:8px; padding:1px 4px; background:rgba(255,255,255,0.2); border-radius:3px;">${adj.factor}: ${adj.value > 0 ? '+' : ''}${adj.value.toFixed(2)}</span>`
+                        ).join('');
+                        const adjEl = document.getElementById('step3AnomalyAdjustments');
+                        if (adjEl) adjEl.innerHTML = adjHtml;
+                    }
+                    
+                    // 顯示近期同產業案例
+                    if (anomaly.recentIndustryData && anomaly.recentIndustryData.cases) {
+                        const cases = anomaly.recentIndustryData.cases;
+                        const casesHtml = `🔍 近期同產業: ${cases.map(c => `${c.name}(${c.mult.toFixed(1)}x)`).join(', ')}`;
+                        updateElement('step3RecentIndustry', casesHtml);
+                    } else {
+                        updateElement('step3RecentIndustry', '');
+                    }
+                    
+                    // v3.98f-3 新增：顯示近5檔/10檔同產業統計
+                    const statsEl = document.getElementById('step3IndustryStats');
+                    if (statsEl && anomaly.industryStats) {
+                        const stats = anomaly.industryStats;
+                        statsEl.style.display = 'block';
+                        
+                        // 近5檔
+                        if (stats.recent5) {
+                            updateElement('step3Ind5Mult', stats.recent5.avgMult ? stats.recent5.avgMult.toFixed(2) : '--');
+                            updateElement('step3Ind5Prem', stats.recent5.avgPrem ? stats.recent5.avgPrem.toFixed(1) + '%' : '--%');
+                        }
+                        
+                        // 近10檔
+                        if (stats.recent10) {
+                            updateElement('step3Ind10Mult', stats.recent10.avgMult ? stats.recent10.avgMult.toFixed(2) : '--');
+                            updateElement('step3Ind10Prem', stats.recent10.avgPrem ? stats.recent10.avgPrem.toFixed(1) + '%' : '--%');
+                        }
+                        
+                        // 歷史平均
+                        if (stats.history) {
+                            updateElement('step3IndHistMult', stats.history.avgMult ? stats.history.avgMult.toFixed(2) : '--');
+                            updateElement('step3IndHistPrem', stats.history.avgPrem ? stats.history.avgPrem.toFixed(1) + '%' : '--%');
+                        }
+                        
+                        // 差異分析
+                        if (stats.diff5VsHistory && stats.diff5VsHistory.mult !== null) {
+                            const diffMult = stats.diff5VsHistory.mult;
+                            const diffPrem = stats.diff5VsHistory.prem;
+                            const diffColor = diffMult > 0.5 ? '#ff5722' : (diffMult < -0.5 ? '#2196f3' : '#9e9e9e');
+                            const diffHtml = `<span style="color:${diffColor}">近5檔 vs 歷史: 倍數 ${diffMult > 0 ? '+' : ''}${diffMult.toFixed(2)} | 溢價 ${diffPrem > 0 ? '+' : ''}${diffPrem.toFixed(1)}%</span>`;
+                            const diffEl = document.getElementById('step3IndDiff');
+                            if (diffEl) diffEl.innerHTML = diffHtml;
+                        }
+                    } else if (statsEl) {
+                        statsEl.style.display = 'none';
+                    }
+                } else if (anomalyEl) {
+                    anomalyEl.style.display = 'none';
                 }
                 
                 // 更新各方法預測值 - 加入安全檢查
@@ -11321,12 +11998,70 @@ function displayResult(r) {
                     updateElement('step3StratBalanced', (ensembleResult.balanced || ensembleResult.value).toFixed(2));
                     updateElement('step3StratAggressive', (ensembleResult.aggressive || ensembleResult.value).toFixed(2));
                     updateElement('step3StratUltimate', (ensembleResult.ultimate || ensembleResult.value).toFixed(2));
+                    
+                    // v3.98f-4 新增：顯示得標機率
+                    if (ensembleResult.winProb) {
+                        updateElement('step3StratConservativeProb', `得標~${ensembleResult.winProb.conservative}%`);
+                        updateElement('step3StratBalancedProb', `得標~${ensembleResult.winProb.balanced}%`);
+                        updateElement('step3StratAggressiveProb', `得標~${ensembleResult.winProb.aggressive}%`);
+                        updateElement('step3StratUltimateProb', `得標~${ensembleResult.winProb.ultimate}%`);
+                    }
+                    
+                    // v3.98f-3 新增：顯示價格範圍限制
+                    const limitsEl = document.getElementById('step3PriceLimits');
+                    if (limitsEl && ensembleResult.limits) {
+                        const limits = ensembleResult.limits;
+                        limitsEl.style.display = 'block';
+                        
+                        updateElement('step3MaxPrice', limits.absoluteMax ? limits.absoluteMax.toFixed(2) : '--');
+                        updateElement('step3MinPrice', limits.absoluteMin ? limits.absoluteMin.toFixed(2) : '--');
+                        
+                        // 顯示警告
+                        const warningEl = document.getElementById('step3LimitWarning');
+                        if (warningEl) {
+                            let warnings = [];
+                            if (limits.conservativeCapped === 'max') warnings.push('保守策略已觸及上限');
+                            if (limits.conservativeCapped === 'min') warnings.push('保守策略已觸及下限');
+                            if (limits.ultimateCapped === 'max') warnings.push('極致策略已觸及上限');
+                            
+                            // 顯示異常調整
+                            if (limits.anomalyAdjustment && Math.abs(limits.anomalyAdjustment) > 0.1) {
+                                const adjDir = limits.anomalyAdjustment > 0 ? '上調' : '下調';
+                                warnings.push(`異常模組${adjDir}${Math.abs(limits.anomalyAdjustment).toFixed(1)}元`);
+                            }
+                            
+                            if (warnings.length > 0) {
+                                warningEl.innerHTML = '⚠️ ' + warnings.join('；');
+                                warningEl.style.color = '#f57c00';
+                            } else {
+                                warningEl.innerHTML = '✅ 所有策略價格在合理範圍內';
+                                warningEl.style.color = '#4caf50';
+                            }
+                        }
+                        
+                        // 標記被限制的策略框
+                        const highlightCapped = (boxId, noteId, capped) => {
+                            const box = document.getElementById(boxId);
+                            const note = document.getElementById(noteId);
+                            if (box && capped) {
+                                box.style.border = '2px solid #ff9800';
+                                if (note) note.innerHTML = capped === 'max' ? '⚠️觸及上限' : '⚠️觸及下限';
+                            } else if (box) {
+                                box.style.border = 'none';
+                            }
+                        };
+                        
+                        highlightCapped('step3StratConservativeBox', 'step3StratConservativeNote', limits.conservativeCapped);
+                        highlightCapped('step3StratBalancedBox', 'step3StratBalancedNote', limits.balancedCapped);
+                        highlightCapped('step3StratAggressiveBox', 'step3StratAggressiveNote', limits.aggressiveCapped);
+                        highlightCapped('step3StratUltimateBox', 'step3StratUltimateNote', limits.ultimateCapped);
+                    }
                 } else {
                     updateElement('step3EnsemblePrice', '--元');
                     updateElement('step3EnsembleStd', '--');
                 }
                 
-                console.log('🧠 v3.98d 分區間集成預測結果:', ensembleResult);
+                console.log('🧠 v3.98f-4 策略邏輯修正版 集成預測結果:', ensembleResult);
             } else {
                 // 集成預測失敗時顯示預設值
                 updateElement('step3SegmentName', '--');

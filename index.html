@@ -19767,6 +19767,7 @@ async function loadMarginData() {
     if (window.marginData.loaded || window.marginData.loading) return;
     window.marginData.loading = true;
 
+    console.log('📊 開始載入融資融券資料...');
     const startTime = Date.now();
 
     const allData = {};
@@ -19797,6 +19798,7 @@ async function loadMarginData() {
     for (const config of fileConfigs) {
         for (const year of years) {
             const filePath = `${config.prefix}${year}.xlsx`;
+            console.log(`   嘗試載入: ${filePath}`);
             try {
                 console.log(`嘗試載入: ${filePath}`);
                 const response = await fetch(filePath);
@@ -20160,6 +20162,18 @@ async function loadYuantaHistoryData() {
     }
 
     const allData = {};
+
+    // v3.97-dm: 先初始化 SQL.js
+    let SQL;
+    try {
+        SQL = await initSqlJs({
+            locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}`
+        });
+    } catch (err) {
+        console.error('SQL.js 初始化失敗:', err);
+        window.yuantaHistoryData.loading = false;
+        return;
+    }
 
     // v3.97-zs-br: 改用 SQLite 資料庫載入
     const dbFiles = ['data/yuanta_data1.db', 'data/yuanta_data2.db'];
@@ -23228,6 +23242,13 @@ window.addEventListener('DOMContentLoaded', function() {
         if (!window.weeklyBalanceData?.loaded && !window.weeklyBalanceData?.loading) {
             loadWeeklyBalanceData();
         }
+        // v3.97-do: 預載入融資融券資料
+        setTimeout(() => {
+            if (!window.marginData?.loaded && !window.marginData?.loading) {
+                console.log('🔄 開始背景載入融資融券資料...');
+                loadMarginData();
+            }
+        }, 1500);
         // 預載入 CB 價格資料（約 45MB）
         setTimeout(() => {
             if (!window.cbPriceData?.loaded && !window.cbPriceData?.loading) {

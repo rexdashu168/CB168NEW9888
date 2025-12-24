@@ -19684,7 +19684,7 @@ window.marginData = {
 
 /**
  * v3.97-zs-az 新增：載入融資融券資料
- * 從 tpxlending (上市) 和 otclending (上櫃) 檔案載入
+ * 從 tpxlenging (上市) 和 otclenging (上櫃) 檔案載入
  */
 async function loadMarginData() {
     if (window.marginData.loaded || window.marginData.loading) return;
@@ -19694,18 +19694,19 @@ async function loadMarginData() {
 
     const allData = {};
 
-    // v3.97-zs-bb: 修正路徑為 data/loan/，載入多年度資料
+    // v3.97-di: 修正路徑為 data/ 根目錄，檔名為 tpxlenging / otclenging
     const years = ['2025', '2024', '2023', '2022', '2021', '2020', '2019', '2018', '2017'];
     const fileConfigs = [
-        { prefix: 'data/loan/tpxlending_', market: '上市', cols: { margin: '融資餘額', short: '融券餘額', cover: '現券償還' } },
-        { prefix: 'data/loan/otclending_', market: '上櫃', cols: { margin: '資餘額', short: '券餘額', cover: '券償' } }
+        { prefix: 'data/tpxlenging_', market: '上市', cols: { margin: '融資餘額', short: '融券餘額', cover: '現券償還' } },
+        { prefix: 'data/otclenging_', market: '上櫃', cols: { margin: '資餘額', short: '券餘額', cover: '券償' } }
     ];
 
     let loadedFiles = { tpx: 0, otc: 0 };
 
     for (const config of fileConfigs) {
         for (const year of years) {
-            const filePath = `${config.prefix}${year}_stock_only.xlsx`;
+            // v3.97-di: 修正檔名格式，實際檔名為 tpxlenging_2025.xlsx
+            const filePath = `${config.prefix}${year}.xlsx`;
             try {
                 const response = await fetch(filePath);
                 if (!response.ok) {
@@ -22308,67 +22309,117 @@ function generateCBPriceTable(data) {
     return tableHTML;
 }
 
-// ==================== v3.97-dc 新增：CB套利追蹤模組 ====================
+// ==================== v3.97-dg 新增：CB套利追蹤模組 ====================
 // 追蹤CB主力套利軌跡：融資餘額 / 融券餘額 / CB流通餘額
+// 使用現有的 weeklyBalanceData（來自 yuanta_data1.db / yuanta_data2.db）
 
-let arbitrageDataCache = {};
 let arbitrageCBList = [];
 
 /**
  * 初始化CB套利追蹤模組
+ * 使用現有的 weeklyBalanceData
  */
 async function initArbitrageModule() {
     const select = document.getElementById('arbitrageCBSelect');
-    if (!select || arbitrageCBList.length > 0) return;
+    if (!select) return;
+    
+    // 如果已載入過就不重複
+    if (arbitrageCBList.length > 0) return;
+    
+    // 顯示載入中
+    select.innerHTML = '<option value="">載入CB清單中...</option>';
     
     try {
-        // 載入CB餘額資料庫
-        if (!window.arbitrageSQL) {
-            window.arbitrageSQL = await initSqlJs({
-                locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}`
+        // 確保週餘額資料已載入
+        if (!window.weeklyBalanceData.loaded) {
+            if (!window.weeklyBalanceData.loading) {
+                await loadWeeklyBalanceData();
+            } else {
+                // 等待載入完成
+                await waitForDataLoaded(() => window.weeklyBalanceData.loaded);
+            }
+        }
+        
+        // 從 weeklyBalanceData 建立CB清單
+        const cbCodes = Object.keys(window.weeklyBalanceData.data);
+        
+        if (cbCodes.length === 0) {
+            select.innerHTML = '<option value="">無可用的CB資料</option>';
+            return;
+        }
+        
+        // 建立CB清單，計算最新餘額和轉換率
+        arbitrageCBList = [];
+        
+        for (const cbCode of cbCodes) {
+            const history = window.weeklyBalanceData.data[cbCode];
+            if (!history || history.length === 0) continue;
+            
+            // 取得最新和最早的資料
+            const latest = history[history.length - 1];
+            const earliest = history[0];
+            
+            // 從 sheet08Data 或 auctionDataCache 取得CB名稱和發行資訊
+            let cbName = latest.cbName || cbCode;
+            let stockCode = latest.stockCode || '';
+            let stockName = latest.stockName || '';
+            let issueShares = earliest.balanceShares || latest.balanceShares;
+            let convPrice = latest.convPrice || 0;
+            
+            // 嘗試從 sheet08Data 補充資訊
+            if (window.sheet08Data) {
+                const info = window.sheet08Data.find(r => String(r['代號']).trim() === cbCode);
+                if (info) {
+                    cbName = info['名稱'] || cbName;
+                    stockCode = info['轉換標的代碼'] || stockCode;
+                    stockName = info['轉換標的名稱'] || stockName;
+                    const issueAmount = parseFloat(info['實際發行總額(百萬)']) || 0;
+                    if (issueAmount > 0) issueShares = Math.round(issueAmount * 10);
+                    convPrice = parseFloat(info['轉換價格(元)']) || convPrice;
+                }
+            }
+            
+            const balanceShares = latest.balanceShares || 0;
+            const convertedPct = issueShares > 0 ? ((1 - balanceShares / issueShares) * 100) : 0;
+            
+            arbitrageCBList.push({
+                cbCode,
+                cbName,
+                stockCode,
+                stockName,
+                issueShares,
+                balanceShares,
+                convertedPct,
+                convPrice
             });
         }
         
-        const response = await fetch('data/cb_balance.db');
-        if (!response.ok) throw new Error('無法載入CB餘額資料庫');
+        // 按轉換率排序（高到低）
+        arbitrageCBList.sort((a, b) => b.convertedPct - a.convertedPct);
         
-        const buffer = await response.arrayBuffer();
-        const db = new window.arbitrageSQL.Database(new Uint8Array(buffer));
+        // 填充下拉選單
+        select.innerHTML = '<option value="">-- 請選擇要追蹤的CB --</option>';
+        arbitrageCBList.forEach(cb => {
+            const pctDisplay = cb.convertedPct.toFixed(0);
+            select.innerHTML += `<option value="${cb.cbCode}">${cb.cbName} (${cb.stockName || cb.stockCode}) - 餘${cb.balanceShares.toLocaleString()}張 已轉${pctDisplay}%</option>`;
+        });
         
-        // 取得所有CB清單（取最新日期有資料的CB）
-        const result = db.exec(`
-            SELECT DISTINCT CBCode, CBName, StockCode, StockName, IssueActual, Balance
-            FROM cb_balance 
-            WHERE Date = (SELECT MAX(Date) FROM cb_balance)
-            AND Balance > 0
-            ORDER BY CBName
-        `)[0];
-        
-        if (result) {
-            arbitrageCBList = result.values.map(row => ({
-                cbCode: row[0],
-                cbName: row[1],
-                stockCode: row[2],
-                stockName: row[3],
-                issueActual: row[4],
-                balance: row[5]
-            }));
-            
-            // 填充下拉選單
-            select.innerHTML = '<option value="">-- 請選擇要追蹤的CB --</option>';
-            arbitrageCBList.forEach(cb => {
-                const pct = ((1 - cb.balance / cb.issueActual) * 100).toFixed(0);
-                const balanceShares = Math.round(cb.balance * 10);
-                select.innerHTML += `<option value="${cb.cbCode}">${cb.cbName} (${cb.stockName}) - 餘${balanceShares.toLocaleString()}張 已轉${pct}%</option>`;
-            });
-            
-            console.log(`CB套利模組: 載入 ${arbitrageCBList.length} 檔CB`);
-        }
-        
-        db.close();
+        console.log(`CB套利模組: 載入 ${arbitrageCBList.length} 檔CB`);
         
     } catch (error) {
         console.error('初始化CB套利模組失敗:', error);
+        select.innerHTML = '<option value="">載入失敗</option>';
+        
+        // 顯示錯誤訊息
+        const chartContainer = document.getElementById('arbitrageChart');
+        if (chartContainer) {
+            chartContainer.innerHTML = `
+                <div style="text-align:center; color:#c62828; padding:40px;">
+                    <div style="font-size:24px;">⚠️</div>
+                    <div style="margin-top:8px;">載入失敗: ${error.message}</div>
+                    <div style="font-size:12px; color:#888; margin-top:8px;">請確認 yuanta_data1.db / yuanta_data2.db 已上傳至 data/ 資料夾</div>
+                </div>`;
+        }
     }
 }
 
@@ -22398,67 +22449,43 @@ async function loadArbitrageData(cbCode) {
         </div>`;
     
     try {
-        // 載入CB餘額歷史
-        const cbBalanceResponse = await fetch('data/cb_balance.db');
-        const cbBuffer = await cbBalanceResponse.arrayBuffer();
-        const cbDb = new window.arbitrageSQL.Database(new Uint8Array(cbBuffer));
+        // 從 weeklyBalanceData 取得CB餘額歷史
+        const cbHistory = window.weeklyBalanceData.data[cbCode];
         
-        const cbResult = cbDb.exec(`
-            SELECT Date, CBName, StockCode, StockName, ConvPrice, IssueActual, Balance
-            FROM cb_balance 
-            WHERE CBCode = '${cbCode}'
-            ORDER BY Date
-        `)[0];
-        
-        if (!cbResult || cbResult.values.length === 0) {
-            throw new Error('找不到此CB的資料');
+        if (!cbHistory || cbHistory.length === 0) {
+            throw new Error('找不到此CB的餘額資料');
         }
         
-        const cbData = cbResult.values.map(row => ({
-            date: row[0],
-            cbName: row[1],
-            stockCode: row[2],
-            stockName: row[3],
-            convPrice: row[4],
-            issueActual: row[5],
-            balance: row[6]
-        }));
+        // 找出CB的基本資訊
+        const cbInfo = arbitrageCBList.find(c => c.cbCode === cbCode) || {};
         
-        cbDb.close();
+        // 整理CB資料
+        const cbData = cbHistory.map(d => ({
+            date: d.date ? parseInt(d.date.replace(/\//g, '')) : 0,
+            dateStr: d.date,
+            cbName: cbInfo.cbName || cbCode,
+            stockCode: cbInfo.stockCode || d.stockCode || '',
+            stockName: cbInfo.stockName || d.stockName || '',
+            convPrice: cbInfo.convPrice || d.convPrice || 0,
+            issueShares: cbInfo.issueShares || d.balanceShares,
+            balance: d.balanceShares || 0
+        }));
         
         // 取得股票代碼
         const stockCode = cbData[0].stockCode;
         
         // 載入融資融券歷史
         let marginData = [];
-        try {
-            const marginResponse = await fetch('data/margin_2025.db');
-            if (marginResponse.ok) {
-                const marginBuffer = await marginResponse.arrayBuffer();
-                const marginDb = new window.arbitrageSQL.Database(new Uint8Array(marginBuffer));
-                
-                const marginResult = marginDb.exec(`
-                    SELECT Date, 
-                           Margin_Balance,
-                           Short_Balance,
-                           Margin_Buy - Margin_Sell - Margin_Cash as Margin_Change
-                    FROM margin 
-                    WHERE Code = '${stockCode}'
-                    ORDER BY Date
-                `)[0];
-                
-                if (marginResult) {
-                    marginData = marginResult.values.map(row => ({
-                        date: row[0],
-                        marginBalance: row[1],
-                        shortBalance: row[2],
-                        marginChange: row[3]
-                    }));
-                }
-                marginDb.close();
+        if (stockCode && window.marginData?.loaded) {
+            const stockMargin = window.marginData.data[stockCode];
+            if (stockMargin) {
+                // 轉換為陣列格式
+                marginData = Object.entries(stockMargin).map(([date, data]) => ({
+                    date: parseInt(date),
+                    marginBalance: data.marginBalance || 0,
+                    shortBalance: data.shortBalance || 0
+                })).sort((a, b) => a.date - b.date);
             }
-        } catch (e) {
-            console.warn('融資融券資料載入失敗:', e);
         }
         
         // 顯示摘要
@@ -22489,11 +22516,11 @@ function displayArbitrageSummary(cbData, marginData) {
     const latest = cbData[cbData.length - 1];
     const first = cbData[0];
     
-    // 百萬 × 10 = 張數（每張CB面額10萬元）
-    const issueShares = Math.round(latest.issueActual * 10);
-    const balanceShares = Math.round(latest.balance * 10);
+    // v3.97-dh: balance 已經是張數，不需要再乘10
+    const issueShares = latest.issueShares || first.balance || 0;
+    const balanceShares = latest.balance || 0;
     const convertedShares = issueShares - balanceShares;
-    const convertedPct = ((1 - latest.balance / latest.issueActual) * 100).toFixed(1);
+    const convertedPct = issueShares > 0 ? ((convertedShares / issueShares) * 100).toFixed(1) : 0;
     
     // 換股比例 & 約當股票張數
     const convRatio = latest.convPrice > 0 ? (100000 / latest.convPrice) : 0;
@@ -22505,19 +22532,20 @@ function displayArbitrageSummary(cbData, marginData) {
     let stageColor = '#666';
     let stageIcon = '⏸️';
     
-    if (convertedPct > 80) {
+    const pctNum = parseFloat(convertedPct);
+    if (pctNum > 80) {
         stage = '套利完成';
         stageColor = '#4caf50';
         stageIcon = '✅';
-    } else if (convertedPct > 50) {
+    } else if (pctNum > 50) {
         stage = '大量轉換中';
         stageColor = '#ff9800';
         stageIcon = '🔥';
-    } else if (convertedPct > 20) {
+    } else if (pctNum > 20) {
         stage = '套利進行中';
         stageColor = '#e91e63';
         stageIcon = '⚡';
-    } else if (convertedPct > 5) {
+    } else if (pctNum > 5) {
         stage = '小量轉換';
         stageColor = '#2196f3';
         stageIcon = '📈';
@@ -22595,14 +22623,19 @@ function displayArbitrageSummary(cbData, marginData) {
 function displayArbitrageChart(cbData, marginData) {
     const container = document.getElementById('arbitrageChart');
     
-    // 準備資料
+    // 準備資料 - 使用 dateStr 或 date
     const labels = cbData.map(d => {
+        if (d.dateStr) {
+            // 格式: 2025/01/06 -> 01/06
+            const parts = d.dateStr.split('/');
+            return parts.length >= 3 ? `${parts[1]}/${parts[2]}` : d.dateStr;
+        }
         const dateStr = String(d.date);
         return dateStr.slice(4, 6) + '/' + dateStr.slice(6, 8);
     });
     
-    // CB餘額轉換為張數（百萬 × 10）
-    const cbBalanceData = cbData.map(d => Math.round(d.balance * 10));
+    // v3.97-dh: balance 已經是張數，不需要再乘10
+    const cbBalanceData = cbData.map(d => d.balance || 0);
     
     // 合併融資融券資料（依日期對應）
     const marginMap = {};
@@ -22694,6 +22727,7 @@ function displayArbitrageChart(cbData, marginData) {
 
 /**
  * 載入轉換熱門榜
+ * 使用現有的 weeklyBalanceData
  */
 async function loadArbitrageHotList() {
     const container = document.getElementById('arbitrageHotList');
@@ -22708,41 +22742,31 @@ async function loadArbitrageHotList() {
     document.getElementById('arbitrageChart').innerHTML = '';
     
     try {
-        const response = await fetch('data/cb_balance.db');
-        const buffer = await response.arrayBuffer();
-        const db = new window.arbitrageSQL.Database(new Uint8Array(buffer));
+        // 確保資料已載入
+        if (!window.weeklyBalanceData.loaded) {
+            if (!window.weeklyBalanceData.loading) {
+                await loadWeeklyBalanceData();
+            } else {
+                await waitForDataLoaded(() => window.weeklyBalanceData.loaded);
+            }
+        }
         
-        // 計算近期轉換最多的CB
-        const result = db.exec(`
-            WITH recent AS (
-                SELECT CBCode, CBName, StockCode, StockName, IssueActual, Balance, Date,
-                       ROW_NUMBER() OVER (PARTITION BY CBCode ORDER BY Date ASC) as rn_first,
-                       ROW_NUMBER() OVER (PARTITION BY CBCode ORDER BY Date DESC) as rn_last
-                FROM cb_balance
-                WHERE Date >= 20250901
-            )
-            SELECT 
-                a.CBCode, a.CBName, a.StockCode, a.StockName, a.IssueActual,
-                a.Balance as BalanceStart,
-                b.Balance as BalanceEnd
-            FROM recent a
-            JOIN recent b ON a.CBCode = b.CBCode
-            WHERE a.rn_first = 1 AND b.rn_last = 1
-            AND a.Balance >= 100
-            ORDER BY (b.Balance - a.Balance) ASC
-            LIMIT 20
-        `)[0];
+        // 從 arbitrageCBList 取得轉換排行（已按轉換率排序）
+        if (arbitrageCBList.length === 0) {
+            await initArbitrageModule();
+        }
         
-        db.close();
+        // 取前20名轉換最多的
+        const topList = arbitrageCBList.slice(0, 20);
         
-        if (!result) {
+        if (topList.length === 0) {
             container.innerHTML = '<div style="padding:20px; text-align:center; color:#888;">無資料</div>';
             return;
         }
         
         let html = `
             <div style="padding:12px 16px; background:#9c27b0; color:white; font-weight:600;">
-                🔥 轉換熱門榜（2025/09以來）
+                🔥 轉換熱門榜（依轉換率排序）
             </div>
             <table style="width:100%; border-collapse:collapse; font-size:13px;">
                 <thead>
@@ -22751,33 +22775,26 @@ async function loadArbitrageHotList() {
                         <th style="padding:10px; text-align:left;">CB名稱</th>
                         <th style="padding:10px; text-align:left;">股票</th>
                         <th style="padding:10px; text-align:right;">發行</th>
-                        <th style="padding:10px; text-align:right;">期初</th>
-                        <th style="padding:10px; text-align:right;">目前</th>
+                        <th style="padding:10px; text-align:right;">目前餘額</th>
                         <th style="padding:10px; text-align:right;">已轉換</th>
                         <th style="padding:10px; text-align:right;">轉換率</th>
                     </tr>
                 </thead>
                 <tbody>`;
         
-        result.values.forEach((row, idx) => {
-            // 轉換為張數（百萬 × 10）
-            const issueShares = Math.round(row[4] * 10);
-            const startShares = Math.round(row[5] * 10);
-            const endShares = Math.round(row[6] * 10);
-            const convertedShares = startShares - endShares;
-            const changePct = ((startShares - endShares) / startShares * 100).toFixed(1);
+        topList.forEach((cb, idx) => {
+            const convertedShares = cb.issueShares - cb.balanceShares;
             const bgColor = idx % 2 === 0 ? '#fff' : '#fafafa';
             
             html += `
-                <tr style="background:${bgColor}; cursor:pointer;" onclick="document.getElementById('arbitrageCBSelect').value='${row[0]}'; loadArbitrageData('${row[0]}');">
+                <tr style="background:${bgColor}; cursor:pointer;" onclick="document.getElementById('arbitrageCBSelect').value='${cb.cbCode}'; loadArbitrageData('${cb.cbCode}');">
                     <td style="padding:10px; font-weight:600; color:#888;">${idx + 1}</td>
-                    <td style="padding:10px; font-weight:600;">${row[1]}</td>
-                    <td style="padding:10px; color:#666;">${row[2]} ${row[3]}</td>
-                    <td style="padding:10px; text-align:right;">${issueShares.toLocaleString()}</td>
-                    <td style="padding:10px; text-align:right;">${startShares.toLocaleString()}</td>
-                    <td style="padding:10px; text-align:right; color:#1976d2; font-weight:600;">${endShares.toLocaleString()}</td>
+                    <td style="padding:10px; font-weight:600;">${cb.cbName}</td>
+                    <td style="padding:10px; color:#666;">${cb.stockCode} ${cb.stockName}</td>
+                    <td style="padding:10px; text-align:right;">${cb.issueShares.toLocaleString()}</td>
+                    <td style="padding:10px; text-align:right; color:#1976d2; font-weight:600;">${cb.balanceShares.toLocaleString()}</td>
                     <td style="padding:10px; text-align:right; color:#c62828;">${convertedShares.toLocaleString()}</td>
-                    <td style="padding:10px; text-align:right; color:#ff9800; font-weight:600;">${changePct}%</td>
+                    <td style="padding:10px; text-align:right; color:#ff9800; font-weight:600;">${cb.convertedPct.toFixed(1)}%</td>
                 </tr>`;
         });
         

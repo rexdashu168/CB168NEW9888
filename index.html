@@ -9517,39 +9517,164 @@ function showCostEffectYear(year, event) {
 
 // 【2】時間維度績效數據生成
 function generateTimePerformanceData() {
-    // 這個需要更細緻的時間序列資料
-    // 目前先用掛牌高低來模擬
+    // v3.98f-14: 使用真實kanban資料計算時間維度績效
     const items = [];
+    const peakTimingStats = { week1: 0, week2: 0, week3: 0, week4: 0, month2: 0, month3: 0, later: 0 };
     
     auctionRawData.forEach(d => {
         if (!d.minBidPrice || d.minBidPrice <= 0 || !d.marketHigh || !d.marketLow) return;
+        if (!d.listDate) return;  // 需要掛牌日期
         
+        const cbCode = d.id;
+        const listDateNum = parseInt(String(d.listDate).replace(/\//g, ''));
+        
+        // 計算基準報酬
         const returnToHigh = ((d.marketHigh - d.minBidPrice) / d.minBidPrice * 100);
         const returnToLow = ((d.marketLow - d.minBidPrice) / d.minBidPrice * 100);
+        const avgBidPrice = d.avgBidPrice || d.minBidPrice;
+        const returnFromAvgBid = ((d.marketHigh - avgBidPrice) / avgBidPrice * 100);
+        
+        // 嘗試從kanban取得真實時間序列資料
+        let return1Week = null, return1Month = null, return3Month = null;
+        let peakDate = null, peakValue = 0, daysToPeak = null;
+        
+        const cbTimeSeries = window.kanbanData?.data?.[cbCode] || window.kanbanData?.data?.[String(cbCode)] || [];
+        
+        if (cbTimeSeries.length > 0) {
+            // 有真實資料，計算各時間點的報酬
+            const sortedData = cbTimeSeries.sort((a, b) => {
+                const dateA = parseInt(String(a.date).replace(/\//g, ''));
+                const dateB = parseInt(String(b.date).replace(/\//g, ''));
+                return dateA - dateB;
+            });
+            
+            // 找出掛牌後各時間點的價格
+            let price1Week = null, price1Month = null, price3Month = null;
+            let highestPrice = 0, highestDate = null;
+            
+            sortedData.forEach(record => {
+                const recordDate = parseInt(String(record.date).replace(/\//g, ''));
+                const daysDiff = Math.floor((recordDate - listDateNum) / 100 * 30);  // 粗略計算天數
+                const cbPrice = record.cbPrice || 0;
+                
+                if (cbPrice <= 0) return;
+                
+                // 追蹤最高價出現時間
+                if (cbPrice > highestPrice) {
+                    highestPrice = cbPrice;
+                    highestDate = recordDate;
+                }
+                
+                // 第1週（7天內）
+                if (daysDiff >= 0 && daysDiff <= 7 && price1Week === null) {
+                    price1Week = cbPrice;
+                }
+                // 第1月（30天內）
+                if (daysDiff >= 25 && daysDiff <= 35 && price1Month === null) {
+                    price1Month = cbPrice;
+                }
+                // 第3月（90天內）
+                if (daysDiff >= 85 && daysDiff <= 95 && price3Month === null) {
+                    price3Month = cbPrice;
+                }
+            });
+            
+            // 計算報酬率
+            if (price1Week !== null) {
+                return1Week = ((price1Week - d.minBidPrice) / d.minBidPrice * 100);
+            }
+            if (price1Month !== null) {
+                return1Month = ((price1Month - d.minBidPrice) / d.minBidPrice * 100);
+            }
+            if (price3Month !== null) {
+                return3Month = ((price3Month - d.minBidPrice) / d.minBidPrice * 100);
+            }
+            
+            // 計算最佳賣點出現時機
+            if (highestDate && highestPrice > 0) {
+                daysToPeak = Math.floor((highestDate - listDateNum) / 100 * 30);
+                peakDate = highestDate;
+                peakValue = highestPrice;
+                
+                // 統計最佳賣點時機分布
+                if (daysToPeak <= 7) peakTimingStats.week1++;
+                else if (daysToPeak <= 14) peakTimingStats.week2++;
+                else if (daysToPeak <= 21) peakTimingStats.week3++;
+                else if (daysToPeak <= 30) peakTimingStats.week4++;
+                else if (daysToPeak <= 60) peakTimingStats.month2++;
+                else if (daysToPeak <= 90) peakTimingStats.month3++;
+                else peakTimingStats.later++;
+            }
+        }
+        
+        // 如果沒有真實資料，用掛牌高低估算
+        if (return1Week === null) {
+            return1Week = returnToLow + (returnToHigh - returnToLow) * 0.4;
+        }
+        if (return1Month === null) {
+            return1Month = returnToLow + (returnToHigh - returnToLow) * 0.65;
+        }
+        if (return3Month === null) {
+            return3Month = returnToLow + (returnToHigh - returnToLow) * 0.85;
+        }
         
         items.push({
             name: d.name,
             id: d.id,
+            listDate: d.listDate,
             minBid: d.minBidPrice,
+            avgBid: avgBidPrice,
             high: d.marketHigh,
             low: d.marketLow,
             returnToHigh: returnToHigh,
             returnToLow: returnToLow,
-            // 模擬：假設第一週報酬為掛牌高低的30%區間
-            return1Week: returnToLow + (returnToHigh - returnToLow) * 0.3,
-            return1Month: returnToLow + (returnToHigh - returnToLow) * 0.6,
-            return3Month: returnToLow + (returnToHigh - returnToLow) * 0.8
+            returnFromAvgBid: returnFromAvgBid,
+            return1Week: return1Week,
+            return1Month: return1Month,
+            return3Month: return3Month,
+            daysToPeak: daysToPeak,
+            peakValue: peakValue,
+            hasRealData: cbTimeSeries.length > 0
         });
     });
     
+    // 計算有真實資料的樣本
+    const realDataItems = items.filter(i => i.hasRealData);
+    const realDataCount = realDataItems.length;
+    
+    // 計算勝率（報酬>0的比例）
+    const winRate1Week = items.filter(i => i.return1Week > 0).length / items.length * 100;
+    const winRate1Month = items.filter(i => i.return1Month > 0).length / items.length * 100;
+    const winRate3Month = items.filter(i => i.return3Month > 0).length / items.length * 100;
+    
+    // 找出最佳賣點的統計（有真實資料的）
+    const peakTimingTotal = Object.values(peakTimingStats).reduce((a, b) => a + b, 0);
+    
     perfAnalysisData.timePerformance = {
         total: items.length,
+        realDataCount: realDataCount,
+        // 各時間點平均報酬
         avg1Week: items.length > 0 ? items.reduce((s, i) => s + i.return1Week, 0) / items.length : 0,
         avg1Month: items.length > 0 ? items.reduce((s, i) => s + i.return1Month, 0) / items.length : 0,
         avg3Month: items.length > 0 ? items.reduce((s, i) => s + i.return3Month, 0) / items.length : 0,
         avgToHigh: items.length > 0 ? items.reduce((s, i) => s + i.returnToHigh, 0) / items.length : 0,
         avgToLow: items.length > 0 ? items.reduce((s, i) => s + i.returnToLow, 0) / items.length : 0,
-        details: items.sort((a, b) => b.returnToHigh - a.returnToHigh)
+        // 勝率
+        winRate1Week: winRate1Week,
+        winRate1Month: winRate1Month,
+        winRate3Month: winRate3Month,
+        // 最佳賣點時機分布
+        peakTimingStats: peakTimingStats,
+        peakTimingTotal: peakTimingTotal,
+        // 詳細資料
+        details: items.sort((a, b) => b.returnToHigh - a.returnToHigh),
+        // 統計資訊
+        stats: {
+            return1Week: StatsHelper.calcStats(items.map(i => i.return1Week)),
+            return1Month: StatsHelper.calcStats(items.map(i => i.return1Month)),
+            return3Month: StatsHelper.calcStats(items.map(i => i.return3Month)),
+            returnToHigh: StatsHelper.calcStats(items.map(i => i.returnToHigh))
+        }
     };
 }
 
@@ -9559,9 +9684,14 @@ function showTimePerformance(period, event) {
     
     document.querySelectorAll('.time-perf-tab').forEach(tab => {
         tab.classList.remove('active');
-        const tabMap = { '1week': '第1週', '1month': '第1月', '3month': '第3月', 'peak': '最佳賣點' };
-        if (tab.textContent === tabMap[period]) tab.classList.add('active');
+        tab.style.background = '#c8e6c9';
+        tab.style.color = '#2e7d32';
     });
+    if (event && event.target) {
+        event.target.classList.add('active');
+        event.target.style.background = '#43a047';
+        event.target.style.color = 'white';
+    }
     
     const data = perfAnalysisData.timePerformance;
     const content = document.getElementById('timePerformanceContent');
@@ -9571,41 +9701,207 @@ function showTimePerformance(period, event) {
         return;
     }
     
-    const periodLabel = { '1week': '掛牌第1週', '1month': '掛牌第1月', '3month': '掛牌第3月', 'peak': '最佳賣點(掛牌高)' }[period];
-    const avgReturn = { '1week': data.avg1Week, '1month': data.avg1Month, '3month': data.avg3Month, 'peak': data.avgToHigh }[period];
+    let html = '';
     
-    let html = `
-    <div class="perf-stat-grid">
-        <div class="perf-stat-card">
-            <div class="perf-stat-label">📊 樣本數</div>
-            <div class="perf-stat-value neutral">${data.total}</div>
-            <div class="perf-stat-sub">檔</div>
+    if (period === '1week' || period === '1month' || period === '3month') {
+        // 各時間點報酬率分析
+        const periodConfig = {
+            '1week': { label: '掛牌第1週', avg: data.avg1Week, winRate: data.winRate1Week, stats: data.stats?.return1Week },
+            '1month': { label: '掛牌第1月', avg: data.avg1Month, winRate: data.winRate1Month, stats: data.stats?.return1Month },
+            '3month': { label: '掛牌第3月', avg: data.avg3Month, winRate: data.winRate3Month, stats: data.stats?.return3Month }
+        };
+        const cfg = periodConfig[period];
+        const stats = cfg.stats || {};
+        
+        html = `
+        <div style="font-size:13px; font-weight:bold; color:#2e7d32; margin-bottom:12px;">
+            ⏱️ ${cfg.label}報酬率分析
+            <span style="font-size:11px; font-weight:normal; color:#888;">（以最低得標價為成本基準）</span>
         </div>
-        <div class="perf-stat-card">
-            <div class="perf-stat-label">📈 ${periodLabel}平均報酬</div>
-            <div class="perf-stat-value ${avgReturn >= 0 ? 'positive' : 'negative'}">
-                ${avgReturn >= 0 ? '+' : ''}${avgReturn.toFixed(1)}%
+        
+        <div class="perf-stat-grid" style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-bottom:15px;">
+            <div style="text-align:center; padding:12px; background:#e8f5e9; border-radius:8px;">
+                <div style="font-size:11px; color:#666;">樣本數</div>
+                <div style="font-size:22px; font-weight:bold; color:#2e7d32;">${data.total}</div>
+                <div style="font-size:10px; color:#888;">檔</div>
+            </div>
+            <div style="text-align:center; padding:12px; background:${cfg.avg >= 0 ? '#e8f5e9' : '#ffebee'}; border-radius:8px;">
+                <div style="font-size:11px; color:#666;">平均報酬</div>
+                <div style="font-size:22px; font-weight:bold; color:${cfg.avg >= 0 ? '#2e7d32' : '#c62828'};">
+                    ${cfg.avg >= 0 ? '+' : ''}${cfg.avg.toFixed(1)}%
+                </div>
+            </div>
+            <div style="text-align:center; padding:12px; background:#e3f2fd; border-radius:8px;">
+                <div style="font-size:11px; color:#666;">勝率</div>
+                <div style="font-size:22px; font-weight:bold; color:#1565c0;">${cfg.winRate.toFixed(1)}%</div>
+                <div style="font-size:10px; color:#888;">報酬>0</div>
+            </div>
+            <div style="text-align:center; padding:12px; background:#fff3e0; border-radius:8px;">
+                <div style="font-size:11px; color:#666;">中位數</div>
+                <div style="font-size:22px; font-weight:bold; color:#e65100;">
+                    ${stats.median ? (stats.median >= 0 ? '+' : '') + stats.median.toFixed(1) + '%' : '-'}
+                </div>
             </div>
         </div>
-        <div class="perf-stat-card">
-            <div class="perf-stat-label">🎯 最高可達</div>
-            <div class="perf-stat-value positive">+${data.avgToHigh.toFixed(1)}%</div>
-            <div class="perf-stat-sub">掛牌高點</div>
-        </div>
-        <div class="perf-stat-card">
-            <div class="perf-stat-label">⚠️ 最低風險</div>
-            <div class="perf-stat-value ${data.avgToLow >= 0 ? 'positive' : 'negative'}">
-                ${data.avgToLow >= 0 ? '+' : ''}${data.avgToLow.toFixed(1)}%
+        
+        <!-- 報酬分布 -->
+        <div style="background:#f5f5f5; padding:12px; border-radius:8px; margin-bottom:12px;">
+            <div style="font-size:12px; font-weight:bold; color:#333; margin-bottom:8px;">📊 報酬率分布</div>
+            <div style="display:flex; justify-content:space-between; font-size:11px; color:#666;">
+                <span>最小: ${stats.min ? stats.min.toFixed(1) + '%' : '-'}</span>
+                <span>25分位: ${stats.p25 ? stats.p25.toFixed(1) + '%' : '-'}</span>
+                <span>中位數: ${stats.median ? stats.median.toFixed(1) + '%' : '-'}</span>
+                <span>75分位: ${stats.p75 ? stats.p75.toFixed(1) + '%' : '-'}</span>
+                <span>最大: ${stats.max ? stats.max.toFixed(1) + '%' : '-'}</span>
             </div>
-            <div class="perf-stat-sub">掛牌低點</div>
+            <div style="margin-top:8px; height:8px; background:#e0e0e0; border-radius:4px; position:relative;">
+                <div style="position:absolute; left:25%; width:50%; height:100%; background:linear-gradient(90deg, #ffb74d, #4caf50); border-radius:4px;"></div>
+            </div>
         </div>
-    </div>
-    
-    <div class="perf-insight">
-        <strong>💡 時間維度分析：</strong>
-        ${periodLabel}平均報酬率為 ${avgReturn.toFixed(1)}%。
-        建議在掛牌後持續觀察，適時獲利了結。最佳賣點平均可達 +${data.avgToHigh.toFixed(1)}%。
-    </div>`;
+        
+        <!-- 各時間點比較 -->
+        <div style="background:#e8f5e9; padding:12px; border-radius:8px; margin-bottom:12px;">
+            <div style="font-size:12px; font-weight:bold; color:#2e7d32; margin-bottom:8px;">📈 各時間點平均報酬比較</div>
+            <table style="width:100%; font-size:12px; border-collapse:collapse;">
+                <tr style="background:#c8e6c9;">
+                    <th style="padding:6px; text-align:center;">時間點</th>
+                    <th style="padding:6px; text-align:center;">平均報酬</th>
+                    <th style="padding:6px; text-align:center;">勝率</th>
+                    <th style="padding:6px; text-align:center;">建議</th>
+                </tr>
+                <tr style="background:${period === '1week' ? '#a5d6a7' : 'white'};">
+                    <td style="padding:6px; text-align:center;">第1週</td>
+                    <td style="padding:6px; text-align:center; color:${data.avg1Week >= 0 ? '#2e7d32' : '#c62828'}; font-weight:bold;">
+                        ${data.avg1Week >= 0 ? '+' : ''}${data.avg1Week.toFixed(1)}%
+                    </td>
+                    <td style="padding:6px; text-align:center;">${data.winRate1Week.toFixed(0)}%</td>
+                    <td style="padding:6px; text-align:center; font-size:10px;">觀察期</td>
+                </tr>
+                <tr style="background:${period === '1month' ? '#a5d6a7' : 'white'};">
+                    <td style="padding:6px; text-align:center;">第1月</td>
+                    <td style="padding:6px; text-align:center; color:${data.avg1Month >= 0 ? '#2e7d32' : '#c62828'}; font-weight:bold;">
+                        ${data.avg1Month >= 0 ? '+' : ''}${data.avg1Month.toFixed(1)}%
+                    </td>
+                    <td style="padding:6px; text-align:center;">${data.winRate1Month.toFixed(0)}%</td>
+                    <td style="padding:6px; text-align:center; font-size:10px;">考慮獲利</td>
+                </tr>
+                <tr style="background:${period === '3month' ? '#a5d6a7' : 'white'};">
+                    <td style="padding:6px; text-align:center;">第3月</td>
+                    <td style="padding:6px; text-align:center; color:${data.avg3Month >= 0 ? '#2e7d32' : '#c62828'}; font-weight:bold;">
+                        ${data.avg3Month >= 0 ? '+' : ''}${data.avg3Month.toFixed(1)}%
+                    </td>
+                    <td style="padding:6px; text-align:center;">${data.winRate3Month.toFixed(0)}%</td>
+                    <td style="padding:6px; text-align:center; font-size:10px;">長期持有</td>
+                </tr>
+                <tr style="background:#fff3e0;">
+                    <td style="padding:6px; text-align:center; font-weight:bold;">掛牌高點</td>
+                    <td style="padding:6px; text-align:center; color:#e65100; font-weight:bold;">
+                        +${data.avgToHigh.toFixed(1)}%
+                    </td>
+                    <td style="padding:6px; text-align:center;">-</td>
+                    <td style="padding:6px; text-align:center; font-size:10px;">理想賣點</td>
+                </tr>
+            </table>
+        </div>`;
+        
+        // 統計說明
+        html += StatsHelper.generateStatsNote(
+            data.details.map(d => ({ count: 1, avgAmp: period === '1week' ? d.return1Week : period === '1month' ? d.return1Month : d.return3Month })),
+            { title: cfg.label + '報酬統計', valueField: 'avgAmp', countField: 'count' }
+        );
+        
+    } else if (period === 'peak') {
+        // 最佳賣點分析
+        const pts = data.peakTimingStats || {};
+        const total = data.peakTimingTotal || 1;
+        
+        html = `
+        <div style="font-size:13px; font-weight:bold; color:#2e7d32; margin-bottom:12px;">
+            🎯 最佳賣點時機分析
+            <span style="font-size:11px; font-weight:normal; color:#888;">（掛牌後最高價出現時間）</span>
+        </div>
+        
+        <div class="perf-stat-grid" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-bottom:15px;">
+            <div style="text-align:center; padding:12px; background:#e8f5e9; border-radius:8px;">
+                <div style="font-size:11px; color:#666;">平均最高報酬</div>
+                <div style="font-size:22px; font-weight:bold; color:#2e7d32;">+${data.avgToHigh.toFixed(1)}%</div>
+                <div style="font-size:10px; color:#888;">掛牌高點</div>
+            </div>
+            <div style="text-align:center; padding:12px; background:#ffebee; border-radius:8px;">
+                <div style="font-size:11px; color:#666;">平均最低風險</div>
+                <div style="font-size:22px; font-weight:bold; color:#c62828;">${data.avgToLow >= 0 ? '+' : ''}${data.avgToLow.toFixed(1)}%</div>
+                <div style="font-size:10px; color:#888;">掛牌低點</div>
+            </div>
+            <div style="text-align:center; padding:12px; background:#e3f2fd; border-radius:8px;">
+                <div style="font-size:11px; color:#666;">有效樣本</div>
+                <div style="font-size:22px; font-weight:bold; color:#1565c0;">${total}</div>
+                <div style="font-size:10px; color:#888;">檔</div>
+            </div>
+        </div>
+        
+        <!-- 最佳賣點時機分布 -->
+        <div style="background:#fff8e1; padding:12px; border-radius:8px; margin-bottom:12px;">
+            <div style="font-size:12px; font-weight:bold; color:#f57c00; margin-bottom:10px;">⏰ 最佳賣點出現時機分布</div>
+            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-bottom:10px;">
+                <div style="text-align:center; padding:8px; background:white; border-radius:6px; border:2px solid ${pts.week1 > pts.week2 && pts.week1 > pts.week3 ? '#ff9800' : '#e0e0e0'};">
+                    <div style="font-size:18px; font-weight:bold; color:#f57c00;">${pts.week1 || 0}</div>
+                    <div style="font-size:10px; color:#666;">第1週</div>
+                    <div style="font-size:9px; color:#888;">${(pts.week1 / total * 100).toFixed(0)}%</div>
+                </div>
+                <div style="text-align:center; padding:8px; background:white; border-radius:6px; border:2px solid ${pts.week2 >= pts.week1 && pts.week2 >= pts.week3 ? '#ff9800' : '#e0e0e0'};">
+                    <div style="font-size:18px; font-weight:bold; color:#f57c00;">${pts.week2 || 0}</div>
+                    <div style="font-size:10px; color:#666;">第2週</div>
+                    <div style="font-size:9px; color:#888;">${(pts.week2 / total * 100).toFixed(0)}%</div>
+                </div>
+                <div style="text-align:center; padding:8px; background:white; border-radius:6px; border:2px solid ${pts.week3 >= pts.week1 && pts.week3 >= pts.week2 ? '#ff9800' : '#e0e0e0'};">
+                    <div style="font-size:18px; font-weight:bold; color:#f57c00;">${pts.week3 || 0}</div>
+                    <div style="font-size:10px; color:#666;">第3週</div>
+                    <div style="font-size:9px; color:#888;">${(pts.week3 / total * 100).toFixed(0)}%</div>
+                </div>
+                <div style="text-align:center; padding:8px; background:white; border-radius:6px;">
+                    <div style="font-size:18px; font-weight:bold; color:#f57c00;">${pts.week4 || 0}</div>
+                    <div style="font-size:10px; color:#666;">第4週</div>
+                    <div style="font-size:9px; color:#888;">${(pts.week4 / total * 100).toFixed(0)}%</div>
+                </div>
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px;">
+                <div style="text-align:center; padding:8px; background:white; border-radius:6px;">
+                    <div style="font-size:16px; font-weight:bold; color:#ff9800;">${pts.month2 || 0}</div>
+                    <div style="font-size:10px; color:#666;">第2月</div>
+                </div>
+                <div style="text-align:center; padding:8px; background:white; border-radius:6px;">
+                    <div style="font-size:16px; font-weight:bold; color:#ff9800;">${pts.month3 || 0}</div>
+                    <div style="font-size:10px; color:#666;">第3月</div>
+                </div>
+                <div style="text-align:center; padding:8px; background:white; border-radius:6px;">
+                    <div style="font-size:16px; font-weight:bold; color:#ff9800;">${pts.later || 0}</div>
+                    <div style="font-size:10px; color:#666;">3月後</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 投資建議 -->
+        <div style="background:linear-gradient(135deg, #e8f5e9, #c8e6c9); padding:12px; border-radius:8px; border-left:4px solid #4caf50;">
+            <div style="font-size:12px; font-weight:bold; color:#2e7d32; margin-bottom:6px;">💡 賣出時機建議</div>
+            <div style="font-size:11px; color:#333; line-height:1.6;">
+                ${(() => {
+                    const firstMonthPct = ((pts.week1 + pts.week2 + pts.week3 + pts.week4) / total * 100).toFixed(0);
+                    const peakWeek = [
+                        { week: '第1週', count: pts.week1 },
+                        { week: '第2週', count: pts.week2 },
+                        { week: '第3週', count: pts.week3 },
+                        { week: '第4週', count: pts.week4 }
+                    ].sort((a, b) => b.count - a.count)[0];
+                    return `
+                        • 約 <b>${firstMonthPct}%</b> 的CB在掛牌後<b>一個月內</b>達到最高價<br>
+                        • 最佳賣點最常出現在<b>${peakWeek.week}</b>（${peakWeek.count}檔，${(peakWeek.count / total * 100).toFixed(0)}%）<br>
+                        • 建議在掛牌後積極觀察，達到預期報酬即可分批獲利了結<br>
+                        • 長期持有（>3個月）有 ${(pts.later / total * 100).toFixed(0)}% 機會獲得更高報酬
+                    `;
+                })()}
+            </div>
+        </div>`;
+    }
     
     content.innerHTML = html;
 }

@@ -2192,7 +2192,7 @@ button:active, .clickable:active {
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.98S CBAS歷史月拆解版)...</div>
+    <div>🔄 系統啟動中 (v3.98S2 修正版)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
@@ -2200,7 +2200,7 @@ button:active, .clickable:active {
     <!-- v3.98g 修改：頂部標題置中 + 統計數據 -->
     <div class="header">
         <h1>🏠 Rex大叔的168台股投資研究室</h1>
-        <span class="version-badge">v3.98S CBAS歷史月拆解版</span>
+        <span class="version-badge">v3.98S2 修正版</span>
         <div class="subtitle">
             <span id="headerSubtitle">載入中...</span>
             <span style="color:#ddd">|</span>
@@ -13162,33 +13162,32 @@ async function searchStockCyclePerformance() {
         return;
     }
     
-    resultDiv.innerHTML = '<div style="text-align:center; padding:20px; color:#666;"><span style="font-size:24px;">⏳</span><br>查詢中...</div>';
+    resultDiv.innerHTML = '<div style="text-align:center; padding:20px; color:#666;"><span style="font-size:24px;">⏳</span><br>載入歷史股價資料中...<br><span style="font-size:11px;">（首次載入可能需要30秒）</span></div>';
     
-    // 歷史重大事件期間定義
-    // v3.98R: 歷史重大事件期間定義（含科技泡沫、金融海嘯）
+    // v3.98S2: 確保股價資料已載入
+    if (!window.stockPriceHistory?.loaded) {
+        await loadHistoricalStockPrice();
+        // 等待一下確保資料完全載入
+        await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    
+    resultDiv.innerHTML = '<div style="text-align:center; padding:20px; color:#666;"><span style="font-size:24px;">🔍</span><br>查詢 ' + stockCode + ' 歷史表現...</div>';
+    
+    // 歷史重大事件期間定義（只包含有資料的年份：2009-2025）
+    // v3.98S2: 移除2000-2008年事件（目前無資料）
     const historicalEvents = [
-        { name: '科技泡沫', startDate: '2000-02-01', endDate: '2001-09-30', peakDate: '2000-02-18', troughDate: '2001-09-26', marketDrop: -67 },
-        { name: '金融海嘯', startDate: '2008-05-01', endDate: '2008-11-30', peakDate: '2008-05-20', troughDate: '2008-11-21', marketDrop: -58 },
-        { name: '歐債危機', startDate: '2011-02-01', endDate: '2011-12-31', peakDate: '2011-02-08', troughDate: '2011-12-19', marketDrop: -28 },
-        { name: '中國股災', startDate: '2015-04-01', endDate: '2016-01-31', peakDate: '2015-04-27', troughDate: '2016-01-18', marketDrop: -28 },
-        { name: '美中貿易戰', startDate: '2018-01-01', endDate: '2018-12-31', peakDate: '2018-01-23', troughDate: '2018-10-26', marketDrop: -17 },
-        { name: 'COVID-19', startDate: '2020-01-01', endDate: '2020-03-31', peakDate: '2020-01-14', troughDate: '2020-03-19', marketDrop: -30 },
-        { name: '升息+俄烏', startDate: '2022-01-01', endDate: '2022-10-31', peakDate: '2022-01-05', troughDate: '2022-10-25', marketDrop: -32 },
-        { name: '日圓套利', startDate: '2024-07-01', endDate: '2024-08-31', peakDate: '2024-07-11', troughDate: '2024-08-05', marketDrop: -19 }
+        // { name: '科技泡沫', startDate: '2000-02-01', endDate: '2001-09-30', marketDrop: -67 }, // 需補資料
+        // { name: '金融海嘯', startDate: '2008-05-01', endDate: '2008-11-30', marketDrop: -58 }, // 需補資料
+        { name: '歐債危機', startDate: '2011-02-01', endDate: '2011-12-31', marketDrop: -28 },
+        { name: '中國股災', startDate: '2015-04-01', endDate: '2016-01-31', marketDrop: -28 },
+        { name: '美中貿易戰', startDate: '2018-01-01', endDate: '2018-12-31', marketDrop: -17 },
+        { name: 'COVID-19', startDate: '2020-01-01', endDate: '2020-03-31', marketDrop: -30 },
+        { name: '升息+俄烏', startDate: '2022-01-01', endDate: '2022-10-31', marketDrop: -32 },
+        { name: '日圓套利', startDate: '2024-07-01', endDate: '2024-08-31', marketDrop: -19 }
     ];
     
     // 從 stock_price 資料庫查詢
     const results = [];
-    
-    // 確保股價資料已載入（包含2000、2001、2008年）
-    if (!window.stockPriceHistory?.loaded) {
-        const yearsNeeded = [2000, 2001, 2008, 2011, 2015, 2016, 2018, 2020, 2022, 2024];
-        for (const year of yearsNeeded) {
-            if (!window.stockPriceHistory?.tse?.[year]) {
-                // 需要載入
-            }
-        }
-    }
     
     // 查詢各事件期間的股價
     for (const event of historicalEvents) {
@@ -13204,10 +13203,18 @@ async function searchStockCyclePerformance() {
     
     // 渲染結果
     if (results.length === 0) {
+        // 檢查是否有載入任何資料
+        const loadedYears = Object.keys(window.stockPriceHistory?.tse || {});
         resultDiv.innerHTML = `
             <div style="text-align:center; padding:20px; color:#888;">
                 <div style="font-size:32px; margin-bottom:10px;">📭</div>
                 <div>未找到 ${stockCode} 的歷史資料</div>
+                <div style="font-size:11px; margin-top:10px; color:#999;">
+                    已載入年份：${loadedYears.length > 0 ? loadedYears.join(', ') : '無'}<br>
+                    可能原因：股票代號錯誤、該股當時尚未上市、或資料庫未涵蓋該期間
+                </div>
+            </div>
+        `;
                 <div style="font-size:11px; margin-top:5px;">可能原因：股票代號錯誤、該股當時尚未上市、或資料庫未涵蓋該期間</div>
             </div>
         `;
@@ -13301,11 +13308,13 @@ async function searchStockCyclePerformance() {
 
 /**
  * v3.98R 新增：取得股票在特定期間的價格資料
+ * v3.98S2 修正：欄位順序 Date, Code, Name, Volume, Value, Open, High, Low, Close, Trades
  */
 async function getStockPriceInPeriod(stockCode, startDate, endDate) {
     const startNum = parseInt(startDate.replace(/-/g, ''));
     const endNum = parseInt(endDate.replace(/-/g, ''));
     const year = parseInt(startDate.substring(0, 4));
+    const endYear = parseInt(endDate.substring(0, 4));
     
     let prices = [];
     let stockName = '';
@@ -13313,12 +13322,12 @@ async function getStockPriceInPeriod(stockCode, startDate, endDate) {
     // 從已載入的 stockPriceHistory 查詢
     if (window.stockPriceHistory?.tse) {
         // 檢查該年和可能跨年的下一年
-        for (let y = year; y <= year + 1; y++) {
+        for (let y = year; y <= endYear; y++) {
             const yearData = window.stockPriceHistory.tse[y];
             if (yearData && Array.isArray(yearData)) {
                 for (const row of yearData) {
-                    // row: [Date, Code, Name, Open, High, Low, Close, Volume, Amount]
-                    const [date, code, name, open, high, low, close] = row;
+                    // 正確欄位順序: [Date, Code, Name, Volume, Value, Open, High, Low, Close, Trades]
+                    const [date, code, name, volume, value, open, high, low, close] = row;
                     if (String(code) === String(stockCode)) {
                         const dateNum = parseInt(date);
                         if (dateNum >= startNum && dateNum <= endNum) {
@@ -13338,11 +13347,12 @@ async function getStockPriceInPeriod(stockCode, startDate, endDate) {
     
     // 也檢查上櫃
     if (prices.length === 0 && window.stockPriceHistory?.otc) {
-        for (let y = year; y <= year + 1; y++) {
+        for (let y = year; y <= endYear; y++) {
             const yearData = window.stockPriceHistory.otc[y];
             if (yearData && Array.isArray(yearData)) {
                 for (const row of yearData) {
-                    const [date, code, name, open, high, low, close] = row;
+                    // 正確欄位順序: [Date, Code, Name, Volume, Value, Open, High, Low, Close, Trades]
+                    const [date, code, name, volume, value, open, high, low, close] = row;
                     if (String(code) === String(stockCode)) {
                         const dateNum = parseInt(date);
                         if (dateNum >= startNum && dateNum <= endNum) {
@@ -27056,6 +27066,29 @@ const CBASHistoryManager = {
     availableYears: [2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025],
     loadedYears: new Set(),
     data: {},  // { cbCode: [{ date, principal, trades, minPremium, maxPremium, avgPremium, period }] }
+    sqlEngine: null,
+    
+    async initSQL() {
+        if (this.sqlEngine) return this.sqlEngine;
+        
+        // 嘗試使用已初始化的SQL引擎
+        if (window.kanbanSQL) {
+            this.sqlEngine = window.kanbanSQL;
+            return this.sqlEngine;
+        }
+        
+        // 初始化新的SQL引擎
+        try {
+            this.sqlEngine = await initSqlJs({
+                locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}`
+            });
+            window.cbasHistorySQL = this.sqlEngine;
+            return this.sqlEngine;
+        } catch (e) {
+            console.error('SQL.js 初始化失敗:', e);
+            return null;
+        }
+    },
     
     async loadYear(year) {
         if (this.loadedYears.has(year)) return true;
@@ -27068,8 +27101,9 @@ const CBASHistoryManager = {
             }
             
             const arrayBuffer = await response.arrayBuffer();
-            const SQL = window.cbasSQL || window.kanbanSQL || window.initSqlJs;
             
+            // v3.98S2: 確保SQL引擎已初始化
+            const SQL = await this.initSQL();
             if (!SQL) {
                 console.error('SQL 引擎未初始化');
                 return false;

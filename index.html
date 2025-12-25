@@ -5773,6 +5773,9 @@ const AICore = {
         calcSegmentPremiumPrediction: function(theoPrice, guaranteeType, auctionData, ratingFilter = null) {
             if (!auctionData || auctionData.length === 0 || theoPrice <= 0) return null;
             
+            // v3.98h 新增：判斷擔保類型
+            const isGuaranteed = (guaranteeType === '有擔保' || guaranteeType === '有');
+            
             // 細化理論價區間定義（7個區間）
             const getSegment = (theo) => {
                 if (theo < 90) return '<90';
@@ -5787,12 +5790,17 @@ const AICore = {
             const targetSegment = getSegment(theoPrice);
             const isHighTheo = theoPrice >= 105; // 高理論價區間
             
-            // 過濾同區間的歷史案例
+            // v3.98h 修正：過濾同區間 + 同擔保類型 的歷史案例
             const filtered = auctionData.filter(d => {
                 const theo = parseFloat(d['理論價']) || 0;
                 const minBid = parseFloat(d['最低得標']) || 0;
+                const guar = d['擔保'] || '無擔保';
+                const dataIsGuaranteed = (guar === '有擔保' || guar === '有');
                 
                 if (minBid <= 0 || theo <= 0) return false;
+                
+                // 擔保類型必須匹配
+                if (dataIsGuaranteed !== isGuaranteed) return false;
                 
                 // 區間匹配
                 if (getSegment(theo) !== targetSegment) return false;
@@ -5806,22 +5814,26 @@ const AICore = {
                 return true;
             });
             
-            // 如果信評過濾後樣本不足，放寬條件
+            // 如果信評過濾後樣本不足，放寬條件（但仍保持擔保類型匹配）
             let finalFiltered = filtered;
             let usedGoodRating = (isHighTheo && ratingFilter === 'good' && filtered.length >= 3);
             
             if (filtered.length < 3) {
-                // 第一次放寬：取消信評過濾
+                // 第一次放寬：取消信評過濾，但保持擔保類型
                 finalFiltered = auctionData.filter(d => {
                     const theo = parseFloat(d['理論價']) || 0;
                     const minBid = parseFloat(d['最低得標']) || 0;
+                    const guar = d['擔保'] || '無擔保';
+                    const dataIsGuaranteed = (guar === '有擔保' || guar === '有');
+                    
                     if (minBid <= 0 || theo <= 0) return false;
+                    if (dataIsGuaranteed !== isGuaranteed) return false;
                     return getSegment(theo) === targetSegment;
                 });
                 usedGoodRating = false;
             }
             
-            // 如果同區間樣本仍不足，嘗試擴大到相鄰區間
+            // 如果同區間樣本仍不足，嘗試擴大到相鄰區間（仍保持擔保類型）
             if (finalFiltered.length < 5) {
                 const allSegments = ['<90', '90-95', '95-100', '100-105', '105-110', '110-115', '>=115'];
                 const targetIdx = allSegments.indexOf(targetSegment);
@@ -5829,7 +5841,11 @@ const AICore = {
                 finalFiltered = auctionData.filter(d => {
                     const theo = parseFloat(d['理論價']) || 0;
                     const minBid = parseFloat(d['最低得標']) || 0;
+                    const guar = d['擔保'] || '無擔保';
+                    const dataIsGuaranteed = (guar === '有擔保' || guar === '有');
+                    
                     if (minBid <= 0 || theo <= 0) return false;
+                    if (dataIsGuaranteed !== isGuaranteed) return false;
                     
                     const dSegment = getSegment(theo);
                     const dIdx = allSegments.indexOf(dSegment);
@@ -5872,8 +5888,12 @@ const AICore = {
         },
         
         // v3.98e 重新設計：分區間MA熱度（只看同區間的近期案例，高理論價區間過濾信評）
-        calcSegmentMA: function(theoPrice, auctionData, n = 10) {
+        // v3.98h 修正：加入擔保類型參數
+        calcSegmentMA: function(theoPrice, guaranteeType, auctionData, n = 10) {
             if (!auctionData || auctionData.length === 0 || theoPrice <= 0) return null;
+            
+            // v3.98h 新增：判斷擔保類型
+            const isGuaranteed = (guaranteeType === '有擔保' || guaranteeType === '有');
             
             const getSegment = (theo) => {
                 if (theo < 90) return '<90';
@@ -5887,12 +5907,17 @@ const AICore = {
             
             const targetSegment = getSegment(theoPrice);
             
-            // 按日期排序（最新在前）
+            // 按日期排序（最新在前），v3.98h: 加入擔保類型過濾
             const sorted = [...auctionData]
                 .filter(d => {
                     const theo = parseFloat(d['理論價']) || 0;
                     const minBid = parseFloat(d['最低得標']) || 0;
-                    return minBid > 0 && theo > 0 && getSegment(theo) === targetSegment;
+                    const guar = d['擔保'] || '無擔保';
+                    const dataIsGuaranteed = (guar === '有擔保' || guar === '有');
+                    
+                    return minBid > 0 && theo > 0 && 
+                           getSegment(theo) === targetSegment &&
+                           dataIsGuaranteed === isGuaranteed;  // 擔保類型必須匹配
                 })
                 .sort((a, b) => new Date(b['開標日期']) - new Date(a['開標日期']));
             
@@ -5932,17 +5957,27 @@ const AICore = {
             const predictions = [];
             const isHighTheo = theoPrice >= 105;
             
+            // v3.98h 新增：判斷擔保類型
+            const isGuaranteed = (guarantee === '有擔保' || guarantee === '有');
+            
             // ========== v3.98f-3 升級：計算近期同產業案例（5檔+10檔） ==========
             let recentAvgMult = null;
             let recentIndustryData = null;
             let industryStats = null;  // 新增：完整的產業統計
             
             if (auctionData && auctionData.length > 0) {
-                const sorted = [...auctionData].sort((a, b) => 
+                // v3.98h 修正：先按擔保類型過濾，再排序
+                const filteredByGuarantee = auctionData.filter(d => {
+                    const guar = d['擔保'] || '無擔保';
+                    const dataIsGuaranteed = (guar === '有擔保' || guar === '有');
+                    return dataIsGuaranteed === isGuaranteed;
+                });
+                
+                const sorted = [...filteredByGuarantee].sort((a, b) => 
                     new Date(b['開標日期']) - new Date(a['開標日期'])
                 );
                 
-                // 近10檔整體市場熱度
+                // 近10檔同擔保類型市場熱度
                 const recent10 = sorted.slice(0, 10);
                 const mults = recent10.map(d => parseFloat(d['投標倍數']) || 0).filter(m => m > 0);
                 if (mults.length > 0) {
@@ -5950,8 +5985,9 @@ const AICore = {
                 }
                 
                 // 🔥v3.98f-3 升級：使用calcRecentIndustryStats計算完整產業統計
+                // v3.98h 修正：傳入過濾後的資料
                 if (industry && window.AICore.anomaly) {
-                    industryStats = window.AICore.anomaly.calcRecentIndustryStats(industry, auctionData);
+                    industryStats = window.AICore.anomaly.calcRecentIndustryStats(industry, filteredByGuarantee);
                     
                     // 轉換為recentIndustryData格式（向後相容）
                     if (industryStats && industryStats.recent5) {
@@ -6025,8 +6061,8 @@ const AICore = {
                 });
             }
             
-            // 方法4: 分區間近期熱度（同區間的MA）
-            const segmentMA = this.calcSegmentMA(theoPrice, auctionData, 10);
+            // 方法4: 分區間近期熱度（同區間+同擔保類型的MA）
+            const segmentMA = this.calcSegmentMA(theoPrice, guarantee, auctionData, 10);
             if (segmentMA && segmentMA.predictedPrice > 0) {
                 predictions.push({ 
                     name: '區間近期熱度', 
@@ -10318,48 +10354,170 @@ function updateStep1Detail() {
     const step1Detail = document.getElementById('step1DetailContent');
     if (!step1Detail) return;
     
-    // 根據當前選擇決定顯示哪個表格
+    const r = window.lastEvalResult;
+    if (!r || !r.dimensions) {
+        step1Detail.innerHTML = '<div style="color:#666;">請先執行評估</div>';
+        return;
+    }
+    
+    // 根據當前選擇決定顯示模式
     const methodName = step1CurrentMethod === 'premium' ? '溢價率分析法' : '得標均價法';
     const weightName = step1CurrentWeight === 'noweight' ? '無加權' : '有加權';
-    const tableId = step1CurrentMethod === 'premium' ? 'premiumDimensionTable' : 'priceDimensionTable';
+    const icon = step1CurrentMethod === 'premium' ? '📈' : '📊';
+    const color = step1CurrentMethod === 'premium' ? '#1976d2' : '#e65100';
+    const weightIcon = step1CurrentWeight === 'noweight' ? '📊' : '⚖️';
     
-    const table = document.getElementById(tableId);
-    if (table) {
-        // 動態生成標題
-        const icon = step1CurrentMethod === 'premium' ? '📈' : '📊';
-        const color = step1CurrentMethod === 'premium' ? '#1976d2' : '#e65100';
-        const weightIcon = step1CurrentWeight === 'noweight' ? '📊' : '⚖️';
-        
-        let html = `
-            <div style="font-weight:bold; color:${color}; margin-bottom:10px; display:flex; align-items:center; gap:8px;">
-                <span>${icon} ${methodName}</span>
-                <span style="background:${step1CurrentWeight === 'weight' ? '#7b1fa2' : '#666'}; color:white; padding:2px 8px; border-radius:4px; font-size:11px;">
-                    ${weightIcon} ${weightName}
-                </span>
-            </div>
-        `;
-        
-        // 取得表格內容
-        const tableContent = table.querySelector('table');
-        if (tableContent) {
-            html += `<div style="overflow-x:auto;">${tableContent.outerHTML}</div>`;
-        }
-        
-        // 加權說明
-        if (step1CurrentWeight === 'noweight') {
-            html += `<div style="margin-top:10px; padding:8px; background:#f5f5f5; border-radius:6px; font-size:11px; color:#666;">
-                💡 無加權模式：各維度數據為該條件下的歷史平均值，未經權重調整
-            </div>`;
+    const nm = {'theoRange':'理論價','broker':'券商','size':'規模','industry':'產業','years':'年期','capital':'股本','rating':'信評'};
+    const isWeighted = step1CurrentWeight === 'weight';
+    const isPremiumMethod = step1CurrentMethod === 'premium';
+    
+    // 動態生成表格行
+    let tableRows = '';
+    let sumRaw1 = 0, sumRaw2 = 0, dimCount = 0;
+    let sumWeighted1 = 0, sumWeighted2 = 0;
+    
+    for (const [k, d] of Object.entries(r.dimensions)) {
+        if (isPremiumMethod) {
+            // 溢價率法
+            const raw1 = d.low !== null ? d.low : 0;  // 原始最低溢價率
+            const raw2 = d.avg !== null ? d.avg : 0;  // 原始平均溢價率
+            const weighted1 = d.weightedLow || 0;     // 加權後最低
+            const weighted2 = d.weightedAvg || 0;     // 加權後平均
+            const weight = d.weight || 0;
+            
+            if (isWeighted) {
+                // 有加權：顯示權重和加權值
+                tableRows += `<tr>
+                    <td>${nm[k] || k}</td>
+                    <td>${d.displayRange || d.range}</td>
+                    <td>${raw1.toFixed(2)}%</td>
+                    <td>${raw2.toFixed(2)}%</td>
+                    <td>${(weight * 100).toFixed(0)}%</td>
+                    <td>${weighted1.toFixed(2)}</td>
+                    <td>${weighted2.toFixed(2)}</td>
+                </tr>`;
+            } else {
+                // 無加權：不顯示權重，顯示原始值
+                tableRows += `<tr>
+                    <td>${nm[k] || k}</td>
+                    <td>${d.displayRange || d.range}</td>
+                    <td>${raw1.toFixed(2)}%</td>
+                    <td>${raw2.toFixed(2)}%</td>
+                    <td>--</td>
+                    <td>${raw1.toFixed(2)}%</td>
+                    <td>${raw2.toFixed(2)}%</td>
+                </tr>`;
+            }
+            
+            if (raw1 !== null && !isNaN(raw1)) { sumRaw1 += raw1; }
+            if (raw2 !== null && !isNaN(raw2)) { sumRaw2 += raw2; }
+            sumWeighted1 += weighted1;
+            sumWeighted2 += weighted2;
+            dimCount++;
         } else {
-            html += `<div style="margin-top:10px; padding:8px; background:#f3e5f5; border-radius:6px; font-size:11px; color:#7b1fa2;">
-                ⚖️ 有加權模式：根據各維度的權重（產業35%+券商25%+信評20%+規模10%+理論價10%）加權計算
-            </div>`;
+            // 得標均價法
+            const raw1 = d.lowBidPrice || 0;  // 原始最低得標價
+            const raw2 = d.avgBidPrice || 0;  // 原始平均得標價
+            const weighted1 = d.weightedLowBid || 0;  // 加權後最低
+            const weighted2 = d.weightedAvgBid || 0;  // 加權後平均
+            const weight = d.weight || 0;
+            
+            if (isWeighted) {
+                tableRows += `<tr>
+                    <td>${nm[k] || k}</td>
+                    <td>${d.displayRange || d.range}</td>
+                    <td>${raw1.toFixed(2)}</td>
+                    <td>${raw2.toFixed(2)}</td>
+                    <td>${(weight * 100).toFixed(0)}%</td>
+                    <td>${weighted1.toFixed(2)}</td>
+                    <td>${weighted2.toFixed(2)}</td>
+                </tr>`;
+            } else {
+                tableRows += `<tr>
+                    <td>${nm[k] || k}</td>
+                    <td>${d.displayRange || d.range}</td>
+                    <td>${raw1.toFixed(2)}</td>
+                    <td>${raw2.toFixed(2)}</td>
+                    <td>--</td>
+                    <td>${raw1.toFixed(2)}</td>
+                    <td>${raw2.toFixed(2)}</td>
+                </tr>`;
+            }
+            
+            if (raw1 > 0) { sumRaw1 += raw1; }
+            if (raw2 > 0) { sumRaw2 += raw2; }
+            sumWeighted1 += weighted1;
+            sumWeighted2 += weighted2;
+            dimCount++;
         }
-        
-        step1Detail.innerHTML = html;
-    } else {
-        step1Detail.innerHTML = '<div style="color:#666;">載入中...</div>';
     }
+    
+    // 計算合計值
+    const avgRaw1 = dimCount > 0 ? sumRaw1 / dimCount : 0;
+    const avgRaw2 = dimCount > 0 ? sumRaw2 / dimCount : 0;
+    const final1 = isWeighted ? sumWeighted1 : avgRaw1;
+    const final2 = isWeighted ? sumWeighted2 : avgRaw2;
+    
+    // 表格欄位標題
+    let col3Title, col4Title, col6Title, col7Title;
+    if (isPremiumMethod) {
+        col3Title = '最低<br>溢價';
+        col4Title = '平均<br>溢價';
+        col6Title = isWeighted ? '加權<br>最低' : '最低<br>溢價';
+        col7Title = isWeighted ? '加權<br>平均' : '平均<br>溢價';
+    } else {
+        col3Title = '最低<br>得標';
+        col4Title = '平均<br>得標';
+        col6Title = isWeighted ? '加權<br>最低' : '最低<br>得標';
+        col7Title = isWeighted ? '加權<br>平均' : '平均<br>得標';
+    }
+    
+    // 合計行格式
+    const unit = isPremiumMethod ? '%' : '';
+    const avgRaw1Str = isPremiumMethod ? avgRaw1.toFixed(2) + '%' : avgRaw1.toFixed(2);
+    const avgRaw2Str = isPremiumMethod ? avgRaw2.toFixed(2) + '%' : avgRaw2.toFixed(2);
+    const final1Str = isPremiumMethod ? final1.toFixed(2) + '%' : final1.toFixed(2);
+    const final2Str = isPremiumMethod ? final2.toFixed(2) + '%' : final2.toFixed(2);
+    
+    // 組合 HTML
+    let html = `
+        <div style="font-weight:bold; color:${color}; margin-bottom:10px; display:flex; align-items:center; gap:8px;">
+            <span>${icon} ${methodName}</span>
+            <span style="background:${isWeighted ? '#7b1fa2' : '#666'}; color:white; padding:2px 8px; border-radius:4px; font-size:11px;">
+                ${weightIcon} ${weightName}
+            </span>
+        </div>
+        <div style="overflow-x:auto;">
+            <table class="data-table" style="font-size:12px;">
+                <thead><tr>
+                    <th>維度</th><th>條件</th>
+                    <th>${col3Title}</th><th>${col4Title}</th>
+                    <th>權重</th><th>${col6Title}</th><th>${col7Title}</th>
+                </tr></thead>
+                <tbody>${tableRows}</tbody>
+                <tfoot><tr>
+                    <td></td><td style="text-align:right"><b>${isWeighted ? '加權合計' : '簡單平均'}</b></td>
+                    <td><b>${avgRaw1Str}</b></td><td><b>${avgRaw2Str}</b></td>
+                    <td>${isWeighted ? '100%' : '--'}</td>
+                    <td><b>${final1Str}</b></td>
+                    <td><b>${final2Str}</b></td>
+                </tr></tfoot>
+            </table>
+        </div>
+    `;
+    
+    // 加權說明
+    if (!isWeighted) {
+        html += `<div style="margin-top:10px; padding:8px; background:#f5f5f5; border-radius:6px; font-size:11px; color:#666;">
+            💡 無加權模式：各維度數據為該條件下的歷史平均值，未經權重調整
+        </div>`;
+    } else {
+        html += `<div style="margin-top:10px; padding:8px; background:#f3e5f5; border-radius:6px; font-size:11px; color:#7b1fa2;">
+            ⚖️ 有加權模式：根據各維度的權重（產業35%+券商25%+信評20%+規模10%+理論價10%）加權計算
+        </div>`;
+    }
+    
+    step1Detail.innerHTML = html;
 }
 
 // v3.55 新增：年度績效排行
@@ -17780,6 +17938,9 @@ function calculateEvaluation(d) {
 }
 
 function displayResult(r) {
+    // v3.98h 新增：保存評估結果供切換加權/無加權時使用
+    window.lastEvalResult = r;
+    
     document.getElementById('welcomeMsg').style.display = 'none';
 
     // v3.97j 顯示步驟式報告
@@ -18040,8 +18201,12 @@ function displayResult(r) {
             .slice(0, 3)
             .map(x => ({
                 name: x.item['名稱'] || x.item['可轉債名稱'] || x.item['CB名稱'] || '-',
-                prem: x.prem,
-                outlierLabel: x.outlierLabel
+                prem: x.prem,  // 平均溢價率
+                outlierLabel: x.outlierLabel,
+                // v3.98h 新增：最低得標價、平均得標價、最低溢價率
+                minBid: parseFloat(x.item['最低得標']) || parseFloat(x.item['最低得標價']) || 0,
+                avgBid: parseFloat(x.item['得標均價']) || parseFloat(x.item['平均得標']) || 0,
+                minPrem: parseFloat(x.item['最低溢價']) || parseFloat(x.item['最低溢價率']) || 0
             }));
 
         return {
@@ -18156,9 +18321,18 @@ function displayResult(r) {
         });
 
         // v3.97t: Top3格式化函數
+        // v3.98h 優化：顯示更完整的前三名資訊（最低得標、最低溢價、平均得標、平均溢價）
         const formatTop3 = (top3) => {
             if (!top3 || top3.length === 0) return '--';
-            return top3.map((t, i) => `${i+1}.${t.name.replace(/一|二|三|四|五/, '')} ${t.prem.toFixed(1)}%`).join('<br>');
+            return top3.map((t, i) => {
+                const name = t.name.replace(/一|二|三|四|五/, '');
+                const minBid = t.minBid > 0 ? t.minBid.toFixed(1) : '-';
+                const avgBid = t.avgBid > 0 ? t.avgBid.toFixed(1) : '-';
+                const minPrem = t.minPrem !== undefined ? t.minPrem.toFixed(1) : '-';
+                const avgPrem = t.prem !== undefined ? t.prem.toFixed(1) : '-';
+                // 格式：名稱 最低得標/溢價% 均價/溢價%
+                return `${i+1}.${name} <span style="opacity:0.9">${minBid}/${minPrem}% ${avgBid}/${avgPrem}%</span>`;
+            }).join('<br>');
         };
 
         // 顯示各維度結果
@@ -21081,36 +21255,56 @@ function initSmartTips() {
 
 /**
  * v3.73 生成條件統計摘要HTML
+ * v3.98h 修改：根據擔保類型過濾統計數據
  * 在評估結果中顯示所選條件的歷史統計
  */
 function generateConditionSummaryHTML(r) {
     if (!r) return '';
 
+    // v3.98h: 取得當前擔保類型，用於過濾統計數據
+    const currentGuarantee = r.guarantee || r.inputData?.guarantee || '';
+    const isGuaranteed = currentGuarantee === '有擔保';
+    const guarLabel = isGuaranteed ? '有擔保' : '無擔保';
+    
+    // 從原始資料計算指定擔保類型的統計
+    const auctionData = window.auctionDataCache || [];
+    const filteredData = auctionData.filter(row => {
+        const guar = row['擔保'] || '無擔保';
+        return isGuaranteed ? guar === '有擔保' : guar !== '有擔保';
+    });
+
     let items = [];
 
-    // 1. 發行規模統計
+    // 1. 發行規模統計（按擔保類型過濾）
     if (r.issueSize) {
-        const sizeMap = {
-            '小於2億': 'under3', '2~5億': '3to5', '5~10億': '5to10',
-            '10~15億': '10to15', '15~20億': 'over15', '大於20億': 'over15'
+        const sizeRanges = {
+            '小於2億': [0, 2], '2~5億': [2, 5], '5~10億': [5, 10],
+            '10~15億': [10, 15], '15~20億': [15, 20], '大於20億': [20, 999]
         };
-        const key = sizeMap[r.issueSize];
-        const data = key ? window.SIZE_MULT_TABLE[key] : null;
-        if (data) {
-            const heatColor = data.avgMult >= 3.5 ? '#ef4444' : (data.avgMult >= 2.5 ? '#eab308' : '#22c55e');
-            items.push({
-                icon: '📦',
-                label: '發行規模',
-                value: data.label,
-                stats: `${data.avgMult.toFixed(2)}x / ${data.avgPrice.toFixed(1)}元`,
-                color: heatColor,
-                count: data.count,
-                tip: data.avgMult >= 3.5 ? '競爭激烈' : (data.avgMult < 2 ? '競爭較低' : '適中')
+        const range = sizeRanges[r.issueSize];
+        if (range) {
+            const sizeData = filteredData.filter(row => {
+                const size = parseFloat(row['發行規模']) || 0;
+                return size >= range[0] && size < range[1];
             });
+            if (sizeData.length >= 3) {
+                const avgMult = sizeData.reduce((s, row) => s + (parseFloat(row['投標倍數']) || 0), 0) / sizeData.length;
+                const avgPrice = sizeData.reduce((s, row) => s + (parseFloat(row['最低得標']) || 0), 0) / sizeData.length;
+                const heatColor = avgMult >= 3.5 ? '#ef4444' : (avgMult >= 2.5 ? '#eab308' : '#22c55e');
+                items.push({
+                    icon: '📦',
+                    label: `發行規模(${guarLabel})`,
+                    value: r.issueSize,
+                    stats: `${avgMult.toFixed(2)}x / ${avgPrice.toFixed(1)}元`,
+                    color: heatColor,
+                    count: sizeData.length,
+                    tip: avgMult >= 3.5 ? '競爭激烈' : (avgMult < 2 ? '競爭較低' : '適中')
+                });
+            }
         }
     }
 
-    // 2. 年期+擔保組合
+    // 2. 年期+擔保組合（原本就有區分）
     if (r.years && r.guarantee) {
         const comboKey = `${r.guarantee}_${r.years}`;
         const data = window.TERM_GUAR_TABLE[comboKey];
@@ -21128,92 +21322,112 @@ function generateConditionSummaryHTML(r) {
         }
     }
 
-    // 3. 理論價區間
+    // 3. 理論價區間（按擔保類型過濾）
     if (r.theoRange || r.theoreticalPrice) {
-        const theoMap = {
-            '小於90元': 'deep_out', '90~95元': 'out', '95~100元': 'out',
-            '100~105元': 'par', '105~110元': 'par', '110~115元': 'in', '大於115元': 'deep_in'
+        let theoMin = 0, theoMax = 999;
+        const theoRangeMap = {
+            '小於90元': [0, 90], '90~95元': [90, 95], '95~100元': [95, 100],
+            '100~105元': [100, 105], '105~110元': [105, 110], '110~115元': [110, 115], '大於115元': [115, 999]
         };
-        let key = theoMap[r.theoRange];
-        if (!key && r.theoreticalPrice) {
+        if (r.theoRange && theoRangeMap[r.theoRange]) {
+            [theoMin, theoMax] = theoRangeMap[r.theoRange];
+        } else if (r.theoreticalPrice) {
             const tp = parseFloat(r.theoreticalPrice);
-            if (tp < 90) key = 'deep_out';
-            else if (tp < 100) key = 'out';
-            else if (tp < 110) key = 'par';
-            else if (tp < 130) key = 'in';
-            else key = 'deep_in';
+            if (tp < 90) { theoMin = 0; theoMax = 90; }
+            else if (tp < 95) { theoMin = 90; theoMax = 95; }
+            else if (tp < 100) { theoMin = 95; theoMax = 100; }
+            else if (tp < 105) { theoMin = 100; theoMax = 105; }
+            else if (tp < 110) { theoMin = 105; theoMax = 110; }
+            else { theoMin = 110; theoMax = 999; }
         }
-        const data = key ? window.CONV_VALUE_TABLE[key] : null;
-        if (data) {
-            const heatColor = data.avgMult >= 3.5 ? '#ef4444' : (data.avgMult >= 2.5 ? '#eab308' : '#22c55e');
+        
+        const theoData = filteredData.filter(row => {
+            const tp = parseFloat(row['理論價']) || 0;
+            return tp >= theoMin && tp < theoMax;
+        });
+        if (theoData.length >= 3) {
+            const avgMult = theoData.reduce((s, row) => s + (parseFloat(row['投標倍數']) || 0), 0) / theoData.length;
+            const avgPrice = theoData.reduce((s, row) => s + (parseFloat(row['最低得標']) || 0), 0) / theoData.length;
+            const labelMap = {
+                '0-90': '深度價外(<90)', '90-95': '價外(90-95)', '95-100': '價外(95-100)',
+                '100-105': '價平(100-105)', '105-110': '價平(105-110)', '110-999': '價內(≥110)'
+            };
+            const heatColor = avgMult >= 3.5 ? '#ef4444' : (avgMult >= 2.5 ? '#eab308' : '#22c55e');
             items.push({
                 icon: '📈',
-                label: '轉換價值',
-                value: data.label,
-                stats: `${data.avgMult.toFixed(2)}x / ${data.avgPrice.toFixed(1)}元`,
+                label: `轉換價值(${guarLabel})`,
+                value: labelMap[`${theoMin}-${theoMax}`] || `${theoMin}~${theoMax}`,
+                stats: `${avgMult.toFixed(2)}x / ${avgPrice.toFixed(1)}元`,
                 color: heatColor,
-                count: data.count,
-                tip: key === 'par' ? '最熱門區間' : ''
+                count: theoData.length,
+                tip: avgMult >= 3.5 ? '最熱門區間' : ''
             });
         }
     }
 
-    // 4. 產業統計
+    // 4. 產業統計（按擔保類型過濾）
     if (r.industry) {
-        const indName = r.industry.split(' ')[0]; // 移除 (n) 後綴
-        const data = window.INDUSTRY_MULT_TABLE[indName];
-        if (data) {
-            const heatColor = data.avgMult >= 3.5 ? '#ef4444' : (data.avgMult >= 2.5 ? '#eab308' : '#22c55e');
+        const indName = r.industry.split(' ')[0];
+        const indData = filteredData.filter(row => {
+            const ind = row['產業分類'] || row['產業'] || '';
+            return ind === indName;
+        });
+        if (indData.length >= 3) {
+            const avgMult = indData.reduce((s, row) => s + (parseFloat(row['投標倍數']) || 0), 0) / indData.length;
+            const avgPrice = indData.reduce((s, row) => s + (parseFloat(row['最低得標']) || 0), 0) / indData.length;
+            const heatColor = avgMult >= 3.5 ? '#ef4444' : (avgMult >= 2.5 ? '#eab308' : '#22c55e');
             items.push({
                 icon: '🏭',
-                label: '產業',
+                label: `產業(${guarLabel})`,
                 value: indName,
-                stats: `${data.avgMult.toFixed(2)}x / ${data.avgPrice.toFixed(1)}元`,
+                stats: `${avgMult.toFixed(2)}x / ${avgPrice.toFixed(1)}元`,
                 color: heatColor,
-                count: data.count,
-                tip: data.avgMult >= 3.5 ? '熱門產業' : (data.avgMult < 2 ? '冷門產業' : '')
+                count: indData.length,
+                tip: avgMult >= 3.5 ? '熱門產業' : (avgMult < 2 ? '冷門產業' : '')
             });
         }
     }
 
-    // 5. 券商統計
+    // 5. 券商統計（按擔保類型過濾）
     if (r.broker) {
         const brokerName = r.broker.split(' ')[0];
-        let data = window.BROKER_MULT_TABLE[brokerName];
-        if (!data) {
-            for (const [name, d] of Object.entries(window.BROKER_MULT_TABLE)) {
-                if (brokerName.includes(name.replace('證券', '')) || name.includes(brokerName.replace('證券', ''))) {
-                    data = d;
-                    break;
-                }
-            }
-        }
-        if (data) {
-            const heatColor = data.avgMult >= 3.5 ? '#ef4444' : (data.avgMult >= 2.5 ? '#eab308' : '#22c55e');
+        const brokerData = filteredData.filter(row => {
+            const b = row['發行券商'] || '';
+            return b.includes(brokerName.replace('證券', '')) || brokerName.includes(b.replace('證券', ''));
+        });
+        if (brokerData.length >= 3) {
+            const avgMult = brokerData.reduce((s, row) => s + (parseFloat(row['投標倍數']) || 0), 0) / brokerData.length;
+            const avgPrice = brokerData.reduce((s, row) => s + (parseFloat(row['最低得標']) || 0), 0) / brokerData.length;
+            const heatColor = avgMult >= 3.5 ? '#ef4444' : (avgMult >= 2.5 ? '#eab308' : '#22c55e');
             items.push({
                 icon: '🏦',
-                label: '券商',
+                label: `券商(${guarLabel})`,
                 value: brokerName,
-                stats: `${data.avgMult.toFixed(2)}x / ${data.avgPrice.toFixed(1)}元`,
+                stats: `${avgMult.toFixed(2)}x / ${avgPrice.toFixed(1)}元`,
                 color: heatColor,
-                count: data.count,
+                count: brokerData.length,
                 tip: ''
             });
         }
     }
 
-    // 6. 信評統計
+    // 6. 信評統計（按擔保類型過濾）
     if (r.rating) {
-        const data = window.RATING_MULT_TABLE[r.rating];
-        if (data && data.count >= 3) {
-            const heatColor = data.avgMult >= 3.5 ? '#ef4444' : (data.avgMult >= 2.5 ? '#eab308' : '#22c55e');
+        const ratingData = filteredData.filter(row => {
+            const rat = String(row['信評'] || row['TCRI'] || '').replace(/[^0-9]/g, '');
+            return rat === r.rating;
+        });
+        if (ratingData.length >= 3) {
+            const avgMult = ratingData.reduce((s, row) => s + (parseFloat(row['投標倍數']) || 0), 0) / ratingData.length;
+            const avgPrice = ratingData.reduce((s, row) => s + (parseFloat(row['最低得標']) || 0), 0) / ratingData.length;
+            const heatColor = avgMult >= 3.5 ? '#ef4444' : (avgMult >= 2.5 ? '#eab308' : '#22c55e');
             items.push({
                 icon: '⭐',
-                label: '信評',
+                label: `信評(${guarLabel})`,
                 value: `TCRI ${r.rating}`,
-                stats: `${data.avgMult.toFixed(2)}x / ${data.avgPrice.toFixed(1)}元`,
+                stats: `${avgMult.toFixed(2)}x / ${avgPrice.toFixed(1)}元`,
                 color: heatColor,
-                count: data.count,
+                count: ratingData.length,
                 tip: parseInt(r.rating) <= 4 ? '優質' : (parseInt(r.rating) >= 7 ? '高風險' : '')
             });
         }
@@ -21260,7 +21474,7 @@ function generateConditionSummaryHTML(r) {
         </h3>
         <div style="padding:5px 0 10px;">
             <div style="font-size:12px; color:#64748b; margin-bottom:12px;">
-                💡 以下為您所選條件在${totalAuctionCount}檔歷史競拍中的統計數據（倍數/得標價）
+                💡 以下為您所選條件在<b>${guarLabel}</b>類型共${filteredData.length}檔歷史競拍中的統計數據（倍數/得標價）
             </div>
             <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:10px;">
                 ${itemsHTML}

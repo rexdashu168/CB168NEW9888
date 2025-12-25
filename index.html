@@ -27218,9 +27218,69 @@ function renderCBASTrackerSection(cbCode, currentCBPrice) {
                     <div>• CB 買進價格：${cbPrice.toFixed(2)} 元 → <b>${(cbPrice * sharesPerUnit).toLocaleString()}</b> 元/張</div>
                     <div>• 支付權利金：${premium.toFixed(2)} 元 → <b style="color:#d32f2f;">${premiumPerUnit.toLocaleString()}</b> 元/張</div>
                     <div>• 抽回本金：履約價 → <b style="color:#2e7d32;">${exercisePricePerUnit.toLocaleString()}</b> 元/張</div>
-                    <div>• 槓桿倍數：${(cbPrice / premium).toFixed(1)}x（用 ${premiumPerUnit.toLocaleString()} 元控制 ${(cbPrice * sharesPerUnit).toLocaleString()} 元）</div>
+                    <div>• 實際投入：權利金 <b>${premiumPerUnit.toLocaleString()}</b> 元</div>
                 </div>
             </div>
+        </div>
+        
+        <!-- 槓桿倍數分析 -->
+        <div style="margin-top:12px; background:#fff; border:1px solid #e0e0e0; padding:15px; border-radius:8px;">
+            <div style="font-weight:bold; color:#333; margin-bottom:12px; font-size:13px;">
+                📐 槓桿倍數分析
+            </div>
+            
+            <!-- 當前槓桿 -->
+            <div style="display:grid; grid-template-columns:1fr 2fr; gap:15px; margin-bottom:12px;">
+                <div style="background:#f5f5f5; padding:12px; border-radius:6px; text-align:center;">
+                    <div style="font-size:11px; color:#666; margin-bottom:4px;">目前槓桿倍數</div>
+                    <div style="font-size:28px; font-weight:bold; color:#7b1fa2;">${(cbPrice / premium).toFixed(1)}x</div>
+                    <div style="font-size:10px; color:#999; margin-top:4px;">
+                        CB ${cbPrice.toFixed(0)} ÷ 權利金 ${premium.toFixed(2)}
+                    </div>
+                </div>
+                <div style="font-size:11px; color:#555; line-height:1.7; padding:8px;">
+                    <div style="margin-bottom:6px;">
+                        <b>槓桿意義：</b>用 <span style="color:#d32f2f;">${premiumPerUnit.toLocaleString()}</span> 元權利金，
+                        參與價值 <span style="color:#1976d2;">${(cbPrice * sharesPerUnit).toLocaleString()}</span> 元 CB 的漲跌。
+                    </div>
+                    <div>
+                        <b>換句話說：</b>CB 每漲跌 1%，權利金約漲跌 <span style="font-weight:bold;">${(cbPrice / premium).toFixed(1)}%</span>（理論值）。
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 不同權利金的槓桿比較 -->
+            <div style="background:#fafafa; padding:12px; border-radius:6px;">
+                <div style="font-size:11px; color:#666; margin-bottom:8px;">不同權利金水準的槓桿倍數參考：</div>
+                <div style="display:grid; grid-template-columns:repeat(5, 1fr); gap:6px; text-align:center; font-size:10px;">
+                    ${[5, 10, 15, 20, 25].map(p => {
+                        const lev = cbPrice / p;
+                        const isCurrentRange = Math.abs(premium - p) < 2.5;
+                        return `
+                            <div style="padding:8px 4px; background:${isCurrentRange ? '#e3f2fd' : '#fff'}; border-radius:4px; border:1px solid ${isCurrentRange ? '#1976d2' : '#e0e0e0'};">
+                                <div style="color:#666;">權利金 ${p}</div>
+                                <div style="font-weight:bold; color:${isCurrentRange ? '#1976d2' : '#333'}; font-size:13px;">${lev.toFixed(1)}x</div>
+                                <div style="color:#999; font-size:9px;">${(p * sharesPerUnit).toLocaleString()}元/張</div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+            
+            <!-- 槓桿說明 -->
+            <div style="margin-top:10px; font-size:10px; color:#888; line-height:1.6;">
+                ※ 槓桿倍數 = CB價格 ÷ 權利金。槓桿越高，潛在報酬與風險同步放大。
+                實際損益受 CB 價格變動、時間消耗、履約價等多重因素影響。
+            </div>
+        </div>
+        
+        <!-- CBAS 買進時機評估（基於歷史資料分析）-->
+        <div style="margin-top:12px; background:linear-gradient(135deg, #1a237e 0%, #283593 100%); color:white; padding:15px; border-radius:8px;">
+            <div style="font-weight:bold; margin-bottom:12px; font-size:14px;">
+                📊 CBAS 買進時機評估（基於 2017-2025 歷史資料）
+            </div>
+            
+            ${renderCBASTimingEvaluation(premium, remainingYears, cbPrice, exercisePrice)}
         </div>
         
         <!-- 權利金歸零警示 -->
@@ -27326,29 +27386,23 @@ function renderCBASTrackerSection(cbCode, currentCBPrice) {
             </div>
             
             <div id="${trackerId}_result" style="background:#fafafa; padding:12px; border-radius:6px;">
-                <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; text-align:center;">
+                <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; text-align:center;">
                     <div>
                         <div style="font-size:10px; color:#666;">目前權利金價值</div>
-                        <div style="font-size:14px; font-weight:bold; color:#1976d2;" id="${trackerId}_currentValue">${currentPremiumValue.toFixed(2)}</div>
-                        <div style="font-size:10px; color:#999;" id="${trackerId}_currentValueYuan">${currentValuePerUnit.toLocaleString()}元</div>
+                        <div style="font-size:16px; font-weight:bold; color:#1976d2;" id="${trackerId}_currentValue">${currentPremiumValue.toFixed(2)}</div>
+                        <div style="font-size:10px; color:#999;" id="${trackerId}_currentValueYuan">${currentValuePerUnit.toLocaleString()}元/張</div>
                     </div>
                     <div>
                         <div style="font-size:10px; color:#666;">帳面損益</div>
-                        <div style="font-size:14px; font-weight:bold;" id="${trackerId}_pnl" style="color:${currentPremiumValue >= premium ? '#2e7d32' : '#d32f2f'}">
+                        <div style="font-size:16px; font-weight:bold;" id="${trackerId}_pnl" style="color:${currentPremiumValue >= premium ? '#2e7d32' : '#d32f2f'}">
                             ${(currentPremiumValue - premium) >= 0 ? '+' : ''}${(currentPremiumValue - premium).toFixed(2)}
                         </div>
-                        <div style="font-size:10px; color:#999;" id="${trackerId}_pnlYuan">${((currentPremiumValue - premium) * sharesPerUnit).toLocaleString()}元</div>
+                        <div style="font-size:10px; color:#999;" id="${trackerId}_pnlYuan">${((currentPremiumValue - premium) >= 0 ? '+' : '')}${((currentPremiumValue - premium) * sharesPerUnit).toLocaleString()}元</div>
                     </div>
                     <div>
                         <div style="font-size:10px; color:#666;">報酬率</div>
-                        <div style="font-size:14px; font-weight:bold;" id="${trackerId}_return">
-                            ${premium > 0 ? ((currentPremiumValue / premium - 1) * 100).toFixed(1) : 0}%
-                        </div>
-                    </div>
-                    <div>
-                        <div style="font-size:10px; color:#666;">槓桿倍數</div>
-                        <div style="font-size:14px; font-weight:bold; color:#7b1fa2;" id="${trackerId}_leverage">
-                            ${premium > 0 ? (cbPrice / premium).toFixed(1) : '-'}x
+                        <div style="font-size:16px; font-weight:bold;" id="${trackerId}_return" style="color:${currentPremiumValue >= premium ? '#2e7d32' : '#d32f2f'}">
+                            ${premium > 0 ? ((currentPremiumValue / premium - 1) * 100 >= 0 ? '+' : '') + ((currentPremiumValue / premium - 1) * 100).toFixed(1) : 0}%
                         </div>
                     </div>
                 </div>
@@ -27379,16 +27433,12 @@ function calculateCBASProfit(trackerId, exercisePrice, defaultPremium, sharesPer
     // 報酬率
     const returnRate = premium > 0 ? ((currentValue / premium - 1) * 100) : 0;
     
-    // 槓桿倍數
-    const leverage = premium > 0 ? (currentPrice / premium) : 0;
-    
     // 更新顯示
     const currentValueEl = document.getElementById(`${trackerId}_currentValue`);
     const currentValueYuanEl = document.getElementById(`${trackerId}_currentValueYuan`);
     const pnlEl = document.getElementById(`${trackerId}_pnl`);
     const pnlYuanEl = document.getElementById(`${trackerId}_pnlYuan`);
     const returnEl = document.getElementById(`${trackerId}_return`);
-    const leverageEl = document.getElementById(`${trackerId}_leverage`);
     
     if (currentValueEl) {
         currentValueEl.textContent = currentValue.toFixed(2);
@@ -27396,7 +27446,7 @@ function calculateCBASProfit(trackerId, exercisePrice, defaultPremium, sharesPer
     }
     
     if (currentValueYuanEl) {
-        currentValueYuanEl.textContent = (currentValue * sharesPerUnit).toLocaleString() + '元';
+        currentValueYuanEl.textContent = (currentValue * sharesPerUnit).toLocaleString() + '元/張';
     }
     
     if (pnlEl) {
@@ -27413,10 +27463,139 @@ function calculateCBASProfit(trackerId, exercisePrice, defaultPremium, sharesPer
         returnEl.textContent = (returnRate >= 0 ? '+' : '') + returnRate.toFixed(1) + '%';
         returnEl.style.color = returnRate >= 0 ? '#2e7d32' : '#d32f2f';
     }
+}
+
+/**
+ * v3.98g 新增：CBAS 買進時機評估（基於歷史資料分析）
+ * 資料來源：yuanta_cbasrate.db (2017-2025, 50,904筆)
+ */
+function renderCBASTimingEvaluation(premium, remainingYears, cbPrice, exercisePrice) {
+    // 計算關鍵指標
+    const leverage = cbPrice / premium;
+    const safetyMargin = ((cbPrice - exercisePrice) / cbPrice * 100);
+    const monthlyRate = (100 * 0.025 / 12) / premium * 100;  // 假設平均折現率 2.5%
     
-    if (leverageEl) {
-        leverageEl.textContent = leverage.toFixed(1) + 'x';
+    // 判斷區間（基於歷史分析結果）
+    let zone = '';
+    let zoneColor = '';
+    let zoneBg = '';
+    let zoneDesc = '';
+    let stars = 0;
+    
+    // 甜蜜點：權利金 5-10 元 + 剩餘 1.5-2.5 年
+    if (premium >= 5 && premium <= 10 && remainingYears >= 1.5 && remainingYears <= 2.5) {
+        zone = '✅ 甜蜜點';
+        zoneColor = '#4caf50';
+        zoneBg = 'rgba(76,175,80,0.2)';
+        zoneDesc = '風險報酬比最佳，時間壓力適中';
+        stars = 5;
     }
+    // 優良區：權利金 3-5 或 8-12 + 合理年期
+    else if ((premium >= 3 && premium < 5 && remainingYears >= 1 && remainingYears <= 2) ||
+             (premium > 10 && premium <= 12 && remainingYears >= 2 && remainingYears <= 3)) {
+        zone = '👍 優良區';
+        zoneColor = '#2196f3';
+        zoneBg = 'rgba(33,150,243,0.2)';
+        zoneDesc = '條件良好，可考慮進場';
+        stars = 4;
+    }
+    // 激進區：權利金 < 3 + 剩餘 < 1 年
+    else if (premium < 3 && remainingYears < 1) {
+        zone = '⚠️ 激進區';
+        zoneColor = '#ff9800';
+        zoneBg = 'rgba(255,152,0,0.2)';
+        zoneDesc = '高槓桿高風險，時間壓力大';
+        stars = 2;
+    }
+    // 保守區：權利金 > 12 + 剩餘 > 2 年
+    else if (premium > 12 && remainingYears > 2) {
+        zone = '🛡️ 保守區';
+        zoneColor = '#9c27b0';
+        zoneBg = 'rgba(156,39,176,0.2)';
+        zoneDesc = '時間充裕但資金效率較低';
+        stars = 3;
+    }
+    // 一般區
+    else {
+        zone = '📊 一般區';
+        zoneColor = '#607d8b';
+        zoneBg = 'rgba(96,125,139,0.2)';
+        zoneDesc = '依個人風險偏好評估';
+        stars = 3;
+    }
+    
+    // 歷史統計參考值
+    const historyRef = {
+        '甜蜜點': { leverage: '15-20x', monthlyRate: '3-5%', safety: '17-18%' },
+        '激進區': { leverage: '>80x', monthlyRate: '>10%', safety: '~10%' },
+        '保守區': { leverage: '8-12x', monthlyRate: '2-3%', safety: '>20%' }
+    };
+    
+    return `
+        <!-- 評估結果 -->
+        <div style="background:${zoneBg}; padding:12px; border-radius:6px; margin-bottom:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <div style="font-size:16px; font-weight:bold;">${zone}</div>
+                <div style="font-size:14px;">${'⭐'.repeat(stars)}${'☆'.repeat(5-stars)}</div>
+            </div>
+            <div style="font-size:12px; opacity:0.9;">${zoneDesc}</div>
+        </div>
+        
+        <!-- 當前指標 vs 歷史統計 -->
+        <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; margin-bottom:12px;">
+            <div style="background:rgba(255,255,255,0.1); padding:10px; border-radius:4px; text-align:center;">
+                <div style="font-size:10px; opacity:0.8;">槓桿倍數</div>
+                <div style="font-size:18px; font-weight:bold;">${leverage.toFixed(1)}x</div>
+                <div style="font-size:9px; opacity:0.7;">歷史中位 40x</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.1); padding:10px; border-radius:4px; text-align:center;">
+                <div style="font-size:10px; opacity:0.8;">剩餘年期</div>
+                <div style="font-size:18px; font-weight:bold;">${remainingYears.toFixed(1)}年</div>
+                <div style="font-size:9px; opacity:0.7;">建議 1.5-2.5年</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.1); padding:10px; border-radius:4px; text-align:center;">
+                <div style="font-size:10px; opacity:0.8;">安全距離</div>
+                <div style="font-size:18px; font-weight:bold;">${safetyMargin.toFixed(1)}%</div>
+                <div style="font-size:9px; opacity:0.7;">建議 >15%</div>
+            </div>
+        </div>
+        
+        <!-- 買進時機參考矩陣 -->
+        <div style="background:rgba(255,255,255,0.1); padding:10px; border-radius:6px;">
+            <div style="font-size:10px; opacity:0.8; margin-bottom:8px;">買進時機參考矩陣（歷史統計）：</div>
+            <table style="width:100%; font-size:10px; border-collapse:collapse;">
+                <tr style="opacity:0.8;">
+                    <td style="padding:4px;"></td>
+                    <td style="padding:4px; text-align:center;">&lt;1年</td>
+                    <td style="padding:4px; text-align:center;">1-2年</td>
+                    <td style="padding:4px; text-align:center;">&gt;2年</td>
+                </tr>
+                <tr>
+                    <td style="padding:4px;">權利金 &lt;5</td>
+                    <td style="padding:4px; text-align:center; background:rgba(255,152,0,0.3); border-radius:3px;">⚠️高風險</td>
+                    <td style="padding:4px; text-align:center; background:rgba(33,150,243,0.3); border-radius:3px;">👍良好</td>
+                    <td style="padding:4px; text-align:center; background:rgba(96,125,139,0.3); border-radius:3px;">一般</td>
+                </tr>
+                <tr>
+                    <td style="padding:4px;">權利金 5-10</td>
+                    <td style="padding:4px; text-align:center; background:rgba(96,125,139,0.3); border-radius:3px;">一般</td>
+                    <td style="padding:4px; text-align:center; background:rgba(76,175,80,0.3); border-radius:3px;">✅最佳</td>
+                    <td style="padding:4px; text-align:center; background:rgba(33,150,243,0.3); border-radius:3px;">👍良好</td>
+                </tr>
+                <tr>
+                    <td style="padding:4px;">權利金 &gt;10</td>
+                    <td style="padding:4px; text-align:center; background:rgba(96,125,139,0.3); border-radius:3px;">少見</td>
+                    <td style="padding:4px; text-align:center; background:rgba(96,125,139,0.3); border-radius:3px;">一般</td>
+                    <td style="padding:4px; text-align:center; background:rgba(156,39,176,0.3); border-radius:3px;">🛡️保守</td>
+                </tr>
+            </table>
+        </div>
+        
+        <!-- 資料來源 -->
+        <div style="margin-top:10px; font-size:9px; opacity:0.6; text-align:right;">
+            資料來源：元大 CBAS 報價表 2017-2025（50,904筆歷史資料）
+        </div>
+    `;
 }
 
 /**

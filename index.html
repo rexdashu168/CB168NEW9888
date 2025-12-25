@@ -10921,24 +10921,32 @@ function generateTimePerformanceData() {
 
 // 【2】顯示時間維度績效
 function showTimePerformance(period, event) {
-    if (event) { event.preventDefault(); event.stopPropagation(); }
-    
-    document.querySelectorAll('.time-perf-tab').forEach(tab => {
-        tab.classList.remove('active');
-        tab.style.background = '#c8e6c9';
-        tab.style.color = '#2e7d32';
-    });
-    if (event && event.target) {
-        event.target.classList.add('active');
-        event.target.style.background = '#43a047';
-        event.target.style.color = 'white';
-    }
-    
-    const data = perfAnalysisData.timePerformance;
-    const content = document.getElementById('timePerformanceContent');
-    
-    if (!data || data.total === 0) {
-        content.innerHTML = `
+    try {
+        console.log('🔍 [showTimePerformance] 被呼叫, period:', period);
+        
+        if (event) { event.preventDefault(); event.stopPropagation(); }
+        
+        document.querySelectorAll('.time-perf-tab').forEach(tab => {
+            tab.classList.remove('active');
+            tab.style.background = '#c8e6c9';
+            tab.style.color = '#2e7d32';
+        });
+        if (event && event.target) {
+            event.target.classList.add('active');
+            event.target.style.background = '#43a047';
+            event.target.style.color = 'white';
+        }
+        
+        const data = perfAnalysisData.timePerformance;
+        const content = document.getElementById('timePerformanceContent');
+        
+        console.log('🔍 [showTimePerformance] data.total:', data?.total);
+        console.log('🔍 [showTimePerformance] content element:', content ? 'found' : 'NOT FOUND');
+        
+        if (!data || data.total === 0) {
+            console.log('🔍 [showTimePerformance] 顯示暫無資料訊息');
+            if (content) {
+                content.innerHTML = `
             <div style="padding:20px; text-align:left;">
                 <div style="color:#2e7d32; font-weight:bold; margin-bottom:12px; font-size:13px;">
                     📊 此功能追蹤 CB 掛牌後的報酬率表現
@@ -10959,8 +10967,9 @@ function showTimePerformance(period, event) {
                 </div>
             </div>
         `;
-        return;
-    }
+            }
+            return;
+        }
     
     let html = '';
     
@@ -11164,7 +11173,11 @@ function showTimePerformance(period, event) {
         </div>`;
     }
     
-    content.innerHTML = html;
+    if (content) content.innerHTML = html;
+    
+    } catch (error) {
+        console.error('❌ [showTimePerformance] 錯誤:', error);
+    }
 }
 
 // 【3】風險調整後績效數據生成

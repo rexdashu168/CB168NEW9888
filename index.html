@@ -8301,6 +8301,7 @@ async function loadStatistics() {
                 'companyName': row['公司名稱'] || row['公司'] || '',  // v3.96 新增：保存公司名稱用於KY股判斷
                 'openDate': getSmartValue(row, 'openDate'),  // v3.96 修正：保留原始日期格式供後續解析
                 'openDateStr': formatDate(getSmartValue(row, 'openDate')),  // 格式化字串用於顯示
+                'listDate': hlRow['掛牌日期'] || row['掛牌日期'] || row['掛牌日'] || null,  // v3.98h 新增：掛牌日期用於時間維度績效
                 'industry': getSmartValue(row, 'industry'),
                 'broker': getSmartValue(row, 'broker'),
                 'guarantee': getSmartValue(row, 'guarantee'),
@@ -9502,7 +9503,6 @@ function generateSupplyAnalysis() {
                     <td style="padding:6px 4px; text-align:center;">${listDateStr}</td>
                 </tr>`;
             });
-            });
             pendingTableHtml += '</tbody></table>';
         } else {
             pendingTableHtml = '<div style="padding:20px; text-align:center; color:#888;">目前無承銷進行中案件</div>';
@@ -10693,16 +10693,48 @@ function showCostEffectYear(year, event) {
 
 // 【2】時間維度績效數據生成
 function generateTimePerformanceData() {
-    // v3.98f-14: 使用真實kanban資料計算時間維度績效
+    // v3.98h: 整合 02 工作表時程資料 + kanban 價格資料計算時間維度績效
     const items = [];
     const peakTimingStats = { week1: 0, week2: 0, week3: 0, week4: 0, month2: 0, month3: 0, later: 0 };
     
+    // 建立 02 工作表的掛牌日期查詢表
+    const scheduleMap = {};
+    if (window.sheet02Data && window.sheet02Data.length > 0) {
+        window.sheet02Data.forEach(row => {
+            const cbCode = String(row['CB代號'] || '').replace('.0', '').trim();
+            if (cbCode) {
+                scheduleMap[cbCode] = {
+                    listDate: row['掛牌日期'],
+                    boardDate: row['董事會公告'],
+                    effectDate: row['生效日期'],
+                    auctionDate: row['詢圈競拍日期'],
+                    expiryDate: row['到期日期']
+                };
+            }
+        });
+    }
+    
     auctionRawData.forEach(d => {
         if (!d.minBidPrice || d.minBidPrice <= 0 || !d.marketHigh || !d.marketLow) return;
-        if (!d.listDate) return;  // 需要掛牌日期
+        
+        // v3.98h: 優先從 02 工作表取得掛牌日期，再從 auctionRawData 本身取得
+        const scheduleInfo = scheduleMap[d.id] || {};
+        let listDateRaw = d.listDate || scheduleInfo.listDate;
+        if (!listDateRaw) return;  // 需要掛牌日期
         
         const cbCode = d.id;
-        const listDateNum = parseInt(String(d.listDate).replace(/\//g, ''));
+        
+        // 解析掛牌日期為數字格式 (YYYYMMDD)
+        let listDateNum = 0;
+        if (typeof listDateRaw === 'number') {
+            // Excel 日期數字
+            const date = new Date((listDateRaw - 25569) * 86400 * 1000);
+            listDateNum = date.getFullYear() * 10000 + (date.getMonth() + 1) * 100 + date.getDate();
+        } else if (typeof listDateRaw === 'string') {
+            listDateNum = parseInt(String(listDateRaw).replace(/[\\/\\-]/g, ''));
+        }
+        
+        if (!listDateNum || listDateNum < 20100101) return;
         
         // 計算基準報酬
         const returnToHigh = ((d.marketHigh - d.minBidPrice) / d.minBidPrice * 100);
@@ -10719,8 +10751,8 @@ function generateTimePerformanceData() {
         if (cbTimeSeries.length > 0) {
             // 有真實資料，計算各時間點的報酬
             const sortedData = cbTimeSeries.sort((a, b) => {
-                const dateA = parseInt(String(a.date).replace(/\//g, ''));
-                const dateB = parseInt(String(b.date).replace(/\//g, ''));
+                const dateA = parseInt(String(a.date).replace(/[\\/]/g, ''));
+                const dateB = parseInt(String(b.date).replace(/[\\/]/g, ''));
                 return dateA - dateB;
             });
             
@@ -10729,28 +10761,40 @@ function generateTimePerformanceData() {
             let highestPrice = 0, highestDate = null;
             
             sortedData.forEach(record => {
-                const recordDate = parseInt(String(record.date).replace(/\//g, ''));
-                const daysDiff = Math.floor((recordDate - listDateNum) / 100 * 30);  // 粗略計算天數
+                const recordDate = parseInt(String(record.date).replace(/[\\/]/g, ''));
+                // 計算與掛牌日的天數差
+                const listYear = Math.floor(listDateNum / 10000);
+                const listMonth = Math.floor((listDateNum % 10000) / 100);
+                const listDay = listDateNum % 100;
+                const recordYear = Math.floor(recordDate / 10000);
+                const recordMonth = Math.floor((recordDate % 10000) / 100);
+                const recordDay = recordDate % 100;
+                
+                const listDateObj = new Date(listYear, listMonth - 1, listDay);
+                const recordDateObj = new Date(recordYear, recordMonth - 1, recordDay);
+                const daysDiff = Math.round((recordDateObj - listDateObj) / (1000 * 60 * 60 * 24));
+                
                 const cbPrice = record.cbPrice || 0;
                 
-                if (cbPrice <= 0) return;
+                if (cbPrice <= 0 || daysDiff < 0) return;
                 
                 // 追蹤最高價出現時間
                 if (cbPrice > highestPrice) {
                     highestPrice = cbPrice;
                     highestDate = recordDate;
+                    daysToPeak = daysDiff;
                 }
                 
-                // 第1週（7天內）
-                if (daysDiff >= 0 && daysDiff <= 7 && price1Week === null) {
+                // 第1週（5-7個交易日）
+                if (daysDiff >= 5 && daysDiff <= 10 && price1Week === null) {
                     price1Week = cbPrice;
                 }
-                // 第1月（30天內）
-                if (daysDiff >= 25 && daysDiff <= 35 && price1Month === null) {
+                // 第1月（20-25個交易日）
+                if (daysDiff >= 20 && daysDiff <= 30 && price1Month === null) {
                     price1Month = cbPrice;
                 }
-                // 第3月（90天內）
-                if (daysDiff >= 85 && daysDiff <= 95 && price3Month === null) {
+                // 第3月（60-70個交易日）
+                if (daysDiff >= 60 && daysDiff <= 75 && price3Month === null) {
                     price3Month = cbPrice;
                 }
             });
@@ -10766,13 +10810,8 @@ function generateTimePerformanceData() {
                 return3Month = ((price3Month - d.minBidPrice) / d.minBidPrice * 100);
             }
             
-            // 計算最佳賣點出現時機
-            if (highestDate && highestPrice > 0) {
-                daysToPeak = Math.floor((highestDate - listDateNum) / 100 * 30);
-                peakDate = highestDate;
-                peakValue = highestPrice;
-                
-                // 統計最佳賣點時機分布
+            // 統計最佳賣點時機分布
+            if (daysToPeak !== null && highestPrice > 0) {
                 if (daysToPeak <= 7) peakTimingStats.week1++;
                 else if (daysToPeak <= 14) peakTimingStats.week2++;
                 else if (daysToPeak <= 21) peakTimingStats.week3++;
@@ -10797,7 +10836,8 @@ function generateTimePerformanceData() {
         items.push({
             name: d.name,
             id: d.id,
-            listDate: d.listDate,
+            listDate: listDateRaw,
+            listDateNum: listDateNum,
             minBid: d.minBidPrice,
             avgBid: avgBidPrice,
             high: d.marketHigh,

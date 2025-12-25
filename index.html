@@ -10693,6 +10693,7 @@ function showCostEffectYear(year, event) {
 
 // 【2】時間維度績效數據生成
 function generateTimePerformanceData() {
+    try {
     // v3.98h: 整合 02 工作表時程資料 + kanban 價格資料計算時間維度績效
     const items = [];
     const peakTimingStats = { week1: 0, week2: 0, week3: 0, week4: 0, month2: 0, month3: 0, later: 0 };
@@ -10911,6 +10912,11 @@ function generateTimePerformanceData() {
     console.log('   - 跳過(無掛牌日期):', skippedNoListDate);
     console.log('   - 處理成功:', processed, '| 最終items:', items.length);
     console.log('   - 有真實kanban資料:', realDataCount);
+    
+    } catch (error) {
+        console.error('❌ [時間維度績效] 發生錯誤:', error);
+        perfAnalysisData.timePerformance = { total: 0 };
+    }
 }
 
 // 【2】顯示時間維度績效
@@ -27937,23 +27943,23 @@ async function loadOtcMarginData() {
 }
 
 async function loadOtcMarginDataBackground(SQL, startYear) {
-    const minYear = 2010;
-    let consecutiveMiss = 0;
+    // v3.98h: 只載入已知存在的年份，避免 404 錯誤
+    // 上櫃融資融券資料可用年份：2023, 2024, 2025
+    const availableYears = [2023, 2024, 2025];
+    const yearsToLoad = availableYears.filter(y => y <= startYear && !window.otcMarginData.years.includes(y));
+    
+    if (yearsToLoad.length === 0) {
+        window.otcMarginData.fullyLoaded = true;
+        return;
+    }
+    
     let backgroundRecords = 0;
     const backgroundYears = [];
     
-    for (let year = startYear; year >= minYear && consecutiveMiss < 2; year--) {
+    for (const year of yearsToLoad) {
         await new Promise(resolve => setTimeout(resolve, 100));
         
-        const dbFile = `data/otclenging_${year}_filtered.db`;
         try {
-            const headResponse = await fetch(dbFile, { method: 'HEAD' });
-            if (!headResponse.ok) {
-                consecutiveMiss++;
-                continue;
-            }
-            consecutiveMiss = 0;
-            
             const records = await loadOtcMarginYearData(SQL, year);
             if (records > 0) {
                 backgroundRecords += records;
@@ -27961,7 +27967,7 @@ async function loadOtcMarginDataBackground(SQL, startYear) {
                 window.otcMarginData.years.push(year);
             }
         } catch (e) {
-            consecutiveMiss++;
+            // 靜默失敗，不輸出錯誤
         }
     }
     

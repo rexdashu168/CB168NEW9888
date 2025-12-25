@@ -13146,6 +13146,19 @@ function generateMarketTrendAnalysis() {
         });
     });
 
+    // v3.98h Debug: 檢查 allCBData
+    console.log('📊 allCBData Debug:', {
+        總筆數: allCBData.length,
+        競拍: allCBData.filter(d => d.type === '競拍').length,
+        詢圈: allCBData.filter(d => d.type === '詢圈').length,
+        前3筆: allCBData.slice(0, 3).map(d => ({
+            id: d.id,
+            name: d.name,
+            issueSize: d.issueSize,
+            high: d.high
+        }))
+    });
+
     // 輔助函數：計算區間統計
     function calcStats(data) {
         const withMarket = data.filter(d => d.hasMarket);
@@ -13243,16 +13256,26 @@ function generateMarketTrendAnalysis() {
         ranges: sizeRanges.map(r => {
             const filtered = allCBData.filter(d => d.issueSize >= r.min && d.issueSize < r.max);
             const stats = calcStats(filtered);
-            // v3.98h: 加入明細資料
+            // v3.98h: 加入明細資料（使用正確的欄位名）
             const items = filtered.map(d => ({
-                code: d.cbCode,
-                name: d.cbName,
-                guarantee: d.guarantee,
-                size: d.issueSize,
-                high: d.marketHigh,
-                low: d.marketLow,
-                amp: d.amplitude
+                code: d.id || '',
+                name: d.name || '',
+                guarantee: d.guarantee || '',
+                size: d.issueSize || 0,
+                high: d.high || 0,
+                low: d.low || 0,
+                amp: d.amp || 0
             }));
+            
+            // v3.98h Debug
+            if (r.label === '小於2億' && items.length > 0) {
+                console.log('📦 發行規模 Debug (小於2億):', {
+                    筆數: items.length,
+                    前3筆: items.slice(0, 3),
+                    原始數據前3: filtered.slice(0, 3)
+                });
+            }
+            
             return { label: r.label, count: stats.count, avgHigh: stats.avgHigh, avgLow: stats.avgLow, avgAmp: stats.avgAmp, items };
         }).filter(r => r.count > 0)
     };
@@ -13270,15 +13293,15 @@ function generateMarketTrendAnalysis() {
         ranges: capitalRanges.map(r => {
             const filtered = allCBData.filter(d => d.capital >= r.min && d.capital < r.max);
             const stats = calcStats(filtered);
-            // v3.98h: 加入明細資料
+            // v3.98h: 加入明細資料（使用正確的欄位名）
             const items = filtered.map(d => ({
-                code: d.cbCode,
-                name: d.cbName,
+                code: d.id,
+                name: d.name,
                 guarantee: d.guarantee,
                 capital: d.capital,
-                high: d.marketHigh,
-                low: d.marketLow,
-                amp: d.amplitude
+                high: d.high,
+                low: d.low,
+                amp: d.amp
             }));
             return { label: r.label, count: stats.count, avgHigh: stats.avgHigh, avgLow: stats.avgLow, avgAmp: stats.avgAmp, items };
         }).filter(r => r.count > 0)
@@ -13297,15 +13320,15 @@ function generateMarketTrendAnalysis() {
         ranges: priceRanges.map(r => {
             const filtered = allCBData.filter(d => d.conversionPrice >= r.min && d.conversionPrice < r.max);
             const stats = calcStats(filtered);
-            // v3.98h: 加入明細資料
+            // v3.98h: 加入明細資料（使用正確的欄位名）
             const items = filtered.map(d => ({
-                code: d.cbCode,
-                name: d.cbName,
+                code: d.id,
+                name: d.name,
                 guarantee: d.guarantee,
                 convPrice: d.conversionPrice,
-                high: d.marketHigh,
-                low: d.marketLow,
-                amp: d.amplitude
+                high: d.high,
+                low: d.low,
+                amp: d.amp
             }));
             return { label: r.label, count: stats.count, avgHigh: stats.avgHigh, avgLow: stats.avgLow, avgAmp: stats.avgAmp, items };
         }).filter(r => r.count > 0)
@@ -13321,15 +13344,15 @@ function generateMarketTrendAnalysis() {
         });
         const stats = calcStats(filtered);
         if (stats.count > 0) {
-            // v3.98h: 加入明細資料
+            // v3.98h: 加入明細資料（使用正確的欄位名）
             const items = filtered.map(d => ({
-                code: d.cbCode,
-                name: d.cbName,
+                code: d.id,
+                name: d.name,
                 guarantee: d.guarantee,
                 rating: d.rating,
-                high: d.marketHigh,
-                low: d.marketLow,
-                amp: d.amplitude
+                high: d.high,
+                low: d.low,
+                amp: d.amp
             }));
             ratingRanges.push({
                 label: 'TCRI ' + tcri,

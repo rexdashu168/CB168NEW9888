@@ -2206,6 +2206,37 @@ button:active, .clickable:active {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
 }
+
+/* v3.98h 智慧篩選標籤樣式 */
+.sf-tag {
+    padding: 4px 10px;
+    border: 1px solid #c8e6c9;
+    background: #f5f5f5;
+    color: #666;
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 11px;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+.sf-tag:hover {
+    background: #e8f5e9;
+    border-color: #43a047;
+    color: #2e7d32;
+}
+.sf-tag.active {
+    background: #43a047;
+    border-color: #43a047;
+    color: white;
+    font-weight: bold;
+}
+.sf-main-tab {
+    transition: all 0.2s;
+}
+.sf-main-tab:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
 </style>
 
 </head>
@@ -2253,6 +2284,162 @@ button:active, .clickable:active {
         <div>
             <div style="font-size:15px; font-weight:800;">AI智能可轉債競拍系統</div>
             <div style="font-size:10px; opacity:0.9; margin-top:1px;">輸入條件 → AI分析 → 策略建議</div>
+        </div>
+    </div>
+</div>
+
+<!-- ========== v3.98h 新增：CB 智慧篩選 ========== -->
+<div id="smartFilterSection" class="panel-section" style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border: 2px solid #43a047; border-radius: 12px; padding: 15px; margin-bottom: 20px;">
+    <div class="section-header" style="display:flex; align-items:center; margin-bottom:15px; padding-bottom:10px; border-bottom:2px solid #43a047; cursor:pointer;" onclick="toggleSmartFilter()">
+        <span style="font-size:20px; margin-right:8px;">🔍</span>
+        <span style="font-size:16px; font-weight:bold; color:#2e7d32;">CB 智慧篩選</span>
+        <span style="font-size:11px; color:#666; margin-left:10px;">快速找到符合條件的CB</span>
+        <span id="smartFilterToggle" style="margin-left:auto; font-size:12px; color:#43a047;">▼ 展開</span>
+    </div>
+    
+    <div id="smartFilterContent" style="display:none;">
+        <!-- 第一排：主要分類標籤 -->
+        <div style="display:flex; gap:5px; margin-bottom:12px; flex-wrap:wrap; border-bottom:1px solid #a5d6a7; padding-bottom:12px;">
+            <button type="button" class="sf-main-tab active" onclick="switchSmartFilterMain('all', this)" style="padding:8px 16px; border:2px solid #43a047; background:#43a047; color:white; border-radius:20px; cursor:pointer; font-weight:bold; font-size:13px;">
+                📊 全部CB
+            </button>
+            <button type="button" class="sf-main-tab" onclick="switchSmartFilterMain('pending', this)" style="padding:8px 16px; border:2px solid #ff9800; background:white; color:#e65100; border-radius:20px; cursor:pointer; font-weight:600; font-size:13px;">
+                ⏳ 承銷進行中
+            </button>
+            <button type="button" class="sf-main-tab" onclick="switchSmartFilterMain('auction', this)" style="padding:8px 16px; border:2px solid #f44336; background:white; color:#c62828; border-radius:20px; cursor:pointer; font-weight:600; font-size:13px;">
+                🔥 即將競拍
+            </button>
+            <button type="button" class="sf-main-tab" onclick="switchSmartFilterMain('listed', this)" style="padding:8px 16px; border:2px solid #2196f3; background:white; color:#1565c0; border-radius:20px; cursor:pointer; font-weight:600; font-size:13px;">
+                ✅ 已掛牌
+            </button>
+            <button type="button" class="sf-main-tab" onclick="switchSmartFilterMain('history', this)" style="padding:8px 16px; border:2px solid #9e9e9e; background:white; color:#616161; border-radius:20px; cursor:pointer; font-weight:600; font-size:13px;">
+                📚 歷史案例
+            </button>
+        </div>
+        
+        <!-- 第二排：篩選條件 -->
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:10px; margin-bottom:15px;">
+            <!-- 產業分類 -->
+            <div style="background:white; padding:10px; border-radius:8px; border:1px solid #c8e6c9;">
+                <div style="font-size:12px; font-weight:bold; color:#2e7d32; margin-bottom:8px;">🏭 產業分類</div>
+                <div id="sfIndustryTags" style="display:flex; flex-wrap:wrap; gap:4px; max-height:80px; overflow-y:auto;">
+                    <span class="sf-tag active" onclick="toggleSfTag(this, 'industry', 'all')">全部</span>
+                    <span class="sf-tag" onclick="toggleSfTag(this, 'industry', '半導體')">半導體</span>
+                    <span class="sf-tag" onclick="toggleSfTag(this, 'industry', '電子')">電子</span>
+                    <span class="sf-tag" onclick="toggleSfTag(this, 'industry', '電腦週邊')">電腦週邊</span>
+                    <span class="sf-tag" onclick="toggleSfTag(this, 'industry', '光電')">光電</span>
+                    <span class="sf-tag" onclick="toggleSfTag(this, 'industry', '通訊')">通訊</span>
+                    <span class="sf-tag" onclick="toggleSfTag(this, 'industry', '生技')">生技</span>
+                    <span class="sf-tag" onclick="toggleSfTag(this, 'industry', '傳產')">傳產</span>
+                    <span class="sf-tag" onclick="toggleSfTag(this, 'industry', '金融')">金融</span>
+                    <span class="sf-tag" onclick="toggleSfTag(this, 'industry', '其他')">其他</span>
+                </div>
+            </div>
+            
+            <!-- 信用評級 -->
+            <div style="background:white; padding:10px; border-radius:8px; border:1px solid #c8e6c9;">
+                <div style="font-size:12px; font-weight:bold; color:#2e7d32; margin-bottom:8px;">⭐ 信用評級</div>
+                <div id="sfRatingTags" style="display:flex; flex-wrap:wrap; gap:4px;">
+                    <span class="sf-tag active" onclick="toggleSfTag(this, 'rating', 'all')">全部</span>
+                    <span class="sf-tag" onclick="toggleSfTag(this, 'rating', 'A')" style="border-color:#4caf50;">twA級以上</span>
+                    <span class="sf-tag" onclick="toggleSfTag(this, 'rating', 'BBB')" style="border-color:#2196f3;">twBBB級</span>
+                    <span class="sf-tag" onclick="toggleSfTag(this, 'rating', 'BB')" style="border-color:#ff9800;">twBB級以下</span>
+                    <span class="sf-tag" onclick="toggleSfTag(this, 'rating', 'none')" style="border-color:#9e9e9e;">無評等</span>
+                </div>
+            </div>
+            
+            <!-- 發行規模 -->
+            <div style="background:white; padding:10px; border-radius:8px; border:1px solid #c8e6c9;">
+                <div style="font-size:12px; font-weight:bold; color:#2e7d32; margin-bottom:8px;">💰 發行規模</div>
+                <div id="sfSizeTags" style="display:flex; flex-wrap:wrap; gap:4px;">
+                    <span class="sf-tag active" onclick="toggleSfTag(this, 'size', 'all')">全部</span>
+                    <span class="sf-tag" onclick="toggleSfTag(this, 'size', 'small')">小型(&lt;5億)</span>
+                    <span class="sf-tag" onclick="toggleSfTag(this, 'size', 'medium')">中型(5-15億)</span>
+                    <span class="sf-tag" onclick="toggleSfTag(this, 'size', 'large')">大型(&gt;15億)</span>
+                </div>
+            </div>
+            
+            <!-- 擔保狀態 -->
+            <div style="background:white; padding:10px; border-radius:8px; border:1px solid #c8e6c9;">
+                <div style="font-size:12px; font-weight:bold; color:#2e7d32; margin-bottom:8px;">🛡️ 擔保狀態</div>
+                <div id="sfGuaranteeTags" style="display:flex; flex-wrap:wrap; gap:4px;">
+                    <span class="sf-tag active" onclick="toggleSfTag(this, 'guarantee', 'all')">全部</span>
+                    <span class="sf-tag" onclick="toggleSfTag(this, 'guarantee', 'yes')" style="border-color:#4caf50;">有擔保</span>
+                    <span class="sf-tag" onclick="toggleSfTag(this, 'guarantee', 'no')" style="border-color:#ff9800;">無擔保</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 第三排：進階篩選 -->
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:10px; margin-bottom:15px;">
+            <!-- 理論價位 -->
+            <div style="background:white; padding:10px; border-radius:8px; border:1px solid #c8e6c9;">
+                <div style="font-size:12px; font-weight:bold; color:#2e7d32; margin-bottom:8px;">📈 理論價位</div>
+                <div id="sfTheoTags" style="display:flex; flex-wrap:wrap; gap:4px;">
+                    <span class="sf-tag active" onclick="toggleSfTag(this, 'theo', 'all')">全部</span>
+                    <span class="sf-tag" onclick="toggleSfTag(this, 'theo', 'below100')" style="border-color:#c62828;">&lt;100</span>
+                    <span class="sf-tag" onclick="toggleSfTag(this, 'theo', '100-105')" style="border-color:#ff9800;">100-105</span>
+                    <span class="sf-tag" onclick="toggleSfTag(this, 'theo', '105-110')" style="border-color:#2196f3;">105-110</span>
+                    <span class="sf-tag" onclick="toggleSfTag(this, 'theo', 'above110')" style="border-color:#4caf50;">&gt;110</span>
+                </div>
+            </div>
+            
+            <!-- 風險等級 -->
+            <div style="background:white; padding:10px; border-radius:8px; border:1px solid #c8e6c9;">
+                <div style="font-size:12px; font-weight:bold; color:#2e7d32; margin-bottom:8px;">⚠️ 風險等級</div>
+                <div id="sfRiskTags" style="display:flex; flex-wrap:wrap; gap:4px;">
+                    <span class="sf-tag active" onclick="toggleSfTag(this, 'risk', 'all')">全部</span>
+                    <span class="sf-tag" onclick="toggleSfTag(this, 'risk', 'low')" style="border-color:#4caf50;">🟢 低</span>
+                    <span class="sf-tag" onclick="toggleSfTag(this, 'risk', 'medium')" style="border-color:#ff9800;">🟡 中</span>
+                    <span class="sf-tag" onclick="toggleSfTag(this, 'risk', 'high')" style="border-color:#f44336;">🔴 高</span>
+                </div>
+            </div>
+            
+            <!-- 熱門排行 -->
+            <div style="background:white; padding:10px; border-radius:8px; border:1px solid #c8e6c9;">
+                <div style="font-size:12px; font-weight:bold; color:#2e7d32; margin-bottom:8px;">🔥 熱門排行</div>
+                <div id="sfHotTags" style="display:flex; flex-wrap:wrap; gap:4px;">
+                    <span class="sf-tag" onclick="toggleSfTag(this, 'hot', 'volume')">成交值</span>
+                    <span class="sf-tag" onclick="toggleSfTag(this, 'hot', 'gainers')">漲幅榜</span>
+                    <span class="sf-tag" onclick="toggleSfTag(this, 'hot', 'losers')">跌幅榜</span>
+                    <span class="sf-tag" onclick="toggleSfTag(this, 'hot', 'margin')">融資增</span>
+                </div>
+            </div>
+            
+            <!-- 特殊篩選 -->
+            <div style="background:white; padding:10px; border-radius:8px; border:1px solid #c8e6c9;">
+                <div style="font-size:12px; font-weight:bold; color:#2e7d32; margin-bottom:8px;">✨ 特殊篩選</div>
+                <div id="sfSpecialTags" style="display:flex; flex-wrap:wrap; gap:4px;">
+                    <span class="sf-tag" onclick="toggleSfTag(this, 'special', 'ky')">KY股</span>
+                    <span class="sf-tag" onclick="toggleSfTag(this, 'special', 'etf')">ETF型</span>
+                    <span class="sf-tag" onclick="toggleSfTag(this, 'special', 'newlist')">新掛牌</span>
+                    <span class="sf-tag" onclick="toggleSfTag(this, 'special', 'bearwarn')" style="border-color:#c62828;">⚠空頭預警</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 搜尋結果統計 & 執行按鈕 -->
+        <div style="display:flex; justify-content:space-between; align-items:center; background:white; padding:12px 15px; border-radius:8px; border:2px solid #43a047;">
+            <div style="font-size:13px;">
+                <span style="color:#666;">符合條件：</span>
+                <span id="sfResultCount" style="font-size:18px; font-weight:bold; color:#2e7d32;">--</span>
+                <span style="color:#666;"> 檔 CB</span>
+                <span id="sfFilterSummary" style="font-size:11px; color:#888; margin-left:10px;"></span>
+            </div>
+            <div style="display:flex; gap:8px;">
+                <button type="button" onclick="resetSmartFilter()" style="padding:8px 16px; border:2px solid #9e9e9e; background:white; color:#616161; border-radius:6px; cursor:pointer; font-size:13px;">
+                    🔄 重置
+                </button>
+                <button type="button" onclick="executeSmartFilter()" style="padding:8px 20px; border:none; background:linear-gradient(135deg, #43a047, #2e7d32); color:white; border-radius:6px; cursor:pointer; font-weight:bold; font-size:13px; box-shadow:0 2px 8px rgba(67,160,71,0.3);">
+                    🔍 搜尋
+                </button>
+            </div>
+        </div>
+        
+        <!-- 搜尋結果區域 -->
+        <div id="sfResultArea" style="margin-top:15px; display:none;">
+            <div style="font-size:14px; font-weight:bold; color:#2e7d32; margin-bottom:10px;">📋 搜尋結果</div>
+            <div id="sfResultTable" style="max-height:400px; overflow-y:auto; background:white; border-radius:8px; border:1px solid #c8e6c9;"></div>
         </div>
     </div>
 </div>
@@ -9260,6 +9447,375 @@ function generateStandardCard(data, titleOverride=null, inquiryData=null, exclud
     return html;
 }
 
+// ========== v3.98h 新增：CB 智慧篩選功能 ==========
+
+// 智慧篩選狀態
+const smartFilterState = {
+    main: 'all',      // all, pending, auction, listed, history
+    industry: 'all',
+    rating: 'all',
+    size: 'all',
+    guarantee: 'all',
+    theo: 'all',
+    risk: 'all',
+    hot: null,
+    special: null
+};
+
+// 切換智慧篩選展開/收合
+function toggleSmartFilter() {
+    const content = document.getElementById('smartFilterContent');
+    const toggle = document.getElementById('smartFilterToggle');
+    if (content.style.display === 'none') {
+        content.style.display = 'block';
+        toggle.textContent = '▲ 收合';
+        // 首次展開時計算結果數量
+        updateSmartFilterCount();
+    } else {
+        content.style.display = 'none';
+        toggle.textContent = '▼ 展開';
+    }
+}
+
+// 切換主要分類
+function switchSmartFilterMain(category, btn) {
+    smartFilterState.main = category;
+    
+    // 更新按鈕樣式
+    document.querySelectorAll('.sf-main-tab').forEach(b => {
+        b.classList.remove('active');
+        b.style.background = 'white';
+        b.style.color = b.style.borderColor;
+    });
+    btn.classList.add('active');
+    btn.style.background = btn.style.borderColor;
+    btn.style.color = 'white';
+    
+    updateSmartFilterCount();
+}
+
+// 切換篩選標籤
+function toggleSfTag(el, category, value) {
+    const container = el.parentElement;
+    
+    // 如果是單選類別（除了 hot 和 special）
+    if (['industry', 'rating', 'size', 'guarantee', 'theo', 'risk'].includes(category)) {
+        container.querySelectorAll('.sf-tag').forEach(t => t.classList.remove('active'));
+        el.classList.add('active');
+        smartFilterState[category] = value;
+    } else {
+        // hot 和 special 是可多選或取消的
+        if (el.classList.contains('active')) {
+            el.classList.remove('active');
+            smartFilterState[category] = null;
+        } else {
+            container.querySelectorAll('.sf-tag').forEach(t => t.classList.remove('active'));
+            el.classList.add('active');
+            smartFilterState[category] = value;
+        }
+    }
+    
+    updateSmartFilterCount();
+}
+
+// 更新符合條件數量
+function updateSmartFilterCount() {
+    const results = getFilteredCBList();
+    document.getElementById('sfResultCount').textContent = results.length;
+    
+    // 顯示篩選條件摘要
+    const summary = [];
+    if (smartFilterState.main !== 'all') {
+        const mainLabels = { pending: '承銷中', auction: '即將競拍', listed: '已掛牌', history: '歷史' };
+        summary.push(mainLabels[smartFilterState.main]);
+    }
+    if (smartFilterState.industry !== 'all') summary.push(smartFilterState.industry);
+    if (smartFilterState.rating !== 'all') summary.push(smartFilterState.rating + '級');
+    if (smartFilterState.size !== 'all') {
+        const sizeLabels = { small: '小型', medium: '中型', large: '大型' };
+        summary.push(sizeLabels[smartFilterState.size]);
+    }
+    if (smartFilterState.guarantee !== 'all') {
+        summary.push(smartFilterState.guarantee === 'yes' ? '有擔保' : '無擔保');
+    }
+    
+    document.getElementById('sfFilterSummary').textContent = summary.length > 0 ? '(' + summary.join(', ') + ')' : '';
+}
+
+// 取得篩選後的 CB 清單
+function getFilteredCBList() {
+    let results = [];
+    
+    // 根據主分類取得基礎資料
+    switch (smartFilterState.main) {
+        case 'pending':
+            // 承銷進行中
+            results = (window.pendingCBData || []).map(d => ({
+                id: d.id || d.cb || d['CB代號'],
+                name: d.name || d['CB名稱'] || d['公司名稱'],
+                industry: d.industry || d['產業'],
+                rating: d.rating || d['信評'],
+                size: parseFloat(d.size || d['發行金額'] || 0),
+                guarantee: d.guarantee || d['擔保'],
+                theo: parseFloat(d.theo || d['理論價'] || 100),
+                type: 'pending'
+            }));
+            break;
+        case 'auction':
+            // 即將競拍
+            results = auctionRawData.filter(d => {
+                if (!d.openDate) return false;
+                const now = new Date();
+                const openDate = typeof d.openDate === 'number' ? 
+                    new Date((d.openDate - 25569) * 86400 * 1000) : new Date(d.openDate);
+                return openDate > now && (openDate - now) < 30 * 24 * 60 * 60 * 1000; // 30天內
+            }).map(d => ({
+                id: d.id,
+                name: d.name,
+                industry: d.industry,
+                rating: d.rating,
+                size: d.issueSize,
+                guarantee: d.guarantee,
+                theo: d.theoPrice,
+                type: 'auction'
+            }));
+            break;
+        case 'listed':
+            // 已掛牌（有掛牌日期且已過掛牌日）
+            results = auctionRawData.filter(d => d.marketHigh > 0).map(d => ({
+                id: d.id,
+                name: d.name,
+                industry: d.industry,
+                rating: d.rating,
+                size: d.issueSize,
+                guarantee: d.guarantee,
+                theo: d.theoPrice,
+                marketHigh: d.marketHigh,
+                marketLow: d.marketLow,
+                type: 'listed'
+            }));
+            break;
+        case 'history':
+            // 歷史案例（全部有競拍結果的）
+            results = auctionRawData.filter(d => d.minBidPrice > 0).map(d => ({
+                id: d.id,
+                name: d.name,
+                industry: d.industry,
+                rating: d.rating,
+                size: d.issueSize,
+                guarantee: d.guarantee,
+                theo: d.theoPrice,
+                minBid: d.minBidPrice,
+                avgBid: d.avgBidPrice,
+                type: 'history'
+            }));
+            break;
+        default:
+            // 全部
+            results = auctionRawData.map(d => ({
+                id: d.id,
+                name: d.name,
+                industry: d.industry,
+                rating: d.rating,
+                size: d.issueSize,
+                guarantee: d.guarantee,
+                theo: d.theoPrice,
+                type: 'all'
+            }));
+    }
+    
+    // 套用產業篩選
+    if (smartFilterState.industry !== 'all') {
+        const keyword = smartFilterState.industry;
+        results = results.filter(d => {
+            const ind = (d.industry || '').toLowerCase();
+            if (keyword === '半導體') return ind.includes('半導體');
+            if (keyword === '電子') return ind.includes('電子') && !ind.includes('半導體');
+            if (keyword === '電腦週邊') return ind.includes('電腦') || ind.includes('週邊');
+            if (keyword === '光電') return ind.includes('光電');
+            if (keyword === '通訊') return ind.includes('通訊') || ind.includes('網路');
+            if (keyword === '生技') return ind.includes('生技') || ind.includes('醫療');
+            if (keyword === '傳產') return ind.includes('傳產') || ind.includes('鋼鐵') || ind.includes('紡織') || ind.includes('塑膠');
+            if (keyword === '金融') return ind.includes('金融') || ind.includes('銀行') || ind.includes('保險');
+            return true;
+        });
+    }
+    
+    // 套用信評篩選
+    if (smartFilterState.rating !== 'all') {
+        results = results.filter(d => {
+            const r = (d.rating || '').toUpperCase();
+            if (smartFilterState.rating === 'A') return r.includes('TWA') || r.includes('A+') || r.includes('A-') || r === 'A';
+            if (smartFilterState.rating === 'BBB') return r.includes('BBB');
+            if (smartFilterState.rating === 'BB') return r.includes('BB') && !r.includes('BBB');
+            if (smartFilterState.rating === 'none') return !r || r === '-' || r === '無';
+            return true;
+        });
+    }
+    
+    // 套用規模篩選
+    if (smartFilterState.size !== 'all') {
+        results = results.filter(d => {
+            const s = d.size || 0;
+            if (smartFilterState.size === 'small') return s < 5;
+            if (smartFilterState.size === 'medium') return s >= 5 && s <= 15;
+            if (smartFilterState.size === 'large') return s > 15;
+            return true;
+        });
+    }
+    
+    // 套用擔保篩選
+    if (smartFilterState.guarantee !== 'all') {
+        results = results.filter(d => {
+            const g = String(d.guarantee || '').toLowerCase();
+            const hasGuarantee = g.includes('有') || g === 'y' || g === 'yes' || g === '1';
+            return smartFilterState.guarantee === 'yes' ? hasGuarantee : !hasGuarantee;
+        });
+    }
+    
+    // 套用理論價篩選
+    if (smartFilterState.theo !== 'all') {
+        results = results.filter(d => {
+            const t = d.theo || 100;
+            if (smartFilterState.theo === 'below100') return t < 100;
+            if (smartFilterState.theo === '100-105') return t >= 100 && t < 105;
+            if (smartFilterState.theo === '105-110') return t >= 105 && t < 110;
+            if (smartFilterState.theo === 'above110') return t >= 110;
+            return true;
+        });
+    }
+    
+    return results;
+}
+
+// 重置篩選
+function resetSmartFilter() {
+    smartFilterState.main = 'all';
+    smartFilterState.industry = 'all';
+    smartFilterState.rating = 'all';
+    smartFilterState.size = 'all';
+    smartFilterState.guarantee = 'all';
+    smartFilterState.theo = 'all';
+    smartFilterState.risk = 'all';
+    smartFilterState.hot = null;
+    smartFilterState.special = null;
+    
+    // 重置所有標籤狀態
+    document.querySelectorAll('.sf-tag').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.sf-tag').forEach(t => {
+        if (t.textContent === '全部') t.classList.add('active');
+    });
+    
+    // 重置主分類
+    document.querySelectorAll('.sf-main-tab').forEach((b, i) => {
+        if (i === 0) {
+            b.classList.add('active');
+            b.style.background = b.style.borderColor;
+            b.style.color = 'white';
+        } else {
+            b.classList.remove('active');
+            b.style.background = 'white';
+            b.style.color = b.style.borderColor;
+        }
+    });
+    
+    updateSmartFilterCount();
+    document.getElementById('sfResultArea').style.display = 'none';
+}
+
+// 執行搜尋
+function executeSmartFilter() {
+    const results = getFilteredCBList();
+    const resultArea = document.getElementById('sfResultArea');
+    const resultTable = document.getElementById('sfResultTable');
+    
+    if (results.length === 0) {
+        resultTable.innerHTML = '<div style="padding:30px; text-align:center; color:#888;">沒有符合條件的 CB</div>';
+        resultArea.style.display = 'block';
+        return;
+    }
+    
+    // 生成表格
+    let html = `
+        <table style="width:100%; border-collapse:collapse; font-size:12px;">
+            <thead>
+                <tr style="background:#43a047; color:white; position:sticky; top:0;">
+                    <th style="padding:10px 8px; text-align:left;">CB代號</th>
+                    <th style="padding:10px 8px; text-align:left;">名稱</th>
+                    <th style="padding:10px 8px; text-align:center;">產業</th>
+                    <th style="padding:10px 8px; text-align:center;">信評</th>
+                    <th style="padding:10px 8px; text-align:right;">規模(億)</th>
+                    <th style="padding:10px 8px; text-align:center;">擔保</th>
+                    <th style="padding:10px 8px; text-align:right;">理論價</th>
+                    <th style="padding:10px 8px; text-align:center;">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    results.slice(0, 100).forEach((d, idx) => {
+        const rowBg = idx % 2 === 0 ? '#f9f9f9' : 'white';
+        const guaranteeColor = String(d.guarantee || '').includes('有') ? '#4caf50' : '#ff9800';
+        const theoColor = (d.theo || 100) >= 105 ? '#4caf50' : ((d.theo || 100) < 100 ? '#f44336' : '#666');
+        
+        html += `
+            <tr style="background:${rowBg}; border-bottom:1px solid #eee;">
+                <td style="padding:8px; font-weight:bold; color:#1565c0;">${d.id || '-'}</td>
+                <td style="padding:8px;">${d.name || '-'}</td>
+                <td style="padding:8px; text-align:center; font-size:11px;">${(d.industry || '-').substring(0, 6)}</td>
+                <td style="padding:8px; text-align:center; font-size:11px;">${d.rating || '-'}</td>
+                <td style="padding:8px; text-align:right;">${d.size ? d.size.toFixed(1) : '-'}</td>
+                <td style="padding:8px; text-align:center; color:${guaranteeColor}; font-weight:bold;">${String(d.guarantee || '').includes('有') ? '有' : '無'}</td>
+                <td style="padding:8px; text-align:right; color:${theoColor}; font-weight:bold;">${d.theo ? d.theo.toFixed(1) : '-'}</td>
+                <td style="padding:8px; text-align:center;">
+                    <button onclick="loadCBToForm('${d.id}')" style="padding:4px 10px; background:#1976d2; color:white; border:none; border-radius:4px; cursor:pointer; font-size:11px;">帶入</button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += '</tbody></table>';
+    
+    if (results.length > 100) {
+        html += `<div style="padding:10px; text-align:center; color:#888; font-size:12px;">僅顯示前 100 筆，共 ${results.length} 筆符合條件</div>`;
+    }
+    
+    resultTable.innerHTML = html;
+    resultArea.style.display = 'block';
+    
+    // 滾動到結果區域
+    resultArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// 將 CB 帶入表單
+function loadCBToForm(cbId) {
+    // 嘗試從快速選單找到並選擇
+    const quickSelect = document.getElementById('quickSelect');
+    if (quickSelect) {
+        for (let option of quickSelect.options) {
+            if (option.value && option.value.includes(cbId)) {
+                quickSelect.value = option.value;
+                quickSelect.dispatchEvent(new Event('change'));
+                
+                // 收合智慧篩選
+                document.getElementById('smartFilterContent').style.display = 'none';
+                document.getElementById('smartFilterToggle').textContent = '▼ 展開';
+                
+                // 滾動到表單區域
+                document.getElementById('evaluationForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+                return;
+            }
+        }
+    }
+    
+    // 如果快速選單找不到，直接填入 CB 名稱欄位
+    const cbNameInput = document.getElementById('cbName');
+    if (cbNameInput) {
+        cbNameInput.value = cbId;
+        cbNameInput.dispatchEvent(new Event('input'));
+    }
+}
+
 function initializeUI() {
     // v3.81 計算競拍案例總數（動態）
     totalAuctionCount = auctionRawData.filter(d => d.minBidPrice > 0).length;
@@ -12965,6 +13521,254 @@ function loadMarketCycleAnalysis() {
 
     const html = renderMarketCycleContent();
     container.innerHTML = html;
+    
+    // v3.98h: 載入指數資料並動態更新
+    loadMarketIndexData();
+}
+
+/**
+ * v3.98h 新增：市場指數資料物件
+ */
+window.marketIndexData = {
+    tse: null,      // 上市加權指數
+    otc: null,      // 上櫃指數
+    tsmc: null,     // 台積電
+    loaded: false,
+    loading: false
+};
+
+/**
+ * v3.98h 新增：載入市場指數 CSV 資料
+ */
+async function loadMarketIndexData() {
+    // 如果已載入，直接更新
+    if (window.marketIndexData.loaded) {
+        updateMarketCycleData();
+        return;
+    }
+    
+    // 如果正在載入，等待
+    if (window.marketIndexData.loading) return;
+    
+    window.marketIndexData.loading = true;
+    
+    const files = [
+        { name: 'tse', path: 'data/TXINDEX_utf8.csv' },
+        { name: 'tsmc', path: 'data/2330_utf8.csv' }
+    ];
+    
+    for (const file of files) {
+        try {
+            const response = await fetch(file.path);
+            if (response.ok) {
+                const text = await response.text();
+                window.marketIndexData[file.name] = parseMarketCSV(text);
+                console.log(`✅ 已載入 ${file.name} 資料，共 ${window.marketIndexData[file.name].length} 筆`);
+            }
+        } catch (e) {
+            console.log(`⚠️ 無法載入 ${file.path}，使用預設值`);
+        }
+    }
+    
+    window.marketIndexData.loaded = true;
+    window.marketIndexData.loading = false;
+    
+    // 更新顯示
+    updateMarketCycleData();
+}
+
+/**
+ * v3.98h 新增：解析市場 CSV 資料
+ */
+function parseMarketCSV(csvText) {
+    const lines = csvText.trim().split('\n');
+    const data = [];
+    
+    for (let i = 1; i < lines.length; i++) {
+        const parts = lines[i].split(',');
+        if (parts.length < 5) continue;
+        
+        const date = parts[0].replace(/\r/g, '');
+        const high = parseFloat(parts[2]);
+        const low = parseFloat(parts[3]);
+        const close = parseFloat(parts[4]);
+        
+        if (!isNaN(high) && !isNaN(close)) {
+            data.push({ date, high, low, close });
+        }
+    }
+    
+    return data;
+}
+
+/**
+ * v3.98h 新增：動態更新多空循環數據
+ */
+function updateMarketCycleData() {
+    // 預設值（當 CSV 無法載入時使用）
+    let currentData = {
+        tseHigh: 28568,
+        tseHighDate: '2025/12/11',
+        tsmcHigh: 1525,
+        tsmcHighDate: '2025/10/31',
+        tseAiStart: 12629,
+        tsmcAiStart: 371,
+        tseSuperStart: 3955,
+        tsmcSuperStart: 38.5
+    };
+    
+    // 如果有載入 CSV，動態計算
+    if (window.marketIndexData.tse && window.marketIndexData.tse.length > 0) {
+        const tseData = window.marketIndexData.tse;
+        
+        // 找 2022/10/25 之後的最高點
+        let maxHigh = 0, maxDate = '';
+        for (const d of tseData) {
+            if (d.date >= '2022/10/25' && d.high > maxHigh) {
+                maxHigh = d.high;
+                maxDate = d.date;
+            }
+        }
+        if (maxHigh > 0) {
+            currentData.tseHigh = maxHigh;
+            currentData.tseHighDate = maxDate;
+        }
+    }
+    
+    if (window.marketIndexData.tsmc && window.marketIndexData.tsmc.length > 0) {
+        const tsmcData = window.marketIndexData.tsmc;
+        
+        // 找 2022/10/25 之後的最高點
+        let maxHigh = 0, maxDate = '';
+        for (const d of tsmcData) {
+            if (d.date >= '2022/10/25' && d.high > maxHigh) {
+                maxHigh = d.high;
+                maxDate = d.date;
+            }
+        }
+        if (maxHigh > 0) {
+            currentData.tsmcHigh = maxHigh;
+            currentData.tsmcHighDate = maxDate;
+        }
+    }
+    
+    // 計算漲幅
+    const tseAiGain = ((currentData.tseHigh - currentData.tseAiStart) / currentData.tseAiStart * 100).toFixed(1);
+    const tsmcAiGain = ((currentData.tsmcHigh - currentData.tsmcAiStart) / currentData.tsmcAiStart * 100).toFixed(1);
+    const tseSuperGain = ((currentData.tseHigh - currentData.tseSuperStart) / currentData.tseSuperStart * 100).toFixed(0);
+    const tsmcSuperGain = ((currentData.tsmcHigh - currentData.tsmcSuperStart) / currentData.tsmcSuperStart * 100).toFixed(0);
+    const aiBullMonths = calculateMonthsSince(new Date('2022-10-25'));
+    
+    // 更新大盤 DOM
+    const aiBullHighEl = document.getElementById('aiBullHigh');
+    const aiBullGainEl = document.getElementById('aiBullGain');
+    const aiBullDurationEl = document.getElementById('aiBullDuration');
+    const superCycleHighEl = document.getElementById('superCycleHigh');
+    const superCycleGainEl = document.getElementById('superCycleGain');
+    
+    if (aiBullHighEl) aiBullHighEl.textContent = currentData.tseHigh.toLocaleString();
+    if (aiBullGainEl) aiBullGainEl.textContent = '+' + tseAiGain + '%';
+    if (aiBullDurationEl) aiBullDurationEl.textContent = aiBullMonths + '個月';
+    if (superCycleHighEl) superCycleHighEl.textContent = currentData.tseHigh.toLocaleString();
+    if (superCycleGainEl) superCycleGainEl.textContent = '+' + tseSuperGain + '%';
+    
+    // 更新對照表的大盤欄位
+    const aiBullHighCompareEl = document.getElementById('aiBullHighCompare');
+    const aiBullGainCompareEl = document.getElementById('aiBullGainCompare');
+    if (aiBullHighCompareEl) aiBullHighCompareEl.textContent = currentData.tseHigh.toLocaleString();
+    if (aiBullGainCompareEl) aiBullGainCompareEl.textContent = '+' + tseAiGain + '%';
+    
+    // 更新台積電 DOM
+    const tsmcAiHighEl = document.getElementById('tsmcAiBullHigh');
+    const tsmcAiGainEl = document.getElementById('tsmcAiBullGain');
+    const tsmcSuperHighEl = document.getElementById('tsmcSuperCycleHigh');
+    const tsmcSuperGainEl = document.getElementById('tsmcSuperCycleGain');
+    
+    if (tsmcAiHighEl) tsmcAiHighEl.textContent = currentData.tsmcHigh.toLocaleString();
+    if (tsmcAiGainEl) tsmcAiGainEl.textContent = '+' + tsmcAiGain + '%';
+    if (tsmcSuperHighEl) tsmcSuperHighEl.textContent = currentData.tsmcHigh.toLocaleString();
+    if (tsmcSuperGainEl) tsmcSuperGainEl.textContent = '+' + tsmcSuperGain + '%';
+    
+    // 更新資料來源提示
+    const dataSourceEl = document.getElementById('marketDataSource');
+    if (dataSourceEl) {
+        const isLive = window.marketIndexData.tse && window.marketIndexData.tse.length > 0;
+        dataSourceEl.innerHTML = isLive 
+            ? `<span style="color:#2e7d32;">✅ 資料來自 CSV 檔案（${currentData.tseHighDate}）</span>`
+            : `<span style="color:#ff9800;">⚠️ 使用預設值，請將 CSV 放入 data/ 目錄</span>`;
+    }
+    
+    // 初始化台積電影響力計算器
+    initTsmcCalculator();
+}
+
+/**
+ * 計算從某日期至今的月數
+ */
+function calculateMonthsSince(startDate) {
+    const now = new Date();
+    return (now.getFullYear() - startDate.getFullYear()) * 12 + (now.getMonth() - startDate.getMonth());
+}
+
+/**
+ * v3.98h 新增：台積電影響力計算
+ * 公式：台積電變動1元 = 大盤指數 × 權重% ÷ 台積電股價
+ */
+function calcTsmcImpact() {
+    const index = parseFloat(document.getElementById('tsmcCalcIndex').value) || 28198;
+    const price = parseFloat(document.getElementById('tsmcCalcPrice').value) || 1480;
+    const weight = parseFloat(document.getElementById('tsmcCalcWeight').value) || 41.99;
+    
+    // 計算影響係數
+    const impact = index * (weight / 100) / price;
+    
+    // 更新主要結果
+    document.getElementById('tsmcImpactResult').textContent = impact.toFixed(2);
+    
+    // 更新快速換算表 - 大盤目標
+    document.getElementById('tsmc100').textContent = (100 / impact).toFixed(1) + '元';
+    document.getElementById('tsmc300').textContent = (300 / impact).toFixed(1) + '元';
+    document.getElementById('tsmc500').textContent = (500 / impact).toFixed(1) + '元';
+    document.getElementById('tsmc1000').textContent = (1000 / impact).toFixed(1) + '元';
+    
+    // 更新快速換算表 - 台積電漲幅
+    document.getElementById('index10').textContent = (10 * impact).toFixed(0) + '點';
+    document.getElementById('index50').textContent = (50 * impact).toFixed(0) + '點';
+    document.getElementById('index100').textContent = (100 * impact).toFixed(0) + '點';
+    
+    // 計算漲停影響（假設漲停為10%）
+    const limitUp = price * 0.1;
+    document.getElementById('indexLimit').textContent = (limitUp * impact).toFixed(0) + '點 (漲' + limitUp.toFixed(0) + '元)';
+    
+    // 更新權重顯示
+    const weightDisplay = document.getElementById('tsmcWeightDisplay');
+    if (weightDisplay) weightDisplay.textContent = weight.toFixed(2) + '%';
+}
+
+/**
+ * v3.98h 新增：初始化台積電計算器（從 CSV 讀取最新數據）
+ */
+function initTsmcCalculator() {
+    // 如果有載入台積電資料，使用最新收盤價
+    if (window.marketIndexData.tsmc && window.marketIndexData.tsmc.length > 0) {
+        const latest = window.marketIndexData.tsmc[window.marketIndexData.tsmc.length - 1];
+        const priceInput = document.getElementById('tsmcCalcPrice');
+        if (priceInput && latest.close > 0) {
+            priceInput.value = latest.close;
+        }
+    }
+    
+    // 如果有載入指數資料，使用最新收盤價
+    if (window.marketIndexData.tse && window.marketIndexData.tse.length > 0) {
+        const latest = window.marketIndexData.tse[window.marketIndexData.tse.length - 1];
+        const indexInput = document.getElementById('tsmcCalcIndex');
+        if (indexInput && latest.close > 0) {
+            indexInput.value = latest.close.toFixed(0);
+        }
+    }
+    
+    // 執行計算
+    calcTsmcImpact();
 }
 
 /**
@@ -13385,8 +14189,8 @@ function renderMarketCycleContent() {
                             <td style="padding:8px; text-align:center; font-weight:bold; color:#2e7d32;">大多頭</td>
                             <td style="padding:8px; text-align:center;">2008-至今</td>
                             <td style="padding:8px; text-align:center;">3,955</td>
-                            <td style="padding:8px; text-align:center;">24,416</td>
-                            <td style="padding:8px; text-align:center; color:#2e7d32; font-weight:bold;">+517%</td>
+                            <td style="padding:8px; text-align:center;" id="superCycleHigh">--</td>
+                            <td style="padding:8px; text-align:center; color:#2e7d32; font-weight:bold;" id="superCycleGain">--</td>
                             <td style="padding:8px; text-align:center; color:#ff9800; font-weight:bold;">${cycleYears}年${cycleMonths}月</td>
                         </tr>
                     </tbody>
@@ -13521,12 +14325,12 @@ function renderMarketCycleContent() {
                             <td style="padding:6px; text-align:center;">22個月</td>
                         </tr>
                         <tr style="background:#f1f8e9; border:2px solid #ff9800;">
-                            <td style="padding:6px; text-align:center;">2022/10-2024/07</td>
+                            <td style="padding:6px; text-align:center;">2022/10-至今</td>
                             <td style="padding:6px; text-align:center;">AI浪潮+台積電ADR</td>
                             <td style="padding:6px; text-align:center;">12,629</td>
-                            <td style="padding:6px; text-align:center;">24,416</td>
-                            <td style="padding:6px; text-align:center; color:#2e7d32; font-weight:bold;">+93%</td>
-                            <td style="padding:6px; text-align:center;">21個月</td>
+                            <td style="padding:6px; text-align:center;" id="aiBullHigh">--</td>
+                            <td style="padding:6px; text-align:center; color:#2e7d32; font-weight:bold;" id="aiBullGain">--</td>
+                            <td style="padding:6px; text-align:center; color:#ff9800; font-weight:bold;" id="aiBullDuration">進行中</td>
                         </tr>
                     </tbody>
                 </table>
@@ -13534,6 +14338,146 @@ function renderMarketCycleContent() {
                     <span>📊 平均漲幅：<strong style="color:#2e7d32;">+81%</strong></span>
                     <span>⏱️ 平均持續：<strong style="color:#1565c0;">25個月</strong></span>
                     <span>🔥 最大漲幅：<strong style="color:#2e7d32;">+133%</strong> (金融海嘯後)</span>
+                </div>
+                <div id="marketDataSource" style="margin-top:8px; padding:8px; background:#fff3e0; border-radius:6px; font-size:11px; color:#e65100;">
+                    ⚡ <b>AI浪潮</b>資料動態更新中...
+                </div>
+            </div>
+
+            <!-- v3.98h 新增：台積電與大盤對照表 -->
+            <div style="background:white; border-radius:10px; padding:15px; margin-bottom:15px; border-left:5px solid #1565c0;">
+                <div style="font-size:14px; font-weight:bold; color:#1565c0; margin-bottom:12px;">
+                    🔷 台積電 vs 大盤對照（領頭羊效應）
+                </div>
+                <table style="width:100%; border-collapse:collapse; font-size:11px;">
+                    <thead>
+                        <tr style="background:#1565c0; color:white;">
+                            <th style="padding:8px; text-align:center;">波段</th>
+                            <th style="padding:8px; text-align:center;" colspan="2">大盤</th>
+                            <th style="padding:8px; text-align:center;" colspan="2">台積電</th>
+                            <th style="padding:8px; text-align:center;">倍數</th>
+                        </tr>
+                        <tr style="background:#e3f2fd; font-size:10px;">
+                            <th style="padding:4px;"></th>
+                            <th style="padding:4px; text-align:center;">高點</th>
+                            <th style="padding:4px; text-align:center;">漲幅</th>
+                            <th style="padding:4px; text-align:center;">高點</th>
+                            <th style="padding:4px; text-align:center;">漲幅</th>
+                            <th style="padding:4px; text-align:center;">台積/大盤</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr style="background:#f5f5f5;">
+                            <td style="padding:6px; text-align:center; font-weight:bold;">超級循環<br><span style="font-size:10px; color:#888;">2008/11起</span></td>
+                            <td style="padding:6px; text-align:center;" id="superCycleHigh">--</td>
+                            <td style="padding:6px; text-align:center; color:#2e7d32; font-weight:bold;" id="superCycleGain">--</td>
+                            <td style="padding:6px; text-align:center;" id="tsmcSuperCycleHigh">1,525</td>
+                            <td style="padding:6px; text-align:center; color:#2e7d32; font-weight:bold;" id="tsmcSuperCycleGain">+3861%</td>
+                            <td style="padding:6px; text-align:center; color:#c62828; font-weight:bold;">6.2x</td>
+                        </tr>
+                        <tr style="background:#e8f5e9; border:2px solid #ff9800;">
+                            <td style="padding:6px; text-align:center; font-weight:bold;">AI浪潮<br><span style="font-size:10px; color:#888;">2022/10起</span></td>
+                            <td style="padding:6px; text-align:center;" id="aiBullHighCompare">--</td>
+                            <td style="padding:6px; text-align:center; color:#2e7d32; font-weight:bold;" id="aiBullGainCompare">--</td>
+                            <td style="padding:6px; text-align:center;" id="tsmcAiBullHigh">1,525</td>
+                            <td style="padding:6px; text-align:center; color:#2e7d32; font-weight:bold;" id="tsmcAiBullGain">+311%</td>
+                            <td style="padding:6px; text-align:center; color:#c62828; font-weight:bold;">2.5x</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div style="margin-top:10px; padding:10px; background:#e3f2fd; border-radius:6px;">
+                    <div style="font-size:12px; font-weight:bold; color:#1565c0; margin-bottom:6px;">📊 領頭羊觀察重點</div>
+                    <div style="font-size:11px; color:#555; line-height:1.6;">
+                        <div>• 台積電佔大盤權重 <b id="tsmcWeightDisplay">41.99%</b>，是最重要的領頭羊</div>
+                        <div>• 超級循環中台積電漲幅是大盤的 <b style="color:#c62828;">6.2倍</b></div>
+                        <div>• AI浪潮中台積電漲幅是大盤的 <b style="color:#c62828;">2.5倍</b></div>
+                        <div>• <b>台積電轉弱 → 大盤難漲</b>，反之亦然</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- v3.98h 新增：台積電影響力計算器 -->
+            <div style="background:white; border-radius:10px; padding:15px; margin-bottom:15px; border-left:5px solid #ff5722;">
+                <div style="font-size:14px; font-weight:bold; color:#e64a19; margin-bottom:12px;">
+                    🧮 台積電影響力計算器
+                </div>
+                
+                <!-- 公式說明 -->
+                <div style="background:#fff3e0; padding:10px; border-radius:6px; margin-bottom:12px;">
+                    <div style="font-size:12px; color:#e65100; margin-bottom:4px;">
+                        <b>公式：</b>台積電變動1元 = 大盤指數 × 權重% ÷ 台積電股價
+                    </div>
+                    <div style="font-size:10px; color:#888;">
+                        權重會隨股價漲跌變動，影響係數也會動態調整
+                    </div>
+                </div>
+                
+                <!-- 輸入區 -->
+                <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-bottom:12px;">
+                    <div>
+                        <label style="font-size:11px; color:#666; display:block; margin-bottom:4px;">大盤指數</label>
+                        <input type="number" id="tsmcCalcIndex" value="28198" 
+                               style="width:100%; padding:8px; border:2px solid #ff5722; border-radius:6px; font-size:14px; font-weight:bold;"
+                               onchange="calcTsmcImpact()">
+                    </div>
+                    <div>
+                        <label style="font-size:11px; color:#666; display:block; margin-bottom:4px;">台積電股價</label>
+                        <input type="number" id="tsmcCalcPrice" value="1480" 
+                               style="width:100%; padding:8px; border:2px solid #ff5722; border-radius:6px; font-size:14px; font-weight:bold;"
+                               onchange="calcTsmcImpact()">
+                    </div>
+                    <div>
+                        <label style="font-size:11px; color:#666; display:block; margin-bottom:4px;">權重 %</label>
+                        <input type="number" id="tsmcCalcWeight" value="41.99" step="0.01"
+                               style="width:100%; padding:8px; border:2px solid #ff5722; border-radius:6px; font-size:14px; font-weight:bold;"
+                               onchange="calcTsmcImpact()">
+                    </div>
+                </div>
+                
+                <!-- 計算結果 -->
+                <div style="background:linear-gradient(135deg, #ff5722, #e64a19); color:white; padding:15px; border-radius:8px; text-align:center;">
+                    <div style="font-size:13px; margin-bottom:8px;">台積電每變動 <b>1 元</b></div>
+                    <div style="font-size:32px; font-weight:bold;" id="tsmcImpactResult">8.00</div>
+                    <div style="font-size:14px;">大盤指數變動點數</div>
+                </div>
+                
+                <!-- 快速換算表 -->
+                <div style="margin-top:12px; display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                    <div style="background:#ffebee; padding:10px; border-radius:6px;">
+                        <div style="font-size:11px; color:#c62828; margin-bottom:6px; font-weight:bold;">📉 大盤目標 → 台積電需漲</div>
+                        <table style="width:100%; font-size:11px;">
+                            <tr><td>大盤+100點</td><td style="text-align:right; font-weight:bold;" id="tsmc100">12.5元</td></tr>
+                            <tr><td>大盤+300點</td><td style="text-align:right; font-weight:bold;" id="tsmc300">37.5元</td></tr>
+                            <tr><td>大盤+500點</td><td style="text-align:right; font-weight:bold;" id="tsmc500">62.5元</td></tr>
+                            <tr><td>大盤+1000點</td><td style="text-align:right; font-weight:bold;" id="tsmc1000">125元</td></tr>
+                        </table>
+                    </div>
+                    <div style="background:#e8f5e9; padding:10px; border-radius:6px;">
+                        <div style="font-size:11px; color:#2e7d32; margin-bottom:6px; font-weight:bold;">📈 台積電漲幅 → 大盤影響</div>
+                        <table style="width:100%; font-size:11px;">
+                            <tr><td>台積電+10元</td><td style="text-align:right; font-weight:bold;" id="index10">80點</td></tr>
+                            <tr><td>台積電+50元</td><td style="text-align:right; font-weight:bold;" id="index50">400點</td></tr>
+                            <tr><td>台積電+100元</td><td style="text-align:right; font-weight:bold;" id="index100">800點</td></tr>
+                            <tr><td>台積電漲停</td><td style="text-align:right; font-weight:bold;" id="indexLimit">--</td></tr>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- 前10大權重股 -->
+                <div style="margin-top:12px; padding:10px; background:#f5f5f5; border-radius:6px;">
+                    <div style="font-size:11px; font-weight:bold; color:#666; margin-bottom:8px;">📊 前10大權重股（合計 57.76%）</div>
+                    <div style="display:flex; flex-wrap:wrap; gap:6px; font-size:10px;">
+                        <span style="background:#1565c0; color:white; padding:3px 8px; border-radius:4px;">1.台積電 41.99%</span>
+                        <span style="background:#42a5f5; color:white; padding:3px 8px; border-radius:4px;">2.鴻海 3.54%</span>
+                        <span style="background:#64b5f6; color:white; padding:3px 8px; border-radius:4px;">3.台達電 2.72%</span>
+                        <span style="background:#90caf9; color:#1565c0; padding:3px 8px; border-radius:4px;">4.聯發科 2.52%</span>
+                        <span style="background:#bbdefb; color:#1565c0; padding:3px 8px; border-radius:4px;">5.富邦金 1.46%</span>
+                        <span style="background:#e3f2fd; color:#1565c0; padding:3px 8px; border-radius:4px;">6.廣達 1.22%</span>
+                        <span style="background:#e3f2fd; color:#1565c0; padding:3px 8px; border-radius:4px;">7.日月光 1.14%</span>
+                        <span style="background:#e3f2fd; color:#1565c0; padding:3px 8px; border-radius:4px;">8.中華電 1.14%</span>
+                        <span style="background:#e3f2fd; color:#1565c0; padding:3px 8px; border-radius:4px;">9.國泰金 1.06%</span>
+                        <span style="background:#e3f2fd; color:#1565c0; padding:3px 8px; border-radius:4px;">10.中信金 0.96%</span>
+                    </div>
                 </div>
             </div>
 

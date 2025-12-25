@@ -2192,7 +2192,7 @@ button:active, .clickable:active {
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.98O 完整單年度資料版)...</div>
+    <div>🔄 系統啟動中 (v3.98R 多空循環+個股查詢版)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
@@ -2200,7 +2200,7 @@ button:active, .clickable:active {
     <!-- v3.98g 修改：頂部標題置中 + 統計數據 -->
     <div class="header">
         <h1>🏠 Rex大叔的168台股投資研究室</h1>
-        <span class="version-badge">v3.98O 完整單年度資料版</span>
+        <span class="version-badge">v3.98R 多空循環+個股查詢版</span>
         <div class="subtitle">
             <span id="headerSubtitle">載入中...</span>
             <span style="color:#ddd">|</span>
@@ -3008,6 +3008,40 @@ button:active, .clickable:active {
         </div>
     </div>
 
+<!-- ========== v3.98Q: 市場循環位置小卡片 ========== -->
+<div id="marketCycleCard" style="background:linear-gradient(135deg, #1a237e 0%, #283593 50%, #3949ab 100%); color:white; padding:15px 18px; border-radius:12px; margin-bottom:15px; box-shadow:0 4px 15px rgba(26,35,126,0.3); cursor:pointer;" onclick="showMarketCycleDetail()">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <div style="display:flex; align-items:center; gap:12px;">
+            <span style="font-size:28px;">🔄</span>
+            <div>
+                <div style="font-size:15px; font-weight:bold;">市場循環位置</div>
+                <div style="font-size:12px; opacity:0.85; margin-top:2px;">2008年大多頭進行中</div>
+            </div>
+        </div>
+        <div style="display:flex; gap:15px; flex-wrap:wrap;">
+            <div style="text-align:center; padding:8px 12px; background:rgba(255,255,255,0.15); border-radius:8px;">
+                <div style="font-size:11px; opacity:0.8;">持續時間</div>
+                <div style="font-size:18px; font-weight:bold;" id="cycleDuration">16年+</div>
+            </div>
+            <div style="text-align:center; padding:8px 12px; background:rgba(255,255,255,0.15); border-radius:8px;">
+                <div style="font-size:11px; opacity:0.8;">累計漲幅</div>
+                <div style="font-size:18px; font-weight:bold; color:#69f0ae;" id="cycleTotalGain">+517%</div>
+            </div>
+            <div style="text-align:center; padding:8px 12px; background:rgba(255,255,255,0.15); border-radius:8px;">
+                <div style="font-size:11px; opacity:0.8;">距上次回檔</div>
+                <div style="font-size:18px; font-weight:bold;" id="cycleLastCorrection">2年2月</div>
+            </div>
+            <div style="text-align:center; padding:8px 12px; background:rgba(255,152,0,0.3); border-radius:8px; border:1px solid rgba(255,152,0,0.5);">
+                <div style="font-size:11px; opacity:0.8;">風險等級</div>
+                <div style="font-size:18px; font-weight:bold; color:#ffb74d;" id="cycleRiskLevel">⚠️ 中高</div>
+            </div>
+        </div>
+    </div>
+    <div style="font-size:11px; opacity:0.7; margin-top:10px; text-align:right;">
+        點擊查看詳細多空循環分析 →
+    </div>
+</div>
+
 <!-- ========== 右側第一區塊：市場趨勢分析 ========== -->
 
 <div class="right-section section-trend" style="margin-top:0;">
@@ -3237,6 +3271,7 @@ button:active, .clickable:active {
         <button type="button" class="basic-info-tab" onclick="showBasicInfoTab('auction', event)">🎯 競拍資料</button>
         <button type="button" class="basic-info-tab" onclick="showBasicInfoTab('quote', event)">📊 最新行情</button>
         <button type="button" class="basic-info-tab" onclick="showBasicInfoTab('balance', event)">📈 餘額變化</button>
+        <button type="button" class="basic-info-tab" onclick="showBasicInfoTab('history', event)" style="background:#1565c0; color:white;">📜 歷史發行</button>
     </div>
     <div id="basicInfoContent" style="min-height:200px; padding:15px; background:#fafafa; border-radius:0 0 8px 8px; border:1px solid #e0e0e0; border-top:none;">
         <div style="text-align:center; color:#999; padding:40px;">
@@ -3657,6 +3692,10 @@ button:active, .clickable:active {
                         style="padding:8px 12px; border:2px solid #37474f; background:white; color:#37474f; border-radius:6px; cursor:pointer; font-size:12px;">
                     ❌ 失敗案例
                 </button>
+                <button type="button" class="risk-tab" onclick="showRiskTab('cycle', this)"
+                        style="padding:8px 12px; border:2px solid #1a237e; background:white; color:#1a237e; border-radius:6px; cursor:pointer; font-size:12px;">
+                    🔄 多空循環
+                </button>
             </div>
 
             <!-- 風險內容區域 -->
@@ -3772,6 +3811,13 @@ button:active, .clickable:active {
                 <div id="riskMarketEnv" class="risk-content" style="display:none;">
                     <div style="text-align:center; padding:20px; color:#888;">
                         載入市場環境風險統計中...
+                    </div>
+                </div>
+
+                <!-- v3.98Q 新增：多空循環分析 -->
+                <div id="riskCycle" class="risk-content" style="display:none;">
+                    <div style="text-align:center; padding:20px; color:#888;">
+                        載入多空循環分析中...
                     </div>
                 </div>
 
@@ -12668,13 +12714,15 @@ function showRiskTab(tabName, btnElement) {
                 'marketEnv': '#37474f',
                 'margin': '#c62828',
                 'cbas': '#7b1fa2',
-                'failure': '#37474f'
+                'failure': '#37474f',
+                'cycle': '#1a237e'
             };
             const color = tabColors[btn.textContent.includes('競拍') ? 'overview' : 
                           btn.textContent.includes('價位') ? 'priceLevel' :
                           btn.textContent.includes('市場') ? 'marketEnv' :
                           btn.textContent.includes('融資') ? 'margin' :
-                          btn.textContent.includes('CBAS') ? 'cbas' : 'failure'] || '#c62828';
+                          btn.textContent.includes('CBAS') ? 'cbas' :
+                          btn.textContent.includes('多空') ? 'cycle' : 'failure'] || '#c62828';
             btn.style.background = color;
             btn.style.borderColor = color;
             btn.style.color = 'white';
@@ -12700,7 +12748,8 @@ function showRiskTab(tabName, btnElement) {
         'margin': 'riskMargin',
         'cbas': 'riskCbas',
         'time': 'riskTime',
-        'failure': 'riskFailure'
+        'failure': 'riskFailure',
+        'cycle': 'riskCycle'
     };
 
     const targetId = tabMap[tabName];
@@ -12722,6 +12771,9 @@ function showRiskTab(tabName, btnElement) {
                     break;
                 case 'cbas':
                     loadCBASRisk();
+                    break;
+                case 'cycle':
+                    loadMarketCycleAnalysis();
                     break;
             }
         }
@@ -12752,6 +12804,44 @@ function loadMarketEnvRisk() {
 }
 
 /**
+ * v3.98Q 新增：載入多空循環分析
+ */
+function loadMarketCycleAnalysis() {
+    const container = document.getElementById('riskCycle');
+    if (!container) return;
+
+    const html = renderMarketCycleContent();
+    container.innerHTML = html;
+}
+
+/**
+ * v3.98Q 新增：點擊小卡片顯示詳細資訊
+ */
+function showMarketCycleDetail() {
+    // 展開風險統計區塊
+    const riskSection = document.getElementById('riskAlertSection');
+    const riskHeader = riskSection?.previousElementSibling;
+    
+    if (riskSection && riskSection.classList.contains('collapsed')) {
+        riskHeader?.click();
+    }
+    
+    // 切換到多空循環標籤
+    setTimeout(() => {
+        const cycleBtn = document.querySelector('.risk-tab[onclick*="cycle"]');
+        if (cycleBtn) {
+            cycleBtn.click();
+        }
+    }, 300);
+    
+    // 滾動到該區塊
+    setTimeout(() => {
+        riskSection?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 500);
+}
+
+
+/**
  * v3.98L 新增：載入CBAS風險統計
  */
 function loadCBASRisk() {
@@ -12761,6 +12851,552 @@ function loadCBASRisk() {
     const html = DynamicRiskStats.renderCBASRiskStats();
     container.innerHTML = html;
 }
+
+/**
+ * v3.98Q 新增：載入多空循環分析
+ */
+function loadMarketCycleAnalysis() {
+    const container = document.getElementById('riskCycle');
+    if (!container) return;
+
+    const html = renderMarketCycleContent();
+    container.innerHTML = html;
+}
+
+/**
+ * v3.98Q 新增：點擊小卡片時顯示詳細分析
+ */
+function showMarketCycleDetail() {
+    // 展開風險統計區塊
+    const riskSection = document.getElementById('riskStatSection');
+    const riskHeader = riskSection?.previousElementSibling;
+    if (riskSection && riskSection.classList.contains('collapsed')) {
+        riskHeader?.click();
+    }
+    
+    // 切換到多空循環標籤
+    setTimeout(() => {
+        const cycleBtn = document.querySelector('.risk-tab[onclick*="cycle"]');
+        if (cycleBtn) {
+            cycleBtn.click();
+        }
+    }, 300);
+}
+
+/**
+ * v3.98Q 新增：渲染多空循環完整內容
+ * v3.98R 更新：新增個股查詢功能
+ */
+function renderMarketCycleContent() {
+    // 計算動態數據
+    const today = new Date();
+    const cycleStart = new Date('2008-11-21'); // 金融海嘯最低點
+    const lastCorrectionEnd = new Date('2022-10-25'); // 上次大回檔低點
+    
+    const cycleYears = Math.floor((today - cycleStart) / (365.25 * 24 * 60 * 60 * 1000));
+    const cycleMonths = Math.floor(((today - cycleStart) / (30.44 * 24 * 60 * 60 * 1000)) % 12);
+    
+    const sinceCorrection = today - lastCorrectionEnd;
+    const correctionYears = Math.floor(sinceCorrection / (365.25 * 24 * 60 * 60 * 1000));
+    const correctionMonths = Math.floor((sinceCorrection / (30.44 * 24 * 60 * 60 * 1000)) % 12);
+
+    return `
+        <div style="background:linear-gradient(135deg, #e8eaf6 0%, #c5cae9 100%); border-radius:10px; padding:18px;">
+            
+            <!-- 標題 -->
+            <div style="display:flex; align-items:center; gap:12px; margin-bottom:18px;">
+                <span style="font-size:32px;">🔄</span>
+                <div>
+                    <div style="font-size:16px; font-weight:bold; color:#1a237e;">台股多空循環分析</div>
+                    <div style="font-size:12px; color:#5c6bc0;">歷史數據回顧與目前位置評估</div>
+                </div>
+            </div>
+
+            <!-- v3.98R 新增：個股查詢區塊 -->
+            <div style="background:white; border-radius:10px; padding:15px; margin-bottom:15px; border:2px solid #ff9800;">
+                <div style="font-size:14px; font-weight:bold; color:#e65100; margin-bottom:12px;">🔍 個股歷史事件表現查詢</div>
+                <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+                    <input type="text" id="cycleStockSearch" placeholder="輸入股票代號（如 2330）" 
+                           style="flex:1; min-width:150px; padding:10px 12px; border:2px solid #ff9800; border-radius:8px; font-size:14px;"
+                           onkeypress="if(event.key==='Enter') searchStockCyclePerformance()">
+                    <button onclick="searchStockCyclePerformance()" 
+                            style="padding:10px 20px; background:#ff9800; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:bold; font-size:14px;">
+                        🔍 查詢
+                    </button>
+                </div>
+                <div style="font-size:11px; color:#888; margin-top:8px;">
+                    💡 查詢該股票在歷次重大股災期間的高低點與漲跌幅表現
+                </div>
+                <div id="stockCycleResult" style="margin-top:15px;"></div>
+            </div>
+
+            <!-- 超級循環總覽 -->
+            <div style="background:white; border-radius:10px; padding:15px; margin-bottom:15px; border-left:5px solid #1a237e;">
+                <div style="font-size:14px; font-weight:bold; color:#1a237e; margin-bottom:12px;">📊 超級循環總覽</div>
+                <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                    <thead>
+                        <tr style="background:#1a237e; color:white;">
+                            <th style="padding:8px; text-align:center;">類型</th>
+                            <th style="padding:8px; text-align:center;">期間</th>
+                            <th style="padding:8px; text-align:center;">起點</th>
+                            <th style="padding:8px; text-align:center;">終點</th>
+                            <th style="padding:8px; text-align:center;">漲跌幅</th>
+                            <th style="padding:8px; text-align:center;">持續</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr style="background:#e8f5e9;">
+                            <td style="padding:8px; text-align:center; font-weight:bold; color:#2e7d32;">大多頭</td>
+                            <td style="padding:8px; text-align:center;">1987-2000</td>
+                            <td style="padding:8px; text-align:center;">1,039</td>
+                            <td style="padding:8px; text-align:center;">10,393</td>
+                            <td style="padding:8px; text-align:center; color:#2e7d32; font-weight:bold;">+900%</td>
+                            <td style="padding:8px; text-align:center;">13年</td>
+                        </tr>
+                        <tr style="background:#ffebee;">
+                            <td style="padding:8px; text-align:center; font-weight:bold; color:#c62828;">大空頭</td>
+                            <td style="padding:8px; text-align:center;">2000-2008</td>
+                            <td style="padding:8px; text-align:center;">10,393</td>
+                            <td style="padding:8px; text-align:center;">3,955</td>
+                            <td style="padding:8px; text-align:center; color:#c62828; font-weight:bold;">-62%</td>
+                            <td style="padding:8px; text-align:center;">8年</td>
+                        </tr>
+                        <tr style="background:#e8f5e9; border:2px solid #ff9800;">
+                            <td style="padding:8px; text-align:center; font-weight:bold; color:#2e7d32;">大多頭</td>
+                            <td style="padding:8px; text-align:center;">2008-至今</td>
+                            <td style="padding:8px; text-align:center;">3,955</td>
+                            <td style="padding:8px; text-align:center;">24,416</td>
+                            <td style="padding:8px; text-align:center; color:#2e7d32; font-weight:bold;">+517%</td>
+                            <td style="padding:8px; text-align:center; color:#ff9800; font-weight:bold;">${cycleYears}年${cycleMonths}月</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 本波多頭中的回檔 -->
+            <div style="background:white; border-radius:10px; padding:15px; margin-bottom:15px; border-left:5px solid #ff9800;">
+                <div style="font-size:14px; font-weight:bold; color:#e65100; margin-bottom:12px;">📉 2008年以來的中型回檔</div>
+                <table style="width:100%; border-collapse:collapse; font-size:11px;">
+                    <thead>
+                        <tr style="background:#ff9800; color:white;">
+                            <th style="padding:6px; text-align:center;">期間</th>
+                            <th style="padding:6px; text-align:center;">事件</th>
+                            <th style="padding:6px; text-align:center;">高點</th>
+                            <th style="padding:6px; text-align:center;">低點</th>
+                            <th style="padding:6px; text-align:center;">跌幅</th>
+                            <th style="padding:6px; text-align:center;">時間</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr style="background:#fff3e0;">
+                            <td style="padding:6px; text-align:center;">2011/02-12</td>
+                            <td style="padding:6px; text-align:center;">歐債危機</td>
+                            <td style="padding:6px; text-align:center;">9,220</td>
+                            <td style="padding:6px; text-align:center;">6,609</td>
+                            <td style="padding:6px; text-align:center; color:#c62828; font-weight:bold;">-28%</td>
+                            <td style="padding:6px; text-align:center;">10個月</td>
+                        </tr>
+                        <tr style="background:#fffde7;">
+                            <td style="padding:6px; text-align:center;">2015/04-2016/01</td>
+                            <td style="padding:6px; text-align:center;">中國股災</td>
+                            <td style="padding:6px; text-align:center;">10,014</td>
+                            <td style="padding:6px; text-align:center;">7,203</td>
+                            <td style="padding:6px; text-align:center; color:#c62828; font-weight:bold;">-28%</td>
+                            <td style="padding:6px; text-align:center;">9個月</td>
+                        </tr>
+                        <tr style="background:#fff3e0;">
+                            <td style="padding:6px; text-align:center;">2018/01-12</td>
+                            <td style="padding:6px; text-align:center;">美中貿易戰</td>
+                            <td style="padding:6px; text-align:center;">11,270</td>
+                            <td style="padding:6px; text-align:center;">9,319</td>
+                            <td style="padding:6px; text-align:center; color:#e65100; font-weight:bold;">-17%</td>
+                            <td style="padding:6px; text-align:center;">11個月</td>
+                        </tr>
+                        <tr style="background:#fffde7;">
+                            <td style="padding:6px; text-align:center;">2020/01-03</td>
+                            <td style="padding:6px; text-align:center;">COVID-19</td>
+                            <td style="padding:6px; text-align:center;">12,197</td>
+                            <td style="padding:6px; text-align:center;">8,523</td>
+                            <td style="padding:6px; text-align:center; color:#c62828; font-weight:bold;">-30%</td>
+                            <td style="padding:6px; text-align:center;">2個月</td>
+                        </tr>
+                        <tr style="background:#fff3e0;">
+                            <td style="padding:6px; text-align:center;">2022/01-10</td>
+                            <td style="padding:6px; text-align:center;">升息+俄烏</td>
+                            <td style="padding:6px; text-align:center;">18,619</td>
+                            <td style="padding:6px; text-align:center;">12,629</td>
+                            <td style="padding:6px; text-align:center; color:#c62828; font-weight:bold;">-32%</td>
+                            <td style="padding:6px; text-align:center;">9個月</td>
+                        </tr>
+                        <tr style="background:#fffde7;">
+                            <td style="padding:6px; text-align:center;">2024/07-08</td>
+                            <td style="padding:6px; text-align:center;">日圓套利平倉</td>
+                            <td style="padding:6px; text-align:center;">24,416</td>
+                            <td style="padding:6px; text-align:center;">19,662</td>
+                            <td style="padding:6px; text-align:center; color:#e65100; font-weight:bold;">-19%</td>
+                            <td style="padding:6px; text-align:center;">1個月</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 回檔規律統計 -->
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:15px;">
+                <!-- 回檔幅度 -->
+                <div style="background:white; border-radius:10px; padding:15px; border-left:5px solid #c62828;">
+                    <div style="font-size:13px; font-weight:bold; color:#c62828; margin-bottom:10px;">📊 回檔幅度分類</div>
+                    <table style="width:100%; font-size:11px; border-collapse:collapse;">
+                        <tr style="background:#ffebee;">
+                            <td style="padding:5px;">小回檔</td>
+                            <td style="padding:5px; text-align:center;">10-15%</td>
+                            <td style="padding:5px; text-align:right;">每年1-2次</td>
+                        </tr>
+                        <tr style="background:#fff;">
+                            <td style="padding:5px;">中回檔</td>
+                            <td style="padding:5px; text-align:center;">15-25%</td>
+                            <td style="padding:5px; text-align:right;">每2-3年</td>
+                        </tr>
+                        <tr style="background:#ffebee;">
+                            <td style="padding:5px;">大回檔</td>
+                            <td style="padding:5px; text-align:center;">25-35%</td>
+                            <td style="padding:5px; text-align:right;">每5-7年</td>
+                        </tr>
+                        <tr style="background:#fff;">
+                            <td style="padding:5px; font-weight:bold; color:#c62828;">崩盤</td>
+                            <td style="padding:5px; text-align:center; color:#c62828;">>50%</td>
+                            <td style="padding:5px; text-align:right;">每10-15年</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <!-- 恢復時間 -->
+                <div style="background:white; border-radius:10px; padding:15px; border-left:5px solid #2e7d32;">
+                    <div style="font-size:13px; font-weight:bold; color:#2e7d32; margin-bottom:10px;">⏱️ 平均恢復時間</div>
+                    <table style="width:100%; font-size:11px; border-collapse:collapse;">
+                        <tr style="background:#e8f5e9;">
+                            <td style="padding:5px;">10-15%</td>
+                            <td style="padding:5px; text-align:right;">1-3個月</td>
+                        </tr>
+                        <tr style="background:#fff;">
+                            <td style="padding:5px;">15-25%</td>
+                            <td style="padding:5px; text-align:right;">3-6個月</td>
+                        </tr>
+                        <tr style="background:#e8f5e9;">
+                            <td style="padding:5px;">25-35%</td>
+                            <td style="padding:5px; text-align:right;">6-12個月</td>
+                        </tr>
+                        <tr style="background:#fff;">
+                            <td style="padding:5px; font-weight:bold; color:#c62828;">>50%</td>
+                            <td style="padding:5px; text-align:right; color:#c62828;">2-5年</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 目前位置評估 -->
+            <div style="background:white; border-radius:10px; padding:15px; border-left:5px solid #1565c0;">
+                <div style="font-size:14px; font-weight:bold; color:#1565c0; margin-bottom:12px;">📍 目前位置評估</div>
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px;">
+                    <div style="padding:12px; background:#e3f2fd; border-radius:8px; text-align:center;">
+                        <div style="font-size:11px; color:#666;">大多頭持續</div>
+                        <div style="font-size:18px; font-weight:bold; color:#1565c0;">${cycleYears}年${cycleMonths}月</div>
+                    </div>
+                    <div style="padding:12px; background:#e3f2fd; border-radius:8px; text-align:center;">
+                        <div style="font-size:11px; color:#666;">距上次回檔</div>
+                        <div style="font-size:18px; font-weight:bold; color:#ff9800;">${correctionYears}年${correctionMonths}月</div>
+                    </div>
+                    <div style="padding:12px; background:#e8f5e9; border-radius:8px; text-align:center;">
+                        <div style="font-size:11px; color:#666;">累計漲幅</div>
+                        <div style="font-size:18px; font-weight:bold; color:#2e7d32;">+517%</div>
+                    </div>
+                    <div style="padding:12px; background:#fff3e0; border-radius:8px; text-align:center;">
+                        <div style="font-size:11px; color:#666;">本波漲幅</div>
+                        <div style="font-size:18px; font-weight:bold; color:#e65100;">+75%</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 多頭結構評估 -->
+            <div style="margin-top:15px; background:white; border-radius:10px; padding:15px; border-left:5px solid #2e7d32;">
+                <div style="font-size:14px; font-weight:bold; color:#2e7d32; margin-bottom:12px;">✅ 多頭結構檢查</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:12px;">
+                    <div style="padding:10px; background:#e8f5e9; border-radius:6px;">
+                        <span style="color:#2e7d32;">✅</span> 回檔後仍創新高
+                    </div>
+                    <div style="padding:10px; background:#e8f5e9; border-radius:6px;">
+                        <span style="color:#2e7d32;">✅</span> 低點持續墊高
+                    </div>
+                    <div style="padding:10px; background:#e8f5e9; border-radius:6px;">
+                        <span style="color:#2e7d32;">✅</span> 尚未連續2次大回檔
+                    </div>
+                    <div style="padding:10px; background:#fff3e0; border-radius:6px;">
+                        <span style="color:#ff9800;">⚠️</span> 漲幅接近100%警戒
+                    </div>
+                </div>
+            </div>
+
+            <!-- 結論 -->
+            <div style="margin-top:15px; padding:12px 15px; background:#e3f2fd; border-radius:8px; border-left:4px solid #1565c0;">
+                <div style="font-size:12px; color:#1565c0; line-height:1.7;">
+                    <strong>📌 結論：</strong>2008年以來的大多頭結構仍然完整，但已進入成熟期。
+                    歷史經驗顯示，漲超過100%、時間超過2年後，發生較大回檔的機率上升，
+                    但不代表一定會馬上跌，超級多頭可以持續更久。建議保持風險意識，適度配置。
+                </div>
+            </div>
+
+        </div>
+    `;
+}
+
+/**
+ * v3.98R 新增：查詢個股在歷史事件中的表現
+ */
+async function searchStockCyclePerformance() {
+    const input = document.getElementById('cycleStockSearch');
+    const resultDiv = document.getElementById('stockCycleResult');
+    const stockCode = input?.value?.trim();
+    
+    if (!stockCode) {
+        resultDiv.innerHTML = '<div style="color:#c62828; padding:10px;">請輸入股票代號</div>';
+        return;
+    }
+    
+    resultDiv.innerHTML = '<div style="text-align:center; padding:20px; color:#666;"><span style="font-size:24px;">⏳</span><br>查詢中...</div>';
+    
+    // 歷史重大事件期間定義
+    // v3.98R: 歷史重大事件期間定義（含科技泡沫、金融海嘯）
+    const historicalEvents = [
+        { name: '科技泡沫', startDate: '2000-02-01', endDate: '2001-09-30', peakDate: '2000-02-18', troughDate: '2001-09-26', marketDrop: -67 },
+        { name: '金融海嘯', startDate: '2008-05-01', endDate: '2008-11-30', peakDate: '2008-05-20', troughDate: '2008-11-21', marketDrop: -58 },
+        { name: '歐債危機', startDate: '2011-02-01', endDate: '2011-12-31', peakDate: '2011-02-08', troughDate: '2011-12-19', marketDrop: -28 },
+        { name: '中國股災', startDate: '2015-04-01', endDate: '2016-01-31', peakDate: '2015-04-27', troughDate: '2016-01-18', marketDrop: -28 },
+        { name: '美中貿易戰', startDate: '2018-01-01', endDate: '2018-12-31', peakDate: '2018-01-23', troughDate: '2018-10-26', marketDrop: -17 },
+        { name: 'COVID-19', startDate: '2020-01-01', endDate: '2020-03-31', peakDate: '2020-01-14', troughDate: '2020-03-19', marketDrop: -30 },
+        { name: '升息+俄烏', startDate: '2022-01-01', endDate: '2022-10-31', peakDate: '2022-01-05', troughDate: '2022-10-25', marketDrop: -32 },
+        { name: '日圓套利', startDate: '2024-07-01', endDate: '2024-08-31', peakDate: '2024-07-11', troughDate: '2024-08-05', marketDrop: -19 }
+    ];
+    
+    // 從 stock_price 資料庫查詢
+    const results = [];
+    
+    // 確保股價資料已載入（包含2000、2001、2008年）
+    if (!window.stockPriceHistory?.loaded) {
+        const yearsNeeded = [2000, 2001, 2008, 2011, 2015, 2016, 2018, 2020, 2022, 2024];
+        for (const year of yearsNeeded) {
+            if (!window.stockPriceHistory?.tse?.[year]) {
+                // 需要載入
+            }
+        }
+    }
+    
+    // 查詢各事件期間的股價
+    for (const event of historicalEvents) {
+        const eventResult = await getStockPriceInPeriod(stockCode, event.startDate, event.endDate);
+        if (eventResult) {
+            results.push({
+                event: event.name,
+                marketDrop: event.marketDrop,
+                ...eventResult
+            });
+        }
+    }
+    
+    // 渲染結果
+    if (results.length === 0) {
+        resultDiv.innerHTML = `
+            <div style="text-align:center; padding:20px; color:#888;">
+                <div style="font-size:32px; margin-bottom:10px;">📭</div>
+                <div>未找到 ${stockCode} 的歷史資料</div>
+                <div style="font-size:11px; margin-top:5px;">可能原因：股票代號錯誤、該股當時尚未上市、或資料庫未涵蓋該期間</div>
+            </div>
+        `;
+        return;
+    }
+    
+    // 取得股票名稱
+    const stockName = results[0]?.stockName || stockCode;
+    
+    let html = `
+        <div style="background:#fff3e0; border-radius:8px; padding:12px; margin-bottom:12px;">
+            <div style="font-size:14px; font-weight:bold; color:#e65100;">
+                📈 ${stockCode} ${stockName} 歷史事件表現
+            </div>
+        </div>
+        <div style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse; font-size:11px; min-width:500px;">
+                <thead>
+                    <tr style="background:#1a237e; color:white;">
+                        <th style="padding:8px; text-align:center;">事件</th>
+                        <th style="padding:8px; text-align:center;">期間最高</th>
+                        <th style="padding:8px; text-align:center;">期間最低</th>
+                        <th style="padding:8px; text-align:center;">跌幅</th>
+                        <th style="padding:8px; text-align:center;">大盤跌幅</th>
+                        <th style="padding:8px; text-align:center;">vs大盤</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    results.forEach((r, idx) => {
+        const dropPct = r.high > 0 ? ((r.low - r.high) / r.high * 100).toFixed(1) : '-';
+        const dropNum = parseFloat(dropPct);
+        const marketDrop = r.marketDrop || 0;
+        const vsMarket = !isNaN(dropNum) ? (dropNum - marketDrop).toFixed(1) : '-';
+        const vsMarketColor = parseFloat(vsMarket) > 0 ? '#2e7d32' : '#c62828';
+        const vsMarketText = parseFloat(vsMarket) > 0 ? `+${vsMarket}%` : `${vsMarket}%`;
+        
+        const dropColor = dropNum <= -50 ? '#b71c1c' : (dropNum <= -30 ? '#c62828' : (dropNum <= -20 ? '#e65100' : '#ff9800'));
+        const rowBg = idx % 2 === 0 ? '#f5f5f5' : 'white';
+        
+        // 標記兩大股災
+        const isMainCrash = r.event === '科技泡沫' || r.event === '金融海嘯';
+        const eventStyle = isMainCrash ? 'background:#ffebee; border-left:3px solid #c62828;' : `background:${rowBg};`;
+        const eventLabel = isMainCrash ? `<span style="color:#c62828; font-weight:bold;">⚠️ ${r.event}</span>` : r.event;
+        
+        html += `
+            <tr style="${eventStyle}">
+                <td style="padding:8px; text-align:center; font-weight:bold;">${eventLabel}</td>
+                <td style="padding:8px; text-align:center; color:#c62828;">${r.high > 0 ? r.high.toFixed(2) : '-'}</td>
+                <td style="padding:8px; text-align:center; color:#2e7d32;">${r.low > 0 ? r.low.toFixed(2) : '-'}</td>
+                <td style="padding:8px; text-align:center; font-weight:bold; color:${dropColor};">${dropPct}%</td>
+                <td style="padding:8px; text-align:center; color:#888;">${marketDrop}%</td>
+                <td style="padding:8px; text-align:center; color:${vsMarketColor}; font-weight:bold;">${vsMarketText}</td>
+            </tr>
+        `;
+    });
+    
+    html += `
+                </tbody>
+            </table>
+        </div>
+        <div style="margin-top:10px; font-size:11px; color:#666;">
+            <div>💡 <b>vs大盤</b>：正數表示跌幅小於大盤（較抗跌），負數表示跌幅大於大盤（較弱勢）</div>
+            <div style="margin-top:3px;">⚠️ 標記為兩大系統性股災（科技泡沫-67%、金融海嘯-58%）</div>
+        </div>
+    `;
+    
+    // 統計摘要
+    const validResults = results.filter(r => r.high > 0 && r.low > 0);
+    if (validResults.length > 0) {
+        const avgDrop = validResults.reduce((sum, r) => sum + ((r.low - r.high) / r.high * 100), 0) / validResults.length;
+        const maxDrop = Math.min(...validResults.map(r => (r.low - r.high) / r.high * 100));
+        const minDrop = Math.max(...validResults.map(r => (r.low - r.high) / r.high * 100));
+        
+        html += `
+            <div style="margin-top:12px; padding:12px; background:#e3f2fd; border-radius:8px; border-left:4px solid #1565c0;">
+                <div style="font-size:12px; font-weight:bold; color:#1565c0; margin-bottom:8px;">📊 統計摘要</div>
+                <div style="display:flex; gap:20px; flex-wrap:wrap; font-size:12px;">
+                    <div>平均跌幅：<strong style="color:#e65100;">${avgDrop.toFixed(1)}%</strong></div>
+                    <div>最大跌幅：<strong style="color:#c62828;">${maxDrop.toFixed(1)}%</strong></div>
+                    <div>最小跌幅：<strong style="color:#2e7d32;">${minDrop.toFixed(1)}%</strong></div>
+                    <div>資料筆數：<strong>${validResults.length}</strong> 次事件</div>
+                </div>
+            </div>
+        `;
+    }
+    
+    resultDiv.innerHTML = html;
+}
+
+/**
+ * v3.98R 新增：取得股票在特定期間的價格資料
+ */
+async function getStockPriceInPeriod(stockCode, startDate, endDate) {
+    const startNum = parseInt(startDate.replace(/-/g, ''));
+    const endNum = parseInt(endDate.replace(/-/g, ''));
+    const year = parseInt(startDate.substring(0, 4));
+    
+    let prices = [];
+    let stockName = '';
+    
+    // 從已載入的 stockPriceHistory 查詢
+    if (window.stockPriceHistory?.tse) {
+        // 檢查該年和可能跨年的下一年
+        for (let y = year; y <= year + 1; y++) {
+            const yearData = window.stockPriceHistory.tse[y];
+            if (yearData && Array.isArray(yearData)) {
+                for (const row of yearData) {
+                    // row: [Date, Code, Name, Open, High, Low, Close, Volume, Amount]
+                    const [date, code, name, open, high, low, close] = row;
+                    if (String(code) === String(stockCode)) {
+                        const dateNum = parseInt(date);
+                        if (dateNum >= startNum && dateNum <= endNum) {
+                            prices.push({
+                                date: dateNum,
+                                high: parseFloat(high) || 0,
+                                low: parseFloat(low) || 0,
+                                close: parseFloat(close) || 0
+                            });
+                            if (!stockName && name) stockName = name;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // 也檢查上櫃
+    if (prices.length === 0 && window.stockPriceHistory?.otc) {
+        for (let y = year; y <= year + 1; y++) {
+            const yearData = window.stockPriceHistory.otc[y];
+            if (yearData && Array.isArray(yearData)) {
+                for (const row of yearData) {
+                    const [date, code, name, open, high, low, close] = row;
+                    if (String(code) === String(stockCode)) {
+                        const dateNum = parseInt(date);
+                        if (dateNum >= startNum && dateNum <= endNum) {
+                            prices.push({
+                                date: dateNum,
+                                high: parseFloat(high) || 0,
+                                low: parseFloat(low) || 0,
+                                close: parseFloat(close) || 0
+                            });
+                            if (!stockName && name) stockName = name;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    if (prices.length === 0) {
+        return null;
+    }
+    
+    // 計算期間最高最低
+    const periodHigh = Math.max(...prices.map(p => p.high));
+    const periodLow = Math.min(...prices.map(p => p.low));
+    
+    return {
+        stockName,
+        high: periodHigh,
+        low: periodLow,
+        dataPoints: prices.length
+    };
+}
+
+/**
+ * v3.98Q 新增：更新市場循環小卡片數據
+ */
+function updateMarketCycleCard() {
+    const today = new Date();
+    const lastCorrectionEnd = new Date('2022-10-25');
+    
+    const sinceCorrection = today - lastCorrectionEnd;
+    const correctionYears = Math.floor(sinceCorrection / (365.25 * 24 * 60 * 60 * 1000));
+    const correctionMonths = Math.floor((sinceCorrection / (30.44 * 24 * 60 * 60 * 1000)) % 12);
+    
+    const durationEl = document.getElementById('cycleDuration');
+    const correctionEl = document.getElementById('cycleLastCorrection');
+    
+    if (durationEl) durationEl.textContent = '16年+';
+    if (correctionEl) correctionEl.textContent = `${correctionYears}年${correctionMonths}月`;
+}
+
+// 頁面載入時更新小卡片
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(updateMarketCycleCard, 1000);
+});
 
 /**
  * v3.98k 更新：載入風險統計數據
@@ -21903,6 +22539,10 @@ function showBasicInfoTab(tabName, event) {
                 console.log('[showBasicInfoTab] 執行 renderBasicInfoBalance');
                 renderBasicInfoBalance(cbCode, content);
                 break;
+            case 'history':
+                console.log('[showBasicInfoTab] 執行 renderBasicInfoHistory');
+                renderBasicInfoHistory(cbCode, content);
+                break;
             default:
                 content.innerHTML = `<div style="color:#999;">未知標籤：${tabName}</div>`;
         }
@@ -23856,6 +24496,244 @@ function renderBasicInfoBalance(cbCode, container) {
     setTimeout(() => {
         renderWeeklyChart(searchCode);
     }, 100);
+}
+
+/**
+ * v3.98O 新增：渲染歷史發行標籤
+ * 顯示同一標的歷史發行的所有CB資訊
+ */
+function renderBasicInfoHistory(cbCode, container) {
+    console.log('[renderBasicInfoHistory] cbCode:', cbCode);
+
+    // 從CB代號取得股票代號（前4或5碼）
+    const stockCode = cbCode.replace(/[一二三四五六七八九十]$/, '').substring(0, cbCode.length > 5 ? 5 : 4);
+    console.log('[renderBasicInfoHistory] stockCode:', stockCode);
+
+    // 從 kanbanData 和其他資料來源搜尋同一標的的所有CB
+    const allCBs = [];
+    
+    // 從 kanbanData 搜尋
+    if (window.kanbanData && Array.isArray(window.kanbanData)) {
+        window.kanbanData.forEach(cb => {
+            const cbStockCode = (cb['股票代號'] || cb['代號'] || '').toString().trim();
+            if (cbStockCode === stockCode || cbStockCode.startsWith(stockCode)) {
+                allCBs.push({
+                    cbCode: cb['CB代號'] || cb['代號'] || '',
+                    cbName: cb['CB名稱'] || cb['名稱'] || '',
+                    stockCode: cbStockCode,
+                    stockName: cb['股票名稱'] || cb['名稱'] || '',
+                    issueSize: cb['發行規模'] || cb['發行總額'] || '',
+                    guarantee: cb['擔保'] || '',
+                    years: cb['年期'] || '',
+                    convPrice: cb['轉換價'] || cb['轉換價格'] || '',
+                    issueType: cb['發行方式'] || '',
+                    marketHigh: cb['掛牌最高'] || '',
+                    marketLow: cb['掛牌最低'] || '',
+                    amplitude: cb['振幅'] || '',
+                    status: cb['狀態'] || (cb['下市日期'] ? '已下市' : '掛牌中'),
+                    source: 'kanban'
+                });
+            }
+        });
+    }
+
+    // 從 basicData (01_basic.csv) 搜尋補充
+    if (window.sheet01Data && Array.isArray(window.sheet01Data)) {
+        window.sheet01Data.forEach(cb => {
+            const cbStockCode = (cb['股票代號'] || '').toString().trim();
+            if (cbStockCode === stockCode) {
+                // 檢查是否已存在
+                const existIdx = allCBs.findIndex(x => x.cbCode === cb['CB代號']);
+                if (existIdx === -1) {
+                    allCBs.push({
+                        cbCode: cb['CB代號'] || '',
+                        cbName: cb['CB名稱'] || '',
+                        stockCode: cbStockCode,
+                        stockName: cb['股票名稱'] || '',
+                        issueSize: cb['發行總額'] || '',
+                        guarantee: cb['擔保'] || '',
+                        years: cb['年期'] || '',
+                        convPrice: cb['轉換價格'] || '',
+                        issueType: cb['詢圈/競拍'] || '',
+                        marketHigh: '',
+                        marketLow: '',
+                        amplitude: '',
+                        status: cb['狀態'] || '',
+                        source: 'basic'
+                    });
+                } else {
+                    // 補充資料
+                    if (!allCBs[existIdx].guarantee) allCBs[existIdx].guarantee = cb['擔保'] || '';
+                    if (!allCBs[existIdx].years) allCBs[existIdx].years = cb['年期'] || '';
+                    if (!allCBs[existIdx].issueType) allCBs[existIdx].issueType = cb['詢圈/競拍'] || '';
+                }
+            }
+        });
+    }
+
+    // 從競拍資料補充
+    if (window.auctionRawData && Array.isArray(window.auctionRawData)) {
+        window.auctionRawData.forEach(auction => {
+            const auctionStockCode = (auction.stockCode || '').toString().trim();
+            if (auctionStockCode === stockCode) {
+                const existIdx = allCBs.findIndex(x => x.cbCode === auction.id);
+                if (existIdx >= 0) {
+                    // 補充競拍資訊
+                    allCBs[existIdx].auctionMinBid = auction.minBidPrice;
+                    allCBs[existIdx].auctionAvgBid = auction.avgBidPrice;
+                    allCBs[existIdx].theoreticalPrice = auction.theoreticalPrice;
+                    allCBs[existIdx].issueType = '競拍';
+                }
+            }
+        });
+    }
+
+    // 從掛牌高低資料補充
+    if (window.marketHighLow) {
+        allCBs.forEach(cb => {
+            const hl = window.marketHighLow[cb.cbCode];
+            if (hl) {
+                cb.marketHigh = cb.marketHigh || hl.high;
+                cb.marketLow = cb.marketLow || hl.low;
+                if (hl.high && hl.low) {
+                    cb.amplitude = ((hl.high - hl.low) / hl.low * 100).toFixed(1) + '%';
+                }
+            }
+        });
+    }
+
+    // 排序：按CB代號數字部分排序
+    allCBs.sort((a, b) => {
+        const numA = parseInt(a.cbCode.replace(/\D/g, '')) || 0;
+        const numB = parseInt(b.cbCode.replace(/\D/g, '')) || 0;
+        return numA - numB;
+    });
+
+    // 去重
+    const uniqueCBs = [];
+    const seenCodes = new Set();
+    allCBs.forEach(cb => {
+        if (!seenCodes.has(cb.cbCode) && cb.cbCode) {
+            seenCodes.add(cb.cbCode);
+            uniqueCBs.push(cb);
+        }
+    });
+
+    console.log('[renderBasicInfoHistory] 找到CB數量:', uniqueCBs.length);
+
+    // 取得股票名稱
+    const stockName = uniqueCBs.length > 0 ? uniqueCBs[0].stockName : '';
+
+    // 產生HTML
+    let html = `
+        <div style="background:linear-gradient(135deg, #1565c0 0%, #0d47a1 100%); color:white; padding:15px 18px; border-radius:10px 10px 0 0; margin:-15px -15px 15px -15px;">
+            <div style="font-size:17px; font-weight:bold;">📜 ${stockCode} ${stockName} 歷史發行CB</div>
+            <div style="font-size:13px; opacity:0.9; margin-top:5px;">共發行 <strong style="font-size:16px;">${uniqueCBs.length}</strong> 檔可轉債</div>
+        </div>
+    `;
+
+    if (uniqueCBs.length === 0) {
+        html += `
+            <div style="text-align:center; padding:40px; color:#888;">
+                <div style="font-size:48px; margin-bottom:15px;">📭</div>
+                <div>未找到 ${stockCode} 的歷史發行資料</div>
+            </div>
+        `;
+        container.innerHTML = html;
+        return;
+    }
+
+    // 建立表格
+    html += `
+        <div style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse; font-size:12px; min-width:700px;">
+                <thead>
+                    <tr style="background:#1565c0; color:white;">
+                        <th style="padding:10px 6px; text-align:center; white-space:nowrap;">CB代號</th>
+                        <th style="padding:10px 6px; text-align:center; white-space:nowrap;">CB名稱</th>
+                        <th style="padding:10px 6px; text-align:center; white-space:nowrap;">規模</th>
+                        <th style="padding:10px 6px; text-align:center; white-space:nowrap;">擔保</th>
+                        <th style="padding:10px 6px; text-align:center; white-space:nowrap;">年期</th>
+                        <th style="padding:10px 6px; text-align:center; white-space:nowrap;">轉換價</th>
+                        <th style="padding:10px 6px; text-align:center; white-space:nowrap;">詢圈/競拍</th>
+                        <th style="padding:10px 6px; text-align:center; white-space:nowrap; background:#c62828;">最高價</th>
+                        <th style="padding:10px 6px; text-align:center; white-space:nowrap; background:#2e7d32;">最低價</th>
+                        <th style="padding:10px 6px; text-align:center; white-space:nowrap;">振幅</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    uniqueCBs.forEach((cb, idx) => {
+        const isCurrentCB = cb.cbCode === cbCode;
+        const rowBg = isCurrentCB ? '#fff3e0' : (idx % 2 === 0 ? '#f5f5f5' : 'white');
+        const rowBorder = isCurrentCB ? '2px solid #ff9800' : 'none';
+        
+        // 格式化數值
+        const issueSize = cb.issueSize ? (parseFloat(cb.issueSize) >= 1 ? parseFloat(cb.issueSize).toFixed(1) + '億' : (parseFloat(cb.issueSize) * 10).toFixed(0) + '千萬') : '-';
+        const convPrice = cb.convPrice ? parseFloat(cb.convPrice).toFixed(1) + '元' : '-';
+        const marketHigh = cb.marketHigh ? parseFloat(cb.marketHigh).toFixed(2) : '-';
+        const marketLow = cb.marketLow ? parseFloat(cb.marketLow).toFixed(2) : '-';
+        
+        // 顏色處理
+        const highColor = marketHigh !== '-' && parseFloat(marketHigh) >= 150 ? '#c62828' : (parseFloat(marketHigh) >= 120 ? '#e65100' : '#333');
+        const lowColor = marketLow !== '-' && parseFloat(marketLow) < 100 ? '#c62828' : '#333';
+        const ampColor = cb.amplitude && parseFloat(cb.amplitude) >= 100 ? '#c62828' : (parseFloat(cb.amplitude) >= 50 ? '#e65100' : '#2e7d32');
+        
+        // 發行方式標記
+        const issueTypeTag = cb.issueType === '競拍' ? 
+            '<span style="background:#ff9800; color:white; padding:2px 6px; border-radius:3px; font-size:10px;">競拍</span>' :
+            '<span style="background:#9e9e9e; color:white; padding:2px 6px; border-radius:3px; font-size:10px;">詢圈</span>';
+
+        html += `
+            <tr style="background:${rowBg}; border:${rowBorder};" ${isCurrentCB ? 'title="目前選擇的CB"' : ''}>
+                <td style="padding:8px 6px; text-align:center; font-weight:bold; color:#1565c0;">
+                    ${cb.cbCode}
+                    ${isCurrentCB ? '<span style="color:#ff9800;">★</span>' : ''}
+                </td>
+                <td style="padding:8px 6px; text-align:center;">${cb.cbName || '-'}</td>
+                <td style="padding:8px 6px; text-align:center;">${issueSize}</td>
+                <td style="padding:8px 6px; text-align:center;">
+                    ${cb.guarantee === '有擔保' || cb.guarantee === '有' ? 
+                        '<span style="color:#2e7d32; font-weight:bold;">有</span>' : 
+                        '<span style="color:#c62828;">無</span>'}
+                </td>
+                <td style="padding:8px 6px; text-align:center;">${cb.years || '-'}</td>
+                <td style="padding:8px 6px; text-align:center;">${convPrice}</td>
+                <td style="padding:8px 6px; text-align:center;">${issueTypeTag}</td>
+                <td style="padding:8px 6px; text-align:center; font-weight:bold; color:${highColor}; background:#ffebee;">${marketHigh}</td>
+                <td style="padding:8px 6px; text-align:center; font-weight:bold; color:${lowColor}; background:#e8f5e9;">${marketLow}</td>
+                <td style="padding:8px 6px; text-align:center; font-weight:bold; color:${ampColor};">${cb.amplitude || '-'}</td>
+            </tr>
+        `;
+    });
+
+    html += `
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    // 統計摘要
+    const guaranteedCount = uniqueCBs.filter(cb => cb.guarantee === '有擔保' || cb.guarantee === '有').length;
+    const auctionCount = uniqueCBs.filter(cb => cb.issueType === '競拍').length;
+    const avgHigh = uniqueCBs.filter(cb => cb.marketHigh).reduce((sum, cb) => sum + parseFloat(cb.marketHigh), 0) / uniqueCBs.filter(cb => cb.marketHigh).length || 0;
+    const avgLow = uniqueCBs.filter(cb => cb.marketLow).reduce((sum, cb) => sum + parseFloat(cb.marketLow), 0) / uniqueCBs.filter(cb => cb.marketLow).length || 0;
+
+    html += `
+        <div style="margin-top:15px; padding:12px 15px; background:#e3f2fd; border-radius:8px; border-left:4px solid #1565c0;">
+            <div style="font-size:13px; font-weight:bold; color:#1565c0; margin-bottom:8px;">📊 發行統計摘要</div>
+            <div style="display:flex; flex-wrap:wrap; gap:15px; font-size:12px; color:#555;">
+                <div>總發行：<strong>${uniqueCBs.length}</strong> 檔</div>
+                <div>有擔保：<strong style="color:#2e7d32;">${guaranteedCount}</strong> 檔</div>
+                <div>競拍發行：<strong style="color:#ff9800;">${auctionCount}</strong> 檔</div>
+                ${avgHigh > 0 ? `<div>平均最高價：<strong style="color:#c62828;">${avgHigh.toFixed(2)}</strong></div>` : ''}
+                ${avgLow > 0 ? `<div>平均最低價：<strong style="color:#2e7d32;">${avgLow.toFixed(2)}</strong></div>` : ''}
+            </div>
+        </div>
+    `;
+
+    container.innerHTML = html;
 }
 
 /**
@@ -27139,16 +28017,20 @@ async function loadAllKanbanData(loadAll = false) {
         const allData = window.kanbanData.data || {};
         const allDates = new Set(window.kanbanData.dates || []);
 
-        // v3.97-as-cj: 簡化載入邏輯
-        // 預設載入 2023-2025 整個資料庫（不做 WHERE 過濾，資料庫本身已按年份分割）
-        // loadAll = true 時才載入更早期資料
-        const dbFiles = loadAll ? [
-            { file: 'data/cb_kanban_2023_2025.db', label: '2023-2025' },
-            { file: 'data/cb_kanban_2020_2022.db', label: '2020-2022' },
-            { file: 'data/cb_kanban_2017_2019.db', label: '2017-2019' }
-        ] : [
-            { file: 'data/cb_kanban_2023_2025.db', label: '2023-2025' }  // 預設只載入這個
-        ];
+        // v3.98P: 改為單年度檔案載入（2017-2025共9個檔案）
+        // 預設載入近3年，loadAll = true 時載入全部9年
+        const currentYear = new Date().getFullYear();
+        const defaultYears = [currentYear, currentYear - 1, currentYear - 2];
+        const allYears = [2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017];
+        
+        const yearsToLoad = loadAll ? allYears : defaultYears.filter(y => y >= 2017);
+        
+        const dbFiles = yearsToLoad.map(year => ({
+            file: `data/cb_kanban_${year}.db`,
+            label: `${year}`
+        }));
+
+        console.log(`📊 準備載入 cb_kanban: ${yearsToLoad.join(', ')}`);
 
         for (const dbInfo of dbFiles) {
             updateProgress(`載入 ${dbInfo.label} 資料...`);
@@ -27165,7 +28047,7 @@ async function loadAllKanbanData(loadAll = false) {
                 
                 const db = new SQL.Database(new Uint8Array(arrayBuffer));
                 
-                // v3.97-as-cj: 直接查詢全部資料，不做 WHERE 過濾
+                // v3.98P: 直接查詢全部資料
                 const results = db.exec(`
                     SELECT date, code, name, conv_price, call_start, call_end,
                            call_price, delist_date, balance, cb_price, stock_price
@@ -27258,10 +28140,12 @@ async function loadEarlierKanbanData() {
         const allData = window.kanbanData.data;
         const allDates = new Set(window.kanbanData.dates);
 
-        const dbFiles = [
-            { file: 'data/cb_kanban_2020_2022.db', label: '2020-2022' },
-            { file: 'data/cb_kanban_2017_2019.db', label: '2017-2019' }
-        ];
+        // v3.98P: 載入剩餘年份的單年度檔案（2017-2022）
+        const additionalYears = [2022, 2021, 2020, 2019, 2018, 2017];
+        const dbFiles = additionalYears.map(year => ({
+            file: `data/cb_kanban_${year}.db`,
+            label: `${year}`
+        }));
 
         for (const dbInfo of dbFiles) {
             try {
@@ -27303,6 +28187,7 @@ async function loadEarlierKanbanData() {
                     }
                 }
                 db.close();
+                console.log(`  ✓ cb_kanban_${dbInfo.label}.db 載入完成`);
             } catch (e) {
                 console.warn(`載入 ${dbInfo.file} 失敗:`, e.message);
             }

@@ -2192,7 +2192,7 @@ button:active, .clickable:active {
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.98M 完整19年資料版)...</div>
+    <div>🔄 系統啟動中 (v3.98N 年度分開載入版)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
@@ -2200,7 +2200,7 @@ button:active, .clickable:active {
     <!-- v3.98g 修改：頂部標題置中 + 統計數據 -->
     <div class="header">
         <h1>🏠 Rex大叔的168台股投資研究室</h1>
-        <span class="version-badge">v3.98M 完整19年資料版</span>
+        <span class="version-badge">v3.98N 年度分開載入版</span>
         <div class="subtitle">
             <span id="headerSubtitle">載入中...</span>
             <span style="color:#ddd">|</span>
@@ -28708,82 +28708,79 @@ function formatNumber(num) {
     return Number(num).toLocaleString();
 }
 
-// ==================== v3.97-zs-br: CB價格歷史資料模組 ====================
+// ==================== v3.98N: CB價格歷史資料模組（按年度分開） ====================
 
 /**
- * 載入 CB 價格歷史資料
+ * v3.98N: CB價格年度資料管理器
+ * 支援按需載入，查詢時只載入需要的年份
  */
-async function loadCBPriceData() {
-    if (window.cbPriceData.loaded || window.cbPriceData.loading) return;
-    window.cbPriceData.loading = true;
-
-    console.log('💰 開始載入 CB 價格歷史資料...');
-    const startTime = Date.now();
-
-    // 確保 sql.js 已初始化
-    if (!window.kanbanSQL) {
-        try {
-            window.kanbanSQL = await initSqlJs({
-                locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}`
-            });
-        } catch (e) {
-            console.error('SQL.js 初始化失敗:', e);
-            window.cbPriceData.loading = false;
-            return;
+const CBPriceManager = {
+    // 可用年份 (2007-2025)
+    availableYears: [2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025],
+    
+    // 已載入的年份
+    loadedYears: new Set(),
+    
+    // 正在載入的年份
+    loadingYears: new Set(),
+    
+    // 資料存放
+    data: {},
+    
+    /**
+     * 載入指定年份的資料
+     */
+    async loadYear(year) {
+        if (this.loadedYears.has(year) || this.loadingYears.has(year)) {
+            return true;
         }
-    }
-    const SQL = window.kanbanSQL;
-
-    const allData = window.cbPriceData.data || {};
-
-    // v3.98M: 完整19年CB價格資料（2007-2025）
-    const dbFiles = [
-        'data/CB_price_2025.db',
-        'data/CB_price_2022_2024.db',
-        'data/CB_price_2019_2021.db',
-        'data/CB_price_2016_2018.db',
-        'data/CB_price_2011_2015.db',
-        'data/CB_price_2007_2010.db'
-    ];
-
-    console.log('📊 準備載入 2007-2025 完整19年 CB價格資料...');
-
-    for (const dbFile of dbFiles) {
+        
+        this.loadingYears.add(year);
+        const dbFile = `data/CB_price_${year}.db`;
+        
         try {
+            // 確保 SQL.js 已初始化
+            if (!window.kanbanSQL) {
+                window.kanbanSQL = await initSqlJs({
+                    locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}`
+                });
+            }
+            const SQL = window.kanbanSQL;
+            
             const response = await fetch(dbFile);
             if (!response.ok) {
-                console.warn(`${dbFile} 載入失敗: ${response.status}`);
-                continue;
+                console.warn(`CB_price_${year}.db 載入失敗: ${response.status}`);
+                this.loadingYears.delete(year);
+                return false;
             }
-
+            
             const buffer = await response.arrayBuffer();
             const db = new SQL.Database(new Uint8Array(buffer));
-
-            // 查詢所有價格資料
+            
             const results = db.exec(`
                 SELECT 日期, 代號, 名稱, 收市, 開市, 最高, 最低, 單位, 金額, 均價
                 FROM CB_price
                 WHERE 收市 > 0 OR 最高 > 0
                 ORDER BY 代號, 日期
             `);
-
+            
+            let count = 0;
             if (results.length > 0) {
-                let count = 0;
                 for (const row of results[0].values) {
                     const [date, code, name, close, open, high, low, volume, amount, avgPrice] = row;
                     if (!code) continue;
-
+                    
                     const cbCode = String(code).trim();
-                    if (!allData[cbCode]) allData[cbCode] = [];
-
-                    // 轉換日期格式 20250102 -> 2025/01/02
+                    if (!this.data[cbCode]) this.data[cbCode] = [];
+                    
                     const dateStr = String(date);
                     const formattedDate = dateStr.length === 8 ?
                         `${dateStr.substring(0,4)}/${dateStr.substring(4,6)}/${dateStr.substring(6,8)}` : dateStr;
-
-                    allData[cbCode].push({
+                    
+                    this.data[cbCode].push({
                         date: formattedDate,
                         dateNum: parseInt(date) || 0,
+                        year: year,
                         name: name || '',
                         close: parseFloat(close) || 0,
                         open: parseFloat(open) || 0,
@@ -28795,27 +28792,138 @@ async function loadCBPriceData() {
                     });
                     count++;
                 }
-                console.log(`  載入 ${dbFile}: ${count} 筆`);
             }
-
+            
             db.close();
+            this.loadedYears.add(year);
+            this.loadingYears.delete(year);
+            console.log(`  ✓ CB_price_${year}.db: ${count} 筆`);
+            return true;
+            
         } catch (err) {
-            console.warn(`載入 ${dbFile} 失敗:`, err.message);
+            console.warn(`CB_price_${year}.db 載入錯誤:`, err.message);
+            this.loadingYears.delete(year);
+            return false;
         }
+    },
+    
+    /**
+     * 載入多個年份
+     */
+    async loadYears(years) {
+        const promises = years.map(y => this.loadYear(y));
+        await Promise.all(promises);
+    },
+    
+    /**
+     * 載入近N年資料
+     */
+    async loadRecentYears(n = 5) {
+        const currentYear = new Date().getFullYear();
+        const years = [];
+        for (let i = 0; i < n && (currentYear - i) >= 2007; i++) {
+            years.push(currentYear - i);
+        }
+        console.log(`📊 載入近${n}年CB價格資料: ${years.join(', ')}`);
+        await this.loadYears(years);
+    },
+    
+    /**
+     * 載入全部年份（用於完整統計分析）
+     */
+    async loadAllYears() {
+        console.log('📊 載入完整19年CB價格資料 (2007-2025)...');
+        await this.loadYears(this.availableYears);
+    },
+    
+    /**
+     * 根據CB代號判斷需要載入哪些年份
+     */
+    async loadForCB(cbCode, startYear, endYear) {
+        const years = [];
+        for (let y = startYear; y <= endYear; y++) {
+            if (this.availableYears.includes(y)) {
+                years.push(y);
+            }
+        }
+        await this.loadYears(years);
+    },
+    
+    /**
+     * 取得某檔CB的價格資料（並排序）
+     */
+    getCBData(cbCode) {
+        const data = this.data[cbCode] || [];
+        return data.sort((a, b) => a.dateNum - b.dateNum);
+    },
+    
+    /**
+     * 取得所有已載入的CB資料
+     */
+    getAllData() {
+        // 排序每檔CB的時間序列
+        const sorted = {};
+        for (const cbCode of Object.keys(this.data)) {
+            sorted[cbCode] = this.data[cbCode].sort((a, b) => a.dateNum - b.dateNum);
+        }
+        return sorted;
+    },
+    
+    /**
+     * 取得統計資訊
+     */
+    getStats() {
+        const cbCount = Object.keys(this.data).length;
+        let recordCount = 0;
+        for (const cbCode of Object.keys(this.data)) {
+            recordCount += this.data[cbCode].length;
+        }
+        return {
+            loadedYears: Array.from(this.loadedYears).sort(),
+            cbCount,
+            recordCount
+        };
     }
+};
 
-    // 排序每檔 CB 的時間序列
-    for (const cbCode of Object.keys(allData)) {
-        allData[cbCode].sort((a, b) => a.dateNum - b.dateNum);
-    }
+/**
+ * 載入 CB 價格歷史資料（相容舊版介面）
+ */
+async function loadCBPriceData() {
+    if (window.cbPriceData.loaded || window.cbPriceData.loading) return;
+    window.cbPriceData.loading = true;
 
-    window.cbPriceData.data = allData;
+    console.log('💰 開始載入 CB 價格歷史資料...');
+    const startTime = Date.now();
+
+    // v3.98N: 預設載入近5年資料（較快），需要更多年份時再按需載入
+    await CBPriceManager.loadRecentYears(5);
+    
+    // 同步到舊版資料結構
+    window.cbPriceData.data = CBPriceManager.getAllData();
     window.cbPriceData.loaded = true;
     window.cbPriceData.loading = false;
 
-    const totalCB = Object.keys(allData).length;
-    const totalRecords = Object.values(allData).reduce((sum, arr) => sum + arr.length, 0);
-    console.log(`✅ CB價格資料載入完成: ${totalCB} 檔CB, ${totalRecords} 筆價格記錄, ${Date.now() - startTime}ms`);
+    const stats = CBPriceManager.getStats();
+    console.log(`✅ CB價格資料載入完成: ${stats.cbCount} 檔CB, ${stats.recordCount} 筆價格記錄, ${Date.now() - startTime}ms`);
+    console.log(`   已載入年份: ${stats.loadedYears.join(', ')}`);
+}
+
+/**
+ * v3.98N 新增：載入完整19年資料（用於風險統計分析）
+ */
+async function loadAllCBPriceData() {
+    console.log('📊 載入完整19年 CB價格資料 (2007-2025)...');
+    const startTime = Date.now();
+    
+    await CBPriceManager.loadAllYears();
+    
+    // 同步到舊版資料結構
+    window.cbPriceData.data = CBPriceManager.getAllData();
+    window.cbPriceData.loaded = true;
+    
+    const stats = CBPriceManager.getStats();
+    console.log(`✅ 完整19年資料載入完成: ${stats.cbCount} 檔CB, ${stats.recordCount} 筆價格記錄, ${Date.now() - startTime}ms`);
 }
 
 /**

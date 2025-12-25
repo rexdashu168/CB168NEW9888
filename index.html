@@ -6110,6 +6110,17 @@ const AICore = {
             );
             const ensembleStd = Math.sqrt(variance);
             
+            // 計算該區間的歷史溢價率統計（用於策略價格）
+            const premiums = filtered.map(d => {
+                const theo = parseFloat(d['理論價']) || 0;
+                const minBid = parseFloat(d['最低得標']) || 0;
+                return theo > 0 ? ((minBid / theo) - 1) * 100 : 0;
+            });
+            const avgPremium = premiums.length > 0 ? premiums.reduce((a, b) => a + b, 0) / premiums.length : 8;
+            const segmentStdPremium = premiums.length > 1 
+                ? Math.sqrt(premiums.reduce((sum, p) => sum + Math.pow(p - avgPremium, 2), 0) / premiums.length) 
+                : 5.5;
+            
             // 用該區間的歷史標準差計算策略價格
             const strategyStd = segmentStdPremium * theoPrice / 100;
             
@@ -22356,9 +22367,7 @@ function evaluateAuctionOpportunity(params) {
             sampleCount,
             recentCount,
             useRecent
-        },
-        // v3.81: 加入快照ID供追蹤
-        snapshotId: predictionSnapshot.id
+        }
     };
 }
 

@@ -7014,85 +7014,55 @@ async function loadStatistics() {
             }
         };
 
-        // v3.98h 優化：分兩波載入 CSV，核心資料優先
+        // 載入所有 CSV 檔案（一次載入，檔案小不需分批）
         console.log('📂 載入 CSV 資料...');
-        const csvStartTime = Date.now();
         
-        // 第一波：核心資料（競拍評估必需）
-        console.log('   🚀 第一波：載入核心資料...');
-        const coreResults = await Promise.all([
-            loadCSVFile('04_auction.csv'),      // 競拍資料（最重要）
-            loadCSVFile('00_CB_filter.csv'),    // CB 篩選
-            loadCSVFile('01_basic.csv'),        // 基本資料
-            loadCSVFile('16_industry.csv')      // 產業分類
+        const csvResults = await Promise.all([
+            loadCSVFile('04_auction.csv'),
+            loadCSVFile('00_CB_filter.csv'),
+            loadCSVFile('01_basic.csv'),
+            loadCSVFile('02_schedule.csv'),
+            loadCSVFile('03_putback.csv'),
+            loadCSVFile('05_filter_range.csv'),
+            loadCSVFile('06_issue.csv'),
+            loadCSVFile('07_board.csv'),
+            loadCSVFile('08_weekly_basic.csv'),
+            loadCSVFile('09_weekly_quote.csv'),
+            loadCSVFile('10_weekly_balance.csv'),
+            loadCSVFile('11_cbas_quote.csv'),
+            loadCSVFile('12_call_execute.csv'),
+            loadCSVFile('13_stop_convert.csv'),
+            loadCSVFile('14_price_adjust.csv'),
+            loadCSVFile('15_cbas_calc.csv'),
+            loadCSVFile('16_industry.csv')
         ]);
         
-        [sheetAuction, sheetHighLow, sheetAllCB, sheetIndustry] = coreResults;
+        [sheetAuction, sheetHighLow, sheetAllCB, sheetSchedule, sheetPutback,
+         sheetFilterRange, sheetPending, sheetBoard, sheetListed, sheetCBClose,
+         sheetBalance, sheetCBAS, sheetCallExecute, sheetSuspend,
+         sheetPriceAdjust, sheetCbasCalc, sheetIndustry] = csvResults;
+        
+        // 儲存到全域變數
+        window.filterRangeData = sheetFilterRange || [];
+        window.priceAdjustData = sheetPriceAdjust || [];
+        window.cbasCalcData = sheetCbasCalc || [];
         
         // 檢查核心資料是否存在
         if (!sheetAuction || sheetAuction.length === 0) {
             throw new Error('找不到競拍資料 (04_auction.csv)，請確認 data/00_cb/ 目錄下有 CSV 檔案');
         }
         
-        console.log(`   ✅ 核心資料載入完成 (${Date.now() - csvStartTime}ms)`);
+        console.log('📂 CSV 資料載入完成');
         
-        // 第二波：背景載入其他資料（不阻塞 UI）
-        console.log('   🔄 第二波：背景載入其他資料...');
-        
-        // 使用 setTimeout 讓出主執行緒，讓 UI 先渲染
-        setTimeout(async () => {
-            try {
-                const secondaryResults = await Promise.all([
-                    loadCSVFile('02_schedule.csv'),
-                    loadCSVFile('03_putback.csv'),
-                    loadCSVFile('05_filter_range.csv'),
-                    loadCSVFile('06_issue.csv'),
-                    loadCSVFile('07_board.csv'),
-                    loadCSVFile('08_weekly_basic.csv'),
-                    loadCSVFile('09_weekly_quote.csv'),
-                    loadCSVFile('10_weekly_balance.csv'),
-                    loadCSVFile('11_cbas_quote.csv'),
-                    loadCSVFile('12_call_execute.csv'),
-                    loadCSVFile('13_stop_convert.csv'),
-                    loadCSVFile('14_price_adjust.csv'),
-                    loadCSVFile('15_cbas_calc.csv')
-                ]);
-                
-                [sheetSchedule, sheetPutback, sheetFilterRange, sheetPending, sheetBoard,
-                 sheetListed, sheetCBClose, sheetBalance, sheetCBAS, 
-                 sheetCallExecute, sheetSuspend, sheetPriceAdjust, sheetCbasCalc] = secondaryResults;
-                
-                // 儲存到全域變數
-                window.filterRangeData = sheetFilterRange || [];
-                window.priceAdjustData = sheetPriceAdjust || [];
-                window.cbasCalcData = sheetCbasCalc || [];
-                window.sheet02Data = sheetSchedule || [];
-                window.sheet03Data = sheetPutback || [];
-                window.sheet08Data = sheetListed || [];
-                window.sheet09Data = sheetCBClose || [];
-                window.sheet10Data = sheetBalance || [];
-                window.sheet12Data = sheetCallExecute || [];
-                window.sheet13Data = sheetSuspend || [];
-                
-                // 更新日期
-                if (sheetBalance && sheetBalance.length > 0) {
-                    const firstRow = sheetBalance[0];
-                    const dateField = firstRow['資料日期'] || firstRow['日期'] || '';
-                    if (dateField) {
-                        window.sheet10Date = String(dateField).replace(/-/g, '/');
-                    }
-                }
-                
-                console.log(`   ✅ 第二波資料載入完成`);
-            } catch (e) {
-                console.warn('   ⚠️ 第二波資料載入部分失敗:', e);
-            }
-        }, 100);
-        
-        console.log('📂 CSV 核心資料載入完成');
-        
-        // CSV 模式下的日期處理（暫用空值，等第二波載入後更新）
+        // CSV 模式下的日期處理
         window.sheet10Date = null;
+        if (sheetBalance && sheetBalance.length > 0) {
+            const firstRow = sheetBalance[0];
+            const dateField = firstRow['資料日期'] || firstRow['日期'] || '';
+            if (dateField) {
+                window.sheet10Date = String(dateField).replace(/-/g, '/');
+            }
+        }
 
         // v3.81 新增：保存競拍數據供KNN超級預測引擎使用
         window.auctionDataCache = sheetAuction;

@@ -2192,7 +2192,7 @@ button:active, .clickable:active {
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.98R 多空循環+個股查詢版)...</div>
+    <div>🔄 系統啟動中 (v3.98S CBAS歷史月拆解版)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
@@ -2200,7 +2200,7 @@ button:active, .clickable:active {
     <!-- v3.98g 修改：頂部標題置中 + 統計數據 -->
     <div class="header">
         <h1>🏠 Rex大叔的168台股投資研究室</h1>
-        <span class="version-badge">v3.98R 多空循環+個股查詢版</span>
+        <span class="version-badge">v3.98S CBAS歷史月拆解版</span>
         <div class="subtitle">
             <span id="headerSubtitle">載入中...</span>
             <span style="color:#ddd">|</span>
@@ -3342,6 +3342,7 @@ button:active, .clickable:active {
             <button type="button" class="price-trend-tab" onclick="showPriceTrendTab('cbHistory', event)" style="padding:10px 14px; border:2px solid #9c27b0; border-radius:8px; background:white; color:#7b1fa2; cursor:pointer; font-weight:600; font-size:13px;">💰 CB價格走勢</button>
             <button type="button" class="price-trend-tab" onclick="showPriceTrendTab('balance', event)" style="padding:10px 14px; border:2px solid #9c27b0; border-radius:8px; background:white; color:#7b1fa2; cursor:pointer; font-weight:600; font-size:13px;">📊 籌碼轉換分析</button>
             <button type="button" class="price-trend-tab" onclick="showPriceTrendTab('cbas', event)" style="padding:10px 14px; border:2px solid #9c27b0; border-radius:8px; background:white; color:#7b1fa2; cursor:pointer; font-weight:600; font-size:13px;">🎯 CBAS拆解</button>
+            <button type="button" class="price-trend-tab" onclick="showPriceTrendTab('cbasHistory', event)" style="padding:10px 14px; border:2px solid #9c27b0; border-radius:8px; background:white; color:#7b1fa2; cursor:pointer; font-weight:600; font-size:13px;">⚡ CBAS歷史</button>
         </div>
     </div>
 
@@ -26992,6 +26993,12 @@ function showPriceTrendTab(tabName, event) {
         return;
     }
 
+    // v3.98S 新增：CBAS歷史月拆解標籤
+    if (tabName === 'cbasHistory') {
+        renderCBASHistoryTab(cbCode, content);
+        return;
+    }
+
     // v3.97-zs-br: CB價格走勢標籤 - 使用 CB_price 資料庫
     if (tabName === 'cbHistory') {
         const period = document.getElementById('priceTrendPeriod')?.value || '90';
@@ -27038,6 +27045,447 @@ function renderCBASFromCurrentData(cbCode, container) {
         convValue: convPrice > 0 ? (stockPrice / convPrice * 100) : 0,
         premium: 0
     }], container, period);
+}
+
+// ==================== v3.98S 新增：CBAS歷史月拆解查詢功能 ====================
+
+/**
+ * v3.98S 新增：CBAS歷史月拆解資料管理器
+ */
+const CBASHistoryManager = {
+    availableYears: [2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025],
+    loadedYears: new Set(),
+    data: {},  // { cbCode: [{ date, principal, trades, minPremium, maxPremium, avgPremium, period }] }
+    
+    async loadYear(year) {
+        if (this.loadedYears.has(year)) return true;
+        
+        try {
+            const response = await fetch(`data/CBAS_${year}.db`);
+            if (!response.ok) {
+                console.warn(`CBAS_${year}.db 不存在`);
+                return false;
+            }
+            
+            const arrayBuffer = await response.arrayBuffer();
+            const SQL = window.cbasSQL || window.kanbanSQL || window.initSqlJs;
+            
+            if (!SQL) {
+                console.error('SQL 引擎未初始化');
+                return false;
+            }
+            
+            const db = new SQL.Database(new Uint8Array(arrayBuffer));
+            const results = db.exec(`
+                SELECT 交易日期, 標的證券, 名目本金, 成交筆數, 
+                       權利金最低, 權利金最高, 權利金平均, 契約期間
+                FROM asset_swap 
+                ORDER BY 標的證券, 交易日期
+            `);
+            
+            if (results.length > 0) {
+                const rows = results[0].values;
+                for (const row of rows) {
+                    const [date, security, principal, trades, minP, maxP, avgP, period] = row;
+                    // 從 "68541_錼創科技一KY創" 提取 CB 代號
+                    const cbCode = security?.split('_')[0];
+                    const cbName = security?.split('_')[1] || '';
+                    
+                    if (!cbCode) continue;
+                    if (!this.data[cbCode]) this.data[cbCode] = [];
+                    
+                    this.data[cbCode].push({
+                        date: date,
+                        cbName: cbName,
+                        principal: parseInt(principal) || 0,
+                        trades: parseInt(trades) || 0,
+                        minPremium: parseFloat(minP) || 0,
+                        maxPremium: parseFloat(maxP) || 0,
+                        avgPremium: parseFloat(avgP) || 0,
+                        period: parseInt(period) || 0
+                    });
+                }
+            }
+            
+            db.close();
+            this.loadedYears.add(year);
+            console.log(`✓ CBAS_${year}.db 載入完成`);
+            return true;
+        } catch (e) {
+            console.warn(`載入 CBAS_${year}.db 失敗:`, e.message);
+            return false;
+        }
+    },
+    
+    async loadAllYears() {
+        for (const year of this.availableYears) {
+            await this.loadYear(year);
+        }
+    },
+    
+    async getCBASHistory(cbCode) {
+        // 先載入所有年份
+        await this.loadAllYears();
+        
+        const rawData = this.data[cbCode] || [];
+        if (rawData.length === 0) return null;
+        
+        // 依日期排序
+        rawData.sort((a, b) => a.date.localeCompare(b.date));
+        
+        return rawData;
+    },
+    
+    // 彙總成月度資料
+    aggregateToMonthly(rawData) {
+        const monthlyMap = {};
+        
+        for (const row of rawData) {
+            const month = row.date.substring(0, 7); // "2025-03"
+            
+            if (!monthlyMap[month]) {
+                monthlyMap[month] = {
+                    month: month,
+                    cbName: row.cbName,
+                    totalPrincipal: 0,
+                    totalTrades: 0,
+                    minPremium: Infinity,
+                    maxPremium: -Infinity,
+                    premiumSum: 0,
+                    premiumCount: 0,
+                    period: row.period
+                };
+            }
+            
+            const m = monthlyMap[month];
+            m.totalPrincipal += row.principal;
+            m.totalTrades += row.trades;
+            m.minPremium = Math.min(m.minPremium, row.minPremium);
+            m.maxPremium = Math.max(m.maxPremium, row.maxPremium);
+            m.premiumSum += row.avgPremium * row.trades;
+            m.premiumCount += row.trades;
+        }
+        
+        // 轉換成陣列並計算平均權利金
+        const result = Object.values(monthlyMap).map(m => ({
+            month: m.month,
+            cbName: m.cbName,
+            principal: m.totalPrincipal,
+            shares: Math.round(m.totalPrincipal / 100000), // 張數 = 名目本金 / 10萬
+            trades: m.totalTrades,
+            minPremium: m.minPremium === Infinity ? 0 : m.minPremium,
+            maxPremium: m.maxPremium === -Infinity ? 0 : m.maxPremium,
+            avgPremium: m.premiumCount > 0 ? (m.premiumSum / m.premiumCount) : 0,
+            period: m.period,
+            premiumAmount: Math.round(m.totalPrincipal * (m.premiumCount > 0 ? m.premiumSum / m.premiumCount / 100 : 0))
+        }));
+        
+        return result.sort((a, b) => a.month.localeCompare(b.month));
+    }
+};
+
+/**
+ * v3.98S 新增：渲染 CBAS 歷史月拆解標籤
+ */
+async function renderCBASHistoryTab(cbCode, container) {
+    container.innerHTML = `
+        <div style="text-align:center; padding:40px; color:#666; background:#fff; border-radius:12px;">
+            <div style="font-size:24px; margin-bottom:10px;">⏳</div>
+            <div>載入 ${cbCode} CBAS歷史拆解資料中...</div>
+            <div style="font-size:11px; margin-top:5px; color:#999;">首次載入可能需要較長時間（載入 2011-2025 年資料）</div>
+        </div>
+    `;
+    
+    try {
+        const rawData = await CBASHistoryManager.getCBASHistory(cbCode);
+        
+        if (!rawData || rawData.length === 0) {
+            container.innerHTML = `
+                <div style="text-align:center; padding:40px; background:#fff; border-radius:12px;">
+                    <div style="font-size:48px; margin-bottom:15px;">📭</div>
+                    <div style="font-size:16px; color:#666;">查無 ${cbCode} 的 CBAS 歷史拆解資料</div>
+                    <div style="font-size:12px; color:#999; margin-top:10px;">
+                        可能原因：該CB尚未有CBAS拆解交易，或代號輸入錯誤
+                    </div>
+                </div>
+            `;
+            return;
+        }
+        
+        // 彙總成月度資料
+        const monthlyData = CBASHistoryManager.aggregateToMonthly(rawData);
+        const cbName = monthlyData[0]?.cbName || '';
+        
+        // 渲染結果
+        renderCBASHistoryResult(cbCode, cbName, monthlyData, rawData, container);
+        
+    } catch (e) {
+        container.innerHTML = `
+            <div style="text-align:center; padding:40px; background:#fff; border-radius:12px;">
+                <div style="font-size:48px; margin-bottom:15px;">❌</div>
+                <div style="font-size:16px; color:#c62828;">載入失敗</div>
+                <div style="font-size:12px; color:#666; margin-top:10px;">${e.message}</div>
+            </div>
+        `;
+    }
+}
+
+/**
+ * v3.98S 新增：渲染 CBAS 歷史月拆解結果
+ */
+function renderCBASHistoryResult(cbCode, cbName, monthlyData, rawData, container) {
+    // 計算統計
+    const totalShares = monthlyData.reduce((sum, m) => sum + m.shares, 0);
+    const totalTrades = monthlyData.reduce((sum, m) => sum + m.trades, 0);
+    const totalPremiumAmount = monthlyData.reduce((sum, m) => sum + m.premiumAmount, 0);
+    const allPremiums = monthlyData.filter(m => m.avgPremium > 0).map(m => m.avgPremium);
+    const overallMinPremium = allPremiums.length > 0 ? Math.min(...monthlyData.map(m => m.minPremium).filter(p => p > 0)) : 0;
+    const overallMaxPremium = allPremiums.length > 0 ? Math.max(...monthlyData.map(m => m.maxPremium)) : 0;
+    const overallAvgPremium = allPremiums.length > 0 ? (allPremiums.reduce((a, b) => a + b, 0) / allPremiums.length) : 0;
+    
+    let html = `
+        <div style="background:#fff; border-radius:12px; padding:20px;">
+            <!-- 標題 -->
+            <div style="display:flex; align-items:center; gap:15px; margin-bottom:20px; padding-bottom:15px; border-bottom:2px solid #7b1fa2;">
+                <span style="font-size:36px;">⚡</span>
+                <div>
+                    <div style="font-size:18px; font-weight:bold; color:#7b1fa2;">${cbCode} ${cbName}</div>
+                    <div style="font-size:13px; color:#666;">CBAS 歷史月拆解資料（${monthlyData[0]?.month} ~ ${monthlyData[monthlyData.length-1]?.month}）</div>
+                </div>
+            </div>
+            
+            <!-- 統計摘要 -->
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:12px; margin-bottom:20px;">
+                <div style="background:linear-gradient(135deg, #7b1fa2, #9c27b0); color:white; padding:15px; border-radius:10px; text-align:center;">
+                    <div style="font-size:11px; opacity:0.9;">累計拆解張數</div>
+                    <div style="font-size:22px; font-weight:bold;">${totalShares.toLocaleString()}</div>
+                </div>
+                <div style="background:linear-gradient(135deg, #1565c0, #1976d2); color:white; padding:15px; border-radius:10px; text-align:center;">
+                    <div style="font-size:11px; opacity:0.9;">累計成交筆數</div>
+                    <div style="font-size:22px; font-weight:bold;">${totalTrades.toLocaleString()}</div>
+                </div>
+                <div style="background:linear-gradient(135deg, #2e7d32, #388e3c); color:white; padding:15px; border-radius:10px; text-align:center;">
+                    <div style="font-size:11px; opacity:0.9;">最低權利金</div>
+                    <div style="font-size:22px; font-weight:bold;">${overallMinPremium.toFixed(2)}</div>
+                </div>
+                <div style="background:linear-gradient(135deg, #c62828, #d32f2f); color:white; padding:15px; border-radius:10px; text-align:center;">
+                    <div style="font-size:11px; opacity:0.9;">最高權利金</div>
+                    <div style="font-size:22px; font-weight:bold;">${overallMaxPremium.toFixed(2)}</div>
+                </div>
+                <div style="background:linear-gradient(135deg, #e65100, #ef6c00); color:white; padding:15px; border-radius:10px; text-align:center;">
+                    <div style="font-size:11px; opacity:0.9;">平均權利金</div>
+                    <div style="font-size:22px; font-weight:bold;">${overallAvgPremium.toFixed(2)}</div>
+                </div>
+                <div style="background:linear-gradient(135deg, #37474f, #455a64); color:white; padding:15px; border-radius:10px; text-align:center;">
+                    <div style="font-size:11px; opacity:0.9;">權利金金額</div>
+                    <div style="font-size:22px; font-weight:bold;">${(totalPremiumAmount / 10000).toFixed(0)}萬</div>
+                </div>
+            </div>
+            
+            <!-- 圖表區域 -->
+            <div style="background:#f8f9fa; border-radius:10px; padding:15px; margin-bottom:20px;">
+                <div style="font-size:14px; font-weight:bold; color:#7b1fa2; margin-bottom:15px;">📊 權利金走勢圖</div>
+                <canvas id="cbasHistoryChart" style="width:100%; height:250px;"></canvas>
+            </div>
+            
+            <!-- 月度明細表格 -->
+            <div style="font-size:14px; font-weight:bold; color:#7b1fa2; margin-bottom:12px;">📋 月度拆解明細</div>
+            <div style="overflow-x:auto; max-height:400px; overflow-y:auto;">
+                <table style="width:100%; border-collapse:collapse; font-size:12px; min-width:700px;">
+                    <thead style="position:sticky; top:0; background:#7b1fa2; color:white;">
+                        <tr>
+                            <th style="padding:10px; text-align:center;">月份</th>
+                            <th style="padding:10px; text-align:right;">拆解張數</th>
+                            <th style="padding:10px; text-align:right;">成交筆數</th>
+                            <th style="padding:10px; text-align:right;">最低權利金</th>
+                            <th style="padding:10px; text-align:right;">最高權利金</th>
+                            <th style="padding:10px; text-align:right;">平均權利金</th>
+                            <th style="padding:10px; text-align:center;">契約年期</th>
+                            <th style="padding:10px; text-align:right;">權利金金額</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+    `;
+    
+    // 倒序顯示（最新在前）
+    const reversedData = [...monthlyData].reverse();
+    reversedData.forEach((m, idx) => {
+        const rowBg = idx % 2 === 0 ? '#f8f9fa' : 'white';
+        const minColor = m.minPremium === overallMinPremium ? 'background:#c8e6c9; font-weight:bold;' : '';
+        const maxColor = m.maxPremium === overallMaxPremium ? 'background:#ffcdd2; font-weight:bold;' : '';
+        
+        html += `
+            <tr style="background:${rowBg};">
+                <td style="padding:8px; text-align:center; font-weight:bold;">${m.month}</td>
+                <td style="padding:8px; text-align:right;">${m.shares.toLocaleString()}</td>
+                <td style="padding:8px; text-align:right;">${m.trades.toLocaleString()}</td>
+                <td style="padding:8px; text-align:right; ${minColor}">${m.minPremium.toFixed(2)}</td>
+                <td style="padding:8px; text-align:right; ${maxColor}">${m.maxPremium.toFixed(2)}</td>
+                <td style="padding:8px; text-align:right; color:#7b1fa2; font-weight:bold;">${m.avgPremium.toFixed(2)}</td>
+                <td style="padding:8px; text-align:center;">${m.period}年</td>
+                <td style="padding:8px; text-align:right;">${(m.premiumAmount / 10000).toFixed(1)}萬</td>
+            </tr>
+        `;
+    });
+    
+    html += `
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- 說明 -->
+            <div style="margin-top:15px; padding:12px; background:#f3e5f5; border-radius:8px; font-size:11px; color:#7b1fa2;">
+                <strong>📌 說明：</strong>
+                <ul style="margin:5px 0 0 15px; padding:0;">
+                    <li>拆解張數 = 名目本金 ÷ 10萬元</li>
+                    <li>權利金金額 = 名目本金 × 平均權利金%</li>
+                    <li>資料來源：CBAS 資產交換資料庫（2011-2025）</li>
+                    <li>綠色標記：歷史最低權利金 | 紅色標記：歷史最高權利金</li>
+                </ul>
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+    
+    // 繪製圖表
+    setTimeout(() => {
+        renderCBASHistoryChart(monthlyData);
+    }, 100);
+}
+
+/**
+ * v3.98S 新增：繪製 CBAS 歷史走勢圖
+ */
+function renderCBASHistoryChart(monthlyData) {
+    const canvas = document.getElementById('cbasHistoryChart');
+    if (!canvas || !window.Chart) return;
+    
+    const ctx = canvas.getContext('2d');
+    
+    // 清除舊圖表
+    if (window.cbasHistoryChartInstance) {
+        window.cbasHistoryChartInstance.destroy();
+    }
+    
+    const labels = monthlyData.map(m => m.month);
+    const sharesData = monthlyData.map(m => m.shares);
+    const minPremiumData = monthlyData.map(m => m.minPremium);
+    const maxPremiumData = monthlyData.map(m => m.maxPremium);
+    const avgPremiumData = monthlyData.map(m => m.avgPremium);
+    
+    window.cbasHistoryChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: '拆解張數',
+                    data: sharesData,
+                    backgroundColor: 'rgba(123, 31, 162, 0.6)',
+                    borderColor: 'rgba(123, 31, 162, 1)',
+                    borderWidth: 1,
+                    yAxisID: 'y',
+                    order: 2
+                },
+                {
+                    label: '最低權利金',
+                    data: minPremiumData,
+                    type: 'line',
+                    borderColor: '#2e7d32',
+                    backgroundColor: 'rgba(46, 125, 50, 0.1)',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.3,
+                    yAxisID: 'y1',
+                    order: 1
+                },
+                {
+                    label: '最高權利金',
+                    data: maxPremiumData,
+                    type: 'line',
+                    borderColor: '#c62828',
+                    backgroundColor: 'rgba(198, 40, 40, 0.1)',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.3,
+                    yAxisID: 'y1',
+                    order: 1
+                },
+                {
+                    label: '平均權利金',
+                    data: avgPremiumData,
+                    type: 'line',
+                    borderColor: '#7b1fa2',
+                    backgroundColor: 'rgba(123, 31, 162, 0.2)',
+                    borderWidth: 3,
+                    fill: false,
+                    tension: 0.3,
+                    yAxisID: 'y1',
+                    order: 0
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: { font: { size: 11 } }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.dataset.label;
+                            const value = context.parsed.y;
+                            if (label === '拆解張數') {
+                                return `${label}: ${value.toLocaleString()} 張`;
+                            }
+                            return `${label}: ${value.toFixed(2)}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    ticks: {
+                        maxRotation: 45,
+                        minRotation: 45,
+                        font: { size: 10 }
+                    }
+                },
+                y: {
+                    type: 'linear',
+                    position: 'left',
+                    title: {
+                        display: true,
+                        text: '拆解張數',
+                        font: { size: 11 }
+                    },
+                    ticks: {
+                        callback: value => value.toLocaleString()
+                    }
+                },
+                y1: {
+                    type: 'linear',
+                    position: 'right',
+                    title: {
+                        display: true,
+                        text: '權利金 (%)',
+                        font: { size: 11 }
+                    },
+                    grid: {
+                        drawOnChartArea: false
+                    }
+                }
+            }
+        }
+    });
 }
 
 // ==================== v3.97z-s 新增：CB_kanban資料載入與圖表繪製 ====================

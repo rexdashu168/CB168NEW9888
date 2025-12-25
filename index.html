@@ -10697,6 +10697,9 @@ function generateTimePerformanceData() {
     const items = [];
     const peakTimingStats = { week1: 0, week2: 0, week3: 0, week4: 0, month2: 0, month3: 0, later: 0 };
     
+    console.log('📊 [時間維度績效] 開始生成...');
+    console.log('📊 auctionRawData 筆數:', auctionRawData?.length || 0);
+    
     // 建立 02 工作表的掛牌日期查詢表
     const scheduleMap = {};
     if (window.sheet02Data && window.sheet02Data.length > 0) {
@@ -10712,15 +10715,23 @@ function generateTimePerformanceData() {
                 };
             }
         });
+        console.log('📊 sheet02Data (時程) 筆數:', window.sheet02Data.length, '| scheduleMap 筆數:', Object.keys(scheduleMap).length);
+    } else {
+        console.log('📊 sheet02Data 未載入或為空');
     }
     
+    let skippedNoMinBid = 0, skippedNoMarket = 0, skippedNoListDate = 0, processed = 0;
+    
     auctionRawData.forEach(d => {
-        if (!d.minBidPrice || d.minBidPrice <= 0 || !d.marketHigh || !d.marketLow) return;
+        if (!d.minBidPrice || d.minBidPrice <= 0) { skippedNoMinBid++; return; }
+        if (!d.marketHigh || !d.marketLow) { skippedNoMarket++; return; }
         
         // v3.98h: 優先從 02 工作表取得掛牌日期，再從 auctionRawData 本身取得
         const scheduleInfo = scheduleMap[d.id] || {};
         let listDateRaw = d.listDate || scheduleInfo.listDate;
-        if (!listDateRaw) return;  // 需要掛牌日期
+        if (!listDateRaw) { skippedNoListDate++; return; }  // 需要掛牌日期
+        
+        processed++;
         
         const cbCode = d.id;
         
@@ -10858,10 +10869,10 @@ function generateTimePerformanceData() {
     const realDataItems = items.filter(i => i.hasRealData);
     const realDataCount = realDataItems.length;
     
-    // 計算勝率（報酬>0的比例）
-    const winRate1Week = items.filter(i => i.return1Week > 0).length / items.length * 100;
-    const winRate1Month = items.filter(i => i.return1Month > 0).length / items.length * 100;
-    const winRate3Month = items.filter(i => i.return3Month > 0).length / items.length * 100;
+    // 計算勝率（報酬>0的比例）- 加入保護避免除以零
+    const winRate1Week = items.length > 0 ? items.filter(i => i.return1Week > 0).length / items.length * 100 : 0;
+    const winRate1Month = items.length > 0 ? items.filter(i => i.return1Month > 0).length / items.length * 100 : 0;
+    const winRate3Month = items.length > 0 ? items.filter(i => i.return3Month > 0).length / items.length * 100 : 0;
     
     // 找出最佳賣點的統計（有真實資料的）
     const peakTimingTotal = Object.values(peakTimingStats).reduce((a, b) => a + b, 0);
@@ -10892,6 +10903,14 @@ function generateTimePerformanceData() {
             returnToHigh: StatsHelper.calcStats(items.map(i => i.returnToHigh))
         }
     };
+    
+    // 除錯輸出
+    console.log('📊 [時間維度績效] 統計結果:');
+    console.log('   - 跳過(無最低得標):', skippedNoMinBid);
+    console.log('   - 跳過(無掛牌高低):', skippedNoMarket);
+    console.log('   - 跳過(無掛牌日期):', skippedNoListDate);
+    console.log('   - 處理成功:', processed, '| 最終items:', items.length);
+    console.log('   - 有真實kanban資料:', realDataCount);
 }
 
 // 【2】顯示時間維度績效

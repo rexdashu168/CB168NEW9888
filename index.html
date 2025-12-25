@@ -2192,7 +2192,7 @@ button:active, .clickable:active {
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.98L 完整動態風險版)...</div>
+    <div>🔄 系統啟動中 (v3.98M 完整19年資料版)...</div>
     <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
@@ -2200,7 +2200,7 @@ button:active, .clickable:active {
     <!-- v3.98g 修改：頂部標題置中 + 統計數據 -->
     <div class="header">
         <h1>🏠 Rex大叔的168台股投資研究室</h1>
-        <span class="version-badge">v3.98L 完整動態風險版</span>
+        <span class="version-badge">v3.98M 完整19年資料版</span>
         <div class="subtitle">
             <span id="headerSubtitle">載入中...</span>
             <span style="color:#ddd">|</span>
@@ -13220,19 +13220,28 @@ const DynamicRiskStats = {
     renderPriceRiskTable: function() {
         const priceRisk = this.calculatePriceRiskFromDB();
         
-        if (!priceRisk || Object.keys(priceRisk).length === 0) {
-            return `
-                <div style="text-align:center; padding:20px; color:#888;">
-                    <div>CB價格資料尚未載入</div>
-                    <div style="font-size:11px; margin-top:5px;">請等待 CB_price 資料庫載入完成</div>
-                </div>
-            `;
-        }
+        // v3.98M: 如果動態計算無資料，使用研究指南的統計數據（2007-2025完整19年）
+        const fallbackData = {
+            90:  { samples: 786, profitRate: '49.9', loss10Rate: '15.5', loss20Rate: '1.3', loss30Rate: '0.4', riskRewardRatio: '38.1' },
+            100: { samples: 774, profitRate: '47.4', loss10Rate: '15.6', loss20Rate: '1.0', loss30Rate: '0.1', riskRewardRatio: '49.9' },
+            110: { samples: 688, profitRate: '45.8', loss10Rate: '24.4', loss20Rate: '1.2', loss30Rate: '0.1', riskRewardRatio: '43.0' },
+            120: { samples: 543, profitRate: '49.0', loss10Rate: '38.9', loss20Rate: '4.6', loss30Rate: '0.2', riskRewardRatio: '11.6' },
+            130: { samples: 424, profitRate: '52.4', loss10Rate: '36.8', loss20Rate: '22.9', loss30Rate: '0.5', riskRewardRatio: '2.4' },
+            150: { samples: 306, profitRate: '52.9', loss10Rate: '35.0', loss20Rate: '23.9', loss30Rate: '13.7', riskRewardRatio: '2.1' },
+            180: { samples: 161, profitRate: '52.8', loss10Rate: '32.3', loss20Rate: '21.1', loss30Rate: '15.5', riskRewardRatio: '2.5' },
+            200: { samples: 110, profitRate: '56.4', loss10Rate: '35.5', loss20Rate: '22.7', loss30Rate: '16.4', riskRewardRatio: '2.5' }
+        };
+
+        const useData = (priceRisk && Object.keys(priceRisk).length > 0) ? priceRisk : fallbackData;
+        const isLive = priceRisk && Object.keys(priceRisk).length > 0;
 
         let html = `
             <div style="background:white; border-radius:10px; padding:15px; margin-bottom:12px; border-left:4px solid #1565c0;">
                 <div style="font-size:14px; font-weight:bold; color:#1565c0; margin-bottom:10px;">
-                    📈 各價位買入風險統計 <span style="font-size:11px; color:#888; font-weight:normal;">(CB_price動態計算)</span>
+                    📈 各價位買入風險統計 
+                    <span style="font-size:11px; color:#888; font-weight:normal;">
+                        ${isLive ? '(2007-2025 CB_price動態計算)' : '(2007-2025研究數據)'}
+                    </span>
                 </div>
                 <div style="overflow-x:auto;">
                     <table style="width:100%; border-collapse:collapse; font-size:11px; min-width:500px;">
@@ -13250,20 +13259,25 @@ const DynamicRiskStats = {
                         <tbody>
         `;
 
-        const priceOrder = [100, 110, 120, 130, 150, 180, 200];
+        const priceOrder = [90, 100, 110, 120, 130, 150, 180, 200];
         priceOrder.forEach((price, i) => {
-            const data = priceRisk[price];
+            const data = useData[price];
             if (!data) return;
 
             const bgColor = i % 2 === 0 ? '#f8f9fa' : 'white';
-            const loss20Color = parseFloat(data.loss20Rate) > 20 ? '#c62828' : 
-                               parseFloat(data.loss20Rate) > 10 ? '#e65100' : '#2e7d32';
-            const rrColor = parseFloat(data.riskRewardRatio) < 3 ? '#c62828' : 
-                           parseFloat(data.riskRewardRatio) < 10 ? '#e65100' : '#2e7d32';
+            const loss20Val = parseFloat(data.loss20Rate);
+            const loss20Color = loss20Val > 20 ? '#c62828' : loss20Val > 10 ? '#e65100' : '#2e7d32';
+            const rrVal = parseFloat(data.riskRewardRatio);
+            const rrColor = rrVal < 3 ? '#c62828' : rrVal < 10 ? '#e65100' : '#2e7d32';
+            
+            // 130元分水嶺標記
+            const rowStyle = price === 130 ? 'background:#fff3e0; border:2px solid #ff9800;' : `background:${bgColor};`;
 
             html += `
-                <tr style="background:${bgColor};">
-                    <td style="padding:5px; text-align:center; font-weight:bold; color:#1565c0;">${price}元</td>
+                <tr style="${rowStyle}">
+                    <td style="padding:5px; text-align:center; font-weight:bold; color:#1565c0;">
+                        ${price}元 ${price === 130 ? '⚠️' : ''}
+                    </td>
                     <td style="padding:5px; text-align:center; color:#666;">${data.samples}</td>
                     <td style="padding:5px; text-align:center; color:#2e7d32; font-weight:500;">${data.profitRate}%</td>
                     <td style="padding:5px; text-align:center;">${data.loss10Rate}%</td>
@@ -13278,8 +13292,11 @@ const DynamicRiskStats = {
                         </tbody>
                     </table>
                 </div>
-                <div style="margin-top:10px; padding:8px; background:#e3f2fd; border-radius:6px; font-size:11px; color:#1565c0;">
-                    💡 <b>130元是分水嶺</b>：虧>20%機率從1-5%升到20%以上 | 風險報酬比急劇下降
+                <div style="margin-top:10px; padding:8px; background:#fff3e0; border-radius:6px; font-size:11px; color:#e65100;">
+                    ⚠️ <b>130元是風險分水嶺</b>：虧>20%機率從1-5%飆升到22.9% | 風險報酬比從11.6急降到2.4
+                </div>
+                <div style="margin-top:8px; padding:8px; background:#e8f5e9; border-radius:6px; font-size:11px; color:#2e7d32;">
+                    ✅ <b>110元以下安全區</b>：虧>20%機率僅1%左右 | 風險報酬比高達38-50
                 </div>
             </div>
         `;
@@ -28719,13 +28736,17 @@ async function loadCBPriceData() {
 
     const allData = window.cbPriceData.data || {};
 
-    // v3.98f-22: 按時間順序載入（最新優先），新增 2016_2018
+    // v3.98M: 完整19年CB價格資料（2007-2025）
     const dbFiles = [
         'data/CB_price_2025.db',
         'data/CB_price_2022_2024.db',
         'data/CB_price_2019_2021.db',
-        'data/CB_price_2016_2018.db'  // v3.98f-22 新增
+        'data/CB_price_2016_2018.db',
+        'data/CB_price_2011_2015.db',
+        'data/CB_price_2007_2010.db'
     ];
+
+    console.log('📊 準備載入 2007-2025 完整19年 CB價格資料...');
 
     for (const dbFile of dbFiles) {
         try {

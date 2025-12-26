@@ -22798,8 +22798,10 @@ function renderBasicInfoHistory(cbCode, container) {
         const highColor = marketHigh !== '-' && parseFloat(marketHigh) >= 150 ? '#c62828' : (parseFloat(marketHigh) >= 120 ? '#e65100' : '#333');
         const lowColor = marketLow !== '-' && parseFloat(marketLow) < 100 ? '#c62828' : '#333';
         const ampColor = cb.amplitude && parseFloat(cb.amplitude) >= 100 ? '#c62828' : (parseFloat(cb.amplitude) >= 50 ? '#e65100' : '#2e7d32');
-        // 發行方式標記
-        const issueTypeTag = cb.issueType === '競拍' ? 
+        // v3.99T: 發行方式標記 - 改進判斷邏輯，支援多種格式
+        const issueTypeStr = String(cb.issueType || '').trim();
+        const isAuction = issueTypeStr.includes('競拍') || issueTypeStr.includes('競價') || issueTypeStr === 'A' || issueTypeStr === '競';
+        const issueTypeTag = isAuction ? 
             '<span style="background:#ff9800; color:white; padding:2px 6px; border-radius:3px; font-size:16px;">競拍</span>' :
             '<span style="background:#9e9e9e; color:white; padding:2px 6px; border-radius:3px; font-size:16px;">詢圈</span>';
         html += `
@@ -22830,7 +22832,11 @@ function renderBasicInfoHistory(cbCode, container) {
         return sum + size;
     }, 0);
     const guaranteedCount = uniqueCBs.filter(cb => cb.guarantee === '有擔保' || cb.guarantee === '有').length;
-    const auctionCount = uniqueCBs.filter(cb => cb.issueType === '競拍').length;
+    // v3.99T: 修正競拍計數邏輯
+    const auctionCount = uniqueCBs.filter(cb => {
+        const issueTypeStr = String(cb.issueType || '').trim();
+        return issueTypeStr.includes('競拍') || issueTypeStr.includes('競價') || issueTypeStr === 'A' || issueTypeStr === '競';
+    }).length;
     const cbsWithHigh = uniqueCBs.filter(cb => cb.marketHigh && parseFloat(cb.marketHigh) > 0);
     const cbsWithLow = uniqueCBs.filter(cb => cb.marketLow && parseFloat(cb.marketLow) > 0);
     const avgHigh = cbsWithHigh.length > 0 ? cbsWithHigh.reduce((sum, cb) => sum + parseFloat(cb.marketHigh), 0) / cbsWithHigh.length : 0;

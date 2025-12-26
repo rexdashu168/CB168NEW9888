@@ -14610,7 +14610,10 @@ function updateSmartReminders() {
             msg += `<div style="margin-bottom:4px;">${idx + 1}. ${tip}</div>`;
         });
         msg += `</div>`;
-        document.getElementById('reminderContent').innerHTML = msg;
+        const reminderContentEl = document.getElementById('reminderContent');
+        if (reminderContentEl) {
+            reminderContentEl.innerHTML = msg;
+        }
         // v3.97g 移除：輸入區不再顯示Rex大叔提醒，已移至結果區步驟報告
         // document.getElementById('smartReminders').style.display='block';
     }
@@ -15058,9 +15061,9 @@ function displayResult(r) {
     // Step 0: Rex大叔提醒 - v3.99N升級：三面向專業分析
     const step0ReminderEl = document.getElementById('step0Reminder');
     if (step0ReminderEl) {
-        // 準備分析數據
-        const theoP = r.theoreticalPrice || 0;
-        const floorP = r.floorPrice || 100;
+        // 準備分析數據 - v3.99S: 確保數值類型
+        const theoP = parseFloat(r.theoreticalPrice) || 0;
+        const floorP = parseFloat(r.floorPrice) || 100;
         const guarantee = r.inputData?.guarantee || '';
         const rating = r.inputData?.rating || '';
         const lowPrem = parseFloat(r.totalLowPremium) || 0;
@@ -19138,20 +19141,7 @@ function updateAuctionEvaluation() {
         broker,
         industry
     });
-    // v3.81 新增：執行超級預測引擎（KNN + 蒙地卡羅）
-    try {
-        const years = parseInt(document.getElementById('years')?.value) || 3;
-        runSuperPredictionEngine({
-            theoPrice,
-            issueSize,
-            guarantee,
-            years,
-            industry,
-            rating: tcri
-        });
-    } catch (e) {
-        console.warn('超級預測引擎執行失敗:', e);
-    }
+    // v3.99S: 超級預測引擎已移除（未定義）
     // 生成評估HTML
     let html = `
     <div style="background:linear-gradient(135deg, ${result.recommendColor}15, ${result.recommendColor}05); border:2px solid ${result.recommendColor}; border-radius:12px; padding:15px; margin-bottom:15px;">

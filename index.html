@@ -4,7 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AI智能可轉債競拍系統 v3.99R (溢價率參數優化版)</title>
-<!-- v3.99R: 新增307檔完整溢價率參數表（有擔保/無擔保 × 投標倍數 × 規模 × TCRI）-->
+<!-- v3.99R: 新增307檔完整溢價率參數表（有擔保/無擔保 × 投標倍數 × 規模 × TCRI × 產業）-->
+<!-- v3.99R: 新增綜合建議價格計算（權重：倍數50% + 規模15% + TCRI20% + 產業15%）-->
+<!-- v3.99R: 新增產業溢價率調整係數（有擔保11個產業、無擔保11個產業）-->
 <!-- v3.99Q: 閃電帶入精簡、代號+名稱修正、移除分析法一二 -->
 <!-- 
      ═══════════════════════════════════════════════════════════════
@@ -2903,6 +2905,67 @@ button:active, .clickable:active {
                 </div>
             </div>
         </div>
+        <!-- v3.99R 新增：307檔統計建議價格 -->
+        <div id="step3StatisticalPrice" style="display:none; background:linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border:2px solid #4caf50; border-radius:10px; padding:12px; margin-bottom:12px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+                <div style="font-size:13px; font-weight:bold; color:#2e7d32;">📈 307檔統計建議價格</div>
+                <div style="font-size:10px; color:#666;" id="step3StatGuaranteeType">--</div>
+            </div>
+            <!-- 調整因子明細 -->
+            <div style="background:white; border-radius:8px; padding:10px; margin-bottom:10px;">
+                <div style="font-size:11px; color:#666; margin-bottom:8px;">調整因子明細</div>
+                <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; font-size:10px;">
+                    <div style="text-align:center; background:#f5f5f5; padding:6px; border-radius:4px;">
+                        <div style="color:#666;">倍數</div>
+                        <div style="font-weight:bold;" id="step3StatMultLevel">--</div>
+                        <div style="font-size:9px; color:#888;">權重50%</div>
+                    </div>
+                    <div style="text-align:center; background:#f5f5f5; padding:6px; border-radius:4px;">
+                        <div style="color:#666;">規模</div>
+                        <div style="font-weight:bold;" id="step3StatSizeAdj">--</div>
+                        <div style="font-size:9px; color:#888;">權重15%</div>
+                    </div>
+                    <div style="text-align:center; background:#f5f5f5; padding:6px; border-radius:4px;">
+                        <div style="color:#666;">TCRI</div>
+                        <div style="font-weight:bold;" id="step3StatTcriAdj">--</div>
+                        <div style="font-size:9px; color:#888;">權重20%</div>
+                    </div>
+                    <div style="text-align:center; background:#f5f5f5; padding:6px; border-radius:4px;">
+                        <div style="color:#666;">產業</div>
+                        <div style="font-weight:bold;" id="step3StatIndustryAdj">--</div>
+                        <div style="font-size:9px; color:#888;">權重15%</div>
+                    </div>
+                </div>
+            </div>
+            <!-- 策略建議價格 -->
+            <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px;">
+                <div style="text-align:center; background:rgba(76,175,80,0.2); padding:10px; border-radius:8px; border:2px solid #4caf50;">
+                    <div style="font-size:10px; color:#2e7d32;">🛡️ 保守(Q25)</div>
+                    <div style="font-size:18px; font-weight:bold; color:#1b5e20;" id="step3StatConservative">--</div>
+                    <div style="font-size:9px; color:#666;">溢價 <span id="step3StatConservativePrem">--%</span></div>
+                </div>
+                <div style="text-align:center; background:rgba(33,150,243,0.2); padding:10px; border-radius:8px; border:2px solid #2196f3;">
+                    <div style="font-size:10px; color:#1565c0;">⚖️ 中位(Q50)</div>
+                    <div style="font-size:18px; font-weight:bold; color:#0d47a1;" id="step3StatBalanced">--</div>
+                    <div style="font-size:9px; color:#666;">溢價 <span id="step3StatBalancedPrem">--%</span></div>
+                </div>
+                <div style="text-align:center; background:rgba(255,152,0,0.2); padding:10px; border-radius:8px; border:2px solid #ff9800;">
+                    <div style="font-size:10px; color:#e65100;">🚀 積極(Q75)</div>
+                    <div style="font-size:18px; font-weight:bold; color:#bf360c;" id="step3StatAggressive">--</div>
+                    <div style="font-size:9px; color:#666;">溢價 <span id="step3StatAggressivePrem">--%</span></div>
+                </div>
+            </div>
+            <!-- 信心度與說明 -->
+            <div style="margin-top:10px; padding:8px; background:white; border-radius:6px; font-size:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <span style="color:#666;">資料信心度：</span>
+                        <span id="step3StatConfidence" style="font-weight:bold;">--</span>
+                    </div>
+                    <div style="color:#888;" id="step3StatNote">--</div>
+                </div>
+            </div>
+        </div>
         <!-- v3.99R 新增：溢價率參數速查表 -->
         <details style="background:#fff8e1; border-radius:8px; overflow:hidden; margin-bottom:12px; border:2px solid #ffc107;">
             <summary style="padding:12px; cursor:pointer; font-size:13px; font-weight:bold; color:#f57c00; background:#fff3e0; display:flex; align-items:center; gap:8px;">
@@ -4943,6 +5006,170 @@ const AICore = {
                 conservative: this.calcSuggestedPrice(theoPrice, guarantee, expectedMult, 'conservative'),
                 balanced: this.calcSuggestedPrice(theoPrice, guarantee, expectedMult, 'balanced'),
                 aggressive: this.calcSuggestedPrice(theoPrice, guarantee, expectedMult, 'aggressive')
+            };
+        },
+        // ========== v3.99R 新增：產業溢價率調整係數 ==========
+        // 基於307檔統計，相對於整體中位數的調整係數
+        industryAdjustment: {
+            // 有擔保產業（相對於9.68%基準）
+            guaranteed: {
+                '半導體業': { adj: 1.37, median: 13.30, note: '溢價率偏高' },
+                '建材營造業': { adj: 1.33, median: 12.92, note: '溢價率偏高' },
+                '鋼鐵工業': { adj: 3.01, median: 29.15, note: '溢價率最高' },
+                '綠能環保': { adj: 1.13, median: 10.97, note: '略高於平均' },
+                '化學工業': { adj: 1.24, median: 11.96, note: '略高於平均' },
+                '光電業': { adj: 1.03, median: 9.96, note: '接近平均' },
+                '其他電子業': { adj: 0.98, median: 9.51, note: '接近平均' },
+                '電機機械': { adj: 0.90, median: 8.75, note: '略低於平均' },
+                '生技醫療業': { adj: 0.61, median: 5.91, note: '溢價率偏低' },
+                '電子零組件業': { adj: 0.32, median: 3.11, note: '溢價率較低' },
+                '通信網路業': { adj: 0.48, median: 4.65, note: '溢價率較低' }
+            },
+            // 無擔保產業（相對於6.78%基準）
+            unguaranteed: {
+                '其他電子業': { adj: 1.82, median: 12.34, note: '溢價率偏高' },
+                '通信網路業': { adj: 1.66, median: 11.25, note: '溢價率偏高' },
+                '鋼鐵工業': { adj: 1.40, median: 9.48, note: '略高於平均' },
+                '觀光餐旅': { adj: 1.50, median: 10.17, note: '略高於平均' },
+                '電子零組件業': { adj: 1.37, median: 9.31, note: '略高於平均' },
+                '運動休閒': { adj: 1.36, median: 9.24, note: '略高於平均' },
+                '半導體業': { adj: 0.80, median: 5.39, note: '溢價率偏低' },
+                '光電業': { adj: 0.35, median: 2.40, note: '溢價率較低' },
+                '建材營造業': { adj: 0.47, median: 3.17, note: '溢價率較低' },
+                '數位雲端': { adj: 0.33, median: 2.22, note: '溢價率較低' },
+                '電腦及週邊設備業': { adj: 0.61, median: 4.16, note: '溢價率偏低' }
+            }
+        },
+        // 取得產業調整係數
+        getIndustryAdjustment: function(industry, guarantee) {
+            const isGuaranteed = (guarantee === '有擔保' || guarantee === '有');
+            const adjTable = isGuaranteed ? this.industryAdjustment.guaranteed : this.industryAdjustment.unguaranteed;
+            return adjTable[industry] || { adj: 1.00, median: null, note: '無歷史數據' };
+        },
+        // ========== v3.99R 新增：綜合建議價格計算 ==========
+        // 整合倍數、規模、TCRI、產業的完整計算
+        calcComprehensivePrice: function(params) {
+            const { theoPrice, guarantee, expectedMult, issueSize, tcri, industry, strategy = 'balanced' } = params;
+            const isGuaranteed = (guarantee === '有擔保' || guarantee === '有');
+            const baseParams = isGuaranteed ? this.premiumParams.guaranteed : this.premiumParams.unguaranteed;
+            
+            // 1. 基礎溢價率（依倍數）
+            let multParams;
+            let multLevel;
+            if (expectedMult <= 2) {
+                multParams = baseParams.byMult.cold;
+                multLevel = 'cold';
+            } else if (expectedMult <= 4) {
+                multParams = baseParams.byMult.medium;
+                multLevel = 'medium';
+            } else {
+                multParams = baseParams.byMult.hot;
+                multLevel = 'hot';
+            }
+            
+            let basePremium;
+            switch(strategy) {
+                case 'conservative': basePremium = multParams.q25; break;
+                case 'aggressive': basePremium = multParams.q75; break;
+                default: basePremium = multParams.q50; break;
+            }
+            
+            // 2. 規模調整
+            let sizeAdj = 1.0;
+            let sizeLevel = '';
+            if (issueSize) {
+                if (issueSize <= 3) {
+                    sizeAdj = isGuaranteed ? 0.96 : 1.01;
+                    sizeLevel = '≤3億';
+                } else if (issueSize <= 5) {
+                    sizeAdj = isGuaranteed ? 1.35 : 0.94;
+                    sizeLevel = '3-5億';
+                } else if (issueSize <= 10) {
+                    sizeAdj = isGuaranteed ? 1.10 : 1.18;
+                    sizeLevel = '5-10億';
+                } else {
+                    sizeAdj = isGuaranteed ? 0.88 : 0.90;
+                    sizeLevel = '>10億';
+                }
+            }
+            
+            // 3. TCRI調整
+            let tcriAdj = 1.0;
+            const tcriNum = parseInt(tcri) || 6;
+            if (baseParams.byTCRI[tcriNum]) {
+                tcriAdj = baseParams.byTCRI[tcriNum].adj;
+            }
+            
+            // 4. 產業調整
+            let industryAdj = 1.0;
+            let industryNote = '';
+            if (industry) {
+                const indData = this.getIndustryAdjustment(industry, guarantee);
+                industryAdj = indData.adj;
+                industryNote = indData.note;
+            }
+            
+            // 5. 綜合調整（加權平均）
+            // 權重：倍數50% + 規模15% + TCRI20% + 產業15%
+            const overallMedian = baseParams.overall.medPrem;
+            const adjustedPremium = basePremium * (
+                0.50 * 1.0 +           // 倍數基準（已在basePremium中）
+                0.15 * sizeAdj +       // 規模調整
+                0.20 * tcriAdj +       // TCRI調整
+                0.15 * industryAdj     // 產業調整
+            );
+            
+            // 計算最終價格
+            const finalPrice = theoPrice * (1 + adjustedPremium / 100);
+            
+            // 信心度評估
+            let confidence = 'high';
+            let confidenceNote = [];
+            if (!industry) confidenceNote.push('無產業資料');
+            if (!issueSize) confidenceNote.push('無規模資料');
+            if (multParams.count < 20) confidenceNote.push(`樣本數偏少(${multParams.count}檔)`);
+            if (confidenceNote.length >= 2) confidence = 'low';
+            else if (confidenceNote.length === 1) confidence = 'medium';
+            
+            return {
+                // 最終建議
+                finalPrice: finalPrice,
+                adjustedPremium: adjustedPremium,
+                
+                // 基礎資訊
+                basePremium: basePremium,
+                multLevel: multLevel,
+                multRange: multParams.range,
+                
+                // 調整明細
+                adjustments: {
+                    size: { level: sizeLevel, adj: sizeAdj, weight: 0.15 },
+                    tcri: { value: tcriNum, adj: tcriAdj, weight: 0.20 },
+                    industry: { name: industry || '未指定', adj: industryAdj, note: industryNote, weight: 0.15 }
+                },
+                
+                // 參考資訊
+                reference: {
+                    overallMedian: overallMedian,
+                    historicalMinBid: multParams.medMinBid,
+                    sampleCount: multParams.count
+                },
+                
+                // 信心度
+                confidence: confidence,
+                confidenceNote: confidenceNote.join(', ') || '資料完整',
+                
+                // 其他
+                guaranteeType: isGuaranteed ? '有擔保' : '無擔保',
+                strategy: strategy
+            };
+        },
+        // 取得三種策略的綜合建議價格
+        getComprehensiveStrategyPrices: function(params) {
+            return {
+                conservative: this.calcComprehensivePrice({ ...params, strategy: 'conservative' }),
+                balanced: this.calcComprehensivePrice({ ...params, strategy: 'balanced' }),
+                aggressive: this.calcComprehensivePrice({ ...params, strategy: 'aggressive' })
             };
         }
     },
@@ -15597,6 +15824,59 @@ function displayResult(r) {
                         highlightCapped('step3StratBalancedBox', 'step3StratBalancedNote', limits.balancedCapped);
                         highlightCapped('step3StratAggressiveBox', 'step3StratAggressiveNote', limits.aggressiveCapped);
                         highlightCapped('step3StratUltimateBox', 'step3StratUltimateNote', limits.ultimateCapped);
+                    }
+                    // ========== v3.99R 新增：307檔統計建議價格 ==========
+                    try {
+                        const theoPrice = parseFloat(document.getElementById('theoryPrice')?.value) || 100;
+                        const guarantee = document.getElementById('guarantee')?.value || '無擔保';
+                        const issueSize = parseFloat(document.getElementById('issueSize')?.value) || 0;
+                        const tcri = document.getElementById('rating')?.value || '6';
+                        const industry = document.getElementById('industry')?.value || '';
+                        // 預估投標倍數（使用雙軌預測結果）
+                        const expectedMult = ensembleResult.stats?.weightedMult || 3.0;
+                        // 計算綜合建議價格
+                        const statPrices = PredictionEngine.dualTrack.getComprehensiveStrategyPrices({
+                            theoPrice: theoPrice,
+                            guarantee: guarantee,
+                            expectedMult: expectedMult,
+                            issueSize: issueSize,
+                            tcri: tcri,
+                            industry: industry
+                        });
+                        // 顯示統計建議價格區塊
+                        const statPriceEl = document.getElementById('step3StatisticalPrice');
+                        if (statPriceEl) {
+                            statPriceEl.style.display = 'block';
+                            // 擔保類型
+                            updateElement('step3StatGuaranteeType', statPrices.balanced.guaranteeType);
+                            // 調整因子
+                            updateElement('step3StatMultLevel', statPrices.balanced.multRange);
+                            const sizeAdj = statPrices.balanced.adjustments.size;
+                            updateElement('step3StatSizeAdj', sizeAdj.level ? `${sizeAdj.level} (${sizeAdj.adj.toFixed(2)})` : '--');
+                            const tcriAdj = statPrices.balanced.adjustments.tcri;
+                            updateElement('step3StatTcriAdj', `TCRI${tcriAdj.value} (${tcriAdj.adj.toFixed(2)})`);
+                            const indAdj = statPrices.balanced.adjustments.industry;
+                            updateElement('step3StatIndustryAdj', indAdj.name !== '未指定' ? `${indAdj.adj.toFixed(2)}` : '--');
+                            // 策略價格
+                            updateElement('step3StatConservative', statPrices.conservative.finalPrice.toFixed(2) + '元');
+                            updateElement('step3StatConservativePrem', statPrices.conservative.adjustedPremium.toFixed(2) + '%');
+                            updateElement('step3StatBalanced', statPrices.balanced.finalPrice.toFixed(2) + '元');
+                            updateElement('step3StatBalancedPrem', statPrices.balanced.adjustedPremium.toFixed(2) + '%');
+                            updateElement('step3StatAggressive', statPrices.aggressive.finalPrice.toFixed(2) + '元');
+                            updateElement('step3StatAggressivePrem', statPrices.aggressive.adjustedPremium.toFixed(2) + '%');
+                            // 信心度
+                            const confColors = { high: '#4caf50', medium: '#ff9800', low: '#f44336' };
+                            const confLabels = { high: '高', medium: '中', low: '低' };
+                            const confEl = document.getElementById('step3StatConfidence');
+                            if (confEl) {
+                                confEl.textContent = confLabels[statPrices.balanced.confidence] || '中';
+                                confEl.style.color = confColors[statPrices.balanced.confidence] || '#ff9800';
+                            }
+                            updateElement('step3StatNote', `樣本${statPrices.balanced.reference.sampleCount}檔 | ${statPrices.balanced.confidenceNote}`);
+                        }
+                        console.log('📊 v3.99R 307檔統計建議價格:', statPrices);
+                    } catch (e) {
+                        console.warn('v3.99R 統計建議價格計算失敗:', e);
                     }
                 } else {
                     updateElement('step3EnsemblePrice', '--元');

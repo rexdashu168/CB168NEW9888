@@ -26086,13 +26086,36 @@ function generateXLabels(data, count = 5) {
     if (data.length === 0) return [];
     const step = Math.max(1, Math.floor((data.length - 1) / (count - 1)));
     const labels = [];
+    // v3.99T: 改進日期格式處理，支援數字和字串格式
+    const formatDateLabel = (dateVal) => {
+        if (!dateVal) return '';
+        // 轉為字串處理
+        let d = String(dateVal).trim();
+        // 移除可能的斜線或破折號
+        const cleanDate = d.replace(/[-\/]/g, '');
+        // 如果是 YYYYMMDD 格式（8位數字）
+        if (cleanDate.length === 8 && /^\d{8}$/.test(cleanDate)) {
+            return cleanDate.substring(4, 6) + '/' + cleanDate.substring(6, 8); // MM/DD
+        }
+        // 如果原始值含有分隔符號（YYYY/MM/DD 或 YYYY-MM-DD）
+        d = String(dateVal).replace(/-/g, '/');
+        if (d.includes('/')) {
+            const parts = d.split('/');
+            if (parts.length >= 3) {
+                return parts[1] + '/' + parts[2]; // MM/DD
+            }
+            return d.substring(5); // 取後面部分
+        }
+        // 其他情況直接回傳
+        return d.length > 5 ? d.substring(d.length - 5) : d;
+    };
     for (let i = 0; i < count && i * step < data.length; i++) {
         const idx = Math.min(i * step, data.length - 1);
-        labels.push({ idx, label: data[idx].date?.substring(5) || '' });
+        labels.push({ idx, label: formatDateLabel(data[idx].date) });
     }
     // 確保包含最後一個
     if (labels[labels.length - 1]?.idx !== data.length - 1) {
-        labels.push({ idx: data.length - 1, label: data[data.length - 1].date?.substring(5) || '' });
+        labels.push({ idx: data.length - 1, label: formatDateLabel(data[data.length - 1].date) });
     }
     return labels;
 }
@@ -26348,16 +26371,32 @@ function renderStockPriceChartSVG(data, stockPrices, convPrices, labels) {
 function renderCBPriceChart(cbCode, data, container, period) {
     const periodLabel = getPeriodLabel(period);
     const labels = data.map(d => d.date);
-    const cbPrices = data.map(d => d.cbPrice);
-    const convValues = data.map(d => d.convValue);  // 理論價格（轉換價值）
-    const premiums = data.map(d => d.premium);
+    const cbPrices = data.map(d => d.cbPrice || 0);
+    // v3.99T: 計算理論價值（轉換價值）= 股價 / 轉換價 × 100
+    const convValues = data.map(d => {
+        const stockPrice = d.stockPrice || 0;
+        const convPrice = d.convPrice || 0;
+        return convPrice > 0 ? (stockPrice / convPrice * 100) : 0;
+    });
+    // v3.99T: 計算溢價率 = (CB價格 - 理論價值) / 理論價值 × 100
+    const premiums = data.map((d, i) => {
+        const cbPrice = cbPrices[i] || 0;
+        const convValue = convValues[i] || 0;
+        if (convValue > 0) {
+            return ((cbPrice - convValue) / convValue * 100);
+        } else if (cbPrice > 0) {
+            // 沒有轉換價值時，用面額100計算
+            return ((cbPrice - 100) / 100 * 100);
+        }
+        return 0;
+    });
     const latestData = data[data.length - 1] || {};
     const cbPrice = latestData.cbPrice || 0;
-    const convValue = latestData.convValue || 0;
-    const premium = latestData.premium || 0;
-    const hasConvValue = convValue > 100;
     const stockPrice = latestData.stockPrice || 0;
     const convPrice = latestData.convPrice || 0;
+    const convValue = convPrice > 0 ? (stockPrice / convPrice * 100) : 0;
+    const premium = convValue > 0 ? ((cbPrice - convValue) / convValue * 100) : ((cbPrice - 100) / 100 * 100);
+    const hasConvValue = convValue > 100;
     // 動態分析判斷
     let statusTag, statusBg, statusColor;
     let analysisContent, conclusionContent, educationTip;
@@ -26514,9 +26553,25 @@ function renderCBPriceChartSVG(data, cbPrices, convValues, premiums, labels) {
     const padding = { top: 50, right: 65, bottom: 50, left: 60 };
     const chartWidth = width - padding.left - padding.right;
     const chartHeight = height - padding.top - padding.bottom;
-    // 左Y軸：價格範圍
-    const priceValues = [...cbPrices, ...convValues].filter(v => v > 0);
-    const { min: minPrice, max: maxPrice, range: priceRange } = calcYAxisRange(priceValues, 0.08);
+    // v3.99T: 改進左Y軸範圍計算，確保包含CB價格和理論價格
+    const validCBPrices = cbPrices.filter(v => v != null && !isNaN(v) && v > 0);
+    const validConvValues = convValues.filter(v => v != null && !isNaN(v) && v > 0);
+    const allPriceValues = [...validCBPrices, ...validConvValues];
+    // 確保有資料
+    let minPrice, maxPrice, priceRange;
+    if (allPriceValues.length > 0) {
+        minPrice = Math.min(...allPriceValues);
+        maxPrice = Math.max(...allPriceValues);
+        // 加入padding
+        const pricePadding = (maxPrice - minPrice) * 0.08 || 5;
+        minPrice = minPrice - pricePadding;
+        maxPrice = maxPrice + pricePadding;
+        priceRange = maxPrice - minPrice || 1;
+    } else {
+        minPrice = 0;
+        maxPrice = 100;
+        priceRange = 100;
+    }
     // 右Y軸：折溢價率範圍
     const premiumValues = premiums.filter(v => v != null && !isNaN(v));
     let minPremium = Math.min(...premiumValues, 0);

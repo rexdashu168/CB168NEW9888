@@ -2337,6 +2337,14 @@ button:active, .clickable:active {
         </div>
         <div id="quickSelectInfo" style="display:none; background:#fff; padding:10px; border-radius:6px; margin-top:8px; font-size:16px; border-left:4px solid #ff9800;"></div>
         <div id="modelCompareResult" style="display:none; background:#e8f5e9; padding:10px; border-radius:6px; margin-top:8px; font-size:16px; border-left:4px solid #4caf50;"></div>
+        <!-- v3.99T: DNA快查 -->
+        <div id="dnaQuickLook" style="display:none; background:linear-gradient(135deg, #f3e5f5, #e1bee7); padding:12px; border-radius:8px; margin-top:10px; border-left:4px solid #7b1fa2;">
+            <div style="font-size:16px; font-weight:bold; color:#7b1fa2; margin-bottom:8px; cursor:pointer;" onclick="toggleDNAQuickDetail()">
+                🧬 DNA快查 <span id="dnaQuickToggle" style="font-size:14px;">▼ 展開</span>
+            </div>
+            <div id="dnaQuickSummary" style="font-size:16px; color:#555;"></div>
+            <div id="dnaQuickDetail" style="display:none; margin-top:10px; padding-top:10px; border-top:1px dashed #9c27b0;"></div>
+        </div>
         <div style="font-size:16px; color:#795548; margin-top:8px;">
             <span>💡 選擇後自動帶入條件</span>
         </div>
@@ -16395,6 +16403,152 @@ function initResizer() {
 // ==========================================
 let pendingCases = [];
 let recentCompletedCases = []; // v3.93 新增：近期完成案例
+/**
+ * v3.99T: DNA快查 - 展開/收合
+ */
+function toggleDNAQuickDetail() {
+    const detail = document.getElementById('dnaQuickDetail');
+    const toggle = document.getElementById('dnaQuickToggle');
+    if (detail && toggle) {
+        if (detail.style.display === 'none') {
+            detail.style.display = 'block';
+            toggle.textContent = '▲ 收合';
+        } else {
+            detail.style.display = 'none';
+            toggle.textContent = '▼ 展開';
+        }
+    }
+}
+/**
+ * v3.99T: 更新DNA快查內容
+ */
+function updateDNAQuickLook(caseData) {
+    const container = document.getElementById('dnaQuickLook');
+    const summaryDiv = document.getElementById('dnaQuickSummary');
+    const detailDiv = document.getElementById('dnaQuickDetail');
+    if (!container || !summaryDiv || !detailDiv) return;
+    // 取得股票代號
+    const stockCode = caseData.stockCode || '';
+    const cbName = caseData.cbName || '';
+    // 取得所有競拍案例
+    const allAuctionCases = window.auctionDataCache || [];
+    if (allAuctionCases.length === 0) {
+        container.style.display = 'none';
+        return;
+    }
+    // 篩選函數
+    const getGuarantee = (cb) => {
+        const g = cb?.['擔保'] || cb?.guarantee || '';
+        return g.includes('有') ? '有擔保' : '無擔保';
+    };
+    const getIssueSize = (cb) => parseFloat(cb?.['發行規模'] || cb?.['發行張數'] || cb?.issueSize || 0);
+    const getIssueSizeRange = (size) => {
+        if (size < 2) return '小於2億';
+        if (size < 5) return '2~5億';
+        if (size < 10) return '5~10億';
+        if (size < 15) return '10~15億';
+        return '15億以上';
+    };
+    const getIndustry = (cb) => cb?.['產業分類'] || cb?.['產業'] || cb?.industry || '';
+    // 當前案件條件
+    const currentGuarantee = caseData.guarantee ? (caseData.guarantee.includes('有') ? '有擔保' : '無擔保') : '無擔保';
+    const currentSize = caseData.issueSize || 0;
+    const currentSizeRange = getIssueSizeRange(currentSize);
+    const currentIndustry = caseData.industry || '';
+    // 1. 同公司歷史發行
+    const sameCompanyCases = allAuctionCases.filter(c => {
+        const cStock = c['股票代號'] || '';
+        return cStock === stockCode && (parseFloat(c['掛牌最高']) || 0) > 0;
+    });
+    // 2. 相似條件（同擔保+同規模區間）
+    const similarCases = allAuctionCases.filter(c => {
+        const high = parseFloat(c['掛牌最高']) || 0;
+        if (high <= 0) return false;
+        const g = getGuarantee(c);
+        const sizeRange = getIssueSizeRange(getIssueSize(c));
+        return g === currentGuarantee && sizeRange === currentSizeRange;
+    });
+    // 計算統計
+    const calcStats = (cases) => {
+        if (cases.length === 0) return null;
+        const highs = cases.map(c => parseFloat(c['掛牌最高']) || 0).filter(v => v > 0);
+        const lows = cases.map(c => parseFloat(c['掛牌最低']) || 0).filter(v => v > 0);
+        const amps = cases.map(c => {
+            const high = parseFloat(c['掛牌最高']) || 0;
+            const low = parseFloat(c['掛牌最低']) || 0;
+            return low > 0 ? ((high - low) / low * 100) : 0;
+        }).filter(v => v > 0);
+        const avgHigh = highs.length > 0 ? highs.reduce((a, b) => a + b, 0) / highs.length : 0;
+        const avgAmp = amps.length > 0 ? amps.reduce((a, b) => a + b, 0) / amps.length : 0;
+        const maxHigh = highs.length > 0 ? Math.max(...highs) : 0;
+        const winRate = highs.filter(h => h >= 110).length / highs.length * 100;
+        return { count: cases.length, avgHigh, avgAmp, maxHigh, winRate };
+    };
+    const companyStats = calcStats(sameCompanyCases);
+    const similarStats = calcStats(similarCases);
+    // 生成摘要
+    let summaryParts = [];
+    if (companyStats && companyStats.count > 0) {
+        const highlight = companyStats.maxHigh >= 150 ? '🔥' : '';
+        summaryParts.push(`<span style="color:#7b1fa2;">${highlight}${stockCode}過去${companyStats.count}檔</span> 均振幅<b style="color:#e65100;">${companyStats.avgAmp.toFixed(0)}%</b> 最高達<b style="color:#c62828;">${companyStats.maxHigh.toFixed(0)}</b>`);
+    }
+    if (similarStats && similarStats.count > 0) {
+        summaryParts.push(`<span style="color:#1565c0;">相似條件${similarStats.count}檔</span> 均高<b style="color:#c62828;">${similarStats.avgHigh.toFixed(1)}</b> 勝率<b style="color:#2e7d32;">${similarStats.winRate.toFixed(0)}%</b>`);
+    }
+    if (summaryParts.length === 0) {
+        container.style.display = 'none';
+        return;
+    }
+    summaryDiv.innerHTML = summaryParts.join(' | ');
+    // 生成詳細內容
+    let detailHtml = '';
+    // 同公司歷史
+    if (companyStats && companyStats.count > 0) {
+        detailHtml += `
+            <div style="margin-bottom:10px;">
+                <div style="font-weight:bold; color:#7b1fa2; margin-bottom:5px;">📜 ${stockCode} 歷史發行 (${companyStats.count}檔)</div>
+                <div style="font-size:16px; color:#555;">
+                    平均最高: <b style="color:#c62828;">${companyStats.avgHigh.toFixed(1)}</b> | 
+                    平均振幅: <b style="color:#e65100;">${companyStats.avgAmp.toFixed(1)}%</b> | 
+                    歷史最高: <b style="color:#c62828;">${companyStats.maxHigh.toFixed(1)}</b>
+                </div>
+        `;
+        // 列出歷史案例
+        if (sameCompanyCases.length <= 5) {
+            detailHtml += `<div style="font-size:16px; margin-top:5px;">`;
+            sameCompanyCases.forEach(c => {
+                const high = parseFloat(c['掛牌最高']) || 0;
+                const low = parseFloat(c['掛牌最低']) || 0;
+                const amp = low > 0 ? ((high - low) / low * 100).toFixed(1) : 0;
+                const highColor = high >= 150 ? '#c62828' : (high >= 120 ? '#e65100' : '#333');
+                detailHtml += `<span style="margin-right:10px;">${c['CB代號'] || c['代號']}: <span style="color:${highColor}; font-weight:bold;">${high.toFixed(0)}</span>/${low.toFixed(0)} (${amp}%)</span>`;
+            });
+            detailHtml += `</div>`;
+        }
+        detailHtml += `</div>`;
+    }
+    // 相似條件
+    if (similarStats && similarStats.count > 0) {
+        detailHtml += `
+            <div>
+                <div style="font-weight:bold; color:#1565c0; margin-bottom:5px;">🎯 相似條件 (${currentGuarantee}+${currentSizeRange}): ${similarStats.count}檔</div>
+                <div style="font-size:16px; color:#555;">
+                    平均最高: <b style="color:#c62828;">${similarStats.avgHigh.toFixed(1)}</b> | 
+                    平均振幅: <b style="color:#e65100;">${similarStats.avgAmp.toFixed(1)}%</b> | 
+                    勝率(≥110): <b style="color:#2e7d32;">${similarStats.winRate.toFixed(0)}%</b>
+                </div>
+            </div>
+        `;
+    }
+    // 提示
+    detailHtml += `
+        <div style="margin-top:10px; font-size:16px; color:#795548;">
+            💡 點擊「🧬 發債DNA」標籤查看完整分析 | 勝率 = 最高價≥110的比例
+        </div>
+    `;
+    detailDiv.innerHTML = detailHtml;
+    container.style.display = 'block';
+}
 // 初始化閃電帶入選單（按狀態分組）
 function initQuickSelect() {
     const select = document.getElementById('quickSelect');
@@ -16771,6 +16925,8 @@ function handleQuickSelect() {
         }
     }
     infoDiv.style.display = 'block';
+    // v3.99T: 觸發DNA快查
+    updateDNAQuickLook(c);
     // v3.94 重寫：根據競拍/詢圈分別處理
     if (c.auctionType === '詢圈') {
         // === 詢圈案例：顯示歷史發行條件分析（掛牌表現統計）===

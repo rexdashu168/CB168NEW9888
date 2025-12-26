@@ -2228,6 +2228,107 @@ button:active, .clickable:active {
     -moz-osx-font-smoothing: grayscale;
 }
 
+/* v3.98h 近期事件提醒樣式 */
+.event-alert-section {
+    max-width: 100%;
+}
+.event-tab {
+    padding: 5px 12px;
+    border: none;
+    border-radius: 15px;
+    background: rgba(255,255,255,0.2);
+    color: white;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.event-tab:hover {
+    background: rgba(255,255,255,0.3);
+}
+.event-tab.active {
+    background: white;
+    color: #c62828;
+}
+.event-tab span {
+    background: rgba(0,0,0,0.2);
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-size: 10px;
+    margin-left: 3px;
+}
+.event-tab.active span {
+    background: #c62828;
+    color: white;
+}
+.event-table-container {
+    max-height: 200px;
+    overflow-y: auto;
+}
+.event-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+.event-table thead {
+    position: sticky;
+    top: 0;
+    background: #ffebee;
+    z-index: 1;
+}
+.event-table th {
+    padding: 8px 6px;
+    text-align: center;
+    font-weight: 600;
+    color: #c62828;
+    border-bottom: 2px solid #ffcdd2;
+}
+.event-table td {
+    padding: 6px;
+    text-align: center;
+    border-bottom: 1px solid #f5f5f5;
+}
+.event-table tbody tr:hover {
+    background: #fff8e1;
+}
+.event-table .cb-code {
+    color: #1565c0;
+    font-weight: 700;
+}
+.event-table .cb-name {
+    font-weight: 500;
+}
+.event-table .date-cell {
+    color: #666;
+}
+.event-table .price-high {
+    color: #2e7d32;
+    font-weight: 600;
+}
+.event-table .price-low {
+    color: #c62828;
+    font-weight: 600;
+}
+.event-table .reason-cell {
+    font-size: 11px;
+    color: #e65100;
+}
+@media (max-width: 768px) {
+    .event-tab {
+        padding: 4px 8px;
+        font-size: 10px;
+    }
+    .event-tab span {
+        display: none;
+    }
+    .event-table {
+        font-size: 11px;
+    }
+    .event-table th, .event-table td {
+        padding: 5px 3px;
+    }
+}
+
 /* v3.98h 智慧篩選標籤樣式 */
 .sf-tag {
     padding: 4px 10px;
@@ -2294,6 +2395,82 @@ button:active, .clickable:active {
             </div>
         </div>
     </div>
+
+<!-- v3.98h 新增：近期事件提醒區塊 -->
+
+<div id="eventAlertSection" class="event-alert-section" style="margin-bottom:15px; display:none;">
+    <div style="background:linear-gradient(135deg, #ff6b6b 0%, #ee5a5a 100%); color:white; padding:12px 15px; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center;">
+        <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:20px;">⚠️</span>
+            <span style="font-size:15px; font-weight:700;">近期重要事件提醒</span>
+        </div>
+        <div style="display:flex; gap:6px;" id="eventAlertTabs">
+            <button class="event-tab active" data-tab="forceRedeem" onclick="switchEventTab('forceRedeem')">
+                🔴 強制贖回 <span id="forceRedeemCount">0</span>
+            </button>
+            <button class="event-tab" data-tab="stopConvert" onclick="switchEventTab('stopConvert')">
+                🟡 停止轉換 <span id="stopConvertCount">0</span>
+            </button>
+            <button class="event-tab" data-tab="priceAdjust" onclick="switchEventTab('priceAdjust')">
+                🟢 價格調整 <span id="priceAdjustCount">0</span>
+            </button>
+        </div>
+    </div>
+    <div style="background:#fff; border:1px solid #ffcdd2; border-top:none; border-radius:0 0 10px 10px; overflow:hidden;">
+        <!-- 強制贖回表格 -->
+        <div id="forceRedeemTable" class="event-table-container">
+            <table class="event-table">
+                <thead>
+                    <tr>
+                        <th>CB代號</th>
+                        <th>CB簡稱</th>
+                        <th>申報日期</th>
+                        <th>終止買賣日</th>
+                        <th>掛牌最高</th>
+                        <th>掛牌最低</th>
+                    </tr>
+                </thead>
+                <tbody id="forceRedeemBody">
+                    <tr><td colspan="6" style="text-align:center; padding:20px; color:#888;">載入中...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <!-- 停止轉換表格 -->
+        <div id="stopConvertTable" class="event-table-container" style="display:none;">
+            <table class="event-table">
+                <thead>
+                    <tr>
+                        <th>債券代碼</th>
+                        <th>債券簡稱</th>
+                        <th>停止起日</th>
+                        <th>停止迄日</th>
+                        <th>事由</th>
+                    </tr>
+                </thead>
+                <tbody id="stopConvertBody">
+                    <tr><td colspan="5" style="text-align:center; padding:20px; color:#888;">載入中...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <!-- 價格調整表格 -->
+        <div id="priceAdjustTable" class="event-table-container" style="display:none;">
+            <table class="event-table">
+                <thead>
+                    <tr>
+                        <th>CB代號</th>
+                        <th>CB簡稱</th>
+                        <th>調整日期</th>
+                        <th>原始價格</th>
+                        <th>調整後價格</th>
+                    </tr>
+                </thead>
+                <tbody id="priceAdjustBody">
+                    <tr><td colspan="5" style="text-align:center; padding:20px; color:#888;">載入中...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 
 <div class="evaluation-container">
     <div class="input-panel" id="inputPanel">
@@ -9868,6 +10045,217 @@ function initializeUI() {
     calculateMarketMomentum(); // v3.74 自動計算市場動能
     updateInitialDisplayFromData(); // v3.90 新增：更新初始顯示（從動態數據）
     initBasicInfoModule(); // v3.97z-s 新增：基本資料查詢模組
+    initEventAlerts(); // v3.98h 新增：近期事件提醒
+}
+
+// v3.98h 新增：近期事件提醒功能
+function initEventAlerts() {
+    console.log('📢 初始化近期事件提醒...');
+    
+    const forceRedeemData = window.sheet12Data || [];
+    const stopConvertData = window.sheet13Data || [];
+    const priceAdjustData = window.priceAdjustData || [];
+    
+    // 過濾近期資料（未來30天內或最近30天內）
+    const today = new Date();
+    const futureLimit = new Date(today.getTime() + 60 * 24 * 60 * 60 * 1000); // 60天後
+    const pastLimit = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000); // 30天前
+    
+    // 處理強制贖回資料
+    const recentForceRedeem = forceRedeemData.filter(row => {
+        const endDateStr = row['終止買賣日'] || row['終止日期'] || '';
+        if (!endDateStr) return false;
+        const endDate = parseFlexibleDate(endDateStr);
+        return endDate && endDate >= pastLimit && endDate <= futureLimit;
+    }).sort((a, b) => {
+        const dateA = parseFlexibleDate(a['終止買賣日'] || a['終止日期'] || '');
+        const dateB = parseFlexibleDate(b['終止買賣日'] || b['終止日期'] || '');
+        return dateA - dateB;
+    });
+    
+    // 處理停止轉換資料
+    const recentStopConvert = stopConvertData.filter(row => {
+        const endDateStr = row['停止迄日'] || row['迄日'] || '';
+        if (!endDateStr) return false;
+        const endDate = parseFlexibleDate(endDateStr);
+        return endDate && endDate >= pastLimit && endDate <= futureLimit;
+    }).sort((a, b) => {
+        const dateA = parseFlexibleDate(a['停止迄日'] || a['迄日'] || '');
+        const dateB = parseFlexibleDate(b['停止迄日'] || b['迄日'] || '');
+        return dateA - dateB;
+    });
+    
+    // 處理價格調整資料
+    const recentPriceAdjust = priceAdjustData.filter(row => {
+        const dateStr = row['調整日期'] || row['生效日期'] || '';
+        if (!dateStr) return false;
+        const date = parseFlexibleDate(dateStr);
+        return date && date >= pastLimit && date <= futureLimit;
+    }).sort((a, b) => {
+        const dateA = parseFlexibleDate(a['調整日期'] || a['生效日期'] || '');
+        const dateB = parseFlexibleDate(b['調整日期'] || b['生效日期'] || '');
+        return dateB - dateA; // 最新的在前
+    });
+    
+    // 更新計數
+    document.getElementById('forceRedeemCount').textContent = recentForceRedeem.length;
+    document.getElementById('stopConvertCount').textContent = recentStopConvert.length;
+    document.getElementById('priceAdjustCount').textContent = recentPriceAdjust.length;
+    
+    // 儲存資料供切換使用
+    window.eventAlertData = {
+        forceRedeem: recentForceRedeem,
+        stopConvert: recentStopConvert,
+        priceAdjust: recentPriceAdjust
+    };
+    
+    // 如果有任何資料，顯示區塊
+    const totalEvents = recentForceRedeem.length + recentStopConvert.length + recentPriceAdjust.length;
+    if (totalEvents > 0) {
+        document.getElementById('eventAlertSection').style.display = 'block';
+        
+        // 渲染各表格
+        renderForceRedeemTable(recentForceRedeem);
+        renderStopConvertTable(recentStopConvert);
+        renderPriceAdjustTable(recentPriceAdjust);
+        
+        // 預設顯示有資料的第一個標籤
+        if (recentForceRedeem.length > 0) {
+            switchEventTab('forceRedeem');
+        } else if (recentStopConvert.length > 0) {
+            switchEventTab('stopConvert');
+        } else {
+            switchEventTab('priceAdjust');
+        }
+    }
+    
+    console.log(`📢 近期事件: 強制贖回${recentForceRedeem.length}筆, 停止轉換${recentStopConvert.length}筆, 價格調整${recentPriceAdjust.length}筆`);
+}
+
+// 解析彈性日期格式
+function parseFlexibleDate(dateStr) {
+    if (!dateStr) return null;
+    dateStr = String(dateStr).trim();
+    
+    // 處理民國年格式 (114/01/01)
+    if (dateStr.match(/^\d{3}\/\d{1,2}\/\d{1,2}$/)) {
+        const parts = dateStr.split('/');
+        const year = parseInt(parts[0]) + 1911;
+        return new Date(year, parseInt(parts[1]) - 1, parseInt(parts[2]));
+    }
+    
+    // 處理西元年格式 (2025/01/01 或 2025-01-01)
+    if (dateStr.match(/^\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}$/)) {
+        const parts = dateStr.split(/[\/\-]/);
+        return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    }
+    
+    // 處理 Excel 數字日期
+    if (!isNaN(dateStr) && parseFloat(dateStr) > 40000) {
+        return new Date((parseFloat(dateStr) - 25569) * 86400 * 1000);
+    }
+    
+    return null;
+}
+
+// 格式化日期顯示
+function formatEventDate(dateStr) {
+    const date = parseFlexibleDate(dateStr);
+    if (!date) return dateStr || '-';
+    return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
+}
+
+// 切換事件標籤
+function switchEventTab(tabName) {
+    // 更新標籤狀態
+    document.querySelectorAll('.event-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.tab === tabName);
+    });
+    
+    // 顯示對應表格
+    document.getElementById('forceRedeemTable').style.display = tabName === 'forceRedeem' ? 'block' : 'none';
+    document.getElementById('stopConvertTable').style.display = tabName === 'stopConvert' ? 'block' : 'none';
+    document.getElementById('priceAdjustTable').style.display = tabName === 'priceAdjust' ? 'block' : 'none';
+}
+
+// 渲染強制贖回表格
+function renderForceRedeemTable(data) {
+    const tbody = document.getElementById('forceRedeemBody');
+    if (data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:#888;">目前無近期強制贖回</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = data.map(row => {
+        const cbCode = row['CB代號'] || row['債券代號'] || row['代號'] || '-';
+        const cbName = row['CB簡稱'] || row['債券簡稱'] || row['簡稱'] || '-';
+        const applyDate = formatEventDate(row['申報日期'] || row['公告日期']);
+        const endDate = formatEventDate(row['終止買賣日'] || row['終止日期']);
+        const high = parseFloat(row['掛牌最高'] || row['最高價'] || 0);
+        const low = parseFloat(row['掛牌最低'] || row['最低價'] || 0);
+        
+        return `
+        <tr>
+            <td class="cb-code">${String(cbCode).replace('.0', '')}</td>
+            <td class="cb-name">${cbName}</td>
+            <td class="date-cell">${applyDate}</td>
+            <td class="date-cell" style="color:#c62828; font-weight:600;">${endDate}</td>
+            <td class="price-high">${high > 0 ? high.toFixed(2) : '-'}</td>
+            <td class="price-low">${low > 0 ? low.toFixed(2) : '-'}</td>
+        </tr>`;
+    }).join('');
+}
+
+// 渲染停止轉換表格
+function renderStopConvertTable(data) {
+    const tbody = document.getElementById('stopConvertBody');
+    if (data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#888;">目前無近期停止轉換</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = data.map(row => {
+        const cbCode = row['債券代碼'] || row['CB代號'] || row['代號'] || '-';
+        const cbName = row['債券簡稱'] || row['CB簡稱'] || row['簡稱'] || '-';
+        const startDate = formatEventDate(row['停止起日'] || row['起日']);
+        const endDate = formatEventDate(row['停止迄日'] || row['迄日']);
+        const reason = row['事由'] || row['原因'] || '-';
+        
+        return `
+        <tr>
+            <td class="cb-code">${String(cbCode).replace('.0', '')}</td>
+            <td class="cb-name">${cbName}</td>
+            <td class="date-cell">${startDate}</td>
+            <td class="date-cell">${endDate}</td>
+            <td class="reason-cell">${reason}</td>
+        </tr>`;
+    }).join('');
+}
+
+// 渲染價格調整表格
+function renderPriceAdjustTable(data) {
+    const tbody = document.getElementById('priceAdjustBody');
+    if (data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#888;">目前無近期價格調整</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = data.map(row => {
+        const cbCode = row['CB代號'] || row['債券代號'] || row['代號'] || '-';
+        const cbName = row['CB簡稱'] || row['債券簡稱'] || row['簡稱'] || '-';
+        const adjDate = formatEventDate(row['調整日期'] || row['生效日期']);
+        const oldPrice = parseFloat(row['原始價格'] || row['調整前'] || 0);
+        const newPrice = parseFloat(row['調整後價格'] || row['調整後'] || 0);
+        
+        return `
+        <tr>
+            <td class="cb-code">${String(cbCode).replace('.0', '')}</td>
+            <td class="cb-name">${cbName}</td>
+            <td class="date-cell">${adjDate}</td>
+            <td>${oldPrice > 0 ? oldPrice.toFixed(2) : '-'}</td>
+            <td style="color:#1565c0; font-weight:600;">${newPrice > 0 ? newPrice.toFixed(2) : '-'}</td>
+        </tr>`;
+    }).join('');
 }
 
 /**

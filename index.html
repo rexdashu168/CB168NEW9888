@@ -17870,15 +17870,37 @@ function showTermGuaranteeTip() {
     // 更新年期提示
     const yearsTipBox = document.getElementById('yearsTip300');
     if (yearsTipBox && years) {
-        const yearData = {
+        // v3.99S 修正：根據擔保類型顯示對應數據
+        // 整體統計（無選擔保時使用）
+        const overallYearData = {
             '3': { label: '3年期', pct: 78.0, avgMult: 3.15, avgPrice: 107.18, avgPremium: 9.4 },
             '5': { label: '5年期', pct: 21.7, avgMult: 2.37, avgPrice: 106.38, avgPremium: 6.3 },
             '7': { label: '7年期', pct: 0.3, avgMult: 1.00, avgPrice: 100.00, avgPremium: 1.9 }
         }[years];
+        // 如果有選擔保，使用組合數據
+        let yearData = overallYearData;
+        let titlePrefix = '📅';
+        let titleSuffix = '';
+        if (guarantee && years) {
+            const comboKey = `${guarantee}_${years}`;
+            const comboData = window.TERM_GUAR_TABLE?.[comboKey];
+            if (comboData) {
+                yearData = {
+                    label: `${guarantee}+${years}年期`,
+                    pct: (comboData.count / totalAuctionCount * 100).toFixed(1),
+                    avgMult: comboData.avgMult,
+                    avgPrice: comboData.avgPrice,
+                    avgPremium: comboData.avgPremium,
+                    count: comboData.count
+                };
+                titlePrefix = guarantee === '有擔保' ? '🛡️' : '📋';
+                titleSuffix = `（${comboData.count}檔）`;
+            }
+        }
         if (yearData) {
             const heatColor = yearData.avgMult >= 3 ? '#ef4444' : (yearData.avgMult >= 2.5 ? '#eab308' : '#22c55e');
             yearsTipBox.innerHTML = `
-                <div class="tip-title">📅 ${totalAuctionCount}檔統計：${yearData.label}（佔${yearData.pct}%）</div>
+                <div class="tip-title">${titlePrefix} ${totalAuctionCount}檔統計：${yearData.label}${titleSuffix || `（佔${yearData.pct}%）`}</div>
                 <div class="tip-stats">
                     <span>投標倍數：<b style="color:${heatColor};">${yearData.avgMult.toFixed(2)}x</b></span>
                     <span>平均得標：<b>${yearData.avgPrice.toFixed(1)}元</b></span>
@@ -17899,31 +17921,13 @@ function showTermGuaranteeTip() {
         }[guarantee];
         if (guarData) {
             const heatColor = guarData.avgMult >= 3 ? '#ef4444' : '#eab308';
-            // 如果年期和擔保都有選擇，顯示組合統計
-            if (years && guarantee) {
-                const comboKey = `${guarantee}_${years}`;
-                const comboData = window.TERM_GUAR_TABLE[comboKey];
-                if (comboData) {
-                    const comboColor = comboData.avgMult >= 3 ? '#ef4444' : (comboData.avgMult >= 2.5 ? '#eab308' : '#22c55e');
-                    guarTipBox.innerHTML = `
-                        <div class="tip-title">
-                            <span style="color:${comboColor};">🎯 ${totalAuctionCount}檔統計：${guarantee}+${years}年組合</span>（${comboData.count}檔）
-                        </div>
-                        <div class="tip-stats">
-                            <span>投標倍數：<b style="color:#6366f1;">${comboData.avgMult.toFixed(2)}x</b></span>
-                            <span>平均得標：<b style="color:#059669;">${comboData.avgPrice.toFixed(1)}元</b></span>
-                            <span>平均溢價：<b>${comboData.avgPremium.toFixed(1)}%</b></span>
-                        </div>
-                    `;
-                    guarTipBox.style.display = 'block';
-                    return;
-                }
-            }
-            // 只有擔保
+            // v3.99S: 年期提示已顯示組合數據，這裡顯示該擔保類型的整體統計
+            const guarIcon = guarantee === '有擔保' ? '🛡️' : '📋';
             guarTipBox.innerHTML = `
-                <div class="tip-title">🛡️ ${totalAuctionCount}檔統計：${guarantee}（佔${guarData.pct}%）</div>
+                <div class="tip-title">${guarIcon} ${totalAuctionCount}檔統計：${guarantee}整體（佔${guarData.pct}%）</div>
                 <div class="tip-stats">
                     <span>投標倍數：<b style="color:${heatColor};">${guarData.avgMult.toFixed(2)}x</b></span>
+                    <span>平均得標：<b>${guarData.avgPrice.toFixed(1)}元</b></span>
                     <span>平均溢價：<b>${guarData.avgPremium.toFixed(1)}%</b></span>
                 </div>
             `;

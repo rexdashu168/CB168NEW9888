@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AI智能可轉債競拍系統 v3.99Q (精簡版)</title>
-<!-- v3.99Q: 閃電帶入精簡、代號+名稱、移除分析法一二 -->
+<!-- v3.99Q: 閃電帶入精簡、代號+名稱修正、移除分析法一二 -->
 <!-- 
      ═══════════════════════════════════════════════════════════════
      v3.98h 新增功能（整合自 cbas_tracker 版本）
@@ -17357,9 +17357,26 @@ function displayResult(r) {
         : '';
 
     // v3.99Q: 組合標題（代號 + 名稱）
+    // 優先從閃電帶入取得，若無則從輸入欄位解析
     let resultTitle = '未命名標的';
-    const code = window.currentCBCode || '';
-    const name = window.currentCBName || r.cbName || '';
+    let code = window.currentCBCode || '';
+    let name = window.currentCBName || '';
+    
+    // 如果閃電帶入沒有設定，嘗試從輸入欄位取得
+    if (!code || !name) {
+        const cbNameInput = document.getElementById('cbName')?.value || '';
+        // 如果輸入的是純數字（股票代號），嘗試從pendingCases找名稱
+        if (/^\d+$/.test(cbNameInput)) {
+            code = cbNameInput;
+            const matchCase = pendingCases.find(c => c.stockCode === cbNameInput);
+            if (matchCase) {
+                name = matchCase.cbName || '';
+            }
+        }
+    }
+    
+    // 如果還是沒有，用r.cbName
+    if (!name) name = r.cbName || '';
     
     if (code && name) {
         resultTitle = `${code} ${name}`;

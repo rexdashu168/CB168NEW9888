@@ -2901,6 +2901,15 @@ button:active, .clickable:active {
                     <div style="font-size:8px; color:#f44336;" id="step3StratUltimateProb">得標~--%</div>
                 </div>
             </div>
+            <!-- v3.99R7 新增：策略方向提示 -->
+            <div id="step3StrategyTip" style="margin-top:8px; padding:10px; background:rgba(255,255,255,0.15); border-radius:6px; font-size:11px; line-height:1.5;">
+                <div style="font-weight:bold; margin-bottom:4px;">💡 策略選擇提示</div>
+                <div id="step3StrategyTipContent">
+                    • <b>冷門低倍數(＜2x)</b>：用<span style="color:#4caf50;">保守價</span>嘗試低成本得標，沒人搶就是撿便宜的機會<br>
+                    • <b>一般倍數(2-3x)</b>：用<span style="color:#2196f3;">穩健價</span>平衡成本與得標機率<br>
+                    • <b>熱門高倍數(＞3x)</b>：競爭激烈，追高成本風險大，需審慎評估是否值得
+                </div>
+            </div>
         </div>
         <!-- 原有的雙軌預測結果（保留作為參考） -->
         <details style="background:#f8f9fa; border-radius:8px; overflow:hidden; margin-bottom:12px;">
@@ -15384,6 +15393,36 @@ function displayResult(r) {
                         }
                     } else if (statsEl) {
                         statsEl.style.display = 'none';
+                    }
+                    // v3.99R7 新增：根據預測倍數更新策略提示
+                    const strategyTipEl = document.getElementById('step3StrategyTipContent');
+                    if (strategyTipEl && anomaly.predictedMult) {
+                        const mult = anomaly.predictedMult;
+                        let tipHtml = '';
+                        if (mult < 2) {
+                            // 冷門低倍數
+                            tipHtml = `<div style="color:#4caf50; font-weight:bold;">❄️ 預測倍數 ${mult.toFixed(1)}x 屬於冷門標的</div>
+                                <div style="margin-top:4px;">👉 建議用<b style="color:#4caf50;">保守價</b>嘗試低成本得標</div>
+                                <div>👉 沒人搶就是撿便宜的機會，不需要追高</div>
+                                <div>👉 價高者得：冷門時出低價就有機會得標</div>`;
+                        } else if (mult < 3) {
+                            // 一般倍數
+                            tipHtml = `<div style="color:#2196f3; font-weight:bold;">😐 預測倍數 ${mult.toFixed(1)}x 屬於一般競爭</div>
+                                <div style="margin-top:4px;">👉 建議用<b style="color:#2196f3;">穩健價</b>平衡成本與得標機率</div>
+                                <div>👉 可視個人風險偏好選擇保守或穩健策略</div>`;
+                        } else if (mult < 4) {
+                            // 偏熱
+                            tipHtml = `<div style="color:#ff9800; font-weight:bold;">⚡ 預測倍數 ${mult.toFixed(1)}x 競爭偏熱</div>
+                                <div style="margin-top:4px;">👉 競爭者較多，需考慮是否值得追價</div>
+                                <div>👉 追高成本風險增加，謹慎評估</div>`;
+                        } else {
+                            // 熱門高倍數
+                            tipHtml = `<div style="color:#f44336; font-weight:bold;">🔥 預測倍數 ${mult.toFixed(1)}x 屬於熱門標的</div>
+                                <div style="margin-top:4px;">👉 <b style="color:#f44336;">競爭激烈，追高成本風險大！</b></div>
+                                <div>👉 需審慎評估是否值得參與</div>
+                                <div>👉 寧可放棄也不宜過度追價</div>`;
+                        }
+                        strategyTipEl.innerHTML = tipHtml;
                     }
                 } else if (anomalyEl) {
                     anomalyEl.style.display = 'none';

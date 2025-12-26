@@ -3056,6 +3056,10 @@ button:active, .clickable:active {
                 <b>💡 Rex大叔提醒：</b>冷門標的若能以底標100元得標，<b>有擔保的就是撿到寶</b>，無擔保則要看公司體質。
             </div>
         </div>
+        <!-- v3.99R7 新增：CBAS持倉追蹤容器 -->
+        <div id="cbasTrackerContainer" style="display:none; margin-top:12px;">
+            <!-- 由renderCBASTrackerSection動態填充 -->
+        </div>
     </div>
 </div>
 </div><!-- stepReport結束 -->
@@ -14531,6 +14535,18 @@ function displayResult(r) {
             <div class="result-header">
                 <h2 style="font-size:28px; margin-bottom:5px;">${resultTitle}</h2>
                 <div style="font-size:14px; opacity:0.9;">AI 評估結果</div>
+            </div>
+            <!-- v3.99R7: 基本資訊移到標題下方 -->
+            <div class="detail-section" style="background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%); margin-top:12px;">
+                <h3>📋 基本資訊</h3>
+                <div style="display:flex; gap:30px; flex-wrap:wrap; font-size:16px;">
+                    <div><span style="color:#666;">理論價格：</span><b style="color:#667eea; font-size:24px;">${r.theoreticalPrice || 0}</b> 元</div>
+                    <div><span style="color:#666;">底標價格：</span><b style="font-size:20px;">${r.floorPrice}</b> 元</div>
+                    <div><span style="color:#666;">已填寫維度：</span><b style="color:#1976d2;">${r.filledDimCount}</b> / ${r.totalDimCount}</div>
+                </div>
+                ${r.filledDimCount < r.totalDimCount ? `<div style="margin-top:10px; padding:8px 12px; background:#fff3e0; border-left:4px solid #ff9800; border-radius:0 6px 6px 0; font-size:13px; color:#e65100;">
+                    ⚠️ 您目前填寫了 <b>${r.filledDimCount}</b> 個維度（共 ${r.totalDimCount} 個），系統已按比例調整權重計算。填寫越多維度，評估結果越精準。
+                </div>` : ''}
             </div>`;
         cbTitleHeader.style.display = 'block';
     }
@@ -15547,6 +15563,28 @@ function displayResult(r) {
                 alertEl.style.display = 'none';
             }
         }
+        // v3.99R7 新增：更新CBAS持倉追蹤
+        const cbasContainer = document.getElementById('cbasTrackerContainer');
+        if (cbasContainer && typeof renderCBASTrackerSection === 'function') {
+            try {
+                const cbCode = r.inputData.cbCode || '';
+                const cbPrice = r.theoPrice || 100;
+                if (cbCode) {
+                    const cbasHtml = renderCBASTrackerSection(cbCode, cbPrice);
+                    if (cbasHtml && !cbasHtml.includes('無 CBAS 報價資料')) {
+                        cbasContainer.innerHTML = cbasHtml;
+                        cbasContainer.style.display = 'block';
+                    } else {
+                        cbasContainer.style.display = 'none';
+                    }
+                } else {
+                    cbasContainer.style.display = 'none';
+                }
+            } catch (e) {
+                console.log('CBAS追蹤載入失敗:', e);
+                cbasContainer.style.display = 'none';
+            }
+        }
         console.log('🤖 Step3 AI智能預測 v3.98a:', { historicalAvg, recentAvg, alpha, integratedPremium, confScore });
     } else {
         // 數據不足 - 安全檢查
@@ -15654,18 +15692,8 @@ function displayResult(r) {
             ⚠️ 您目前填寫了 <b>${r.filledDimCount}</b> 個維度（共 ${r.totalDimCount} 個），系統已按比例調整權重計算。填寫越多維度，評估結果越精準。
            </div>`
         : '';
-    // v3.99R7: 標題已移至cbTitleHeader，這裡只顯示基本資訊和Rex大叔提醒
+    // v3.99R7: 基本資訊已移至cbTitleHeader，這裡只保留Rex大叔提醒和隱藏表格
     div.innerHTML = `
-    <!-- ========== 基本資訊 ========== -->
-    <div class="detail-section" style="background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);">
-        <h3>📋 基本資訊</h3>
-        <div style="display:flex; gap:30px; flex-wrap:wrap; font-size:16px;">
-            <div><span style="color:#666;">理論價格：</span><b style="color:#667eea; font-size:24px;">${r.theoreticalPrice || 0}</b> 元</div>
-            <div><span style="color:#666;">底標價格：</span><b style="font-size:20px;">${r.floorPrice}</b> 元</div>
-            <div><span style="color:#666;">已填寫維度：</span><b style="color:#1976d2;">${r.filledDimCount}</b> / ${r.totalDimCount}</div>
-        </div>
-        ${dimWarning}
-    </div>
     ${generateRexCommentary(r)}
     ${generateConditionSummaryHTML(r)}
     <!-- v3.97-as-co: 移除重複的 majorPlayerHTML，已整合到 Step 3 -->

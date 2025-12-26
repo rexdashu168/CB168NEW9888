@@ -22197,77 +22197,84 @@ function renderBasicInfoQuote(cbCode, container) {
         // v3.97-zs-ag: 取得名稱
         const cbName = (quoteData['名稱  '] || quoteData['名稱'] || '').trim();
         const html = `
-            <div style="background:linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); padding:25px; border-radius:12px;">
+            <div style="background:linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); padding:20px; border-radius:12px;">
                 ${renderTabHeader('最新行情', '📊', '#2e7d32', completeness.percentage, '🟢 掛牌中', cbCode, cbName)}
-                <!-- 主要報價 - v3.97-zs-z 字體優化 -->
-                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:12px; margin-bottom:18px;">
-                    <div style="background:white; padding:18px 12px; border-radius:10px; text-align:center; border:2px solid #4caf50;">
-                        <div style="font-size:16px; color:#444; margin-bottom:8px;">CB收盤價</div>
-                        <div style="font-size:26px; font-weight:bold; color:#2e7d32;">${cbPrice || '-'}</div>
+                <!-- v3.99S 修正：固定3欄佈局確保整齊 -->
+                <!-- 第一排：CB收盤價、股票收盤、轉換價格 -->
+                <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-bottom:10px;">
+                    <div style="background:white; padding:12px 10px; border-radius:8px; text-align:center; border:2px solid #4caf50;">
+                        <div style="font-size:13px; color:#444; margin-bottom:4px;">CB收盤價</div>
+                        <div style="font-size:22px; font-weight:bold; color:#2e7d32;">${cbPrice || '-'}</div>
                     </div>
-                    <div style="background:white; padding:18px 12px; border-radius:10px; text-align:center;">
-                        <div style="font-size:16px; color:#444; margin-bottom:8px;">股票收盤</div>
-                        <div style="font-size:22px; font-weight:bold; color:#1976d2;">${stockPrice || '-'}</div>
+                    <div style="background:white; padding:12px 10px; border-radius:8px; text-align:center;">
+                        <div style="font-size:13px; color:#444; margin-bottom:4px;">股票收盤</div>
+                        <div style="font-size:20px; font-weight:bold; color:#1976d2;">${stockPrice || '-'}</div>
                     </div>
-                    <div style="background:white; padding:18px 12px; border-radius:10px; text-align:center;">
-                        <div style="font-size:16px; color:#444; margin-bottom:8px;">轉換價格</div>
-                        <div style="font-size:20px; font-weight:bold;">${convPrice || '-'}</div>
-                    </div>
-                    <div style="background:white; padding:18px 12px; border-radius:10px; text-align:center;">
-                        <div style="font-size:16px; color:#444; margin-bottom:8px;">轉換價值</div>
-                        <div style="font-size:20px; font-weight:bold; color:#7b1fa2;">${convValue ? convValue.toFixed(2) : '-'}</div>
-                    </div>
-                    <div style="background:white; padding:18px 12px; border-radius:10px; text-align:center; border:2px solid ${premiumColor};">
-                        <div style="font-size:16px; color:#444; margin-bottom:8px;">溢(折)價率</div>
-                        <div style="font-size:22px; font-weight:bold; color:${premiumColor};">${premiumSign}${premium.toFixed(2)}%</div>
+                    <div style="background:white; padding:12px 10px; border-radius:8px; text-align:center;">
+                        <div style="font-size:13px; color:#444; margin-bottom:4px;">轉換價格</div>
+                        <div style="font-size:18px; font-weight:bold;">${convPrice || '-'}</div>
                     </div>
                 </div>
-                <!-- 詳細資訊 - v3.97-zs-z 字體優化 -->
-                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:12px; margin-bottom:18px;">
-                    <div style="background:rgba(255,255,255,0.9); padding:15px; border-radius:8px; text-align:center;">
-                        <div style="font-size:16px; color:#444; margin-bottom:6px;">成交量(張)</div>
+                <!-- 第二排：轉換價值、溢折價率、成交量 -->
+                <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-bottom:10px;">
+                    <div style="background:white; padding:12px 10px; border-radius:8px; text-align:center;">
+                        <div style="font-size:13px; color:#444; margin-bottom:4px;">轉換價值</div>
+                        <div style="font-size:18px; font-weight:bold; color:#7b1fa2;">${convValue ? convValue.toFixed(2) : '-'}</div>
+                    </div>
+                    <div style="background:white; padding:12px 10px; border-radius:8px; text-align:center; border:2px solid ${premiumColor};">
+                        <div style="font-size:13px; color:#444; margin-bottom:4px;">溢(折)價率</div>
+                        <div style="font-size:20px; font-weight:bold; color:${premiumColor};">${premiumSign}${premium.toFixed(2)}%</div>
+                    </div>
+                    <div style="background:white; padding:12px 10px; border-radius:8px; text-align:center;">
+                        <div style="font-size:13px; color:#444; margin-bottom:4px;">成交量(張)</div>
                         <div style="font-size:18px; font-weight:bold;">${quoteData['成交量'] || '-'}</div>
                     </div>
-                    <div style="background:rgba(255,255,255,0.9); padding:15px; border-radius:8px; text-align:center;">
-                        <div style="font-size:16px; color:#444; margin-bottom:6px;">YTM</div>
-                        <div style="font-size:18px; font-weight:bold; color:#1976d2;">${quoteData['YTM'] ? parseFloat(quoteData['YTM']).toFixed(2) + '%' : '-'}</div>
+                </div>
+                <!-- 第三排：YTM、YTP、TCRI -->
+                <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-bottom:10px;">
+                    <div style="background:rgba(255,255,255,0.9); padding:10px 8px; border-radius:8px; text-align:center;">
+                        <div style="font-size:13px; color:#444; margin-bottom:4px;">YTM</div>
+                        <div style="font-size:16px; font-weight:bold; color:#1976d2;">${quoteData['YTM'] ? parseFloat(quoteData['YTM']).toFixed(2) + '%' : '-'}</div>
                     </div>
-                    <div style="background:rgba(255,255,255,0.9); padding:15px; border-radius:8px; text-align:center;">
-                        <div style="font-size:16px; color:#444; margin-bottom:6px;">YTP</div>
-                        <div style="font-size:18px; font-weight:bold; color:#e65100;">${quoteData['YTP'] ? parseFloat(quoteData['YTP']).toFixed(2) + '%' : '-'}</div>
+                    <div style="background:rgba(255,255,255,0.9); padding:10px 8px; border-radius:8px; text-align:center;">
+                        <div style="font-size:13px; color:#444; margin-bottom:4px;">YTP</div>
+                        <div style="font-size:16px; font-weight:bold; color:#e65100;">${quoteData['YTP'] ? parseFloat(quoteData['YTP']).toFixed(2) + '%' : '-'}</div>
                     </div>
-                    <div style="background:rgba(255,255,255,0.9); padding:15px; border-radius:8px; text-align:center;">
-                        <div style="font-size:16px; color:#444; margin-bottom:6px;">TCRI</div>
-                        <div style="font-size:18px; font-weight:bold;">${quoteData['TCRI'] || '-'}</div>
-                    </div>
-                    <div style="background:rgba(255,255,255,0.9); padding:15px; border-radius:8px; text-align:center;">
-                        <div style="font-size:16px; color:#444; margin-bottom:6px;">120日波動</div>
-                        <div style="font-size:18px; font-weight:bold;">${quoteData['股價波動率120天(%)'] ? parseFloat(quoteData['股價波動率120天(%)']).toFixed(1) : '-'}%</div>
-                    </div>
-                    <div style="background:rgba(255,255,255,0.9); padding:15px; border-radius:8px; text-align:center;">
-                        <div style="font-size:16px; color:#444; margin-bottom:6px;">240日波動</div>
-                        <div style="font-size:18px; font-weight:bold;">${quoteData['股價波動率240天(%)'] ? parseFloat(quoteData['股價波動率240天(%)']).toFixed(1) : '-'}%</div>
+                    <div style="background:rgba(255,255,255,0.9); padding:10px 8px; border-radius:8px; text-align:center;">
+                        <div style="font-size:13px; color:#444; margin-bottom:4px;">TCRI</div>
+                        <div style="font-size:16px; font-weight:bold;">${quoteData['TCRI'] || '-'}</div>
                     </div>
                 </div>
-                <!-- 法人動向 -->
-                <div style="background:rgba(255,255,255,0.9); padding:15px; border-radius:8px;">
-                    <div style="font-size:16px; color:#555; margin-bottom:12px; font-weight:bold;">📈 法人買賣超</div>
-                    <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; text-align:center;">
+                <!-- 第四排：120日波動、240日波動 -->
+                <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; margin-bottom:12px;">
+                    <div style="background:rgba(255,255,255,0.9); padding:10px 8px; border-radius:8px; text-align:center;">
+                        <div style="font-size:13px; color:#444; margin-bottom:4px;">120日波動</div>
+                        <div style="font-size:16px; font-weight:bold;">${quoteData['股價波動率120天(%)'] ? parseFloat(quoteData['股價波動率120天(%)']).toFixed(1) + '%' : '-%'}</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.9); padding:10px 8px; border-radius:8px; text-align:center;">
+                        <div style="font-size:13px; color:#444; margin-bottom:4px;">240日波動</div>
+                        <div style="font-size:16px; font-weight:bold;">${quoteData['股價波動率240天(%)'] ? parseFloat(quoteData['股價波動率240天(%)']).toFixed(1) + '%' : '-%'}</div>
+                    </div>
+                </div>
+                <!-- 法人動向 - 固定4欄 -->
+                <div style="background:rgba(255,255,255,0.9); padding:12px; border-radius:8px;">
+                    <div style="font-size:14px; color:#555; margin-bottom:10px; font-weight:bold;">📈 法人買賣超</div>
+                    <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; text-align:center;">
                         <div>
-                            <div style="font-size:16px; color:#444; margin-bottom:5px;">自營商買</div>
-                            <div style="font-size:18px; font-weight:bold; color:#d32f2f;">${quoteData['自營商買張數'] || 0}</div>
+                            <div style="font-size:12px; color:#444; margin-bottom:3px;">自營商買</div>
+                            <div style="font-size:16px; font-weight:bold; color:#d32f2f;">${quoteData['自營商買張數'] || 0}</div>
                         </div>
                         <div>
-                            <div style="font-size:16px; color:#444; margin-bottom:5px;">自營商賣</div>
-                            <div style="font-size:18px; font-weight:bold; color:#2e7d32;">${quoteData['自營商賣張數'] || 0}</div>
+                            <div style="font-size:12px; color:#444; margin-bottom:3px;">自營商賣</div>
+                            <div style="font-size:16px; font-weight:bold; color:#2e7d32;">${quoteData['自營商賣張數'] || 0}</div>
                         </div>
                         <div>
-                            <div style="font-size:16px; color:#444; margin-bottom:5px;">外資買</div>
-                            <div style="font-size:18px; font-weight:bold; color:#d32f2f;">${quoteData['外資買張數'] || 0}</div>
+                            <div style="font-size:12px; color:#444; margin-bottom:3px;">外資買</div>
+                            <div style="font-size:16px; font-weight:bold; color:#d32f2f;">${quoteData['外資買張數'] || 0}</div>
                         </div>
                         <div>
-                            <div style="font-size:16px; color:#444; margin-bottom:5px;">外資賣</div>
-                            <div style="font-size:18px; font-weight:bold; color:#2e7d32;">${quoteData['外資賣張數'] || 0}</div>
+                            <div style="font-size:12px; color:#444; margin-bottom:3px;">外資賣</div>
+                            <div style="font-size:16px; font-weight:bold; color:#2e7d32;">${quoteData['外資賣張數'] || 0}</div>
                         </div>
                     </div>
                 </div>

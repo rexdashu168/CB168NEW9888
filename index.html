@@ -160,9 +160,11 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 .header .stat-label { font-size: 16px; color: #444; margin-top: 2px; }
 .version-badge { display: inline-block; background: #7B1FA2; color: white; padding: 4px 12px; border-radius: 20px; font-size: 16px; font-weight: bold; margin: 6px 0 10px 0; }
 .evaluation-container { display: grid; grid-template-columns: 38.2% 8px 1fr; gap: 0; width: 100%; }
-.resizer { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); cursor: col-resize; position: relative; border-radius: 4px; transition: background 0.2s; }
+.resizer { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); cursor: pointer; position: relative; border-radius: 4px; transition: all 0.3s; display: flex; align-items: flex-start; justify-content: center; }
 .resizer:hover { background: linear-gradient(135deg, #5a6fd6 0%, #6a4190 100%); }
-.resizer::before { content: "⋮"; position: absolute; top: 20px; left: 50%; transform: translateX(-50%); color: white; font-size: 18px; font-weight: bold; background: rgba(0,0,0,0.2); padding: 8px 2px; border-radius: 4px; }
+.resizer-btn { background: rgba(255,255,255,0.2); color: white; font-size: 20px; font-weight: bold; padding: 12px 4px; border-radius: 4px; margin-top: 15px; transition: all 0.2s; cursor: pointer; }
+.resizer-btn:hover { background: rgba(255,255,255,0.4); transform: scale(1.1); }
+.resizer.collapsed .resizer-btn { transform: rotate(180deg); }
 .input-panel { background: white; border-radius: 15px; padding: 20px; box-shadow: 0 5px 20px rgba(0,0,0,0.15); position: sticky; top: 20px; border: 2px solid rgba(102, 126, 234, 0.3); border-left: 6px solid #667eea; box-sizing: border-box; max-height: calc(100vh - 40px); overflow-y: auto; overflow-x: hidden; min-width: 320px; }
 .input-panel::-webkit-scrollbar { width: 8px; }
 .input-panel::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
@@ -2550,7 +2552,9 @@ button:active, .clickable:active {
 </div>
 </form>
 </div><!-- input-panel結束 -->
-<div class="resizer" id="resizer"></div>
+<div class="resizer" id="resizer" onclick="toggleLeftPanel()">
+    <div class="resizer-btn" id="resizerBtn" title="點擊收合/展開左側面板">◀</div>
+</div>
 <div class="result-panel" id="resultPanel">
     <!-- v3.99Q: CB標題區塊（放在步驟報告前） -->
     <div id="cbTitleHeader" style="display:none;">
@@ -16340,55 +16344,43 @@ document.getElementById('evaluationForm').addEventListener('submit', function(e)
     }
 });
 // ==========================================
-// 可拖曳分隔線功能
+// v3.99T: 左側面板收合功能（點擊按鈕）
 // ==========================================
-function initResizer() {
-    const resizer = document.getElementById('resizer');
+let isLeftPanelCollapsed = false;
+let originalGridColumns = '38.2% 8px 1fr';
+
+function toggleLeftPanel() {
     const container = document.querySelector('.evaluation-container');
     const inputPanel = document.getElementById('inputPanel');
-    if (!resizer || !container || !inputPanel) return;
-    let isResizing = false;
-    let startX, startWidth;
-    resizer.addEventListener('mousedown', function(e) {
-        isResizing = true;
-        startX = e.clientX;
-        startWidth = inputPanel.offsetWidth;
-        document.body.style.cursor = 'col-resize';
-        document.body.style.userSelect = 'none';
-        e.preventDefault();
-    });
-    document.addEventListener('mousemove', function(e) {
-        if (!isResizing) return;
-        const diff = e.clientX - startX;
-        let newWidth = startWidth + diff;
-        // 限制最小和最大寬度
-        newWidth = Math.max(280, Math.min(600, newWidth));
-        container.style.gridTemplateColumns = newWidth + 'px 8px 1fr';
-    });
-    document.addEventListener('mouseup', function() {
-        if (isResizing) {
-            isResizing = false;
-            document.body.style.cursor = '';
-            document.body.style.userSelect = '';
-        }
-    });
-    // 觸控裝置支援
-    resizer.addEventListener('touchstart', function(e) {
-        isResizing = true;
-        startX = e.touches[0].clientX;
-        startWidth = inputPanel.offsetWidth;
-        e.preventDefault();
-    });
-    document.addEventListener('touchmove', function(e) {
-        if (!isResizing) return;
-        const diff = e.touches[0].clientX - startX;
-        let newWidth = startWidth + diff;
-        newWidth = Math.max(280, Math.min(600, newWidth));
-        container.style.gridTemplateColumns = newWidth + 'px 8px 1fr';
-    });
-    document.addEventListener('touchend', function() {
-        isResizing = false;
-    });
+    const resizer = document.getElementById('resizer');
+    const resizerBtn = document.getElementById('resizerBtn');
+    if (!container || !inputPanel || !resizer) return;
+    
+    if (isLeftPanelCollapsed) {
+        // 展開
+        container.style.gridTemplateColumns = originalGridColumns;
+        inputPanel.style.display = 'block';
+        inputPanel.style.opacity = '1';
+        resizerBtn.textContent = '◀';
+        resizerBtn.title = '點擊收合左側面板';
+        resizer.classList.remove('collapsed');
+        isLeftPanelCollapsed = false;
+    } else {
+        // 收合
+        originalGridColumns = container.style.gridTemplateColumns || '38.2% 8px 1fr';
+        container.style.gridTemplateColumns = '0px 8px 1fr';
+        inputPanel.style.display = 'none';
+        inputPanel.style.opacity = '0';
+        resizerBtn.textContent = '▶';
+        resizerBtn.title = '點擊展開左側面板';
+        resizer.classList.add('collapsed');
+        isLeftPanelCollapsed = true;
+    }
+}
+
+function initResizer() {
+    // v3.99T: 改為點擊收合，不再支援拖曳
+    // 點擊事件已在HTML onclick中設定
 }
 // ==========================================
 // v3.69 閃電帶入功能 - 承銷中案件資料（含狀態判斷）
@@ -16430,13 +16422,18 @@ function updateDNAQuickLook(caseData) {
     // 取得股票代號
     const stockCode = caseData.stockCode || '';
     const cbName = caseData.cbName || '';
-    // 取得所有競拍案例
-    const allAuctionCases = window.auctionDataCache || [];
+    // v3.99T: 取得所有競拍案例 - 多來源支援
+    let allAuctionCases = [];
+    if (window.auctionDataCache && Array.isArray(window.auctionDataCache) && window.auctionDataCache.length > 0) {
+        allAuctionCases = window.auctionDataCache;
+    } else if (window.STATS_DATA && window.STATS_DATA.auctionStats && window.STATS_DATA.auctionStats.length > 0) {
+        allAuctionCases = window.STATS_DATA.auctionStats;
+    }
     if (allAuctionCases.length === 0) {
         container.style.display = 'none';
         return;
     }
-    // 篩選函數
+    // 篩選函數 - 支援多種欄位名稱
     const getGuarantee = (cb) => {
         const g = cb?.['擔保'] || cb?.guarantee || '';
         return g.includes('有') ? '有擔保' : '無擔保';
@@ -16450,6 +16447,8 @@ function updateDNAQuickLook(caseData) {
         return '15億以上';
     };
     const getIndustry = (cb) => cb?.['產業分類'] || cb?.['產業'] || cb?.industry || '';
+    const getMarketHigh = (cb) => parseFloat(cb?.['掛牌最高'] || cb?.['掛牌最高價'] || cb?.marketHigh || 0);
+    const getMarketLow = (cb) => parseFloat(cb?.['掛牌最低'] || cb?.['掛牌最低價'] || cb?.marketLow || 0);
     // 當前案件條件
     const currentGuarantee = caseData.guarantee ? (caseData.guarantee.includes('有') ? '有擔保' : '無擔保') : '無擔保';
     const currentSize = caseData.issueSize || 0;
@@ -16457,12 +16456,12 @@ function updateDNAQuickLook(caseData) {
     const currentIndustry = caseData.industry || '';
     // 1. 同公司歷史發行
     const sameCompanyCases = allAuctionCases.filter(c => {
-        const cStock = c['股票代號'] || '';
-        return cStock === stockCode && (parseFloat(c['掛牌最高']) || 0) > 0;
+        const cStock = c['股票代號'] || c['stockCode'] || '';
+        return cStock === stockCode && getMarketHigh(c) > 0;
     });
     // 2. 相似條件（同擔保+同規模區間）
     const similarCases = allAuctionCases.filter(c => {
-        const high = parseFloat(c['掛牌最高']) || 0;
+        const high = getMarketHigh(c);
         if (high <= 0) return false;
         const g = getGuarantee(c);
         const sizeRange = getIssueSizeRange(getIssueSize(c));
@@ -16471,11 +16470,11 @@ function updateDNAQuickLook(caseData) {
     // 計算統計
     const calcStats = (cases) => {
         if (cases.length === 0) return null;
-        const highs = cases.map(c => parseFloat(c['掛牌最高']) || 0).filter(v => v > 0);
-        const lows = cases.map(c => parseFloat(c['掛牌最低']) || 0).filter(v => v > 0);
+        const highs = cases.map(c => getMarketHigh(c)).filter(v => v > 0);
+        const lows = cases.map(c => getMarketLow(c)).filter(v => v > 0);
         const amps = cases.map(c => {
-            const high = parseFloat(c['掛牌最高']) || 0;
-            const low = parseFloat(c['掛牌最低']) || 0;
+            const high = getMarketHigh(c);
+            const low = getMarketLow(c);
             return low > 0 ? ((high - low) / low * 100) : 0;
         }).filter(v => v > 0);
         const avgHigh = highs.length > 0 ? highs.reduce((a, b) => a + b, 0) / highs.length : 0;
@@ -16569,12 +16568,13 @@ function initQuickSelect() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const currentYear = today.getFullYear();
-    // v3.97 修正：輔助函數 - 解析投標期間並判斷是否已完成
+    const currentMonth = today.getMonth() + 1; // 1-12
+    // v3.99T 修正：輔助函數 - 解析投標期間並判斷是否已完成（含跨年處理）
     function parseBidPeriodAndCheck(bidPeriodStr) {
         if (!bidPeriodStr || bidPeriodStr === '未定' || bidPeriodStr.includes('未定')) {
             return { hasSchedule: false, isCompleted: false };
         }
-        // 解析結束日期，格式如 "11/25-11/27" 或 "12/17-12/19"
+        // 解析結束日期，格式如 "11/25-11/27" 或 "12/17-12/19" 或 "1/6-1/8"
         const parts = bidPeriodStr.split('-');
         if (parts.length >= 2) {
             const endPart = parts[1].trim();
@@ -16582,10 +16582,16 @@ function initQuickSelect() {
             if (match) {
                 const endMonth = parseInt(match[1]);
                 const endDay = parseInt(match[2]);
-                // 判斷年份：承銷中案件時程不會跨年太遠，視為當年度
-                const endDateObj = new Date(currentYear, endMonth - 1, endDay);
+                // v3.99T: 跨年判斷 - 如果結束月份比現在月份小很多（例如現在12月，結束日期1月），視為明年
+                let targetYear = currentYear;
+                if (currentMonth >= 10 && endMonth <= 3) {
+                    // 現在是10-12月，結束日期是1-3月，視為明年
+                    targetYear = currentYear + 1;
+                }
+                const endDateObj = new Date(targetYear, endMonth - 1, endDay);
                 endDateObj.setHours(0, 0, 0, 0);
                 const isCompleted = endDateObj < today;
+                console.log(`[parseBidPeriod] ${bidPeriodStr} -> ${targetYear}/${endMonth}/${endDay}, isCompleted: ${isCompleted}`);
                 return { hasSchedule: true, isCompleted: isCompleted, endDate: endDateObj };
             }
         }
@@ -23076,23 +23082,39 @@ function renderDNAAnalysis(cbCode, container) {
             };
         }
     }
-    // 取得所有競拍案例（307檔）
-    const allAuctionCases = window.auctionDataCache || [];
+    // v3.99T: 取得所有競拍案例 - 優先用 auctionDataCache，備用 STATS_DATA.auctionStats
+    let allAuctionCases = [];
+    if (window.auctionDataCache && Array.isArray(window.auctionDataCache) && window.auctionDataCache.length > 0) {
+        allAuctionCases = window.auctionDataCache;
+        console.log('[renderDNAAnalysis] 使用 auctionDataCache:', allAuctionCases.length, '筆');
+    } else if (window.STATS_DATA && window.STATS_DATA.auctionStats && window.STATS_DATA.auctionStats.length > 0) {
+        allAuctionCases = window.STATS_DATA.auctionStats;
+        console.log('[renderDNAAnalysis] 使用 STATS_DATA.auctionStats:', allAuctionCases.length, '筆');
+    }
+    // 除錯：列出第一筆資料的欄位
+    if (allAuctionCases.length > 0) {
+        console.log('[renderDNAAnalysis] 第一筆資料欄位:', Object.keys(allAuctionCases[0]));
+        console.log('[renderDNAAnalysis] 第一筆資料:', allAuctionCases[0]);
+    }
     if (allAuctionCases.length === 0) {
         container.innerHTML = `
             <div style="text-align:center; padding:40px; color:#555;">
                 <div style="font-size:48px; margin-bottom:15px;">📭</div>
                 <div>競拍資料庫尚未載入，請稍後再試</div>
+                <div style="font-size:14px; margin-top:10px; color:#999;">
+                    auctionDataCache: ${window.auctionDataCache?.length || 0} 筆<br>
+                    STATS_DATA.auctionStats: ${window.STATS_DATA?.auctionStats?.length || 0} 筆
+                </div>
             </div>
         `;
         return;
     }
-    // 解析當前CB條件
+    // 解析當前CB條件 - v3.99T: 支援多種欄位名稱
     const getGuarantee = (cb) => {
-        const g = cb?.['擔保'] || '';
+        const g = cb?.['擔保'] || cb?.['guarantee'] || '';
         return g.includes('有') ? '有擔保' : '無擔保';
     };
-    const getIssueSize = (cb) => parseFloat(cb?.['發行規模'] || cb?.['發行張數'] || 0);
+    const getIssueSize = (cb) => parseFloat(cb?.['發行規模'] || cb?.['發行張數'] || cb?.['issueSize'] || 0);
     const getIssueSizeRange = (size) => {
         if (size < 2) return '小於2億';
         if (size < 5) return '2~5億';
@@ -23100,9 +23122,11 @@ function renderDNAAnalysis(cbCode, container) {
         if (size < 15) return '10~15億';
         return '15億以上';
     };
-    const getIndustry = (cb) => cb?.['產業分類'] || cb?.['產業'] || '';
-    const getBroker = (cb) => cb?.['發行券商'] || cb?.['券商'] || '';
-    const getYears = (cb) => parseFloat(cb?.['發行年期'] || cb?.['年期'] || 0);
+    const getIndustry = (cb) => cb?.['產業分類'] || cb?.['產業'] || cb?.['industry'] || '';
+    const getBroker = (cb) => cb?.['發行券商'] || cb?.['券商'] || cb?.['broker'] || '';
+    const getYears = (cb) => parseFloat(cb?.['發行年期'] || cb?.['年期'] || cb?.['years'] || 0);
+    const getMarketHigh = (cb) => parseFloat(cb?.['掛牌最高'] || cb?.['掛牌最高價'] || cb?.['marketHigh'] || 0);
+    const getMarketLow = (cb) => parseFloat(cb?.['掛牌最低'] || cb?.['掛牌最低價'] || cb?.['marketLow'] || 0);
     // 當前CB條件
     const currentGuarantee = currentCB ? getGuarantee(currentCB) : null;
     const currentSize = currentCB ? getIssueSize(currentCB) : null;
@@ -23111,21 +23135,21 @@ function renderDNAAnalysis(cbCode, container) {
     const currentBroker = currentCB ? getBroker(currentCB) : null;
     const currentYears = currentCB ? getYears(currentCB) : null;
     const cbName = currentCB?.['名稱'] || currentCB?.['CB名稱'] || cbCode;
-    // 篩選函數
+    // 篩選函數 - v3.99T: 使用getter函數
     const filterByCondition = (cases, conditionFn) => {
         return cases.filter(c => {
-            const high = parseFloat(c['掛牌最高']) || 0;
+            const high = getMarketHigh(c);
             return high > 0 && conditionFn(c);
         });
     };
-    // 計算統計
+    // 計算統計 - v3.99T: 使用getter函數
     const calcStats = (cases) => {
         if (cases.length === 0) return null;
-        const highs = cases.map(c => parseFloat(c['掛牌最高']) || 0).filter(v => v > 0);
-        const lows = cases.map(c => parseFloat(c['掛牌最低']) || 0).filter(v => v > 0);
+        const highs = cases.map(c => getMarketHigh(c)).filter(v => v > 0);
+        const lows = cases.map(c => getMarketLow(c)).filter(v => v > 0);
         const amps = cases.map(c => {
-            const high = parseFloat(c['掛牌最高']) || 0;
-            const low = parseFloat(c['掛牌最低']) || 0;
+            const high = getMarketHigh(c);
+            const low = getMarketLow(c);
             return low > 0 ? ((high - low) / low * 100) : 0;
         }).filter(v => v > 0);
         const avgHigh = highs.length > 0 ? highs.reduce((a, b) => a + b, 0) / highs.length : 0;
@@ -23195,13 +23219,11 @@ function renderDNAAnalysis(cbCode, container) {
             </div>
         `;
     };
-    // 生成詳細表格
+    // 生成詳細表格 - v3.99T: 使用getter函數
     const genDetailTable = (cases, title, limit = 10) => {
         if (!cases || cases.length === 0) return '';
         // 按最高價排序
-        const sortedCases = [...cases].sort((a, b) => 
-            (parseFloat(b['掛牌最高']) || 0) - (parseFloat(a['掛牌最高']) || 0)
-        );
+        const sortedCases = [...cases].sort((a, b) => getMarketHigh(b) - getMarketHigh(a));
         const topCases = sortedCases.slice(0, limit);
         let html = `
             <div style="margin-top:15px;">
@@ -23222,10 +23244,10 @@ function renderDNAAnalysis(cbCode, container) {
                         <tbody>
         `;
         topCases.forEach((c, idx) => {
-            const high = parseFloat(c['掛牌最高']) || 0;
-            const low = parseFloat(c['掛牌最低']) || 0;
+            const high = getMarketHigh(c);
+            const low = getMarketLow(c);
             const amp = low > 0 ? ((high - low) / low * 100).toFixed(1) : 0;
-            const size = parseFloat(c['發行規模'] || c['發行張數'] || 0);
+            const size = getIssueSize(c);
             const guarantee = getGuarantee(c);
             const highColor = high >= 150 ? '#c62828' : (high >= 120 ? '#e65100' : '#333');
             const rowBg = idx % 2 === 0 ? '#f5f5f5' : 'white';

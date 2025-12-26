@@ -4,8 +4,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.99P (精簡版)</title>
-<!-- v3.99P: 閃電帶入移除詢圈選項，優化手機版select -->
+<title>AI智能可轉債競拍系統 v3.99Q (精簡版)</title>
+<!-- v3.99Q: 閃電帶入精簡、代號+名稱、移除分析法一二 -->
 <!-- 
      ═══════════════════════════════════════════════════════════════
      v3.98h 新增功能（整合自 cbas_tracker 版本）
@@ -463,11 +463,10 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     cursor: pointer;
 }
 #quickSelect option {
-    padding: 8px 12px;
+    padding: 10px 12px;
     font-size: 13px;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    line-height: 1.8;
 }
 /* 競拍選項 - 橘色系背景 */
 #quickSelect optgroup[id*="Auction"] {
@@ -17357,20 +17356,21 @@ function displayResult(r) {
            </div>`
         : '';
 
-    // v3.99P: 組合標題（代號 + 名稱）
+    // v3.99Q: 組合標題（代號 + 名稱）
     let resultTitle = '未命名標的';
-    if (window.currentCBCode && window.currentCBName) {
-        resultTitle = `${window.currentCBCode} ${window.currentCBName}`;
-    } else if (window.currentCBCode) {
-        resultTitle = window.currentCBCode;
-    } else if (window.currentCBName) {
-        resultTitle = window.currentCBName;
-    } else if (r.cbName) {
-        resultTitle = r.cbName;
+    const code = window.currentCBCode || '';
+    const name = window.currentCBName || r.cbName || '';
+    
+    if (code && name) {
+        resultTitle = `${code} ${name}`;
+    } else if (name) {
+        resultTitle = name;
+    } else if (code) {
+        resultTitle = code;
     }
 
     div.innerHTML = `
-    <!-- v3.99N: 代號名稱移到基本資訊前 -->
+    <!-- v3.99Q: 代號+名稱顯示 -->
     <div class="result-header">
         <h2 style="font-size:28px; margin-bottom:5px;">${resultTitle}</h2>
         <div style="font-size:14px; opacity:0.9;">AI 評估結果</div>
@@ -17387,7 +17387,6 @@ function displayResult(r) {
         ${dimWarning}
     </div>
 
-    <!-- v3.99P: 移除重複的分析法一、分析法二，已整合至Step 1明細 -->
 
     ${generateRexCommentary(r)}
 
@@ -17668,13 +17667,13 @@ function initQuickSelect() {
         const isAuction = c.auctionType && (c.auctionType.includes('競拍') || c.auctionType === '競拍');
         const isInquiry = c.auctionType && (c.auctionType.includes('詢圈') || c.auctionType === '詢圈');
 
-        // v3.98f-5: 精簡選項文字，確保單行顯示
-        // 格式：名稱 | 產業 | 底標XXX
+        // v3.99Q: 精簡選項文字，單行顯示
+        // 格式：名稱 | 底標XXX | 擔保
         const shortGuarantee = c.guarantee === '無擔保' ? '無擔' : (c.guarantee === '有擔保' ? '有擔' : '');
         
         if (isAuction) {
-            // 競拍格式：名稱 | 產業 | 底標XXX | 擔保
-            const optText = `${c.cbName} | ${c.industry} | ${priceLabel}${shortGuarantee ? ' | ' + shortGuarantee : ''}`;
+            // 競拍格式：名稱 | 底標XXX | 擔保
+            const optText = `${c.cbName} | ${priceLabel} | ${shortGuarantee}`;
             option.textContent = optText;
             
             if (isCompleted) {
@@ -17688,23 +17687,11 @@ function initQuickSelect() {
                 if (pendingAuctionGroup) pendingAuctionGroup.appendChild(option);
             }
         } else if (isInquiry) {
-            // 詢圈格式：名稱 | 產業 | 擔保
-            const optText = `${c.cbName} | ${c.industry}${shortGuarantee ? ' | ' + shortGuarantee : ''}`;
-            option.textContent = optText;
-            
-            if (isCompleted) {
-                option.style.cssText = 'background:#fafafa; color:#888;';
-                if (recentInquiryGroup) recentInquiryGroup.appendChild(option);
-            } else if (hasSchedule) {
-                option.style.cssText = 'background:#e3f2fd; color:#1565c0; font-weight:600;';
-                if (upcomingInquiryGroup) upcomingInquiryGroup.appendChild(option);
-            } else {
-                option.style.cssText = 'background:#e8f5e9;';
-                if (pendingInquiryGroup) pendingInquiryGroup.appendChild(option);
-            }
+            // 詢圈不顯示（已移除optgroup）
         } else {
-            // 未設定類型
-            option.textContent = `${c.cbName} | ${c.industry} | ${priceLabel}`;
+            // 未設定類型視為競拍
+            const optText = `${c.cbName} | ${priceLabel} | ${shortGuarantee}`;
+            option.textContent = optText;
             option.style.cssText = 'background:#fff8e1;';
             if (pendingAuctionGroup) pendingAuctionGroup.appendChild(option);
         }
@@ -17746,22 +17733,10 @@ function handleQuickSelect() {
 
     if (!c) return;
 
-    // v3.99P: 保存完整標的資訊供結果標題使用
-    // cbCode可能為空，嘗試從stockCode或其他欄位取得
-    let cbCode = c.cbCode || c.stockCode || '';
-    let cbName = c.cbName || '';
-    
-    // 如果cbName包含代號（如"6510 精測一"），分離出來
-    if (cbName && !cbCode) {
-        const match = cbName.match(/^(\d+)\s*/);
-        if (match) {
-            cbCode = match[1];
-            cbName = cbName.replace(/^\d+\s*/, '').trim();
-        }
-    }
-    
-    window.currentCBCode = cbCode;
-    window.currentCBName = cbName;
+    // v3.99Q: 保存完整標的資訊（代號+名稱）
+    // 優先使用 stockCode 作為代號
+    window.currentCBCode = c.stockCode || c.cbCode || '';
+    window.currentCBName = c.cbName || '';
     console.log('⚡ 閃電帶入標的:', window.currentCBCode, window.currentCBName);
 
     // 帶入各欄位

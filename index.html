@@ -24130,6 +24130,141 @@ function showPriceTrendTab(tabName, event) {
     loadKanbanAndRender(cbCode, tabName, period, content);
 }
 /**
+ * v3.99S 新增：CB價格走勢標籤 - 使用 CB_price 資料庫
+ */
+async function renderCBHistory(cbCode, container, period) {
+    container.innerHTML = `<div style="text-align:center; padding:40px; color:#444; background:#fff; border-radius:12px;">
+        <div style="font-size:24px; margin-bottom:10px;">⏳</div>
+        <div>載入 ${cbCode} CB價格走勢中...</div>
+    </div>`;
+    // 嘗試從 cbPriceData 取得資料
+    if (!window.cbPriceData?.loaded) {
+        // 嘗試載入
+        try {
+            const response = await fetch('data/cb_price.db');
+            if (response.ok) {
+                const SQL = await initSqlJs({
+                    locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}`
+                });
+                const arrayBuffer = await response.arrayBuffer();
+                const db = new SQL.Database(new Uint8Array(arrayBuffer));
+                const results = db.exec(`SELECT * FROM cb_price WHERE code = '${cbCode}' ORDER BY date`);
+                if (results.length > 0) {
+                    const cols = results[0].columns;
+                    const rows = results[0].values;
+                    window.cbPriceData = window.cbPriceData || { data: {}, loaded: true };
+                    window.cbPriceData.data[cbCode] = rows.map(row => {
+                        const obj = {};
+                        cols.forEach((col, i) => obj[col] = row[i]);
+                        return {
+                            date: obj.date,
+                            close: parseFloat(obj.close) || 0,
+                            volume: parseFloat(obj.volume) || 0
+                        };
+                    });
+                }
+                db.close();
+            }
+        } catch (e) {
+            console.warn('CB_price 資料載入失敗:', e);
+        }
+    }
+    // 從 kanbanData 取得資料（備援）
+    let priceData = window.cbPriceData?.data?.[cbCode] || [];
+    if (priceData.length === 0 && window.kanbanData?.data?.[cbCode]) {
+        priceData = window.kanbanData.data[cbCode].map(d => ({
+            date: d.date,
+            close: d.cbPrice || 0,
+            volume: 0
+        })).filter(d => d.close > 0);
+    }
+    if (priceData.length === 0) {
+        container.innerHTML = `<div style="text-align:center; padding:40px; color:#444; background:#fff; border-radius:12px;">
+            <div style="font-size:48px; margin-bottom:15px;">📭</div>
+            <div style="font-size:16px;">找不到 <strong>${cbCode}</strong> 的CB價格走勢資料</div>
+        </div>`;
+        return;
+    }
+    // 根據期間篩選
+    const filteredData = filterDataByPeriod(priceData, period);
+    if (filteredData.length === 0) {
+        container.innerHTML = `<div style="text-align:center; padding:40px; color:#444;">無選定期間資料</div>`;
+        return;
+    }
+    const periodLabel = getPeriodLabel(period);
+    const latestData = filteredData[filteredData.length - 1];
+    const firstData = filteredData[0];
+    const cbPrice = latestData.close || 0;
+    const firstPrice = firstData.close || 0;
+    const priceChange = cbPrice - firstPrice;
+    const priceChangePct = firstPrice > 0 ? (priceChange / firstPrice * 100) : 0;
+    const changeColor = priceChange >= 0 ? '#d32f2f' : '#2e7d32';
+    const changeSign = priceChange >= 0 ? '+' : '';
+    // 繪製圖表
+    const width = 800, height = 350, padding = 60;
+    const chartWidth = width - padding * 2;
+    const chartHeight = height - padding * 2;
+    const prices = filteredData.map(d => d.close);
+    const maxPrice = Math.max(...prices);
+    const minPrice = Math.min(...prices);
+    const priceRange = maxPrice - minPrice || 1;
+    const yMin = minPrice - priceRange * 0.1;
+    const yMax = maxPrice + priceRange * 0.1;
+    const range = yMax - yMin;
+    // 生成路徑
+    const pathPoints = filteredData.map((d, i) => {
+        const x = padding + (i / (filteredData.length - 1)) * chartWidth;
+        const y = padding + chartHeight - ((d.close - yMin) / range) * chartHeight;
+        return `${i === 0 ? 'M' : 'L'}${x},${y}`;
+    }).join(' ');
+    container.innerHTML = `
+        <div style="background:#fff; padding:15px; border-radius:8px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <div style="font-weight:bold; color:#7b1fa2; font-size:16px;">
+                    💰 ${cbCode} CB價格走勢 <span style="font-size:14px; color:#444; font-weight:normal;">(${periodLabel})</span>
+                </div>
+                <div style="font-size:14px; padding:4px 10px; border-radius:12px; background:${priceChange >= 0 ? '#ffebee' : '#e8f5e9'}; color:${changeColor};">
+                    ${changeSign}${priceChange.toFixed(2)}元 (${changeSign}${priceChangePct.toFixed(2)}%)
+                </div>
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-bottom:15px;">
+                <div style="background:#f3e5f5; padding:10px; border-radius:6px; text-align:center;">
+                    <div style="font-size:13px; color:#444;">最新CB價</div>
+                    <div style="font-size:18px; font-weight:bold; color:#7b1fa2;">${cbPrice.toFixed(2)}</div>
+                </div>
+                <div style="background:#e3f2fd; padding:10px; border-radius:6px; text-align:center;">
+                    <div style="font-size:13px; color:#444;">期間最高</div>
+                    <div style="font-size:16px; font-weight:bold; color:#d32f2f;">${maxPrice.toFixed(2)}</div>
+                </div>
+                <div style="background:#e8f5e9; padding:10px; border-radius:6px; text-align:center;">
+                    <div style="font-size:13px; color:#444;">期間最低</div>
+                    <div style="font-size:16px; font-weight:bold; color:#2e7d32;">${minPrice.toFixed(2)}</div>
+                </div>
+            </div>
+            <div style="background:white; padding:15px; border-radius:10px; border:1px solid #e0e0e0;">
+                <svg width="100%" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet">
+                    <rect x="${padding}" y="${padding}" width="${chartWidth}" height="${chartHeight}" fill="#faf5ff" stroke="#e9d5ff" rx="4"/>
+                    ${[0, 0.25, 0.5, 0.75, 1].map(ratio => {
+                        const y = padding + chartHeight * (1 - ratio);
+                        const val = (yMin + range * ratio).toFixed(1);
+                        return `<line x1="${padding}" y1="${y}" x2="${width - padding}" y2="${y}" stroke="#f3e8ff" stroke-dasharray="4,4"/>
+                                <text x="${padding - 8}" y="${y + 4}" text-anchor="end" font-size="12" fill="#6c757d">${val}</text>`;
+                    }).join('')}
+                    <path d="${pathPoints}" fill="none" stroke="#9c27b0" stroke-width="2.5"/>
+                    <circle cx="${padding}" cy="${padding + chartHeight - ((firstPrice - yMin) / range) * chartHeight}" r="5" fill="#1976d2" stroke="white" stroke-width="2"/>
+                    <circle cx="${width - padding}" cy="${padding + chartHeight - ((cbPrice - yMin) / range) * chartHeight}" r="5" fill="#9c27b0" stroke="white" stroke-width="2"/>
+                    <text x="18" y="${height / 2}" text-anchor="middle" font-size="13" fill="#7b1fa2" font-weight="500" transform="rotate(-90, 18, ${height / 2})">CB價格(元)</text>
+                </svg>
+                <div style="display:flex; justify-content:space-between; font-size:12px; color:#6c757d; margin-top:8px; padding:0 ${padding}px;">
+                    <span>${filteredData[0]?.date || ''}</span>
+                    <span style="color:#7b1fa2;">共 ${filteredData.length} 筆資料</span>
+                    <span>${filteredData[filteredData.length - 1]?.date || ''}</span>
+                </div>
+            </div>
+        </div>
+    `;
+}
+/**
  * 從當前資料渲染 CBAS 分析（不依賴 kanban 歷史資料）
  */
 function renderCBASFromCurrentData(cbCode, container) {
@@ -26122,23 +26257,23 @@ function renderCBPriceChart(cbCode, data, container, period) {
                     ${statusTag}
                 </div>
             </div>
-            <!-- 數據摘要 -->
+            <!-- 數據摘要 - v3.99S修正：理論價值用公式計算 -->
             <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-bottom:15px;">
                 <div style="background:#e8f5e9; padding:10px; border-radius:6px; text-align:center;">
-                    <div style="font-size:16px; color:#444;">理論價值</div>
-                    <div style="font-size:16px; font-weight:bold; color:#2e7d32;">${hasConvValue ? convValue.toFixed(2) : '-'}</div>
+                    <div style="font-size:13px; color:#444;">理論價值</div>
+                    <div style="font-size:16px; font-weight:bold; color:#2e7d32;">${theoryValue > 0 ? theoryValue.toFixed(2) : (convValue > 0 ? convValue.toFixed(2) : '-')}</div>
                 </div>
                 <div style="background:#f3e5f5; padding:10px; border-radius:6px; text-align:center;">
-                    <div style="font-size:16px; color:#444;">CB收盤價</div>
+                    <div style="font-size:13px; color:#444;">CB收盤價</div>
                     <div style="font-size:16px; font-weight:bold; color:#7b1fa2;">${cbPrice.toFixed(2)}</div>
                 </div>
                 <div style="background:#fff3e0; padding:10px; border-radius:6px; text-align:center;">
-                    <div style="font-size:16px; color:#444;">溢價率</div>
+                    <div style="font-size:13px; color:#444;">溢價率</div>
                     <div style="font-size:16px; font-weight:bold; color:#e65100;">${premium.toFixed(2)}%</div>
                 </div>
                 <div style="background:#e3f2fd; padding:10px; border-radius:6px; text-align:center;">
-                    <div style="font-size:16px; color:#444;">理論價值</div>
-                    <div style="font-size:16px; font-weight:bold; color:#1976d2;">${theoryValue > 0 ? theoryValue.toFixed(2) : '-'}</div>
+                    <div style="font-size:13px; color:#444;">轉換價格</div>
+                    <div style="font-size:16px; font-weight:bold; color:#1976d2;">${convPrice > 0 ? convPrice.toFixed(2) : '-'}</div>
                 </div>
             </div>
             <!-- 圖表區域 - SVG版本 -->
@@ -26289,31 +26424,59 @@ function renderBalanceChart(cbCode, data, container, period) {
             stockCapital = parseFloat(cbInfo['股本大小'] || cbInfo['股本'] || cbInfo['股本(億)'] || cbInfo['股本(億元)'] || 0);
         }
     }
-    console.log(`📊 ${cbCode} 股本資料: ${stockCapital} 億`);
+    console.log(`📊 ${cbCode} 股本資料: ${stockCapital} 億, convPrice: ${convPrice}`);
+    // v3.99S 修正：判斷 balance 的單位並正確轉換
+    // balance 可能是：元、萬元、億元、或張數
+    // 標準：CB張數 = 發行金額 / 100000（每張面額10萬元）
+    let balanceUnit = 1; // 預設假設是億元
+    const rawBalance = latestData.balance || 0;
+    // 根據數值大小判斷單位
+    if (rawBalance > 100000000) {
+        // 很大的數字，可能是元
+        balanceUnit = 100000000; // 轉為億元需除以1億
+    } else if (rawBalance > 100000) {
+        // 中等數字，可能是萬元
+        balanceUnit = 10000; // 轉為億元需除以1萬
+    } else if (rawBalance > 1000) {
+        // 可能是億元或已經是張數
+        balanceUnit = 1;
+    }
     // 計算張數資料（每張CB面額10萬元）
     // CB張數 = 餘額(億) × 1億 / 10萬 = 餘額(億) × 1000
-    // 約當股票張數 = CB張數 × (10萬/轉換價) / 1000 = 餘額(億) × 1000 × 100000 / 轉換價 / 1000 = 餘額 × 100000 / 轉換價
-    const cbShares = data.map(d => d.balance * 1000); // CB張數
-    const stockShares = data.map(d => convPrice > 0 ? d.balance * 100000 / convPrice : 0); // 約當股票張數
-    const latestCBShares = latestData.balance ? latestData.balance * 1000 : 0;
-    const latestStockShares = convPrice > 0 ? latestData.balance * 100000 / convPrice : 0;
-    const originalCBShares = latestData.originalBalance ? latestData.originalBalance * 1000 : 0;
-    const originalStockShares = convPrice > 0 ? latestData.originalBalance * 100000 / convPrice : 0;
+    const normalizedBalance = balanceUnit > 1 ? rawBalance / balanceUnit : rawBalance;
+    const cbShares = data.map(d => {
+        const bal = d.balance || 0;
+        const normBal = balanceUnit > 1 ? bal / balanceUnit : bal;
+        return normBal * 1000; // 億元轉張數
+    });
+    // 約當股票張數 = CB張數 × (10萬/轉換價) / 1000
+    const stockShares = data.map(d => {
+        const bal = d.balance || 0;
+        const normBal = balanceUnit > 1 ? bal / balanceUnit : bal;
+        return convPrice > 0 ? normBal * 100000 / convPrice : 0;
+    });
+    const latestCBShares = normalizedBalance * 1000;
+    const latestStockShares = convPrice > 0 ? normalizedBalance * 100000 / convPrice : 0;
+    // 原始發行額
+    const originalBalanceRaw = latestData.originalBalance || latestData.originalIssue || rawBalance;
+    const originalBalance = balanceUnit > 1 ? originalBalanceRaw / balanceUnit : originalBalanceRaw;
+    const originalCBShares = originalBalance * 1000;
+    const originalStockShares = convPrice > 0 ? originalBalance * 100000 / convPrice : 0;
     // 已轉換張數
-    const convertedCBShares = originalCBShares - latestCBShares;
-    const convertedStockShares = originalStockShares - latestStockShares;
+    const convertedCBShares = Math.max(0, originalCBShares - latestCBShares);
+    const convertedStockShares = Math.max(0, originalStockShares - latestStockShares);
     // 佔股本比（股本以億元為單位，股票面額10元，1億元=1000萬股=1萬張）
     const stockCapitalShares = stockCapital * 10000; // 股本張數
     const stockCapitalPct = stockCapitalShares > 0 ? (latestStockShares / stockCapitalShares * 100) : 0;
     // 轉換比率（每張CB可換幾股）
     const convRatio = convPrice > 0 ? (100000 / convPrice) : 0;
-    // 計算CBAS權利金（簡化計算：溢價部分就是權利金概念）
+    // 計算已轉換比例
+    const convertedPct = originalCBShares > 0 ? (convertedCBShares / originalCBShares * 100) : 0;
+    const remainRatio = 100 - convertedPct;
+    // CB價格和溢價
     const cbPrice = latestData.cbPrice || 100;
     const premium = latestData.premium || 0;
-    const premiumCost = cbPrice > 100 ? (cbPrice - 100) * 1000 : 0; // 溢價部分的成本
-    const totalCost = cbPrice * 1000; // 總成本
-    const remainRatio = latestData.remainRatio || 100;
-    const convertedPct = 100 - remainRatio;
+    console.log(`📊 ${cbCode} 餘額計算: rawBalance=${rawBalance}, balanceUnit=${balanceUnit}, normalizedBalance=${normalizedBalance}, cbShares=${latestCBShares}`);
     // 動態分析判斷
     let statusTag, statusBg, statusColor;
     let analysisContent, conclusionContent;

@@ -2330,9 +2330,9 @@ button:active, .clickable:active {
             <label style="color: #e65100;">選擇案件，自動帶入所有條件</label>
             <select id="quickSelect" style="border: 2px solid #ffc107; font-weight: bold; font-size: 16px; padding: 10px; width: 100%;">
                 <option value="">-- 請選擇案件 --</option>
-                <optgroup label="🔥 即將競拍" id="upcomingAuctionGroup" style="background:#fff3e0; color:#e65100;"></optgroup>
-                <optgroup label="⏳ 承銷中-競拍" id="pendingAuctionGroup" style="background:#fff8e1;"></optgroup>
-                <optgroup label="✅ 近期完成競拍" id="recentAuctionGroup" style="background:#fafafa;"></optgroup>
+                <optgroup label="🔥 即將競拍（日期未到）" id="upcomingAuctionGroup" style="background:#ff9800; color:white; font-weight:bold;"></optgroup>
+                <optgroup label="⏳ 承銷中-競拍（時程未定）" id="pendingAuctionGroup" style="background:#fff8e1; color:#795548;"></optgroup>
+                <optgroup label="✅ 近期完成競拍" id="recentAuctionGroup" style="background:#e0e0e0; color:#555;"></optgroup>
             </select>
         </div>
         <div id="quickSelectInfo" style="display:none; background:#fff; padding:10px; border-radius:6px; margin-top:8px; font-size:16px; border-left:4px solid #ff9800;"></div>
@@ -3407,6 +3407,7 @@ button:active, .clickable:active {
         <button type="button" class="basic-info-tab" onclick="showBasicInfoTab('quote', event)">📊 最新行情</button>
         <button type="button" class="basic-info-tab" onclick="showBasicInfoTab('balance', event)">📈 餘額變化</button>
         <button type="button" class="basic-info-tab" onclick="showBasicInfoTab('history', event)" style="background:#1565c0; color:white;">📜 歷史發行</button>
+        <button type="button" class="basic-info-tab" onclick="showBasicInfoTab('dna', event)" style="background:#7b1fa2; color:white;">🧬 發債DNA</button>
     </div>
     <div id="basicInfoContent" style="min-height:200px; padding:15px; background:#fafafa; border-radius:0 0 8px 8px; border:1px solid #e0e0e0; border-top:none;">
         <div style="text-align:center; color:#444; padding:40px;">
@@ -16438,6 +16439,10 @@ function initQuickSelect() {
         return { hasSchedule: true, isCompleted: false };
     }
     // 1. 處理06工作表案例（pendingCases）- 分為即將進行、承銷中、近期完成
+    // v3.99T: 先收集並排序，即將競拍放最前面
+    const upcomingItems = [];
+    const pendingItems = [];
+    const completedItems = [];
     pendingCases.forEach((c, idx) => {
         // 跳過已掛牌的
         if (c.status === 'listed') return;
@@ -16468,8 +16473,7 @@ function initQuickSelect() {
         // v3.97 修正：使用includes判斷競拍/詢圈
         const isAuction = c.auctionType && (c.auctionType.includes('競拍') || c.auctionType === '競拍');
         const isInquiry = c.auctionType && (c.auctionType.includes('詢圈') || c.auctionType === '詢圈');
-        // v3.99Q: 極簡選項文字，確保手機單行
-        // 格式：名稱 | 底標XXX | 擔
+        // v3.99T: 極簡選項文字，加入日期
         const shortGuarantee = c.guarantee === '無擔保' ? '無' : (c.guarantee === '有擔保' ? '有' : '');
         if (isAuction) {
             // 競拍格式：名稱 | 底XXX | 擔
@@ -16477,14 +16481,18 @@ function initQuickSelect() {
             const optText = `${c.cbName} | ${shortPrice} | ${shortGuarantee}`;
             option.textContent = optText;
             if (isCompleted) {
-                option.style.cssText = 'background:#fafafa; color:#555;';
-                if (recentAuctionGroup) recentAuctionGroup.appendChild(option);
+                // v3.99T: 近期完成 - 灰色背景
+                option.style.cssText = 'background-color:#e0e0e0 !important; color:#555 !important;';
+                completedItems.push({ option, endDate: scheduleStatus.endDate });
             } else if (hasSchedule) {
-                option.style.cssText = 'background:#fff3e0; color:#e65100; font-weight:600;';
-                if (upcomingAuctionGroup) upcomingAuctionGroup.appendChild(option);
+                // v3.99T: 即將競拍 - 橘色醒目，加上火焰符號
+                option.textContent = `🔥 ${optText}`;
+                option.style.cssText = 'background-color:#ff9800 !important; color:#fff !important; font-weight:bold !important;';
+                upcomingItems.push({ option, endDate: scheduleStatus.endDate });
             } else {
-                option.style.cssText = 'background:#fff8e1;';
-                if (pendingAuctionGroup) pendingAuctionGroup.appendChild(option);
+                // v3.99T: 承銷中 - 淡黃色
+                option.style.cssText = 'background-color:#fff8e1 !important; color:#795548 !important;';
+                pendingItems.push({ option });
             }
         } else if (isInquiry) {
             // 詢圈不顯示（已移除optgroup）
@@ -16493,9 +16501,21 @@ function initQuickSelect() {
             const shortPrice = priceLabel.replace('底標', '');
             const optText = `${c.cbName} | ${shortPrice} | ${shortGuarantee}`;
             option.textContent = optText;
-            option.style.cssText = 'background:#fff8e1;';
-            if (pendingAuctionGroup) pendingAuctionGroup.appendChild(option);
+            option.style.cssText = 'background-color:#fff8e1 !important; color:#795548 !important;';
+            pendingItems.push({ option });
         }
+    });
+    // v3.99T: 排序後加入群組（即將競拍按日期升序，近期完成按日期降序）
+    upcomingItems.sort((a, b) => (a.endDate || 0) - (b.endDate || 0));
+    completedItems.sort((a, b) => (b.endDate || 0) - (a.endDate || 0));
+    upcomingItems.forEach(item => {
+        if (upcomingAuctionGroup) upcomingAuctionGroup.appendChild(item.option);
+    });
+    pendingItems.forEach(item => {
+        if (pendingAuctionGroup) pendingAuctionGroup.appendChild(item.option);
+    });
+    completedItems.forEach(item => {
+        if (recentAuctionGroup) recentAuctionGroup.appendChild(item.option);
     });
     // 監聯選擇事件
     select.addEventListener('change', handleQuickSelect);
@@ -20834,6 +20854,10 @@ function showBasicInfoTab(tabName, event) {
                 console.log('[showBasicInfoTab] 執行 renderBasicInfoHistory');
                 renderBasicInfoHistory(cbCode, content);
                 break;
+            case 'dna':
+                console.log('[showBasicInfoTab] 執行 renderDNAAnalysis');
+                renderDNAAnalysis(cbCode, content);
+                break;
             default:
                 content.innerHTML = `<div style="color:#444;">未知標籤：${tabName}</div>`;
         }
@@ -22861,6 +22885,306 @@ function renderBasicInfoHistory(cbCode, container) {
             </table>
         </div>
     `;
+    container.innerHTML = html;
+}
+/**
+ * v3.99T 新增：發債DNA解碼分析
+ * 根據發行條件從307檔競拍案例中篩選相似條件進行比對分析
+ */
+function renderDNAAnalysis(cbCode, container) {
+    console.log('[renderDNAAnalysis] cbCode:', cbCode);
+    // 從CB代號取得股票代號
+    const stockCode = cbCode.replace(/[一二三四五六七八九十]$/, '').substring(0, cbCode.length > 5 ? 5 : 4);
+    // 取得當前CB的發行條件
+    let currentCB = null;
+    // 從 auctionDataCache 找
+    if (window.auctionDataCache && Array.isArray(window.auctionDataCache)) {
+        currentCB = window.auctionDataCache.find(cb => 
+            cb['CB代號'] === cbCode || cb['代號'] === cbCode
+        );
+    }
+    // 從 sheet01Data 找
+    if (!currentCB && window.sheet01Data && Array.isArray(window.sheet01Data)) {
+        const sheet01Row = window.sheet01Data.find(r => String(r['CB代號']).trim() === cbCode);
+        if (sheet01Row) {
+            currentCB = {
+                'CB代號': sheet01Row['CB代號'],
+                '名稱': sheet01Row['名稱'],
+                '股票代號': sheet01Row['股票代號'],
+                '擔保': sheet01Row['擔保'],
+                '發行規模': sheet01Row['發行規模'],
+                '發行年期': sheet01Row['發行年期'],
+                '產業分類': sheet01Row['產業分類'],
+                '發行券商': sheet01Row['發行券商'],
+                '轉換價格': sheet01Row['轉換價格']
+            };
+        }
+    }
+    // 取得所有競拍案例（307檔）
+    const allAuctionCases = window.auctionDataCache || [];
+    if (allAuctionCases.length === 0) {
+        container.innerHTML = `
+            <div style="text-align:center; padding:40px; color:#555;">
+                <div style="font-size:48px; margin-bottom:15px;">📭</div>
+                <div>競拍資料庫尚未載入，請稍後再試</div>
+            </div>
+        `;
+        return;
+    }
+    // 解析當前CB條件
+    const getGuarantee = (cb) => {
+        const g = cb?.['擔保'] || '';
+        return g.includes('有') ? '有擔保' : '無擔保';
+    };
+    const getIssueSize = (cb) => parseFloat(cb?.['發行規模'] || cb?.['發行張數'] || 0);
+    const getIssueSizeRange = (size) => {
+        if (size < 2) return '小於2億';
+        if (size < 5) return '2~5億';
+        if (size < 10) return '5~10億';
+        if (size < 15) return '10~15億';
+        return '15億以上';
+    };
+    const getIndustry = (cb) => cb?.['產業分類'] || cb?.['產業'] || '';
+    const getBroker = (cb) => cb?.['發行券商'] || cb?.['券商'] || '';
+    const getYears = (cb) => parseFloat(cb?.['發行年期'] || cb?.['年期'] || 0);
+    // 當前CB條件
+    const currentGuarantee = currentCB ? getGuarantee(currentCB) : null;
+    const currentSize = currentCB ? getIssueSize(currentCB) : null;
+    const currentSizeRange = currentSize ? getIssueSizeRange(currentSize) : null;
+    const currentIndustry = currentCB ? getIndustry(currentCB) : null;
+    const currentBroker = currentCB ? getBroker(currentCB) : null;
+    const currentYears = currentCB ? getYears(currentCB) : null;
+    const cbName = currentCB?.['名稱'] || currentCB?.['CB名稱'] || cbCode;
+    // 篩選函數
+    const filterByCondition = (cases, conditionFn) => {
+        return cases.filter(c => {
+            const high = parseFloat(c['掛牌最高']) || 0;
+            return high > 0 && conditionFn(c);
+        });
+    };
+    // 計算統計
+    const calcStats = (cases) => {
+        if (cases.length === 0) return null;
+        const highs = cases.map(c => parseFloat(c['掛牌最高']) || 0).filter(v => v > 0);
+        const lows = cases.map(c => parseFloat(c['掛牌最低']) || 0).filter(v => v > 0);
+        const amps = cases.map(c => {
+            const high = parseFloat(c['掛牌最高']) || 0;
+            const low = parseFloat(c['掛牌最低']) || 0;
+            return low > 0 ? ((high - low) / low * 100) : 0;
+        }).filter(v => v > 0);
+        const avgHigh = highs.length > 0 ? highs.reduce((a, b) => a + b, 0) / highs.length : 0;
+        const avgLow = lows.length > 0 ? lows.reduce((a, b) => a + b, 0) / lows.length : 0;
+        const avgAmp = amps.length > 0 ? amps.reduce((a, b) => a + b, 0) / amps.length : 0;
+        const winRate110 = highs.filter(h => h >= 110).length / highs.length * 100;
+        const winRate120 = highs.filter(h => h >= 120).length / highs.length * 100;
+        const winRate150 = highs.filter(h => h >= 150).length / highs.length * 100;
+        return {
+            count: cases.length,
+            avgHigh: avgHigh.toFixed(1),
+            avgLow: avgLow.toFixed(1),
+            avgAmp: avgAmp.toFixed(1),
+            winRate110: winRate110.toFixed(0),
+            winRate120: winRate120.toFixed(0),
+            winRate150: winRate150.toFixed(0),
+            maxHigh: Math.max(...highs).toFixed(1),
+            minHigh: Math.min(...highs).toFixed(1)
+        };
+    };
+    // 各條件篩選
+    const guaranteedCases = filterByCondition(allAuctionCases, c => getGuarantee(c) === '有擔保');
+    const unguaranteedCases = filterByCondition(allAuctionCases, c => getGuarantee(c) === '無擔保');
+    const sameGuaranteeCases = currentGuarantee ? filterByCondition(allAuctionCases, c => getGuarantee(c) === currentGuarantee) : [];
+    const sameSizeRangeCases = currentSizeRange ? filterByCondition(allAuctionCases, c => getIssueSizeRange(getIssueSize(c)) === currentSizeRange) : [];
+    const sameIndustryCases = currentIndustry ? filterByCondition(allAuctionCases, c => getIndustry(c) === currentIndustry) : [];
+    const sameBrokerCases = currentBroker ? filterByCondition(allAuctionCases, c => getBroker(c) === currentBroker) : [];
+    // 組合條件：同擔保+同規模區間
+    const combinedCases = currentGuarantee && currentSizeRange ? 
+        filterByCondition(allAuctionCases, c => 
+            getGuarantee(c) === currentGuarantee && 
+            getIssueSizeRange(getIssueSize(c)) === currentSizeRange
+        ) : [];
+    // 組合條件：同擔保+同產業
+    const combined2Cases = currentGuarantee && currentIndustry ? 
+        filterByCondition(allAuctionCases, c => 
+            getGuarantee(c) === currentGuarantee && 
+            getIndustry(c) === currentIndustry
+        ) : [];
+    // 全部案例統計
+    const allStats = calcStats(filterByCondition(allAuctionCases, () => true));
+    const guaranteedStats = calcStats(guaranteedCases);
+    const unguaranteedStats = calcStats(unguaranteedCases);
+    const sameGuaranteeStats = calcStats(sameGuaranteeCases);
+    const sameSizeRangeStats = calcStats(sameSizeRangeCases);
+    const sameIndustryStats = calcStats(sameIndustryCases);
+    const sameBrokerStats = calcStats(sameBrokerCases);
+    const combinedStats = calcStats(combinedCases);
+    const combined2Stats = calcStats(combined2Cases);
+    // 生成統計卡片HTML
+    const genStatsCard = (title, stats, highlight = false) => {
+        if (!stats || stats.count === 0) {
+            return `<div style="flex:1; min-width:140px; background:#f5f5f5; padding:12px; border-radius:8px; text-align:center;">
+                <div style="font-size:16px; font-weight:bold; color:#555; margin-bottom:8px;">${title}</div>
+                <div style="color:#999;">無資料</div>
+            </div>`;
+        }
+        const bgColor = highlight ? 'linear-gradient(135deg, #fff3e0, #ffe0b2)' : '#fff';
+        const borderColor = highlight ? '#ff9800' : '#e0e0e0';
+        return `
+            <div style="flex:1; min-width:140px; background:${bgColor}; padding:12px; border-radius:8px; border:2px solid ${borderColor}; text-align:center;">
+                <div style="font-size:16px; font-weight:bold; color:#333; margin-bottom:8px;">${title}</div>
+                <div style="font-size:20px; font-weight:bold; color:#7b1fa2; margin-bottom:4px;">${stats.count} 檔</div>
+                <div style="font-size:16px; color:#555; margin-bottom:4px;">均高 <span style="color:#c62828; font-weight:bold;">${stats.avgHigh}</span></div>
+                <div style="font-size:16px; color:#555; margin-bottom:4px;">均振幅 <span style="color:#e65100; font-weight:bold;">${stats.avgAmp}%</span></div>
+                <div style="font-size:16px; color:#2e7d32;">勝率 ${stats.winRate110}%</div>
+            </div>
+        `;
+    };
+    // 生成詳細表格
+    const genDetailTable = (cases, title, limit = 10) => {
+        if (!cases || cases.length === 0) return '';
+        // 按最高價排序
+        const sortedCases = [...cases].sort((a, b) => 
+            (parseFloat(b['掛牌最高']) || 0) - (parseFloat(a['掛牌最高']) || 0)
+        );
+        const topCases = sortedCases.slice(0, limit);
+        let html = `
+            <div style="margin-top:15px;">
+                <div style="font-size:16px; font-weight:bold; color:#1565c0; margin-bottom:8px;">📊 ${title}（前${limit}名）</div>
+                <div style="overflow-x:auto;">
+                    <table style="width:100%; border-collapse:collapse; font-size:16px;">
+                        <thead>
+                            <tr style="background:#7b1fa2; color:white;">
+                                <th style="padding:8px 6px; text-align:center;">CB代號</th>
+                                <th style="padding:8px 6px; text-align:center;">名稱</th>
+                                <th style="padding:8px 6px; text-align:center;">擔保</th>
+                                <th style="padding:8px 6px; text-align:center;">規模</th>
+                                <th style="padding:8px 6px; text-align:center; background:#c62828;">最高</th>
+                                <th style="padding:8px 6px; text-align:center; background:#2e7d32;">最低</th>
+                                <th style="padding:8px 6px; text-align:center;">振幅</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+        `;
+        topCases.forEach((c, idx) => {
+            const high = parseFloat(c['掛牌最高']) || 0;
+            const low = parseFloat(c['掛牌最低']) || 0;
+            const amp = low > 0 ? ((high - low) / low * 100).toFixed(1) : 0;
+            const size = parseFloat(c['發行規模'] || c['發行張數'] || 0);
+            const guarantee = getGuarantee(c);
+            const highColor = high >= 150 ? '#c62828' : (high >= 120 ? '#e65100' : '#333');
+            const rowBg = idx % 2 === 0 ? '#f5f5f5' : 'white';
+            html += `
+                <tr style="background:${rowBg};">
+                    <td style="padding:6px; text-align:center; color:#1565c0; font-weight:bold;">${c['CB代號'] || c['代號'] || '-'}</td>
+                    <td style="padding:6px; text-align:center;">${c['名稱'] || c['CB名稱'] || '-'}</td>
+                    <td style="padding:6px; text-align:center;">${guarantee === '有擔保' ? '<span style="color:#2e7d32;">有</span>' : '<span style="color:#c62828;">無</span>'}</td>
+                    <td style="padding:6px; text-align:center;">${size > 0 ? size.toFixed(1) + '億' : '-'}</td>
+                    <td style="padding:6px; text-align:center; font-weight:bold; color:${highColor}; background:#ffebee;">${high.toFixed(1)}</td>
+                    <td style="padding:6px; text-align:center; background:#e8f5e9;">${low.toFixed(1)}</td>
+                    <td style="padding:6px; text-align:center; font-weight:bold; color:#e65100;">${amp}%</td>
+                </tr>
+            `;
+        });
+        html += `</tbody></table></div></div>`;
+        return html;
+    };
+    // 組裝HTML
+    let html = `
+        <div style="background:linear-gradient(135deg, #7b1fa2 0%, #9c27b0 100%); color:white; padding:15px 18px; border-radius:10px 10px 0 0; margin:-15px -15px 15px -15px;">
+            <div style="font-size:17px; font-weight:bold;">🧬 發債DNA解碼</div>
+            <div style="font-size:16px; opacity:0.9; margin-top:5px;">條件比對分析 | 資料庫共 <strong>${allAuctionCases.length}</strong> 檔競拍案例</div>
+        </div>
+    `;
+    // 當前CB條件摘要
+    if (currentCB) {
+        html += `
+            <div style="background:#f3e5f5; padding:12px 15px; border-radius:8px; margin-bottom:15px; border-left:4px solid #7b1fa2;">
+                <div style="font-size:16px; font-weight:bold; color:#7b1fa2; margin-bottom:8px;">📌 ${cbName} 發行條件</div>
+                <div style="display:flex; flex-wrap:wrap; gap:10px; font-size:16px; color:#555;">
+                    <span style="background:${currentGuarantee === '有擔保' ? '#e8f5e9' : '#ffebee'}; padding:4px 10px; border-radius:4px;">
+                        ${currentGuarantee === '有擔保' ? '✅ 有擔保' : '⚠️ 無擔保'}
+                    </span>
+                    ${currentSize ? `<span style="background:#e3f2fd; padding:4px 10px; border-radius:4px;">💰 ${currentSize.toFixed(1)}億 (${currentSizeRange})</span>` : ''}
+                    ${currentIndustry ? `<span style="background:#fff3e0; padding:4px 10px; border-radius:4px;">🏭 ${currentIndustry}</span>` : ''}
+                    ${currentBroker ? `<span style="background:#fce4ec; padding:4px 10px; border-radius:4px;">🏦 ${currentBroker}</span>` : ''}
+                    ${currentYears ? `<span style="background:#f5f5f5; padding:4px 10px; border-radius:4px;">📅 ${currentYears}年</span>` : ''}
+                </div>
+            </div>
+        `;
+    }
+    // 全體 vs 有擔保 vs 無擔保 比較
+    html += `
+        <div style="margin-bottom:20px;">
+            <div style="font-size:16px; font-weight:bold; color:#333; margin-bottom:10px;">📊 擔保類型比較</div>
+            <div style="display:flex; flex-wrap:wrap; gap:10px;">
+                ${genStatsCard('全部案例', allStats)}
+                ${genStatsCard('有擔保', guaranteedStats)}
+                ${genStatsCard('無擔保', unguaranteedStats)}
+            </div>
+        </div>
+    `;
+    // 相似條件分析
+    if (currentCB) {
+        html += `
+            <div style="margin-bottom:20px;">
+                <div style="font-size:16px; font-weight:bold; color:#333; margin-bottom:10px;">🎯 相似條件案例</div>
+                <div style="display:flex; flex-wrap:wrap; gap:10px;">
+                    ${genStatsCard(`同擔保(${currentGuarantee})`, sameGuaranteeStats, true)}
+                    ${currentSizeRange ? genStatsCard(`同規模(${currentSizeRange})`, sameSizeRangeStats, true) : ''}
+                    ${currentIndustry ? genStatsCard(`同產業(${currentIndustry.substring(0,4)})`, sameIndustryStats, true) : ''}
+                </div>
+            </div>
+        `;
+        // 組合條件
+        if (combinedStats && combinedStats.count > 0) {
+            html += `
+                <div style="margin-bottom:20px;">
+                    <div style="font-size:16px; font-weight:bold; color:#333; margin-bottom:10px;">🔗 組合條件分析</div>
+                    <div style="display:flex; flex-wrap:wrap; gap:10px;">
+                        ${genStatsCard(`${currentGuarantee}+${currentSizeRange}`, combinedStats, true)}
+                        ${combined2Stats && combined2Stats.count > 0 ? genStatsCard(`${currentGuarantee}+${currentIndustry?.substring(0,4) || ''}`, combined2Stats, true) : ''}
+                    </div>
+                </div>
+            `;
+        }
+        // 勝率說明
+        html += `
+            <div style="background:#e8f5e9; padding:12px 15px; border-radius:8px; margin-bottom:15px; border-left:4px solid #4caf50;">
+                <div style="font-size:16px; font-weight:bold; color:#2e7d32; margin-bottom:6px;">📈 勝率說明</div>
+                <div style="font-size:16px; color:#555;">
+                    勝率 = 掛牌最高價 ≥ 110元 的案例比例<br>
+                    <span style="color:#888;">勝率越高，代表該條件組合歷史表現越好</span>
+                </div>
+            </div>
+        `;
+        // 相似條件案例列表
+        const displayCases = combinedCases.length >= 5 ? combinedCases : sameGuaranteeCases;
+        const displayTitle = combinedCases.length >= 5 ? `${currentGuarantee}+${currentSizeRange} 案例` : `${currentGuarantee} 案例`;
+        html += genDetailTable(displayCases, displayTitle, 10);
+    } else {
+        html += `
+            <div style="background:#fff3e0; padding:15px; border-radius:8px; text-align:center;">
+                <div style="font-size:16px; color:#e65100;">⚠️ 無法取得 ${cbCode} 的發行條件資料</div>
+                <div style="font-size:16px; color:#795548; margin-top:8px;">請確認CB代號是否正確，或該CB資料尚未收錄</div>
+            </div>
+        `;
+        // 顯示全部案例前10名
+        html += genDetailTable(filterByCondition(allAuctionCases, () => true), '全部競拍案例', 10);
+    }
+    // 券商分析（如果有）
+    if (currentBroker && sameBrokerStats && sameBrokerStats.count >= 3) {
+        html += `
+            <div style="margin-top:20px; padding:12px 15px; background:#fce4ec; border-radius:8px; border-left:4px solid #e91e63;">
+                <div style="font-size:16px; font-weight:bold; color:#c2185b; margin-bottom:8px;">🏦 ${currentBroker} 承銷歷史</div>
+                <div style="font-size:16px; color:#555;">
+                    共承銷 <strong>${sameBrokerStats.count}</strong> 檔競拍 | 
+                    平均最高 <strong style="color:#c62828;">${sameBrokerStats.avgHigh}</strong> | 
+                    平均振幅 <strong style="color:#e65100;">${sameBrokerStats.avgAmp}%</strong> | 
+                    勝率 <strong style="color:#2e7d32;">${sameBrokerStats.winRate110}%</strong>
+                </div>
+            </div>
+        `;
+    }
     container.innerHTML = html;
 }
 /**

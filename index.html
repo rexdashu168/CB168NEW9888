@@ -22614,34 +22614,41 @@ function renderBasicInfoHistory(cbCode, container) {
         });
     }
     // 從 basicData (01_basic.csv) 搜尋補充
+    // v3.99T: 修正欄位名稱對應
     if (window.sheet01Data && Array.isArray(window.sheet01Data)) {
         window.sheet01Data.forEach(cb => {
             const cbStockCode = (cb['股票代號'] || '').toString().trim();
             if (cbStockCode === stockCode) {
                 // 檢查是否已存在
-                const existIdx = allCBs.findIndex(x => x.cbCode === cb['CB代號']);
+                const cbCodeVal = cb['CB代號'] || '';
+                const existIdx = allCBs.findIndex(x => x.cbCode === cbCodeVal);
                 if (existIdx === -1) {
                     allCBs.push({
-                        cbCode: cb['CB代號'] || '',
-                        cbName: cb['CB名稱'] || '',
+                        cbCode: cbCodeVal,
+                        cbName: cb['名稱'] || cb['CB名稱'] || '',
                         stockCode: cbStockCode,
                         stockName: cb['股票名稱'] || '',
-                        issueSize: cb['發行總額'] || '',
+                        issueSize: cb['發行規模'] || cb['發行總額'] || '',
                         guarantee: cb['擔保'] || '',
-                        years: cb['年期'] || '',
-                        convPrice: cb['轉換價格'] || '',
-                        issueType: cb['詢圈/競拍'] || '',
-                        marketHigh: '',
-                        marketLow: '',
+                        years: cb['發行年期'] || cb['年期'] || '',
+                        convPrice: cb['轉換價格'] || cb['轉換價'] || '',
+                        issueType: cb['詢圈競拍'] || cb['詢圈/競拍'] || cb['發行方式'] || '',
+                        marketHigh: cb['掛牌最高'] || '',
+                        marketLow: cb['掛牌最低'] || '',
                         amplitude: '',
                         status: cb['狀態'] || '',
                         source: 'basic'
                     });
                 } else {
                     // 補充資料
+                    if (!allCBs[existIdx].cbName) allCBs[existIdx].cbName = cb['名稱'] || cb['CB名稱'] || '';
                     if (!allCBs[existIdx].guarantee) allCBs[existIdx].guarantee = cb['擔保'] || '';
-                    if (!allCBs[existIdx].years) allCBs[existIdx].years = cb['年期'] || '';
-                    if (!allCBs[existIdx].issueType) allCBs[existIdx].issueType = cb['詢圈/競拍'] || '';
+                    if (!allCBs[existIdx].years) allCBs[existIdx].years = cb['發行年期'] || cb['年期'] || '';
+                    if (!allCBs[existIdx].issueSize) allCBs[existIdx].issueSize = cb['發行規模'] || cb['發行總額'] || '';
+                    if (!allCBs[existIdx].convPrice) allCBs[existIdx].convPrice = cb['轉換價格'] || cb['轉換價'] || '';
+                    if (!allCBs[existIdx].issueType) allCBs[existIdx].issueType = cb['詢圈競拍'] || cb['詢圈/競拍'] || '';
+                    if (!allCBs[existIdx].marketHigh) allCBs[existIdx].marketHigh = cb['掛牌最高'] || '';
+                    if (!allCBs[existIdx].marketLow) allCBs[existIdx].marketLow = cb['掛牌最低'] || '';
                 }
             }
         });
@@ -22658,6 +22665,46 @@ function renderBasicInfoHistory(cbCode, container) {
                     allCBs[existIdx].auctionAvgBid = auction.avgBidPrice;
                     allCBs[existIdx].theoreticalPrice = auction.theoreticalPrice;
                     allCBs[existIdx].issueType = '競拍';
+                }
+            }
+        });
+    }
+    // v3.99T: 從 auctionDataCache (04_auction.csv) 補充更多資料
+    if (window.auctionDataCache && Array.isArray(window.auctionDataCache)) {
+        window.auctionDataCache.forEach(auction => {
+            const auctionStockCode = (auction['股票代號'] || '').toString().trim();
+            if (auctionStockCode === stockCode) {
+                const cbCodeVal = auction['CB代號'] || '';
+                const existIdx = allCBs.findIndex(x => x.cbCode === cbCodeVal);
+                if (existIdx >= 0) {
+                    // 補充資料
+                    if (!allCBs[existIdx].cbName) allCBs[existIdx].cbName = auction['名稱'] || auction['CB名稱'] || '';
+                    if (!allCBs[existIdx].stockName) allCBs[existIdx].stockName = auction['股票名稱'] || '';
+                    if (!allCBs[existIdx].issueSize) allCBs[existIdx].issueSize = auction['發行規模'] || auction['發行張數'] || '';
+                    if (!allCBs[existIdx].guarantee) allCBs[existIdx].guarantee = auction['擔保'] || '';
+                    if (!allCBs[existIdx].years) allCBs[existIdx].years = auction['年期'] || '';
+                    if (!allCBs[existIdx].convPrice) allCBs[existIdx].convPrice = auction['轉換價格'] || auction['轉換價'] || '';
+                    if (!allCBs[existIdx].marketHigh) allCBs[existIdx].marketHigh = auction['掛牌最高'] || '';
+                    if (!allCBs[existIdx].marketLow) allCBs[existIdx].marketLow = auction['掛牌最低'] || '';
+                    allCBs[existIdx].issueType = '競拍';
+                } else {
+                    // 新增此筆資料
+                    allCBs.push({
+                        cbCode: cbCodeVal,
+                        cbName: auction['名稱'] || auction['CB名稱'] || '',
+                        stockCode: auctionStockCode,
+                        stockName: auction['股票名稱'] || '',
+                        issueSize: auction['發行規模'] || auction['發行張數'] || '',
+                        guarantee: auction['擔保'] || '',
+                        years: auction['年期'] || '',
+                        convPrice: auction['轉換價格'] || auction['轉換價'] || '',
+                        issueType: '競拍',
+                        marketHigh: auction['掛牌最高'] || '',
+                        marketLow: auction['掛牌最低'] || '',
+                        amplitude: '',
+                        status: '',
+                        source: 'auction'
+                    });
                 }
             }
         });
@@ -22687,6 +22734,14 @@ function renderBasicInfoHistory(cbCode, container) {
     allCBs.forEach(cb => {
         if (!seenCodes.has(cb.cbCode) && cb.cbCode) {
             seenCodes.add(cb.cbCode);
+            // v3.99T: 自動計算振幅（如果有掛牌最高/最低但沒有振幅）
+            if (!cb.amplitude && cb.marketHigh && cb.marketLow) {
+                const high = parseFloat(cb.marketHigh);
+                const low = parseFloat(cb.marketLow);
+                if (high > 0 && low > 0) {
+                    cb.amplitude = ((high - low) / low * 100).toFixed(1) + '%';
+                }
+            }
             uniqueCBs.push(cb);
         }
     });
@@ -22769,26 +22824,35 @@ function renderBasicInfoHistory(cbCode, container) {
             </tr>
         `;
     });
+    // v3.99T: 計算合計列
+    const totalIssueSize = uniqueCBs.reduce((sum, cb) => {
+        const size = parseFloat(cb.issueSize) || 0;
+        return sum + size;
+    }, 0);
+    const guaranteedCount = uniqueCBs.filter(cb => cb.guarantee === '有擔保' || cb.guarantee === '有').length;
+    const auctionCount = uniqueCBs.filter(cb => cb.issueType === '競拍').length;
+    const cbsWithHigh = uniqueCBs.filter(cb => cb.marketHigh && parseFloat(cb.marketHigh) > 0);
+    const cbsWithLow = uniqueCBs.filter(cb => cb.marketLow && parseFloat(cb.marketLow) > 0);
+    const avgHigh = cbsWithHigh.length > 0 ? cbsWithHigh.reduce((sum, cb) => sum + parseFloat(cb.marketHigh), 0) / cbsWithHigh.length : 0;
+    const avgLow = cbsWithLow.length > 0 ? cbsWithLow.reduce((sum, cb) => sum + parseFloat(cb.marketLow), 0) / cbsWithLow.length : 0;
+    const avgAmp = (avgHigh > 0 && avgLow > 0) ? ((avgHigh - avgLow) / avgLow * 100) : 0;
+    // 合計列
+    html += `
+                <tr style="background:#1565c0; color:white; font-weight:bold;">
+                    <td style="padding:10px 6px; text-align:center;" colspan="2">📊 合計 ${uniqueCBs.length} 檔</td>
+                    <td style="padding:10px 6px; text-align:center;">${totalIssueSize >= 1 ? totalIssueSize.toFixed(1) + '億' : (totalIssueSize * 10).toFixed(0) + '千萬'}</td>
+                    <td style="padding:10px 6px; text-align:center;">${guaranteedCount}有/${uniqueCBs.length - guaranteedCount}無</td>
+                    <td style="padding:10px 6px; text-align:center;">-</td>
+                    <td style="padding:10px 6px; text-align:center;">-</td>
+                    <td style="padding:10px 6px; text-align:center;">競${auctionCount}/詢${uniqueCBs.length - auctionCount}</td>
+                    <td style="padding:10px 6px; text-align:center; background:#c62828;">${avgHigh > 0 ? '均' + avgHigh.toFixed(1) : '-'}</td>
+                    <td style="padding:10px 6px; text-align:center; background:#2e7d32;">${avgLow > 0 ? '均' + avgLow.toFixed(1) : '-'}</td>
+                    <td style="padding:10px 6px; text-align:center;">${avgAmp > 0 ? '均' + avgAmp.toFixed(1) + '%' : '-'}</td>
+                </tr>
+    `;
     html += `
                 </tbody>
             </table>
-        </div>
-    `;
-    // 統計摘要
-    const guaranteedCount = uniqueCBs.filter(cb => cb.guarantee === '有擔保' || cb.guarantee === '有').length;
-    const auctionCount = uniqueCBs.filter(cb => cb.issueType === '競拍').length;
-    const avgHigh = uniqueCBs.filter(cb => cb.marketHigh).reduce((sum, cb) => sum + parseFloat(cb.marketHigh), 0) / uniqueCBs.filter(cb => cb.marketHigh).length || 0;
-    const avgLow = uniqueCBs.filter(cb => cb.marketLow).reduce((sum, cb) => sum + parseFloat(cb.marketLow), 0) / uniqueCBs.filter(cb => cb.marketLow).length || 0;
-    html += `
-        <div style="margin-top:15px; padding:12px 15px; background:#e3f2fd; border-radius:8px; border-left:4px solid #1565c0;">
-            <div style="font-size:16px; font-weight:bold; color:#1565c0; margin-bottom:8px;">📊 發行統計摘要</div>
-            <div style="display:flex; flex-wrap:wrap; gap:15px; font-size:16px; color:#555;">
-                <div>總發行：<strong>${uniqueCBs.length}</strong> 檔</div>
-                <div>有擔保：<strong style="color:#2e7d32;">${guaranteedCount}</strong> 檔</div>
-                <div>競拍發行：<strong style="color:#ff9800;">${auctionCount}</strong> 檔</div>
-                ${avgHigh > 0 ? `<div>平均最高價：<strong style="color:#c62828;">${avgHigh.toFixed(2)}</strong></div>` : ''}
-                ${avgLow > 0 ? `<div>平均最低價：<strong style="color:#2e7d32;">${avgLow.toFixed(2)}</strong></div>` : ''}
-            </div>
         </div>
     `;
     container.innerHTML = html;

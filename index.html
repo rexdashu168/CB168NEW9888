@@ -4,8 +4,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.99j (精簡版)</title>
-<!-- v3.99j: 移除CB智慧篩選、台股熱門交易、歷史風險提醒 -->
+<title>AI智能可轉債競拍系統 v3.99N (精簡版)</title>
+<!-- v3.99N: UI優化-代號名稱前置、Rex大叔提醒三面向分析 -->
 <!-- 
      ═══════════════════════════════════════════════════════════════
      v3.98h 新增功能（整合自 cbas_tracker 版本）
@@ -17628,19 +17628,95 @@ function displayResult(r) {
         }
     }, 100);
 
-    // Step 0: Rex大叔提醒 - v3.98a修正：加入安全檢查
-    const reminderContent = document.getElementById('reminderContent');
+    // Step 0: Rex大叔提醒 - v3.99N升級：三面向專業分析
     const step0ReminderEl = document.getElementById('step0Reminder');
     if (step0ReminderEl) {
-        if (reminderContent && reminderContent.innerHTML.trim()) {
-            step0ReminderEl.innerHTML = reminderContent.innerHTML;
+        // 準備分析數據
+        const theoP = r.theoreticalPrice || 0;
+        const floorP = r.floorPrice || 100;
+        const guarantee = r.inputData?.guarantee || '';
+        const rating = r.inputData?.rating || '';
+        const lowPrem = parseFloat(r.totalLowPremium) || 0;
+        const avgPrem = parseFloat(r.totalAvgPremium) || 0;
+        const wLowBid = parseFloat(r.weightedLowBidPrice) || 0;
+        const wAvgBid = parseFloat(r.weightedAvgBidPrice) || 0;
+        const filledDim = r.filledDimCount || 0;
+        const totalDim = r.totalDimCount || 7;
+        
+        // 計算建議價格區間
+        const premLow = theoP * (1 + lowPrem / 100);
+        const premHigh = theoP * (1 + avgPrem / 100);
+        
+        let reminderHTML = `<div style="font-size:13px; line-height:1.8;">`;
+        
+        // 1. 基礎數據分析
+        reminderHTML += `<div style="margin-bottom:12px; padding-bottom:10px; border-bottom:1px dashed #ccc;">
+            <div style="font-weight:bold; color:#1565c0; margin-bottom:6px;">📊 一、基礎數據分析</div>`;
+        
+        if (theoP >= 97.5) {
+            reminderHTML += `<div>• 理論價 <b>${theoP.toFixed(2)}元</b>，採用<b style="color:#1976d2;">溢價率分析法</b>為主</div>`;
+            reminderHTML += `<div>• 歷史溢價區間 ${lowPrem.toFixed(2)}%~${avgPrem.toFixed(2)}%，對應價格 <b>${premLow.toFixed(2)}~${premHigh.toFixed(2)}元</b></div>`;
         } else {
-            step0ReminderEl.innerHTML = `
-                <div>• 競拍投標價格應以<b>截標日13:30收盤價</b>計算的理論價為基準</div>
-                <div>• 溢價率會隨市場氛圍變動，熱門標的溢價較高</div>
-                <div>• 建議價格僅供參考，請根據自身風險承受度調整</div>
-            `;
+            reminderHTML += `<div>• 理論價 <b>${theoP.toFixed(2)}元</b>（<95元），採用<b style="color:#e65100;">得標均價分析法</b>為主</div>`;
+            reminderHTML += `<div>• 歷史得標價區間 <b>${wLowBid.toFixed(2)}~${wAvgBid.toFixed(2)}元</b></div>`;
         }
+        
+        if (guarantee === '有擔保') {
+            reminderHTML += `<div>• <span style="color:#2e7d32;">有擔保</span>標的，市場接受度較高，溢價空間相對穩定</div>`;
+        } else if (guarantee === '無擔保') {
+            reminderHTML += `<div>• <span style="color:#c62828;">無擔保</span>標的，需留意信評與市場氛圍影響</div>`;
+        }
+        reminderHTML += `</div>`;
+        
+        // 2. 四個主要加權維度分析
+        reminderHTML += `<div style="margin-bottom:12px; padding-bottom:10px; border-bottom:1px dashed #ccc;">
+            <div style="font-weight:bold; color:#7b1fa2; margin-bottom:6px;">⚖️ 二、加權維度分析</div>`;
+        reminderHTML += `<div>• 已填寫 <b>${filledDim}/${totalDim}</b> 個維度，`;
+        
+        if (filledDim >= 5) {
+            reminderHTML += `維度資訊充足，評估結果<b style="color:#2e7d32;">可信度較高</b></div>`;
+        } else if (filledDim >= 3) {
+            reminderHTML += `建議補充更多維度以提升準確度</div>`;
+        } else {
+            reminderHTML += `<span style="color:#e65100;">建議至少填寫3個以上維度</span></div>`;
+        }
+        
+        // 信評分析
+        if (rating) {
+            const ratingNum = parseInt(rating.replace(/[^0-9]/g, '')) || 0;
+            if (ratingNum <= 4) {
+                reminderHTML += `<div>• 信評 TCRI ${ratingNum}，屬<b style="color:#2e7d32;">優質等級</b>，市場認同度高</div>`;
+            } else if (ratingNum <= 6) {
+                reminderHTML += `<div>• 信評 TCRI ${ratingNum}，屬中等等級，溢價表現適中</div>`;
+            } else {
+                reminderHTML += `<div>• 信評 TCRI ${ratingNum}，<span style="color:#c62828;">等級偏低</span>，建議採保守策略</div>`;
+            }
+        }
+        reminderHTML += `</div>`;
+        
+        // 3. 市場投標倍數預測
+        reminderHTML += `<div>
+            <div style="font-weight:bold; color:#e65100; margin-bottom:6px;">📈 三、市場投標倍數預測</div>`;
+        
+        // 根據理論價區間給予倍數預測提示
+        if (theoP < 95) {
+            reminderHTML += `<div>• 低理論價區間，歷史投標倍數通常<b>偏低(1~2倍)</b>，競爭較緩和</div>`;
+            reminderHTML += `<div>• 建議價格可略偏保守，以提高得標機率</div>`;
+        } else if (theoP < 105) {
+            reminderHTML += `<div>• 理論價位於熱門區間，歷史投標倍數通常<b>較高(2~4倍)</b></div>`;
+            reminderHTML += `<div>• 市場參與度高，建議適度積極以確保得標</div>`;
+        } else if (theoP < 120) {
+            reminderHTML += `<div>• 中高理論價區間，投標倍數<b>中等(1.5~3倍)</b></div>`;
+            reminderHTML += `<div>• 可參考平衡策略，兼顧得標率與報酬空間</div>`;
+        } else {
+            reminderHTML += `<div>• 高理論價區間，溢價空間有限，投標倍數通常<b>偏低</b></div>`;
+            reminderHTML += `<div>• 建議採保守策略，注意風險報酬比</div>`;
+        }
+        reminderHTML += `</div>`;
+        
+        reminderHTML += `</div>`;
+        
+        step0ReminderEl.innerHTML = reminderHTML;
     }
 
     // ========== Step 1: 基礎數據分析 ==========
@@ -18789,7 +18865,11 @@ function displayResult(r) {
     }
 
     div.innerHTML = `
-    <div class="result-header"><h2>${resultTitle}</h2><div>AI 評估結果</div></div>
+    <!-- v3.99N: 代號名稱移到基本資訊前 -->
+    <div class="result-header">
+        <h2 style="font-size:28px; margin-bottom:5px;">${resultTitle}</h2>
+        <div style="font-size:14px; opacity:0.9;">AI 評估結果</div>
+    </div>
 
     <!-- ========== 基本資訊 ========== -->
     <div class="detail-section" style="background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);">
@@ -31306,593 +31386,10 @@ function formatNumber(num) {
     return Number(num).toLocaleString();
 }
 
-// ==================== v3.98N: CB價格歷史資料模組（按年度分開） ====================
 
-/**
- * v3.98N: CB價格年度資料管理器
- * 支援按需載入，查詢時只載入需要的年份
- */
-const CBPriceManager = {
-    // 可用年份 (2007-2025)
-    availableYears: [2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025],
-    
-    // 已載入的年份
-    loadedYears: new Set(),
-    
-    // 正在載入的年份
-    loadingYears: new Set(),
-    
-    // 資料存放
-    data: {},
-    
-    /**
-     * 載入指定年份的資料
-     */
-    async loadYear(year) {
-        if (this.loadedYears.has(year) || this.loadingYears.has(year)) {
-            return true;
-        }
-        
-        this.loadingYears.add(year);
-        const dbFile = `data/CB_price_${year}.db`;
-        
-        try {
-            // 確保 SQL.js 已初始化
-            if (!window.kanbanSQL) {
-                window.kanbanSQL = await initSqlJs({
-                    locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}`
-                });
-            }
-            const SQL = window.kanbanSQL;
-            
-            const response = await fetch(dbFile);
-            if (!response.ok) {
-                console.warn(`CB_price_${year}.db 載入失敗: ${response.status}`);
-                this.loadingYears.delete(year);
-                return false;
-            }
-            
-            const buffer = await response.arrayBuffer();
-            const db = new SQL.Database(new Uint8Array(buffer));
-            
-            const results = db.exec(`
-                SELECT 日期, 代號, 名稱, 收市, 開市, 最高, 最低, 單位, 金額, 均價
-                FROM CB_price
-                WHERE 收市 > 0 OR 最高 > 0
-                ORDER BY 代號, 日期
-            `);
-            
-            let count = 0;
-            if (results.length > 0) {
-                for (const row of results[0].values) {
-                    const [date, code, name, close, open, high, low, volume, amount, avgPrice] = row;
-                    if (!code) continue;
-                    
-                    const cbCode = String(code).trim();
-                    if (!this.data[cbCode]) this.data[cbCode] = [];
-                    
-                    const dateStr = String(date);
-                    const formattedDate = dateStr.length === 8 ?
-                        `${dateStr.substring(0,4)}/${dateStr.substring(4,6)}/${dateStr.substring(6,8)}` : dateStr;
-                    
-                    this.data[cbCode].push({
-                        date: formattedDate,
-                        dateNum: parseInt(date) || 0,
-                        year: year,
-                        name: name || '',
-                        close: parseFloat(close) || 0,
-                        open: parseFloat(open) || 0,
-                        high: parseFloat(high) || 0,
-                        low: parseFloat(low) || 0,
-                        volume: parseFloat(volume) || 0,
-                        amount: parseFloat(amount) || 0,
-                        avgPrice: parseFloat(avgPrice) || 0
-                    });
-                    count++;
-                }
-            }
-            
-            db.close();
-            this.loadedYears.add(year);
-            this.loadingYears.delete(year);
-            console.log(`  ✓ CB_price_${year}.db: ${count} 筆`);
-            return true;
-            
-        } catch (err) {
-            console.warn(`CB_price_${year}.db 載入錯誤:`, err.message);
-            this.loadingYears.delete(year);
-            return false;
-        }
-    },
-    
-    /**
-     * 載入多個年份
-     */
-    async loadYears(years) {
-        const promises = years.map(y => this.loadYear(y));
-        await Promise.all(promises);
-    },
-    
-    /**
-     * 載入近N年資料
-     */
-    async loadRecentYears(n = 5) {
-        const currentYear = new Date().getFullYear();
-        const years = [];
-        for (let i = 0; i < n && (currentYear - i) >= 2007; i++) {
-            years.push(currentYear - i);
-        }
-        console.log(`📊 載入近${n}年CB價格資料: ${years.join(', ')}`);
-        await this.loadYears(years);
-    },
-    
-    /**
-     * 載入全部年份（用於完整統計分析）
-     */
-    async loadAllYears() {
-        console.log('📊 載入完整19年CB價格資料 (2007-2025)...');
-        await this.loadYears(this.availableYears);
-    },
-    
-    /**
-     * 根據CB代號判斷需要載入哪些年份
-     */
-    async loadForCB(cbCode, startYear, endYear) {
-        const years = [];
-        for (let y = startYear; y <= endYear; y++) {
-            if (this.availableYears.includes(y)) {
-                years.push(y);
-            }
-        }
-        await this.loadYears(years);
-    },
-    
-    /**
-     * 取得某檔CB的價格資料（並排序）
-     */
-    getCBData(cbCode) {
-        const data = this.data[cbCode] || [];
-        return data.sort((a, b) => a.dateNum - b.dateNum);
-    },
-    
-    /**
-     * 取得所有已載入的CB資料
-     */
-    getAllData() {
-        // 排序每檔CB的時間序列
-        const sorted = {};
-        for (const cbCode of Object.keys(this.data)) {
-            sorted[cbCode] = this.data[cbCode].sort((a, b) => a.dateNum - b.dateNum);
-        }
-        return sorted;
-    },
-    
-    /**
-     * 取得統計資訊
-     */
-    getStats() {
-        const cbCount = Object.keys(this.data).length;
-        let recordCount = 0;
-        for (const cbCode of Object.keys(this.data)) {
-            recordCount += this.data[cbCode].length;
-        }
-        return {
-            loadedYears: Array.from(this.loadedYears).sort(),
-            cbCount,
-            recordCount
-        };
-    }
-};
-
-/**
- * 載入 CB 價格歷史資料（相容舊版介面）
- */
-async function loadCBPriceData() {
-    if (window.cbPriceData.loaded || window.cbPriceData.loading) return;
-    window.cbPriceData.loading = true;
-
-    console.log('💰 開始載入 CB 價格歷史資料...');
-    const startTime = Date.now();
-
-    // v3.98N: 預設載入近5年資料（較快），需要更多年份時再按需載入
-    await CBPriceManager.loadRecentYears(5);
-    
-    // 同步到舊版資料結構
-    window.cbPriceData.data = CBPriceManager.getAllData();
-    window.cbPriceData.loaded = true;
-    window.cbPriceData.loading = false;
-
-    const stats = CBPriceManager.getStats();
-    console.log(`✅ CB價格資料載入完成: ${stats.cbCount} 檔CB, ${stats.recordCount} 筆價格記錄, ${Date.now() - startTime}ms`);
-    console.log(`   已載入年份: ${stats.loadedYears.join(', ')}`);
-}
-
-/**
- * v3.98N 新增：載入完整19年資料（用於風險統計分析）
- */
-async function loadAllCBPriceData() {
-    console.log('📊 載入完整19年 CB價格資料 (2007-2025)...');
-    const startTime = Date.now();
-    
-    await CBPriceManager.loadAllYears();
-    
-    // 同步到舊版資料結構
-    window.cbPriceData.data = CBPriceManager.getAllData();
-    window.cbPriceData.loaded = true;
-    
-    const stats = CBPriceManager.getStats();
-    console.log(`✅ 完整19年資料載入完成: ${stats.cbCount} 檔CB, ${stats.recordCount} 筆價格記錄, ${Date.now() - startTime}ms`);
-}
-
-/**
- * 渲染 CB 價格走勢
- */
-async function renderCBHistory(cbCode, container, period) {
-    // 確保資料已載入
-    if (!window.cbPriceData.loaded && !window.cbPriceData.loading) {
-        container.innerHTML = `<div style="text-align:center; padding:40px; color:#666;">
-            <div style="font-size:24px; margin-bottom:10px;">⏳</div>
-            <div>首次載入 CB 價格歷史資料中...</div>
-        </div>`;
-
-        await loadCBPriceData();
-    }
-
-    if (window.cbPriceData.loading) {
-        container.innerHTML = `<div style="text-align:center; padding:40px; color:#666;">
-            <div style="font-size:24px; margin-bottom:10px;">⏳</div>
-            <div>CB 價格資料載入中...</div>
-        </div>`;
-
-        // v3.97-zs-bs: 使用 waitForDataLoaded
-        waitForDataLoaded(() => !window.cbPriceData.loading).then(() => {
-            renderCBHistory(cbCode, container, period);
-        });
-        return;
-    }
-
-    const searchCode = String(cbCode).trim();
-    let allData = window.cbPriceData.data[searchCode] || [];
-
-    // 如果找不到，嘗試數字格式
-    if (allData.length === 0) {
-        const numCode = parseInt(searchCode, 10);
-        if (!isNaN(numCode)) {
-            allData = window.cbPriceData.data[String(numCode)] || [];
-        }
-    }
-
-    if (allData.length === 0) {
-        container.innerHTML = `<div style="text-align:center; color:#888; padding:40px;">
-            <div style="font-size:32px; margin-bottom:10px;">💰</div>
-            <div>尚無 ${searchCode} 的價格歷史資料</div>
-            <div style="font-size:12px; margin-top:8px; color:#aaa;">資料庫：CB_price_2019_2025</div>
-        </div>`;
-        return;
-    }
-
-    // v3.97-as-bv: 根據期間過濾（從資料最新日期往前推算）
-    let filteredData = allData;
-    if (period !== 'all') {
-        const days = parseInt(period);
-
-        // 找出資料中的最新日期
-        const latestData = allData[allData.length - 1];
-        let latestDateNum = latestData?.dateNum;
-
-        if (latestDateNum) {
-            // 從最新日期往前推算
-            const latestStr = String(latestDateNum);
-            const latestYear = parseInt(latestStr.substring(0, 4));
-            const latestMonth = parseInt(latestStr.substring(4, 6));
-            const latestDay = parseInt(latestStr.substring(6, 8));
-            const latestDate = new Date(latestYear, latestMonth - 1, latestDay);
-
-            latestDate.setDate(latestDate.getDate() - days);
-            const cutoffNum = parseInt(latestDate.toISOString().slice(0,10).replace(/-/g, ''));
-            filteredData = allData.filter(d => d.dateNum >= cutoffNum);
-        } else {
-            // 退回使用今天
-            const cutoffDate = new Date();
-            cutoffDate.setDate(cutoffDate.getDate() - days);
-            const cutoffNum = parseInt(cutoffDate.toISOString().slice(0,10).replace(/-/g, ''));
-            filteredData = allData.filter(d => d.dateNum >= cutoffNum);
-        }
-    }
-
-    if (filteredData.length === 0) {
-        filteredData = allData.slice(-30); // 至少顯示最後30筆
-    }
-
-    // 計算統計數據
-    const closes = filteredData.map(d => d.close).filter(v => v > 0);
-    const highs = filteredData.map(d => d.high).filter(v => v > 0);
-    const lows = filteredData.map(d => d.low).filter(v => v > 0);
-    const volumes = filteredData.map(d => d.volume).filter(v => v > 0);
-
-    const stats = {
-        maxPrice: highs.length > 0 ? Math.max(...highs) : 0,
-        minPrice: lows.length > 0 ? Math.min(...lows) : 0,
-        avgPrice: closes.length > 0 ? (closes.reduce((a,b) => a+b, 0) / closes.length) : 0,
-        latestPrice: closes.length > 0 ? closes[closes.length - 1] : 0,
-        totalVolume: volumes.reduce((a,b) => a+b, 0),
-        avgVolume: volumes.length > 0 ? Math.round(volumes.reduce((a,b) => a+b, 0) / volumes.length) : 0,
-        dataCount: filteredData.length
-    };
-
-    // 找出最高/最低價日期
-    const maxPriceData = filteredData.find(d => d.high === stats.maxPrice);
-    const minPriceData = filteredData.find(d => d.low === stats.minPrice);
-
-    // CB名稱
-    const cbName = filteredData[0]?.name || '';
-
-    // 期間文字
-    const periodTexts = { '30': '1個月', '90': '3個月', '180': '6個月', '365': '1年', '730': '2年', '1095': '3年', 'all': '全部' };
-    const periodText = periodTexts[period] || period;
-
-    // 生成走勢圖 SVG
-    const svgChart = generateCBPriceChart(filteredData, stats);
-
-    // 渲染內容 - v3.97-as-bu 優化佈局
-    container.innerHTML = `
-        <div style="margin-bottom:15px;">
-            <!-- 標題單獨一列 -->
-            <div style="text-align:center; margin-bottom:12px;">
-                <span style="font-size:16px; font-weight:700; color:#7b1fa2;">
-                    💰 ${cbName || searchCode} ${periodText}價格走勢
-                </span>
-            </div>
-
-            <!-- 按鈕單獨一列 -->
-            <div style="display:flex; justify-content:center; gap:12px; margin-bottom:15px;">
-                <button type="button" onclick="switchCBHistoryView('chart')" id="cbHistoryChartBtn"
-                    style="padding:8px 20px; border:2px solid #7b1fa2; border-radius:6px; background:#7b1fa2; color:white; cursor:pointer; font-size:13px; font-weight:600;">
-                    📈 走勢圖
-                </button>
-                <button type="button" onclick="switchCBHistoryView('table')" id="cbHistoryTableBtn"
-                    style="padding:8px 20px; border:2px solid #7b1fa2; border-radius:6px; background:white; color:#7b1fa2; cursor:pointer; font-size:13px; font-weight:600;">
-                    📋 價格表
-                </button>
-            </div>
-
-            <!-- 統計摘要 - 重新設計參考 Investing.com 風格 -->
-            <div style="padding:16px; background:#fff; border-radius:12px; margin-bottom:16px; box-shadow:0 2px 8px rgba(0,0,0,0.08);">
-                <!-- 最新價格突出顯示 -->
-                <div style="text-align:center; margin-bottom:16px; padding-bottom:16px; border-bottom:1px solid #eee;">
-                    <div style="font-size:13px; color:#666; margin-bottom:4px;">最新價</div>
-                    <div style="font-size:36px; font-weight:700; color:#7b1fa2;">${stats.latestPrice.toFixed(2)}</div>
-                </div>
-                
-                <!-- 高低價格 -->
-                <div style="display:flex; justify-content:space-around; margin-bottom:16px; padding-bottom:16px; border-bottom:1px solid #eee;">
-                    <div style="text-align:center;">
-                        <div style="font-size:12px; color:#888; margin-bottom:4px;">最高價</div>
-                        <div style="font-size:22px; font-weight:700; color:#c62828;">${stats.maxPrice.toFixed(2)}</div>
-                        <div style="font-size:11px; color:#aaa;">${maxPriceData?.date?.substring(5) || ''}</div>
-                    </div>
-                    <div style="width:1px; background:#eee;"></div>
-                    <div style="text-align:center;">
-                        <div style="font-size:12px; color:#888; margin-bottom:4px;">最低價</div>
-                        <div style="font-size:22px; font-weight:700; color:#2e7d32;">${stats.minPrice.toFixed(2)}</div>
-                        <div style="font-size:11px; color:#aaa;">${minPriceData?.date?.substring(5) || ''}</div>
-                    </div>
-                </div>
-                
-                <!-- 其他統計 -->
-                <div style="display:flex; justify-content:space-around;">
-                    <div style="text-align:center;">
-                        <div style="font-size:11px; color:#888;">平均價</div>
-                        <div style="font-size:16px; font-weight:600; color:#333;">${stats.avgPrice.toFixed(2)}</div>
-                    </div>
-                    <div style="text-align:center;">
-                        <div style="font-size:11px; color:#888;">累計成交</div>
-                        <div style="font-size:16px; font-weight:600; color:#333;">${formatNumber(stats.totalVolume)} 張</div>
-                    </div>
-                    <div style="text-align:center;">
-                        <div style="font-size:11px; color:#888;">日均量</div>
-                        <div style="font-size:16px; font-weight:600; color:#333;">${formatNumber(stats.avgVolume)} 張</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 走勢圖 / 價格表 內容區 -->
-        <div id="cbHistoryChartView">
-            ${svgChart}
-        </div>
-        <div id="cbHistoryTableView" style="display:none;">
-            ${generateCBPriceTable(filteredData)}
-        </div>
-
-        <div style="font-size:11px; color:#888; margin-top:8px; text-align:right;">
-            共 ${stats.dataCount} 筆交易日資料 | 資料來源：CB_price 資料庫
-        </div>
-    `;
-}
-
-/**
- * 切換 CB 價格顯示模式（走勢圖/價格表）
- */
-function switchCBHistoryView(view) {
-    const chartView = document.getElementById('cbHistoryChartView');
-    const tableView = document.getElementById('cbHistoryTableView');
-    const chartBtn = document.getElementById('cbHistoryChartBtn');
-    const tableBtn = document.getElementById('cbHistoryTableBtn');
-
-    if (view === 'chart') {
-        chartView.style.display = 'block';
-        tableView.style.display = 'none';
-        chartBtn.style.background = '#7b1fa2';
-        chartBtn.style.color = 'white';
-        tableBtn.style.background = 'white';
-        tableBtn.style.color = '#7b1fa2';
-    } else {
-        chartView.style.display = 'none';
-        tableView.style.display = 'block';
-        chartBtn.style.background = 'white';
-        chartBtn.style.color = '#7b1fa2';
-        tableBtn.style.background = '#7b1fa2';
-        tableBtn.style.color = 'white';
-    }
-}
-
-/**
- * 生成 CB 價格走勢圖 SVG
- */
-function generateCBPriceChart(data, stats) {
-    if (data.length === 0) return '<div style="text-align:center; padding:40px; color:#888;">無資料</div>';
-
-    const width = 680;
-    const height = 280;
-    const padding = { top: 20, right: 50, bottom: 40, left: 50 };
-    const chartWidth = width - padding.left - padding.right;
-    const chartHeight = height - padding.top - padding.bottom;
-
-    // 計算 Y 軸範圍
-    const allPrices = data.flatMap(d => [d.high, d.low, d.close].filter(v => v > 0));
-    const minY = Math.min(...allPrices) * 0.98;
-    const maxY = Math.max(...allPrices) * 1.02;
-    const yRange = maxY - minY || 1;
-
-    // 生成價格路徑
-    let closePath = '';
-    let highPath = '';
-    let lowPath = '';
-
-    data.forEach((d, i) => {
-        const x = padding.left + (i / Math.max(data.length - 1, 1)) * chartWidth;
-
-        if (d.close > 0) {
-            const yClose = padding.top + chartHeight - ((d.close - minY) / yRange) * chartHeight;
-            closePath += (closePath ? ' L ' : 'M ') + `${x.toFixed(1)} ${yClose.toFixed(1)}`;
-        }
-        if (d.high > 0) {
-            const yHigh = padding.top + chartHeight - ((d.high - minY) / yRange) * chartHeight;
-            highPath += (highPath ? ' L ' : 'M ') + `${x.toFixed(1)} ${yHigh.toFixed(1)}`;
-        }
-        if (d.low > 0) {
-            const yLow = padding.top + chartHeight - ((d.low - minY) / yRange) * chartHeight;
-            lowPath += (lowPath ? ' L ' : 'M ') + `${x.toFixed(1)} ${yLow.toFixed(1)}`;
-        }
-    });
-
-    // Y 軸刻度
-    const yTicks = 5;
-    let yTicksHTML = '';
-    for (let i = 0; i <= yTicks; i++) {
-        const value = minY + (yRange * i / yTicks);
-        const y = padding.top + chartHeight - (chartHeight * i / yTicks);
-        yTicksHTML += `
-            <line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" stroke="#eee" stroke-width="1"/>
-            <text x="${padding.left - 5}" y="${y + 4}" text-anchor="end" font-size="10" fill="#666">${value.toFixed(1)}</text>
-        `;
-    }
-
-    // X 軸日期標籤（顯示5個）
-    let xLabelsHTML = '';
-    const labelCount = Math.min(5, data.length);
-    for (let i = 0; i < labelCount; i++) {
-        const idx = Math.floor(i * (data.length - 1) / Math.max(labelCount - 1, 1));
-        const d = data[idx];
-        const x = padding.left + (idx / Math.max(data.length - 1, 1)) * chartWidth;
-        xLabelsHTML += `<text x="${x}" y="${height - 10}" text-anchor="middle" font-size="10" fill="#666">${d.date?.substring(5) || ''}</text>`;
-    }
-
-    return `
-        <svg width="100%" viewBox="0 0 ${width} ${height}" style="max-width:${width}px; display:block; margin:0 auto;">
-            <!-- 背景 -->
-            <rect x="${padding.left}" y="${padding.top}" width="${chartWidth}" height="${chartHeight}" fill="#fafafa" rx="4"/>
-
-            <!-- Y軸刻度 -->
-            ${yTicksHTML}
-
-            <!-- 價格線 -->
-            <path d="${highPath}" fill="none" stroke="#ffcdd2" stroke-width="1.5" opacity="0.7"/>
-            <path d="${lowPath}" fill="none" stroke="#c8e6c9" stroke-width="1.5" opacity="0.7"/>
-            <path d="${closePath}" fill="none" stroke="#7b1fa2" stroke-width="2"/>
-
-            <!-- 圖例 -->
-            <g transform="translate(${padding.left + 10}, ${padding.top + 15})">
-                <line x1="0" y1="0" x2="20" y2="0" stroke="#7b1fa2" stroke-width="2"/>
-                <text x="25" y="4" font-size="10" fill="#7b1fa2">收盤</text>
-                <line x1="60" y1="0" x2="80" y2="0" stroke="#ffcdd2" stroke-width="2"/>
-                <text x="85" y="4" font-size="10" fill="#c62828">最高</text>
-                <line x1="120" y1="0" x2="140" y2="0" stroke="#c8e6c9" stroke-width="2"/>
-                <text x="145" y="4" font-size="10" fill="#2e7d32">最低</text>
-            </g>
-
-            <!-- X軸標籤 -->
-            ${xLabelsHTML}
-
-            <!-- Y軸標題 -->
-            <text x="${padding.left - 35}" y="${height/2}" text-anchor="middle" font-size="11" fill="#666" transform="rotate(-90, ${padding.left - 35}, ${height/2})">價格(元)</text>
-        </svg>
-    `;
-}
-
-/**
- * 生成 CB 價格明細表
- */
-function generateCBPriceTable(data) {
-    if (data.length === 0) return '<div style="text-align:center; padding:40px; color:#888;">無資料</div>';
-
-    // 倒序顯示（最新在前）
-    const displayData = [...data].reverse();
-
-    // v3.97-as-bu: 優化表格佈局，移除成交量欄位避免擠壓
-    let tableHTML = `
-        <div style="max-height:400px; overflow-y:auto;">
-            <table style="width:100%; border-collapse:collapse; font-size:14px; table-layout:fixed;">
-                <thead style="position:sticky; top:0; background:#7b1fa2; color:white;">
-                    <tr>
-                        <th style="padding:10px 8px; text-align:center; font-weight:600; width:28%;">日期</th>
-                        <th style="padding:10px 8px; text-align:right; font-weight:600; width:18%;">收盤</th>
-                        <th style="padding:10px 8px; text-align:right; font-weight:600; width:18%;">漲跌</th>
-                        <th style="padding:10px 8px; text-align:right; font-weight:600; width:18%;">最高</th>
-                        <th style="padding:10px 8px; text-align:right; font-weight:600; width:18%;">最低</th>
-                    </tr>
-                </thead>
-                <tbody>
-    `;
-
-    displayData.forEach((d, i) => {
-        const bgColor = i % 2 === 0 ? '#f5f5f5' : 'white';
-        const prevData = displayData[i + 1];
-        const change = prevData && d.close > 0 && prevData.close > 0 ? d.close - prevData.close : 0;
-        const changeColor = change > 0 ? '#c62828' : change < 0 ? '#2e7d32' : '#666';
-        const changeStr = change !== 0 ? (change > 0 ? '+' : '') + change.toFixed(2) : '-';
-
-        tableHTML += `
-            <tr style="background:${bgColor};">
-                <td style="padding:8px; text-align:center; color:#555; font-size:13px;">${d.date || '-'}</td>
-                <td style="padding:8px; text-align:right; font-weight:700; color:#7b1fa2; font-size:15px;">${d.close > 0 ? d.close.toFixed(2) : '-'}</td>
-                <td style="padding:8px; text-align:right; color:${changeColor}; font-weight:600; font-size:14px;">${changeStr}</td>
-                <td style="padding:8px; text-align:right; color:#c62828; font-size:14px;">${d.high > 0 ? d.high.toFixed(2) : '-'}</td>
-                <td style="padding:8px; text-align:right; color:#2e7d32; font-size:14px;">${d.low > 0 ? d.low.toFixed(2) : '-'}</td>
-            </tr>
-        `;
-    });
-
-    tableHTML += '</tbody></table></div>';
-    return tableHTML;
-}
-
-
-// v3.99i: 已移除CB套利追蹤模組
-// 原本功能：initArbitrageModule, loadArbitrageHotList, renderArbitrageChart 等
-
-async function initArbitrageModule() {
-    const container = document.getElementById("arbitrageContent");
-    if (container) {
-        container.innerHTML = `<div style="text-align:center; padding:40px; color:#999;">
-            <div style="font-size:32px; margin-bottom:10px;">💎</div>
-            <div>CB套利追蹤功能已移除</div>
-            <div style="font-size:12px; margin-top:8px;">v3.99i 精簡版</div>
-        </div>`;
-    }
-}
-
+// v3.99L: 已移除CB價格歷史資料模組
+const CBPriceManager = { loadRecentYears: async () => {}, loadAllYears: async () => {}, getAllData: () => ({}), getStats: () => ({}) };
+async function loadCBPriceData() { return; }
 // 系統啟動
 window.addEventListener('DOMContentLoaded', function() {
     loadStatistics();

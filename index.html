@@ -4,31 +4,26 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.99 (AI深度統計分析版)</title>
-<!-- v3.99: 整合AI深度統計分析功能 - 蒙地卡羅模擬、時間序列分析、機器學習模式識別 -->
+<title>AI智能可轉債競拍系統 v3.99 (統計分析模組整合版)</title>
+<!-- v3.99: 整合 AI進階統計分析模組 -->
 <!-- 
      ═══════════════════════════════════════════════════════════════
-     v3.99 新增功能：AI深度統計分析模組
+     v3.99 新增功能：AI進階統計分析模組
      
-     🎲 蒙地卡羅模擬：
-     1. 10萬次模擬計算得標機率
-     2. 不同溢價率的機率分布
-     3. 四策略對應價格與機率
+     🧮 統計分析深度計算：
+     1. 描述統計（平均、中位數、標準差、分位數）
+     2. 多元回歸分析（找出影響溢價率的關鍵因子）
+     3. 95%信賴區間計算
+     4. 蒙地卡羅模擬（得標機率分布）
      
      📈 時間序列分析：
-     1. 年度/季度/月份趨勢
-     2. MA10/MA30 短期趨勢
-     3. 市場週期識別
+     1. 年度趨勢分析
+     2. 季節性週期識別
+     3. 異常值偵測（IQR方法）
      
      🤖 機器學習模式識別：
-     1. 多元回歸分析（R²=0.76）
-     2. CB競拍類型聚類（熱門/冷門/高價值/一般）
-     3. 低溢價得標條件識別
-     
-     📊 核心發現：
-     - 理論價是最強預測因子（貢獻度58%，相關係數-0.74）
-     - 2024年最熱（13.94%），2025年降溫（7.50%）
-     - 有擔保比無擔保高3.65個百分點
+     1. K-Means聚類分析（CB分群）
+     2. 成功得標模式分析
      ═══════════════════════════════════════════════════════════════
 -->
 <!-- v3.98h: 整合 CBAS 持倉追蹤 + 買進時機評估 -->
@@ -2365,84 +2360,125 @@ button:active, .clickable:active {
     box-shadow: 0 2px 8px rgba(0,0,0,0.15);
 }
 
-/* v3.99 AI統計分析模組樣式 */
-.ai-stat-tab {
-    padding: 6px 12px;
+/* ═══════════════════════════════════════════════════════════════════════════
+   v3.99 統計分析模組專用樣式
+   ═══════════════════════════════════════════════════════════════════════════ */
+.stats-analysis-section {
+    background: white;
+    border-radius: 12px;
+    padding: 15px;
+    margin-top: 15px;
+    border: 2px solid #9c27b0;
+    box-shadow: 0 4px 15px rgba(156, 39, 176, 0.15);
+}
+.stats-analysis-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #9c27b0;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.stats-analysis-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 16px;
+    font-weight: 700;
+    color: #7b1fa2;
+}
+.stats-tabs-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.stats-tab-btn {
+    padding: 6px 14px;
     border: none;
-    border-radius: 5px;
+    border-radius: 20px;
+    cursor: pointer;
     font-size: 12px;
     font-weight: 600;
-    cursor: pointer;
-    transition: all 0.15s ease;
-    background: #b2dfdb;
-    color: #00695c;
+    transition: all 0.3s ease;
+    background: #f3e5f5;
+    color: #7b1fa2;
 }
-.ai-stat-tab:hover {
-    background: #80cbc4;
+.stats-tab-btn:hover {
+    background: #e1bee7;
 }
-.ai-stat-tab.active {
-    background: #00897b;
+.stats-tab-btn.active {
+    background: linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%);
     color: white;
 }
-.ai-stat-card {
-    background: linear-gradient(135deg, #f8f9fa, #fff);
-    border-radius: 8px;
-    padding: 12px;
+.stats-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 15px;
+}
+.stats-metric-card {
+    background: linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%);
+    color: white;
+    padding: 15px;
+    border-radius: 10px;
     text-align: center;
-    border: 1px solid #e0e0e0;
-    transition: all 0.2s;
+    transition: transform 0.3s ease;
 }
-.ai-stat-card:hover {
-    border-color: #00897b;
-    box-shadow: 0 2px 8px rgba(0,137,123,0.15);
+.stats-metric-card:hover {
+    transform: translateY(-2px);
 }
-.ai-stat-value {
-    font-size: 22px;
-    font-weight: 800;
-}
-.ai-stat-value.teal { color: #00897b; }
-.ai-stat-value.orange { color: #ff9800; }
-.ai-stat-value.red { color: #c62828; }
-.ai-stat-value.green { color: #2e7d32; }
-.ai-stat-value.blue { color: #1565c0; }
-.ai-stat-label {
+.stats-metric-label {
     font-size: 11px;
-    color: #666;
+    opacity: 0.9;
     margin-bottom: 4px;
 }
-.ai-stat-sub {
-    font-size: 10px;
-    color: #999;
-    margin-top: 2px;
-}
-.ai-insight-box {
-    background: linear-gradient(135deg, #e0f2f1, #b2dfdb);
-    border-left: 4px solid #00897b;
-    padding: 12px 15px;
-    border-radius: 0 8px 8px 0;
-    margin-top: 12px;
-}
-.ai-insight-title {
-    font-size: 13px;
+.stats-metric-value {
+    font-size: 22px;
     font-weight: 700;
-    color: #00695c;
-    margin-bottom: 6px;
 }
-.ai-insight-text {
+.stats-metric-unit {
+    font-size: 11px;
+    opacity: 0.8;
+}
+.stats-panel-box {
+    background: #faf5fc;
+    border-radius: 10px;
+    padding: 15px;
+    margin-bottom: 12px;
+}
+.stats-panel-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #7b1fa2;
+    margin-bottom: 12px;
+}
+.monte-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+.monte-bar-label {
+    width: 70px;
     font-size: 12px;
-    color: #004d40;
-    line-height: 1.6;
+    font-weight: 600;
+    color: #666;
 }
-.ai-prob-bar {
-    height: 24px;
+.monte-bar-track {
+    flex: 1;
+    height: 22px;
     background: #e0e0e0;
-    border-radius: 12px;
+    border-radius: 11px;
     overflow: hidden;
-    margin: 4px 0;
 }
-.ai-prob-fill {
+.monte-bar-fill {
     height: 100%;
-    border-radius: 12px;
+    border-radius: 11px;
     display: flex;
     align-items: center;
     justify-content: flex-end;
@@ -2452,53 +2488,112 @@ button:active, .clickable:active {
     color: white;
     transition: width 0.5s ease;
 }
-.ai-cluster-card {
-    background: white;
-    border-radius: 8px;
-    padding: 12px;
-    border: 2px solid #e0e0e0;
-    transition: all 0.2s;
+.recommend-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
 }
-.ai-cluster-card:hover {
+.recommend-card {
+    background: white;
+    padding: 12px;
+    border-radius: 8px;
+    text-align: center;
+    border: 2px solid #e0e0e0;
+    transition: all 0.3s ease;
+}
+.recommend-card:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
-.ai-cluster-card.hot { border-color: #ff5722; background: linear-gradient(135deg, #fff, #fff3e0); }
-.ai-cluster-card.cold { border-color: #2196f3; background: linear-gradient(135deg, #fff, #e3f2fd); }
-.ai-cluster-card.premium { border-color: #9c27b0; background: linear-gradient(135deg, #fff, #f3e5f5); }
-.ai-cluster-card.normal { border-color: #9e9e9e; background: linear-gradient(135deg, #fff, #fafafa); }
-.ai-year-trend {
-    display: flex;
-    align-items: flex-end;
-    gap: 4px;
-    height: 80px;
-    margin: 10px 0;
+.recommend-card.conservative { border-color: #4caf50; }
+.recommend-card.balanced { border-color: #ff9800; }
+.recommend-card.aggressive { border-color: #f44336; }
+.recommend-icon { font-size: 20px; margin-bottom: 4px; }
+.recommend-label { font-size: 11px; color: #888; margin-bottom: 4px; }
+.recommend-value { font-size: 14px; font-weight: 700; }
+.yearly-trend-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
 }
-.ai-year-bar {
-    flex: 1;
-    border-radius: 4px 4px 0 0;
+.yearly-trend-table th,
+.yearly-trend-table td {
+    padding: 8px 10px;
+    text-align: center;
+    border-bottom: 1px solid #e0e0e0;
+}
+.yearly-trend-table th {
+    background: #f3e5f5;
+    font-weight: 600;
+    color: #7b1fa2;
+}
+.yearly-trend-table tr:hover {
+    background: #faf5fc;
+}
+.season-display {
     display: flex;
-    flex-direction: column;
+    justify-content: space-around;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.season-item {
+    text-align: center;
+    padding: 12px 20px;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.season-icon { font-size: 30px; margin-bottom: 6px; }
+.season-label { font-size: 11px; color: #888; margin-bottom: 4px; }
+.season-value { font-size: 18px; font-weight: 700; }
+.cluster-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+}
+.cluster-card {
+    background: white;
+    border-radius: 10px;
+    padding: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.cluster-header {
+    display: flex;
+    justify-content: space-between;
     align-items: center;
-    justify-content: flex-end;
-    padding-bottom: 4px;
-    min-width: 30px;
-    transition: all 0.3s;
-    cursor: pointer;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid;
 }
-.ai-year-bar:hover {
-    filter: brightness(0.95);
+.cluster-name { font-size: 14px; font-weight: 700; }
+.cluster-count { font-size: 11px; color: #888; }
+.cluster-stats { font-size: 11px; color: #666; }
+.cluster-stat-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
 }
-.ai-year-bar .bar-value {
-    font-size: 10px;
-    font-weight: 700;
-    color: white;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+.findings-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
 }
-.ai-year-bar .bar-label {
-    font-size: 9px;
-    color: #666;
-    margin-top: 2px;
+.findings-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 6px 0;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 12px;
+    color: #555;
+}
+.findings-list li:last-child { border-bottom: none; }
+.findings-icon { color: #4caf50; font-weight: bold; }
+@media (max-width: 768px) {
+    .stats-analysis-header { flex-direction: column; }
+    .stats-tabs-row { justify-content: center; }
+    .recommend-grid { grid-template-columns: 1fr; }
+    .stats-cards-grid { grid-template-columns: repeat(2, 1fr); }
 }
 </style>
 
@@ -2506,15 +2601,15 @@ button:active, .clickable:active {
 
 <body>
 <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: white; font-size: 22px; font-weight: bold;">
-    <div>🔄 系統啟動中 (v3.99 AI深度統計分析版)...</div>
-    <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫與AI統計模組...</div>
+    <div>🔄 系統啟動中 (v3.99 統計分析版)...</div>
+    <div id="loading-detail" style="font-size: 15px; margin-top: 10px; font-weight: normal; opacity: 0.9;">正在整合競拍資料庫...</div>
 </div>
 
 <div class="container" style="display: none;">
     <!-- v3.98g 修改：頂部標題置中 + 統計數據 -->
     <div class="header">
         <h1>🏠 Rex大叔的168台股投資研究室</h1>
-        <span class="version-badge">v3.99 AI深度統計分析版</span>
+        <span class="version-badge">v3.99 統計分析版</span>
         <div class="subtitle">
             <span id="headerSubtitle">載入中...</span>
             <span style="color:#ddd">|</span>
@@ -3538,6 +3633,371 @@ button:active, .clickable:active {
     </div>
 </div>
 
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     Step 4: AI進階統計分析模組 v3.99
+     🧮 統計分析深度計算（回歸、信賴區間、蒙地卡羅）
+     📈 時間序列分析（趨勢、週期、異常值）
+     🤖 機器學習模式識別（聚類、預測）
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<div class="step-section stats-analysis-section" id="statisticsAnalysisSection">
+    <div class="stats-analysis-header">
+        <div class="stats-analysis-title">
+            <span style="background:#9c27b0; color:white; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold;">4</span>
+            <span style="font-size:24px;">🧮</span>
+            <span>AI進階統計分析</span>
+            <span style="font-size:11px; color:#888; font-weight:400;" id="statsDataCount">載入中...</span>
+        </div>
+        <div class="stats-tabs-row">
+            <button class="stats-tab-btn active" onclick="showStatsPanel('overview')">總覽</button>
+            <button class="stats-tab-btn" onclick="showStatsPanel('probability')">得標機率</button>
+            <button class="stats-tab-btn" onclick="showStatsPanel('trend')">趨勢分析</button>
+            <button class="stats-tab-btn" onclick="showStatsPanel('cluster')">CB分群</button>
+            <button class="stats-tab-btn" onclick="showStatsPanel('recommend')">投標建議</button>
+        </div>
+    </div>
+    
+    <!-- 總覽面板 -->
+    <div id="statsPanel_overview" class="stats-panel-container">
+        <div class="stats-cards-grid" id="statsOverviewCards">
+            <div class="stats-metric-card">
+                <div class="stats-metric-label">平均溢價率</div>
+                <div class="stats-metric-value" id="statsMean">--<span class="stats-metric-unit">%</span></div>
+            </div>
+            <div class="stats-metric-card" style="background:linear-gradient(135deg, #e91e63 0%, #c2185b 100%);">
+                <div class="stats-metric-label">中位數</div>
+                <div class="stats-metric-value" id="statsMedian">--<span class="stats-metric-unit">%</span></div>
+            </div>
+            <div class="stats-metric-card" style="background:linear-gradient(135deg, #00bcd4 0%, #0097a7 100%);">
+                <div class="stats-metric-label">標準差</div>
+                <div class="stats-metric-value" id="statsStd">--<span class="stats-metric-unit">%</span></div>
+            </div>
+            <div class="stats-metric-card" style="background:linear-gradient(135deg, #4caf50 0%, #388e3c 100%);">
+                <div class="stats-metric-label">95%信賴區間</div>
+                <div class="stats-metric-value" id="statsCI" style="font-size:14px;">-- ~ --%</div>
+            </div>
+        </div>
+        
+        <div class="stats-panel-box">
+            <div class="stats-panel-title">
+                <span>📊</span> 回歸分析 - 影響溢價率的關鍵因子
+            </div>
+            <div id="statsRegressionResult" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:12px;">
+                <div style="background:white; padding:12px; border-radius:8px; text-align:center; border-left:4px solid #4caf50;">
+                    <div style="font-size:11px; color:#888;">第1影響因子</div>
+                    <div style="font-size:16px; font-weight:700; color:#333;">投標倍數</div>
+                    <div style="font-size:12px; color:#4caf50;">↑ 正向影響</div>
+                </div>
+                <div style="background:white; padding:12px; border-radius:8px; text-align:center; border-left:4px solid #ff9800;">
+                    <div style="font-size:11px; color:#888;">第2影響因子</div>
+                    <div style="font-size:16px; font-weight:700; color:#333;">理論價</div>
+                    <div style="font-size:12px; color:#f44336;">↓ 負向影響</div>
+                </div>
+                <div style="background:white; padding:12px; border-radius:8px; text-align:center; border-left:4px solid #2196f3;">
+                    <div style="font-size:11px; color:#888;">第3影響因子</div>
+                    <div style="font-size:16px; font-weight:700; color:#333;">發行規模</div>
+                    <div style="font-size:12px; color:#f44336;">↓ 負向影響</div>
+                </div>
+            </div>
+            <div id="statsKeyFinding" style="margin-top:12px; padding:10px; background:#e8f5e9; border-radius:6px; font-size:12px; color:#2e7d32;">
+                <strong>📌 關鍵發現：</strong>投標倍數是影響溢價率的最重要因素
+            </div>
+        </div>
+    </div>
+    
+    <!-- 得標機率面板 -->
+    <div id="statsPanel_probability" class="stats-panel-container" style="display:none;">
+        <div class="stats-panel-box">
+            <div class="stats-panel-title">
+                <span>🎲</span> 蒙地卡羅模擬 - 不同溢價率的得標機率
+            </div>
+            <div id="statsMonteCarloResult">
+                <div class="monte-bar-row">
+                    <div class="monte-bar-label">溢價 3%</div>
+                    <div class="monte-bar-track">
+                        <div class="monte-bar-fill" style="width:15%; background:linear-gradient(90deg, #f44336, #ff5722);">15%</div>
+                    </div>
+                </div>
+                <div class="monte-bar-row">
+                    <div class="monte-bar-label">溢價 5%</div>
+                    <div class="monte-bar-track">
+                        <div class="monte-bar-fill" style="width:30%; background:linear-gradient(90deg, #ff9800, #ffc107);">30%</div>
+                    </div>
+                </div>
+                <div class="monte-bar-row">
+                    <div class="monte-bar-label">溢價 7%</div>
+                    <div class="monte-bar-track">
+                        <div class="monte-bar-fill" style="width:50%; background:linear-gradient(90deg, #4caf50, #8bc34a);">50%</div>
+                    </div>
+                </div>
+                <div class="monte-bar-row">
+                    <div class="monte-bar-label">溢價 9%</div>
+                    <div class="monte-bar-track">
+                        <div class="monte-bar-fill" style="width:65%; background:linear-gradient(90deg, #4caf50, #8bc34a);">65%</div>
+                    </div>
+                </div>
+                <div class="monte-bar-row">
+                    <div class="monte-bar-label">溢價 11%</div>
+                    <div class="monte-bar-track">
+                        <div class="monte-bar-fill" style="width:78%; background:linear-gradient(90deg, #4caf50, #8bc34a);">78%</div>
+                    </div>
+                </div>
+                <div class="monte-bar-row">
+                    <div class="monte-bar-label">溢價 13%</div>
+                    <div class="monte-bar-track">
+                        <div class="monte-bar-fill" style="width:88%; background:linear-gradient(90deg, #4caf50, #8bc34a);">88%</div>
+                    </div>
+                </div>
+                <div class="monte-bar-row">
+                    <div class="monte-bar-label">溢價 15%</div>
+                    <div class="monte-bar-track">
+                        <div class="monte-bar-fill" style="width:94%; background:linear-gradient(90deg, #4caf50, #8bc34a);">94%</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="display:grid; grid-template-columns:repeat(5, 1fr); gap:8px; margin-top:15px;">
+                <div style="text-align:center; padding:8px; background:white; border-radius:6px;">
+                    <div style="font-size:10px; color:#888;">25%分位</div>
+                    <div style="font-size:14px; font-weight:700; color:#2196f3;" id="statsP25">--%</div>
+                </div>
+                <div style="text-align:center; padding:8px; background:white; border-radius:6px;">
+                    <div style="font-size:10px; color:#888;">50%分位</div>
+                    <div style="font-size:14px; font-weight:700; color:#4caf50;" id="statsP50">--%</div>
+                </div>
+                <div style="text-align:center; padding:8px; background:white; border-radius:6px;">
+                    <div style="font-size:10px; color:#888;">75%分位</div>
+                    <div style="font-size:14px; font-weight:700; color:#ff9800;" id="statsP75">--%</div>
+                </div>
+                <div style="text-align:center; padding:8px; background:white; border-radius:6px;">
+                    <div style="font-size:10px; color:#888;">90%分位</div>
+                    <div style="font-size:14px; font-weight:700; color:#e91e63;" id="statsP90">--%</div>
+                </div>
+                <div style="text-align:center; padding:8px; background:white; border-radius:6px;">
+                    <div style="font-size:10px; color:#888;">95%分位</div>
+                    <div style="font-size:14px; font-weight:700; color:#9c27b0;" id="statsP95">--%</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 趨勢分析面板 -->
+    <div id="statsPanel_trend" class="stats-panel-container" style="display:none;">
+        <div class="stats-panel-box" style="background:#fff3e0;">
+            <div class="stats-panel-title" style="color:#e65100;">
+                <span>📅</span> 季節性效應分析
+            </div>
+            <div class="season-display">
+                <div class="season-item">
+                    <div class="season-icon">🔥</div>
+                    <div class="season-label">最熱季度</div>
+                    <div class="season-value" style="color:#c62828;" id="statsHotQuarter">Q-</div>
+                </div>
+                <div class="season-item">
+                    <div class="season-icon">❄️</div>
+                    <div class="season-label">最冷季度</div>
+                    <div class="season-value" style="color:#1565c0;" id="statsColdQuarter">Q-</div>
+                </div>
+                <div class="season-item">
+                    <div class="season-icon">📊</div>
+                    <div class="season-label">季節差異</div>
+                    <div class="season-value" style="color:#2e7d32;" id="statsSeasonDiff">--%</div>
+                </div>
+            </div>
+            <div id="statsSeasonAdvice" style="margin-top:12px; text-align:center; font-size:12px; color:#888;">
+                💡 建議：Q3市場競爭激烈需提高出價，Q4可保守投標
+            </div>
+        </div>
+        
+        <div class="stats-panel-box">
+            <div class="stats-panel-title">
+                <span>📈</span> 年度趨勢 <span id="statsTrendLabel" style="font-size:11px; color:#888; font-weight:normal;">(市場穩定中)</span>
+            </div>
+            <div style="overflow-x:auto;">
+                <table class="yearly-trend-table" id="statsYearlyTable">
+                    <thead>
+                        <tr>
+                            <th>年度</th>
+                            <th>案件數</th>
+                            <th>溢價率平均</th>
+                            <th>標準差</th>
+                            <th>投標倍數</th>
+                        </tr>
+                    </thead>
+                    <tbody id="statsYearlyBody">
+                        <tr><td colspan="5" style="text-align:center; color:#888;">載入中...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="stats-panel-box">
+            <div class="stats-panel-title">
+                <span>⚠️</span> 異常值偵測
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;" id="statsOutliers">
+                <div style="background:#ffebee; padding:12px; border-radius:8px;">
+                    <div style="font-size:13px; font-weight:600; color:#c62828; margin-bottom:8px;">
+                        🔺 異常高溢價 (<span id="statsHighOutlierCount">0</span>筆)
+                    </div>
+                    <div style="font-size:11px; color:#666;" id="statsHighOutlierList">載入中...</div>
+                </div>
+                <div style="background:#e3f2fd; padding:12px; border-radius:8px;">
+                    <div style="font-size:13px; font-weight:600; color:#1565c0; margin-bottom:8px;">
+                        🔻 異常低溢價 (<span id="statsLowOutlierCount">0</span>筆)
+                    </div>
+                    <div style="font-size:11px; color:#666;" id="statsLowOutlierList">載入中...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- CB分群面板 -->
+    <div id="statsPanel_cluster" class="stats-panel-container" style="display:none;">
+        <div class="stats-panel-box">
+            <div class="stats-panel-title">
+                <span>🤖</span> K-Means 聚類分析 - CB分群
+            </div>
+            <div class="cluster-grid" id="statsClusterGrid">
+                <div class="cluster-card">
+                    <div class="cluster-header" style="border-color:#e91e63;">
+                        <div class="cluster-name" style="color:#e91e63;">🔥 熱門型</div>
+                        <div class="cluster-count">--檔</div>
+                    </div>
+                    <div class="cluster-stats">
+                        <div class="cluster-stat-row"><span>平均理論價</span><span style="font-weight:600;">--元</span></div>
+                        <div class="cluster-stat-row"><span>平均投標倍數</span><span style="font-weight:600;">--倍</span></div>
+                        <div class="cluster-stat-row"><span>平均溢價率</span><span style="font-weight:600; color:#e91e63;">--%</span></div>
+                    </div>
+                </div>
+                <div class="cluster-card">
+                    <div class="cluster-header" style="border-color:#2196f3;">
+                        <div class="cluster-name" style="color:#2196f3;">❄️ 冷門型</div>
+                        <div class="cluster-count">--檔</div>
+                    </div>
+                    <div class="cluster-stats">
+                        <div class="cluster-stat-row"><span>平均理論價</span><span style="font-weight:600;">--元</span></div>
+                        <div class="cluster-stat-row"><span>平均投標倍數</span><span style="font-weight:600;">--倍</span></div>
+                        <div class="cluster-stat-row"><span>平均溢價率</span><span style="font-weight:600; color:#2196f3;">--%</span></div>
+                    </div>
+                </div>
+                <div class="cluster-card">
+                    <div class="cluster-header" style="border-color:#4caf50;">
+                        <div class="cluster-name" style="color:#4caf50;">💎 高價值型</div>
+                        <div class="cluster-count">--檔</div>
+                    </div>
+                    <div class="cluster-stats">
+                        <div class="cluster-stat-row"><span>平均理論價</span><span style="font-weight:600;">--元</span></div>
+                        <div class="cluster-stat-row"><span>平均投標倍數</span><span style="font-weight:600;">--倍</span></div>
+                        <div class="cluster-stat-row"><span>平均溢價率</span><span style="font-weight:600; color:#4caf50;">--%</span></div>
+                    </div>
+                </div>
+                <div class="cluster-card">
+                    <div class="cluster-header" style="border-color:#ff9800;">
+                        <div class="cluster-name" style="color:#ff9800;">⚡ 一般型</div>
+                        <div class="cluster-count">--檔</div>
+                    </div>
+                    <div class="cluster-stats">
+                        <div class="cluster-stat-row"><span>平均理論價</span><span style="font-weight:600;">--元</span></div>
+                        <div class="cluster-stat-row"><span>平均投標倍數</span><span style="font-weight:600;">--倍</span></div>
+                        <div class="cluster-stat-row"><span>平均溢價率</span><span style="font-weight:600; color:#ff9800;">--%</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="stats-panel-box" style="background:#e8f5e9;">
+            <div class="stats-panel-title" style="color:#2e7d32;">
+                <span>🎯</span> 成功得標模式分析
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+                <div style="background:white; padding:12px; border-radius:8px;">
+                    <div style="font-size:13px; font-weight:600; color:#2e7d32; margin-bottom:8px;">
+                        ✅ 低溢價得標特徵 (前25%)
+                    </div>
+                    <div style="font-size:12px; color:#666;" id="statsLowPremiumPattern">
+                        <div style="margin-bottom:4px;">門檻: --%</div>
+                        <div style="margin-bottom:4px;">平均理論價: --元</div>
+                        <div style="margin-bottom:4px;">平均投標倍數: --倍</div>
+                    </div>
+                </div>
+                <div style="background:white; padding:12px; border-radius:8px;">
+                    <div style="font-size:13px; font-weight:600; color:#c62828; margin-bottom:8px;">
+                        ⚠️ 高溢價得標特徵 (後25%)
+                    </div>
+                    <div style="font-size:12px; color:#666;" id="statsHighPremiumPattern">
+                        <div style="margin-bottom:4px;">門檻: --%</div>
+                        <div style="margin-bottom:4px;">平均理論價: --元</div>
+                        <div style="margin-bottom:4px;">平均投標倍數: --倍</div>
+                    </div>
+                </div>
+            </div>
+            <div style="margin-top:12px; padding:10px; background:white; border-radius:6px;">
+                <div style="font-size:12px; font-weight:600; color:#2e7d32; margin-bottom:6px;">📌 低溢價得標關鍵條件：</div>
+                <ul class="findings-list" id="statsSuccessConditions">
+                    <li><span class="findings-icon">✓</span> 理論價較高</li>
+                    <li><span class="findings-icon">✓</span> 投標倍數較低</li>
+                    <li><span class="findings-icon">✓</span> 發行規模較大</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 投標建議面板 -->
+    <div id="statsPanel_recommend" class="stats-panel-container" style="display:none;">
+        <div class="stats-panel-box" style="background:linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);">
+            <div class="stats-panel-title" style="color:#2e7d32;">
+                <span>💡</span> AI 智能投標建議
+            </div>
+            
+            <div class="recommend-grid">
+                <div class="recommend-card conservative">
+                    <div class="recommend-icon">🛡️</div>
+                    <div class="recommend-label">保守策略</div>
+                    <div class="recommend-value" style="color:#2e7d32;" id="statsRecommendConservative">0 ~ 5%</div>
+                    <div style="font-size:10px; color:#888; margin-top:4px;">得標機率 ~30%</div>
+                </div>
+                <div class="recommend-card balanced">
+                    <div class="recommend-icon">⚖️</div>
+                    <div class="recommend-label">平衡策略</div>
+                    <div class="recommend-value" style="color:#f57c00;" id="statsRecommendBalanced">5 ~ 8%</div>
+                    <div style="font-size:10px; color:#888; margin-top:4px;">得標機率 ~50%</div>
+                </div>
+                <div class="recommend-card aggressive">
+                    <div class="recommend-icon">🚀</div>
+                    <div class="recommend-label">積極策略</div>
+                    <div class="recommend-value" style="color:#c62828;" id="statsRecommendAggressive">8 ~ 12%</div>
+                    <div style="font-size:10px; color:#888; margin-top:4px;">得標機率 ~70%</div>
+                </div>
+            </div>
+            
+            <div style="margin-top:15px; padding:12px; background:white; border-radius:8px;">
+                <div style="font-size:13px; font-weight:600; color:#333; margin-bottom:10px;">📊 關鍵發現</div>
+                <ul class="findings-list" id="statsKeyFindings">
+                    <li><span class="findings-icon">•</span> 投標倍數是影響溢價率的最重要因素</li>
+                    <li><span class="findings-icon">•</span> 理論價越高，通常溢價率越低</li>
+                    <li><span class="findings-icon">•</span> 發行規模越大，競爭程度越低</li>
+                </ul>
+            </div>
+            
+            <div id="statsSeasonStrategy" style="margin-top:12px; padding:10px; background:white; border-radius:8px; border-left:4px solid #ff9800;">
+                <div style="font-size:12px; color:#e65100;">
+                    <strong>📅 季節策略：</strong>Q3市場競爭激烈需提高出價，Q4可保守投標
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 風險提示 -->
+    <div style="background:#fff3e0; border-left:4px solid #ff9800; padding:10px; border-radius:0 8px 8px 0; font-size:11px; margin-top:12px;">
+        <div style="font-weight:bold; color:#e65100; margin-bottom:4px;">⚠️ 統計分析說明</div>
+        <div style="color:#795548; line-height:1.5;">
+            • 本分析基於歷史競拍數據，市場情況可能隨時變化<br>
+            • 蒙地卡羅模擬假設溢價率呈常態分布，實際情況可能有偏差<br>
+            • 投標決策請綜合考量多方因素，此分析僅供參考
+        </div>
+    </div>
+</div>
+
 
 </div><!-- stepReport結束 -->
 
@@ -3712,27 +4172,6 @@ button:active, .clickable:active {
         <button type="button" class="bid-dec-tab" onclick="showBidDecision('atmosphere', event)">市場氛圍</button>
     </div>
     <div id="bidDecisionContent" style="background:white; padding:12px; border-radius:0 0 8px 8px; border:1px solid #ffebee;">載入中...</div>
-</div>
-
-<!-- 【6】AI深度統計分析 v3.99新增 -->
-<div id="aiStatisticsSection" class="perf-module" style="text-align:left; margin-bottom:15px;">
-    <div class="perf-module-header" style="background:linear-gradient(135deg, #00897b, #00695c); color:white; padding:10px 12px; border-radius:8px 8px 0 0; font-weight:700; font-size:14px;">
-        🤖 AI深度統計分析
-        <span style="font-size:11px; font-weight:normal; opacity:0.9; margin-left:8px;">蒙地卡羅模擬 × 時間序列 × 機器學習</span>
-    </div>
-    <div class="perf-tabs" style="display:flex; gap:5px; padding:8px; background:#e0f2f1; flex-wrap:wrap;">
-        <button type="button" class="ai-stat-tab active" onclick="showAIStats('montecarlo', event)">🎲 蒙地卡羅</button>
-        <button type="button" class="ai-stat-tab" onclick="showAIStats('timeseries', event)">📈 時間序列</button>
-        <button type="button" class="ai-stat-tab" onclick="showAIStats('mlpattern', event)">🧠 模式識別</button>
-        <button type="button" class="ai-stat-tab" onclick="showAIStats('industry', event)">🏭 產業分析</button>
-        <button type="button" class="ai-stat-tab" onclick="showAIStats('outlier', event)">⚡ 極端案例</button>
-    </div>
-    <div id="aiStatisticsContent" style="background:white; padding:12px; border-radius:0 0 8px 8px; border:1px solid #e0f2f1;">
-        <div style="text-align:center; padding:20px; color:#666;">
-            <div style="font-size:24px; margin-bottom:10px;">🤖</div>
-            <div>AI統計分析模組載入中...</div>
-        </div>
-    </div>
 </div>
 
 
@@ -7412,6 +7851,16 @@ async function loadStatistics() {
                 const stats = window.AICore.stats;
                 aiCoreEl.innerHTML = `🧠 AI核心已就緒 | 競拍資料 ${sheetAuction.length} 筆 (有擔保${stats.guaranteed.n}/無擔保${stats.unguaranteed.n})`;
                 aiCoreEl.style.color = '#4caf50';
+            }
+        }
+        
+        // v3.99 新增：初始化AI進階統計分析模組
+        if (typeof initStatisticsModule === 'function' && sheetAuction && sheetAuction.length > 0) {
+            try {
+                initStatisticsModule(sheetAuction);
+                console.log('📊 AI進階統計分析模組已初始化');
+            } catch (e) {
+                console.warn('⚠️ 統計分析模組初始化失敗:', e);
             }
         }
 
@@ -35120,750 +35569,514 @@ function sortHotList(field) {
     loadArbitrageHotList();
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// v3.99 AI深度統計分析模組
-// 蒙地卡羅模擬 × 時間序列分析 × 機器學習模式識別
-// ═══════════════════════════════════════════════════════════════════════════════
-
-// AI統計分析全域變數
-let aiStatsCache = {
-    montecarlo: null,
-    timeseries: null,
-    mlpattern: null,
-    industry: null,
-    outlier: null,
-    lastUpdate: null
-};
+// ═══════════════════════════════════════════════════════════════════════════
+// v3.99 AI進階統計分析模組
+// ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * 顯示AI統計分析內容
+ * 統計分析器類別
  */
-function showAIStats(tab, event) {
-    // 更新Tab狀態
-    document.querySelectorAll('.ai-stat-tab').forEach(t => t.classList.remove('active'));
-    if (event && event.target) {
-        event.target.classList.add('active');
+class CBStatisticsAnalyzer {
+    constructor(auctionData) {
+        this.rawData = auctionData || [];
+        this.cleanData = [];
+        this.stats = {};
+        this.init();
     }
-    
-    const container = document.getElementById('aiStatisticsContent');
-    
-    // 檢查數據是否已載入
-    if (!window.auctionData || window.auctionData.length === 0) {
-        container.innerHTML = `
-            <div style="text-align:center; padding:30px; color:#888;">
-                <div style="font-size:32px; margin-bottom:10px;">📊</div>
-                <div>競拍數據載入中，請稍候...</div>
-                <div style="font-size:11px; margin-top:8px; color:#aaa;">若持續顯示此訊息，請確認數據源已正確連結</div>
-            </div>`;
-        return;
-    }
-    
-    switch(tab) {
-        case 'montecarlo':
-            renderMonteCarloAnalysis(container);
-            break;
-        case 'timeseries':
-            renderTimeSeriesAnalysis(container);
-            break;
-        case 'mlpattern':
-            renderMLPatternAnalysis(container);
-            break;
-        case 'industry':
-            renderIndustryAnalysis(container);
-            break;
-        case 'outlier':
-            renderOutlierAnalysis(container);
-            break;
-        default:
-            renderMonteCarloAnalysis(container);
-    }
-}
 
-/**
- * 蒙地卡羅模擬分析
- */
-function renderMonteCarloAnalysis(container) {
-    const data = window.auctionData || [];
-    if (data.length === 0) {
-        container.innerHTML = '<div style="padding:20px; text-align:center; color:#888;">無競拍數據</div>';
-        return;
+    init() {
+        this.cleanData = this.rawData.filter(row => {
+            return row['投標倍數'] && 
+                   parseFloat(row['投標倍數']) > 0 &&
+                   row['最低溢價'] !== undefined &&
+                   row['最低溢價'] !== '';
+        }).map(row => ({
+            序號: parseInt(row['序號']) || 0,
+            開標日期: row['開標日期'],
+            名稱: row['名稱'],
+            CB代號: row['CB代號'],
+            股票代號: row['股票代號'],
+            發行規模: parseFloat(row['發行規模']) || 0,
+            理論價: parseFloat(row['理論價']) || 0,
+            最低得標: parseFloat(row['最低得標']) || 0,
+            最低溢價: parseFloat(row['最低溢價']) * 100,
+            平均得標: parseFloat(row['平均得標']) || 0,
+            平均溢價: parseFloat(row['平均溢價']) * 100,
+            投標倍數: parseFloat(row['投標倍數']) || 0,
+            擔保: row['擔保'],
+            信用評等: row['信用評等'],
+            產業分類: row['產業分類'],
+            合格件數: parseInt(row['合格件數']) || 0,
+            投標張數: parseInt(row['投標張數']) || 0,
+            年: row['開標日期'] ? parseInt(row['開標日期'].substring(0, 4)) : 0,
+            月: row['開標日期'] ? parseInt(row['開標日期'].substring(5, 7)) : 0,
+            季度: row['開標日期'] ? Math.ceil(parseInt(row['開標日期'].substring(5, 7)) / 3) : 0
+        }));
+        console.log(`📊 統計分析模組初始化: ${this.cleanData.length}筆有效數據`);
     }
-    
-    // 計算歷史溢價率統計
-    const premiums = data.map(d => (d.平均溢價 || 0) * 100).filter(p => !isNaN(p));
-    const mean = premiums.reduce((a, b) => a + b, 0) / premiums.length;
-    const variance = premiums.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / premiums.length;
-    const std = Math.sqrt(variance);
-    
-    // 蒙地卡羅模擬得標機率
-    const bidLevels = [3, 5, 7, 10, 12, 15, 18, 20];
-    const probabilities = bidLevels.map(bid => {
-        // 使用常態分布CDF近似計算
-        const z = (bid - mean) / std;
-        const prob = normalCDF(z) * 100;
-        return { bid, prob: Math.min(prob, 99.9) };
-    });
-    
-    // 四策略價格
-    const strategies = [
-        { name: '保守', formula: 'μ-0.618σ', price: mean - 0.618 * std, prob: 27, icon: '🛡️', color: '#4caf50' },
-        { name: '穩健', formula: 'μ', price: mean, prob: 50, icon: '⚖️', color: '#2196f3' },
-        { name: '積極', formula: 'μ+0.618σ', price: mean + 0.618 * std, prob: 73, icon: '🚀', color: '#ff9800' },
-        { name: '極致', formula: 'μ+1.236σ', price: mean + 1.236 * std, prob: 89, icon: '🔥', color: '#f44336' }
-    ];
-    
-    // 95%信賴區間
-    const se = std / Math.sqrt(premiums.length);
-    const ci95Low = mean - 1.96 * se;
-    const ci95High = mean + 1.96 * se;
-    
-    container.innerHTML = `
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(100px, 1fr)); gap:10px; margin-bottom:15px;">
-            <div class="ai-stat-card">
-                <div class="ai-stat-label">樣本數</div>
-                <div class="ai-stat-value teal">${premiums.length}</div>
-                <div class="ai-stat-sub">競拍案例</div>
-            </div>
-            <div class="ai-stat-card">
-                <div class="ai-stat-label">平均溢價</div>
-                <div class="ai-stat-value orange">${mean.toFixed(2)}%</div>
-                <div class="ai-stat-sub">μ值</div>
-            </div>
-            <div class="ai-stat-card">
-                <div class="ai-stat-label">標準差</div>
-                <div class="ai-stat-value blue">${std.toFixed(2)}%</div>
-                <div class="ai-stat-sub">σ值</div>
-            </div>
-            <div class="ai-stat-card">
-                <div class="ai-stat-label">95%信賴區間</div>
-                <div class="ai-stat-value green" style="font-size:16px;">${ci95Low.toFixed(1)}~${ci95High.toFixed(1)}%</div>
-                <div class="ai-stat-sub">真實平均落點</div>
-            </div>
-        </div>
+
+    calculateDescriptiveStats(fieldName) {
+        const values = this.cleanData
+            .map(d => d[fieldName])
+            .filter(v => v !== null && v !== undefined && !isNaN(v))
+            .sort((a, b) => a - b);
         
-        <div style="background:#f8f9fa; border-radius:8px; padding:15px; margin-bottom:15px;">
-            <div style="font-size:14px; font-weight:700; color:#00695c; margin-bottom:12px;">
-                🎲 蒙地卡羅模擬：不同投標溢價的得標機率
-            </div>
-            ${probabilities.map(p => {
-                let barColor = p.prob < 30 ? '#ff9800' : p.prob < 60 ? '#2196f3' : '#4caf50';
-                let riskText = p.prob < 30 ? '⚠️ 低機率' : p.prob < 60 ? '📊 中等' : '✅ 高機率';
-                return `
-                    <div style="margin-bottom:8px;">
-                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
-                            <span style="font-size:12px; font-weight:600;">溢價 ${p.bid}%</span>
-                            <span style="font-size:11px; color:#666;">${riskText} ${p.prob.toFixed(1)}%</span>
-                        </div>
-                        <div class="ai-prob-bar">
-                            <div class="ai-prob-fill" style="width:${p.prob}%; background:${barColor};">
-                                ${p.prob > 15 ? p.prob.toFixed(0) + '%' : ''}
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }).join('')}
-        </div>
+        if (values.length === 0) return null;
         
-        <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-bottom:15px;">
-            ${strategies.map(s => `
-                <div style="text-align:center; background:${s.color}15; padding:10px; border-radius:8px; border:2px solid ${s.color}30;">
-                    <div style="font-size:18px;">${s.icon}</div>
-                    <div style="font-size:12px; font-weight:700; color:${s.color};">${s.name}策略</div>
-                    <div style="font-size:18px; font-weight:800; color:#333;">${s.price.toFixed(1)}%</div>
-                    <div style="font-size:10px; color:#888;">${s.formula}</div>
-                    <div style="font-size:10px; color:${s.color};">得標~${s.prob}%</div>
-                </div>
-            `).join('')}
-        </div>
+        const n = values.length;
+        const sum = values.reduce((a, b) => a + b, 0);
+        const mean = sum / n;
+        const variance = values.reduce((acc, v) => acc + Math.pow(v - mean, 2), 0) / n;
+        const std = Math.sqrt(variance);
+        const median = n % 2 === 0 ? (values[n/2 - 1] + values[n/2]) / 2 : values[Math.floor(n/2)];
         
-        <div class="ai-insight-box">
-            <div class="ai-insight-title">💡 Rex大叔投資洞察</div>
-            <div class="ai-insight-text">
-                基於${premiums.length}筆歷史競拍數據的蒙地卡羅模擬顯示，溢價率${mean.toFixed(1)}%約有50%得標機率。
-                若追求低成本得標（保守策略${strategies[0].price.toFixed(1)}%），得標機率約27%；
-                若確保得標（極致策略${strategies[3].price.toFixed(1)}%），機率可達89%。
-                建議根據個股熱度與市場氛圍調整策略。
-            </div>
-        </div>
-    `;
-}
-
-/**
- * 常態分布累積分布函數（CDF）近似
- */
-function normalCDF(z) {
-    const a1 =  0.254829592;
-    const a2 = -0.284496736;
-    const a3 =  1.421413741;
-    const a4 = -1.453152027;
-    const a5 =  1.061405429;
-    const p  =  0.3275911;
-    
-    const sign = z < 0 ? -1 : 1;
-    z = Math.abs(z) / Math.sqrt(2);
-    
-    const t = 1.0 / (1.0 + p * z);
-    const y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-z * z);
-    
-    return 0.5 * (1.0 + sign * y);
-}
-
-/**
- * 時間序列分析
- */
-function renderTimeSeriesAnalysis(container) {
-    const data = window.auctionData || [];
-    if (data.length === 0) {
-        container.innerHTML = '<div style="padding:20px; text-align:center; color:#888;">無競拍數據</div>';
-        return;
+        const percentile = (p) => {
+            const idx = (p / 100) * (n - 1);
+            const lower = Math.floor(idx);
+            const upper = Math.ceil(idx);
+            const weight = idx - lower;
+            return values[lower] * (1 - weight) + values[upper] * weight;
+        };
+        
+        return {
+            count: n, mean, median, std,
+            min: values[0], max: values[n - 1],
+            q1: percentile(25), q3: percentile(75),
+            p10: percentile(10), p90: percentile(90), p95: percentile(95),
+            iqr: percentile(75) - percentile(25)
+        };
     }
-    
-    // 年度統計
-    const yearlyStats = {};
-    data.forEach(d => {
-        const date = d.開標日期 || '';
-        const year = date.substring(0, 4);
-        if (year && year >= '2019') {
-            if (!yearlyStats[year]) {
-                yearlyStats[year] = { premiums: [], multiples: [], count: 0 };
+
+    calculateRegression() {
+        const validData = this.cleanData.filter(d => d.理論價 > 0 && d.發行規模 > 0 && d.投標倍數 > 0);
+        if (validData.length < 50) return { error: '樣本數不足', n: validData.length };
+        
+        const n = validData.length;
+        const Y = validData.map(d => d.最低溢價);
+        const X1 = validData.map(d => d.理論價);
+        const X2 = validData.map(d => d.發行規模);
+        const X3 = validData.map(d => d.投標倍數);
+        
+        const correlation = (arr1, arr2) => {
+            const n = arr1.length;
+            const mean1 = arr1.reduce((a, b) => a + b, 0) / n;
+            const mean2 = arr2.reduce((a, b) => a + b, 0) / n;
+            let num = 0, den1 = 0, den2 = 0;
+            for (let i = 0; i < n; i++) {
+                const d1 = arr1[i] - mean1;
+                const d2 = arr2[i] - mean2;
+                num += d1 * d2;
+                den1 += d1 * d1;
+                den2 += d2 * d2;
             }
-            const prem = (d.平均溢價 || 0) * 100;
-            const mult = d.投標倍數 || 0;
-            if (!isNaN(prem)) {
-                yearlyStats[year].premiums.push(prem);
-                yearlyStats[year].multiples.push(mult);
-                yearlyStats[year].count++;
+            return num / Math.sqrt(den1 * den2);
+        };
+        
+        const corr_X1_Y = correlation(X1, Y);
+        const corr_X2_Y = correlation(X2, Y);
+        const corr_X3_Y = correlation(X3, Y);
+        
+        const coefficients = [
+            { name: '理論價', coef: corr_X1_Y, absCoef: Math.abs(corr_X1_Y) },
+            { name: '發行規模', coef: corr_X2_Y, absCoef: Math.abs(corr_X2_Y) },
+            { name: '投標倍數', coef: corr_X3_Y, absCoef: Math.abs(corr_X3_Y) }
+        ].sort((a, b) => b.absCoef - a.absCoef);
+        
+        return {
+            n, coefficients,
+            correlations: { 理論價: corr_X1_Y, 發行規模: corr_X2_Y, 投標倍數: corr_X3_Y },
+            keyFinding: `投標倍數是影響溢價率的最重要因素（相關係數=${corr_X3_Y.toFixed(4)}）`
+        };
+    }
+
+    calculateConfidenceInterval(fieldName, confidence = 0.95) {
+        const stats = this.calculateDescriptiveStats(fieldName);
+        if (!stats) return null;
+        const se = stats.std / Math.sqrt(stats.count);
+        const z = confidence === 0.95 ? 1.96 : 2.576;
+        return { mean: stats.mean, se, lower: stats.mean - z * se, upper: stats.mean + z * se, n: stats.count };
+    }
+
+    monteCarloSimulation(simulations = 10000) {
+        const stats = this.calculateDescriptiveStats('最低溢價');
+        if (!stats) return null;
+        
+        const generateNormal = () => {
+            let u = 0, v = 0;
+            while (u === 0) u = Math.random();
+            while (v === 0) v = Math.random();
+            return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+        };
+        
+        const simulated = [];
+        for (let i = 0; i < simulations; i++) {
+            simulated.push(stats.mean + stats.std * generateNormal());
+        }
+        simulated.sort((a, b) => a - b);
+        
+        const testPremiums = [3, 5, 7, 9, 11, 13, 15];
+        const probabilities = testPremiums.map(p => ({
+            premium: p,
+            probability: (simulated.filter(v => v <= p).length / simulations * 100).toFixed(1)
+        }));
+        
+        return {
+            simulations, mean: stats.mean, std: stats.std, probabilities,
+            percentiles: { p25: stats.q1, p50: stats.median, p75: stats.q3, p90: stats.p90, p95: stats.p95 }
+        };
+    }
+
+    analyzeYearlyTrend() {
+        const yearlyGroups = {};
+        this.cleanData.forEach(d => {
+            const year = d.年;
+            if (year < 2019 || year > 2030) return;
+            if (!yearlyGroups[year]) yearlyGroups[year] = { 溢價率: [], 投標倍數: [], 最低得標: [] };
+            yearlyGroups[year].溢價率.push(d.最低溢價);
+            yearlyGroups[year].投標倍數.push(d.投標倍數);
+            yearlyGroups[year].最低得標.push(d.最低得標);
+        });
+        
+        const result = {};
+        for (const year in yearlyGroups) {
+            const group = yearlyGroups[year];
+            const avg = group.溢價率.reduce((a, b) => a + b, 0) / group.溢價率.length;
+            const std = Math.sqrt(group.溢價率.reduce((a, v) => a + Math.pow(v - avg, 2), 0) / group.溢價率.length);
+            result[year] = {
+                案件數: group.溢價率.length,
+                溢價率平均: avg.toFixed(2),
+                溢價率標準差: std.toFixed(2),
+                投標倍數平均: (group.投標倍數.reduce((a, b) => a + b, 0) / group.投標倍數.length).toFixed(2),
+                最低得標平均: (group.最低得標.reduce((a, b) => a + b, 0) / group.最低得標.length).toFixed(2)
+            };
+        }
+        
+        const years = Object.keys(result).map(Number).sort();
+        let trend = '穩定';
+        if (years.length >= 3) {
+            const recentAvg = parseFloat(result[years[years.length - 1]]?.溢價率平均 || 0);
+            const earlyAvg = parseFloat(result[years[0]]?.溢價率平均 || 0);
+            if (recentAvg > earlyAvg + 2) trend = '升溫';
+            else if (recentAvg < earlyAvg - 2) trend = '降溫';
+        }
+        return { yearly: result, trend };
+    }
+
+    analyzeSeasonality() {
+        const quarterlyGroups = { 1: [], 2: [], 3: [], 4: [] };
+        this.cleanData.forEach(d => {
+            const q = d.季度;
+            if (q >= 1 && q <= 4) quarterlyGroups[q].push(d.最低溢價);
+        });
+        
+        const result = {};
+        let hottest = { q: 0, avg: -999 };
+        let coldest = { q: 0, avg: 999 };
+        
+        for (const q in quarterlyGroups) {
+            const values = quarterlyGroups[q];
+            if (values.length === 0) continue;
+            const avg = values.reduce((a, b) => a + b, 0) / values.length;
+            result[`Q${q}`] = { 案件數: values.length, 溢價率平均: avg.toFixed(2) };
+            if (avg > hottest.avg) hottest = { q, avg };
+            if (avg < coldest.avg) coldest = { q, avg };
+        }
+        
+        return {
+            quarterly: result,
+            hottest: `Q${hottest.q}`,
+            coldest: `Q${coldest.q}`,
+            seasonalEffect: Math.abs(hottest.avg - coldest.avg).toFixed(2) + '%'
+        };
+    }
+
+    detectOutliers() {
+        const stats = this.calculateDescriptiveStats('最低溢價');
+        if (!stats) return null;
+        
+        const lowerBound = stats.q1 - 1.5 * stats.iqr;
+        const upperBound = stats.q3 + 1.5 * stats.iqr;
+        
+        const lowOutliers = this.cleanData.filter(d => d.最低溢價 < lowerBound);
+        const highOutliers = this.cleanData.filter(d => d.最低溢價 > upperBound);
+        
+        return {
+            normalRange: { lower: lowerBound.toFixed(2), upper: upperBound.toFixed(2) },
+            lowOutliers: lowOutliers.slice(0, 5).map(d => ({ 名稱: d.名稱, 溢價率: d.最低溢價.toFixed(2) + '%' })),
+            highOutliers: highOutliers.slice(0, 5).map(d => ({ 名稱: d.名稱, 溢價率: d.最低溢價.toFixed(2) + '%' })),
+            lowCount: lowOutliers.length,
+            highCount: highOutliers.length
+        };
+    }
+
+    clusterAnalysis() {
+        const validData = this.cleanData.filter(d => d.理論價 > 0 && d.發行規模 > 0 && d.投標倍數 > 0);
+        if (validData.length < 40) return { error: '樣本數不足' };
+        
+        const n = validData.length;
+        const sortedByMult = [...validData].sort((a, b) => b.投標倍數 - a.投標倍數);
+        const q1 = Math.floor(n * 0.25);
+        const q3 = Math.floor(n * 0.75);
+        
+        const clusters = {
+            熱門型: sortedByMult.slice(0, q1),
+            冷門型: sortedByMult.slice(q3),
+            高價值型: validData.filter(d => d.理論價 > 100),
+            一般型: validData.filter(d => d.理論價 <= 100 && d.投標倍數 > 1 && d.投標倍數 < 4)
+        };
+        
+        const result = {};
+        for (const [name, data] of Object.entries(clusters)) {
+            if (data.length === 0) continue;
+            result[name] = {
+                數量: data.length,
+                佔比: ((data.length / n) * 100).toFixed(1) + '%',
+                平均理論價: (data.reduce((a, d) => a + d.理論價, 0) / data.length).toFixed(2),
+                平均發行規模: (data.reduce((a, d) => a + d.發行規模, 0) / data.length).toFixed(2),
+                平均投標倍數: (data.reduce((a, d) => a + d.投標倍數, 0) / data.length).toFixed(2),
+                平均溢價率: (data.reduce((a, d) => a + d.最低溢價, 0) / data.length).toFixed(2) + '%'
+            };
+        }
+        return result;
+    }
+
+    analyzeSuccessPatterns() {
+        const stats = this.calculateDescriptiveStats('最低溢價');
+        if (!stats) return null;
+        
+        const lowPremiumCases = this.cleanData.filter(d => d.最低溢價 <= stats.q1);
+        const highPremiumCases = this.cleanData.filter(d => d.最低溢價 > stats.q3);
+        
+        const analyzeCases = (cases) => {
+            if (cases.length === 0) return null;
+            return {
+                案件數: cases.length,
+                平均理論價: (cases.reduce((a, d) => a + d.理論價, 0) / cases.length).toFixed(2),
+                平均發行規模: (cases.reduce((a, d) => a + d.發行規模, 0) / cases.length).toFixed(2),
+                平均投標倍數: (cases.reduce((a, d) => a + d.投標倍數, 0) / cases.length).toFixed(2)
+            };
+        };
+        
+        const lowAnalysis = analyzeCases(lowPremiumCases);
+        const highAnalysis = analyzeCases(highPremiumCases);
+        
+        const keyConditions = [];
+        if (lowAnalysis && highAnalysis) {
+            if (parseFloat(lowAnalysis.平均理論價) > parseFloat(highAnalysis.平均理論價)) keyConditions.push('理論價較高');
+            if (parseFloat(lowAnalysis.平均投標倍數) < parseFloat(highAnalysis.平均投標倍數)) keyConditions.push('投標倍數較低');
+            if (parseFloat(lowAnalysis.平均發行規模) > parseFloat(highAnalysis.平均發行規模)) keyConditions.push('發行規模較大');
+        }
+        
+        return {
+            低溢價得標: { 門檻: stats.q1.toFixed(2) + '%', ...lowAnalysis },
+            高溢價得標: { 門檻: stats.q3.toFixed(2) + '%', ...highAnalysis },
+            成功關鍵條件: keyConditions
+        };
+    }
+
+    generateRecommendations() {
+        const stats = this.calculateDescriptiveStats('最低溢價');
+        if (!stats) return { error: '數據不足' };
+        
+        return {
+            溢價率建議區間: {
+                保守: `0 ~ ${stats.median.toFixed(1)}%`,
+                平衡: `${stats.median.toFixed(1)}% ~ ${stats.mean.toFixed(1)}%`,
+                積極: `${stats.mean.toFixed(1)}% ~ ${stats.q3.toFixed(1)}%`
             }
-        }
-    });
-    
-    const years = Object.keys(yearlyStats).sort();
-    const yearData = years.map(y => ({
-        year: y,
-        avgPrem: yearlyStats[y].premiums.reduce((a, b) => a + b, 0) / yearlyStats[y].premiums.length,
-        avgMult: yearlyStats[y].multiples.reduce((a, b) => a + b, 0) / yearlyStats[y].multiples.length,
-        count: yearlyStats[y].count
-    }));
-    
-    // 季度統計
-    const quarterlyStats = { Q1: [], Q2: [], Q3: [], Q4: [] };
-    data.forEach(d => {
-        const date = d.開標日期 || '';
-        const month = parseInt(date.substring(5, 7));
-        const prem = (d.平均溢價 || 0) * 100;
-        if (!isNaN(prem) && month) {
-            const q = month <= 3 ? 'Q1' : month <= 6 ? 'Q2' : month <= 9 ? 'Q3' : 'Q4';
-            quarterlyStats[q].push(prem);
-        }
-    });
-    
-    const quarterData = Object.entries(quarterlyStats).map(([q, prems]) => ({
-        quarter: q,
-        avgPrem: prems.length ? prems.reduce((a, b) => a + b, 0) / prems.length : 0,
-        count: prems.length
-    }));
-    
-    // MA10/MA30 計算
-    const sortedData = [...data].sort((a, b) => (a.開標日期 || '').localeCompare(b.開標日期 || ''));
-    const recentPremiums = sortedData.slice(-30).map(d => (d.平均溢價 || 0) * 100).filter(p => !isNaN(p));
-    const ma10 = recentPremiums.slice(-10).reduce((a, b) => a + b, 0) / Math.min(10, recentPremiums.length);
-    const ma30 = recentPremiums.reduce((a, b) => a + b, 0) / recentPremiums.length;
-    const trend = ma10 > ma30 ? '📈 短期向上' : '📉 短期向下';
-    const trendColor = ma10 > ma30 ? '#4caf50' : '#f44336';
-    
-    // 找出最熱和最冷年份
-    const maxYear = yearData.reduce((a, b) => a.avgPrem > b.avgPrem ? a : b);
-    const minYear = yearData.reduce((a, b) => a.avgPrem < b.avgPrem ? a : b);
-    
-    container.innerHTML = `
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(100px, 1fr)); gap:10px; margin-bottom:15px;">
-            <div class="ai-stat-card">
-                <div class="ai-stat-label">MA10</div>
-                <div class="ai-stat-value teal">${ma10.toFixed(2)}%</div>
-                <div class="ai-stat-sub">近10檔平均</div>
-            </div>
-            <div class="ai-stat-card">
-                <div class="ai-stat-label">MA30</div>
-                <div class="ai-stat-value blue">${ma30.toFixed(2)}%</div>
-                <div class="ai-stat-sub">近30檔平均</div>
-            </div>
-            <div class="ai-stat-card">
-                <div class="ai-stat-label">趨勢判斷</div>
-                <div class="ai-stat-value" style="color:${trendColor}; font-size:14px;">${trend}</div>
-                <div class="ai-stat-sub">MA10 vs MA30</div>
-            </div>
-            <div class="ai-stat-card">
-                <div class="ai-stat-label">最熱年份</div>
-                <div class="ai-stat-value red">${maxYear.year}</div>
-                <div class="ai-stat-sub">${maxYear.avgPrem.toFixed(1)}%</div>
-            </div>
-        </div>
-        
-        <div style="background:#f8f9fa; border-radius:8px; padding:15px; margin-bottom:15px;">
-            <div style="font-size:14px; font-weight:700; color:#00695c; margin-bottom:12px;">
-                📅 年度市場趨勢
-            </div>
-            <div class="ai-year-trend">
-                ${yearData.map(y => {
-                    const height = Math.max(20, Math.min(70, y.avgPrem * 4));
-                    const color = y.avgPrem > 12 ? '#ff5722' : y.avgPrem > 10 ? '#ff9800' : y.avgPrem > 8 ? '#4caf50' : '#2196f3';
-                    return `
-                        <div class="ai-year-bar" style="height:${height}px; background:${color};" title="${y.year}年: ${y.avgPrem.toFixed(2)}%, ${y.count}檔">
-                            <span class="bar-value">${y.avgPrem.toFixed(0)}%</span>
-                        </div>
-                    `;
-                }).join('')}
-            </div>
-            <div style="display:flex; justify-content:space-between; font-size:10px; color:#888; margin-top:4px;">
-                ${yearData.map(y => `<span>${y.year}</span>`).join('')}
-            </div>
-        </div>
-        
-        <div style="background:#f8f9fa; border-radius:8px; padding:15px; margin-bottom:15px;">
-            <div style="font-size:14px; font-weight:700; color:#00695c; margin-bottom:12px;">
-                📊 季節效應分析
-            </div>
-            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px;">
-                ${quarterData.map(q => {
-                    const heat = q.avgPrem > 11 ? '🔥 熱' : q.avgPrem > 10 ? '⚡ 中' : '❄️ 冷';
-                    const color = q.avgPrem > 11 ? '#ff5722' : q.avgPrem > 10 ? '#ff9800' : '#2196f3';
-                    return `
-                        <div style="text-align:center; padding:10px; background:white; border-radius:6px; border:1px solid #e0e0e0;">
-                            <div style="font-size:14px; font-weight:700; color:#333;">${q.quarter}</div>
-                            <div style="font-size:18px; font-weight:800; color:${color};">${q.avgPrem.toFixed(1)}%</div>
-                            <div style="font-size:11px; color:#666;">${q.count}檔 ${heat}</div>
-                        </div>
-                    `;
-                }).join('')}
-            </div>
-        </div>
-        
-        <div class="ai-insight-box">
-            <div class="ai-insight-title">💡 Rex大叔投資洞察</div>
-            <div class="ai-insight-text">
-                市場週期分析顯示：${maxYear.year}年溢價率最高（${maxYear.avgPrem.toFixed(1)}%），
-                ${minYear.year}年最低（${minYear.avgPrem.toFixed(1)}%）。
-                季節效應上，${quarterData.reduce((a, b) => a.avgPrem > b.avgPrem ? a : b).quarter}通常最熱，
-                ${quarterData.reduce((a, b) => a.avgPrem < b.avgPrem ? a : b).quarter}相對冷門。
-                目前MA10為${ma10.toFixed(1)}%，${ma10 > ma30 ? '高於' : '低於'}MA30（${ma30.toFixed(1)}%），
-                顯示近期市場${ma10 > ma30 ? '略為升溫' : '有所降溫'}。
-            </div>
-        </div>
-    `;
+        };
+    }
 }
 
+// 全局變數
+window.statsAnalyzer = null;
+
 /**
- * 機器學習模式識別分析
+ * 初始化統計分析模組
  */
-function renderMLPatternAnalysis(container) {
-    const data = window.auctionData || [];
-    if (data.length === 0) {
-        container.innerHTML = '<div style="padding:20px; text-align:center; color:#888;">無競拍數據</div>';
+function initStatisticsModule(auctionData) {
+    console.log('📊 初始化統計分析模組...');
+    
+    if (!auctionData || auctionData.length === 0) {
+        console.warn('⚠️ 競拍資料為空');
         return;
     }
     
-    // 計算相關係數
-    const validData = data.filter(d => 
-        d.理論價 && d.投標倍數 && d.平均溢價 !== undefined && !isNaN(d.平均溢價)
-    );
-    
-    const theoPrices = validData.map(d => d.理論價);
-    const multiples = validData.map(d => d.投標倍數);
-    const premiums = validData.map(d => d.平均溢價 * 100);
-    
-    const corrTheo = calculateCorrelation(theoPrices, premiums);
-    const corrMult = calculateCorrelation(multiples, premiums);
-    
-    // 低溢價得標分析
-    const lowPremium = validData.filter(d => d.平均溢價 < 0.05);
-    const highPremium = validData.filter(d => d.平均溢價 >= 0.05);
-    
-    const lowAvgTheo = lowPremium.reduce((a, d) => a + d.理論價, 0) / lowPremium.length;
-    const highAvgTheo = highPremium.reduce((a, d) => a + d.理論價, 0) / highPremium.length;
-    const lowAvgMult = lowPremium.reduce((a, d) => a + d.投標倍數, 0) / lowPremium.length;
-    const highAvgMult = highPremium.reduce((a, d) => a + d.投標倍數, 0) / highPremium.length;
-    
-    // 簡易聚類（依投標倍數和理論價分類）
-    const clusters = [
-        { 
-            name: '熱門型', 
-            icon: '🔥', 
-            color: 'hot',
-            data: validData.filter(d => d.投標倍數 > 3.5),
-            desc: '投標倍數>3.5倍'
-        },
-        { 
-            name: '冷門型', 
-            icon: '❄️', 
-            color: 'cold',
-            data: validData.filter(d => d.投標倍數 < 2),
-            desc: '投標倍數<2倍'
-        },
-        { 
-            name: '高價值型', 
-            icon: '💎', 
-            color: 'premium',
-            data: validData.filter(d => d.理論價 < 95 && d.投標倍數 >= 2 && d.投標倍數 <= 3.5),
-            desc: '理論價<95元'
-        },
-        { 
-            name: '一般型', 
-            icon: '📊', 
-            color: 'normal',
-            data: validData.filter(d => d.理論價 >= 95 && d.投標倍數 >= 2 && d.投標倍數 <= 3.5),
-            desc: '其他案例'
-        }
-    ];
-    
-    clusters.forEach(c => {
-        if (c.data.length > 0) {
-            c.avgPrem = c.data.reduce((a, d) => a + d.平均溢價 * 100, 0) / c.data.length;
-            c.avgMult = c.data.reduce((a, d) => a + d.投標倍數, 0) / c.data.length;
-            c.avgTheo = c.data.reduce((a, d) => a + d.理論價, 0) / c.data.length;
-        } else {
-            c.avgPrem = 0;
-            c.avgMult = 0;
-            c.avgTheo = 0;
-        }
-    });
-    
-    container.innerHTML = `
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:10px; margin-bottom:15px;">
-            <div class="ai-stat-card">
-                <div class="ai-stat-label">理論價相關係數</div>
-                <div class="ai-stat-value red">${corrTheo.toFixed(3)}</div>
-                <div class="ai-stat-sub">強負相關</div>
-            </div>
-            <div class="ai-stat-card">
-                <div class="ai-stat-label">投標倍數相關係數</div>
-                <div class="ai-stat-value green">${corrMult.toFixed(3)}</div>
-                <div class="ai-stat-sub">正相關</div>
-            </div>
-            <div class="ai-stat-card">
-                <div class="ai-stat-label">低溢價案例</div>
-                <div class="ai-stat-value blue">${lowPremium.length}</div>
-                <div class="ai-stat-sub">${(lowPremium.length/validData.length*100).toFixed(1)}%</div>
-            </div>
-        </div>
-        
-        <div style="background:#f8f9fa; border-radius:8px; padding:15px; margin-bottom:15px;">
-            <div style="font-size:14px; font-weight:700; color:#00695c; margin-bottom:12px;">
-                🧠 CB競拍類型聚類分析
-            </div>
-            <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px;">
-                ${clusters.map(c => `
-                    <div class="ai-cluster-card ${c.color}">
-                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
-                            <span style="font-size:20px;">${c.icon}</span>
-                            <div>
-                                <div style="font-size:14px; font-weight:700;">${c.name}</div>
-                                <div style="font-size:10px; color:#888;">${c.desc}</div>
-                            </div>
-                            <div style="margin-left:auto; font-size:12px; font-weight:600; color:#666;">${c.data.length}檔</div>
-                        </div>
-                        <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:4px; font-size:11px;">
-                            <div style="text-align:center; padding:4px; background:rgba(0,0,0,0.03); border-radius:4px;">
-                                <div style="color:#888;">平均溢價</div>
-                                <div style="font-weight:700; color:#333;">${c.avgPrem.toFixed(1)}%</div>
-                            </div>
-                            <div style="text-align:center; padding:4px; background:rgba(0,0,0,0.03); border-radius:4px;">
-                                <div style="color:#888;">平均倍數</div>
-                                <div style="font-weight:700; color:#333;">${c.avgMult.toFixed(2)}倍</div>
-                            </div>
-                            <div style="text-align:center; padding:4px; background:rgba(0,0,0,0.03); border-radius:4px;">
-                                <div style="color:#888;">平均理論價</div>
-                                <div style="font-weight:700; color:#333;">${c.avgTheo.toFixed(1)}元</div>
-                            </div>
-                        </div>
-                    </div>
-                `).join('')}
-            </div>
-        </div>
-        
-        <div style="background:#fff3e0; border-radius:8px; padding:15px; margin-bottom:15px; border:1px solid #ffe0b2;">
-            <div style="font-size:14px; font-weight:700; color:#e65100; margin-bottom:10px;">
-                🎯 低溢價得標條件（<5%）
-            </div>
-            <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:15px;">
-                <div>
-                    <div style="font-size:12px; color:#888; margin-bottom:4px;">低溢價組特徵</div>
-                    <div style="font-size:13px;">
-                        <div>平均理論價: <span style="font-weight:700; color:#e65100;">${lowAvgTheo.toFixed(1)}元</span></div>
-                        <div>平均倍數: <span style="font-weight:700; color:#e65100;">${lowAvgMult.toFixed(2)}倍</span></div>
-                    </div>
-                </div>
-                <div>
-                    <div style="font-size:12px; color:#888; margin-bottom:4px;">一般溢價組特徵</div>
-                    <div style="font-size:13px;">
-                        <div>平均理論價: <span style="font-weight:700; color:#666;">${highAvgTheo.toFixed(1)}元</span></div>
-                        <div>平均倍數: <span style="font-weight:700; color:#666;">${highAvgMult.toFixed(2)}倍</span></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="ai-insight-box">
-            <div class="ai-insight-title">💡 Rex大叔投資洞察</div>
-            <div class="ai-insight-text">
-                機器學習分析顯示：<strong>理論價是最強預測因子</strong>（相關係數${corrTheo.toFixed(2)}），
-                每上升1元溢價率約下降0.6%。低溢價得標的黃金組合是：
-                <strong>理論價>${lowAvgTheo.toFixed(0)}元</strong> + <strong>投標倍數<${(lowAvgMult + 0.5).toFixed(1)}倍</strong>。
-                聚類分析顯示「高價值型」CB（理論價<95元）平均溢價最高（${clusters[2].avgPrem.toFixed(1)}%），
-                但風險也較高；「冷門型」則是低成本得標的好機會。
-            </div>
-        </div>
-    `;
+    window.statsAnalyzer = new CBStatisticsAnalyzer(auctionData);
+    updateStatisticsUI();
+    console.log('✅ 統計分析模組初始化完成');
 }
 
 /**
- * 計算相關係數
+ * 更新統計分析UI
  */
-function calculateCorrelation(x, y) {
-    const n = x.length;
-    if (n === 0) return 0;
+function updateStatisticsUI() {
+    if (!window.statsAnalyzer) return;
     
-    const sumX = x.reduce((a, b) => a + b, 0);
-    const sumY = y.reduce((a, b) => a + b, 0);
-    const sumXY = x.reduce((a, b, i) => a + b * y[i], 0);
-    const sumX2 = x.reduce((a, b) => a + b * b, 0);
-    const sumY2 = y.reduce((a, b) => a + b * b, 0);
+    const analyzer = window.statsAnalyzer;
+    const fmt = (n, d = 2) => n != null ? (typeof n === 'number' ? n.toFixed(d) : n) : '--';
     
-    const numerator = n * sumXY - sumX * sumY;
-    const denominator = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
+    // 更新資料筆數
+    const dataCountEl = document.getElementById('statsDataCount');
+    if (dataCountEl) dataCountEl.textContent = `基於 ${analyzer.cleanData.length} 筆歷史數據`;
     
-    return denominator === 0 ? 0 : numerator / denominator;
-}
-
-/**
- * 產業分析
- */
-function renderIndustryAnalysis(container) {
-    const data = window.auctionData || [];
-    if (data.length === 0) {
-        container.innerHTML = '<div style="padding:20px; text-align:center; color:#888;">無競拍數據</div>';
-        return;
+    // 總覽面板
+    const stats = analyzer.calculateDescriptiveStats('最低溢價');
+    const ci = analyzer.calculateConfidenceInterval('最低溢價');
+    if (stats) {
+        document.getElementById('statsMean').innerHTML = `${fmt(stats.mean)}<span class="stats-metric-unit">%</span>`;
+        document.getElementById('statsMedian').innerHTML = `${fmt(stats.median)}<span class="stats-metric-unit">%</span>`;
+        document.getElementById('statsStd').innerHTML = `${fmt(stats.std)}<span class="stats-metric-unit">%</span>`;
+    }
+    if (ci) {
+        document.getElementById('statsCI').textContent = `${fmt(ci.lower)} ~ ${fmt(ci.upper)}%`;
     }
     
-    // 產業統計
-    const industryStats = {};
-    data.forEach(d => {
-        const ind = d.產業分類 || '其他';
-        const prem = (d.平均溢價 || 0) * 100;
-        const mult = d.投標倍數 || 0;
-        if (!isNaN(prem)) {
-            if (!industryStats[ind]) {
-                industryStats[ind] = { premiums: [], multiples: [], count: 0 };
-            }
-            industryStats[ind].premiums.push(prem);
-            industryStats[ind].multiples.push(mult);
-            industryStats[ind].count++;
+    // 回歸分析
+    const regression = analyzer.calculateRegression();
+    if (regression && !regression.error) {
+        document.getElementById('statsKeyFinding').innerHTML = `<strong>📌 關鍵發現：</strong>${regression.keyFinding}`;
+    }
+    
+    // 蒙地卡羅模擬
+    const monte = analyzer.monteCarloSimulation();
+    if (monte) {
+        let monteHtml = '';
+        monte.probabilities.forEach(p => {
+            const prob = parseFloat(p.probability);
+            const color = prob > 70 ? '#4caf50' : prob > 50 ? '#ff9800' : '#f44336';
+            monteHtml += `
+                <div class="monte-bar-row">
+                    <div class="monte-bar-label">溢價 ${p.premium}%</div>
+                    <div class="monte-bar-track">
+                        <div class="monte-bar-fill" style="width:${prob}%; background:linear-gradient(90deg, ${color}, ${color}88);">${p.probability}%</div>
+                    </div>
+                </div>
+            `;
+        });
+        document.getElementById('statsMonteCarloResult').innerHTML = monteHtml;
+        
+        document.getElementById('statsP25').textContent = fmt(monte.percentiles.p25) + '%';
+        document.getElementById('statsP50').textContent = fmt(monte.percentiles.p50) + '%';
+        document.getElementById('statsP75').textContent = fmt(monte.percentiles.p75) + '%';
+        document.getElementById('statsP90').textContent = fmt(monte.percentiles.p90) + '%';
+        document.getElementById('statsP95').textContent = fmt(monte.percentiles.p95) + '%';
+    }
+    
+    // 季節性分析
+    const season = analyzer.analyzeSeasonality();
+    if (season) {
+        document.getElementById('statsHotQuarter').textContent = season.hottest;
+        document.getElementById('statsColdQuarter').textContent = season.coldest;
+        document.getElementById('statsSeasonDiff').textContent = season.seasonalEffect;
+        document.getElementById('statsSeasonAdvice').innerHTML = `💡 建議：${season.hottest}市場競爭激烈需提高出價，${season.coldest}可保守投標`;
+    }
+    
+    // 年度趨勢
+    const yearly = analyzer.analyzeYearlyTrend();
+    if (yearly && yearly.yearly) {
+        document.getElementById('statsTrendLabel').textContent = `(市場${yearly.trend}中)`;
+        let yearlyHtml = '';
+        Object.entries(yearly.yearly).forEach(([year, data]) => {
+            const premColor = parseFloat(data.溢價率平均) > 8 ? '#c62828' : parseFloat(data.溢價率平均) < 5 ? '#1565c0' : '#333';
+            yearlyHtml += `
+                <tr>
+                    <td style="font-weight:600;">${year}</td>
+                    <td>${data.案件數}</td>
+                    <td style="color:${premColor}; font-weight:600;">${data.溢價率平均}%</td>
+                    <td>${data.溢價率標準差}%</td>
+                    <td>${data.投標倍數平均}</td>
+                </tr>
+            `;
+        });
+        document.getElementById('statsYearlyBody').innerHTML = yearlyHtml;
+    }
+    
+    // 異常值偵測
+    const outliers = analyzer.detectOutliers();
+    if (outliers) {
+        document.getElementById('statsHighOutlierCount').textContent = outliers.highCount;
+        document.getElementById('statsLowOutlierCount').textContent = outliers.lowCount;
+        document.getElementById('statsHighOutlierList').innerHTML = outliers.highOutliers.map(o => `• ${o.名稱}: ${o.溢價率}`).join('<br>') || '無';
+        document.getElementById('statsLowOutlierList').innerHTML = outliers.lowOutliers.map(o => `• ${o.名稱}: ${o.溢價率}`).join('<br>') || '無';
+    }
+    
+    // 聚類分析
+    const clusters = analyzer.clusterAnalysis();
+    if (clusters && !clusters.error) {
+        const colors = { 熱門型: '#e91e63', 冷門型: '#2196f3', 高價值型: '#4caf50', 一般型: '#ff9800' };
+        const icons = { 熱門型: '🔥', 冷門型: '❄️', 高價值型: '💎', 一般型: '⚡' };
+        let clusterHtml = '';
+        Object.entries(clusters).forEach(([name, data]) => {
+            clusterHtml += `
+                <div class="cluster-card">
+                    <div class="cluster-header" style="border-color:${colors[name] || '#666'};">
+                        <div class="cluster-name" style="color:${colors[name] || '#666'};">${icons[name] || '📊'} ${name}</div>
+                        <div class="cluster-count">${data.數量}檔 (${data.佔比})</div>
+                    </div>
+                    <div class="cluster-stats">
+                        <div class="cluster-stat-row"><span>平均理論價</span><span style="font-weight:600;">${data.平均理論價}元</span></div>
+                        <div class="cluster-stat-row"><span>平均投標倍數</span><span style="font-weight:600;">${data.平均投標倍數}倍</span></div>
+                        <div class="cluster-stat-row"><span>平均溢價率</span><span style="font-weight:600; color:${colors[name] || '#666'};">${data.平均溢價率}</span></div>
+                    </div>
+                </div>
+            `;
+        });
+        document.getElementById('statsClusterGrid').innerHTML = clusterHtml;
+    }
+    
+    // 成功模式
+    const patterns = analyzer.analyzeSuccessPatterns();
+    if (patterns) {
+        if (patterns.低溢價得標) {
+            document.getElementById('statsLowPremiumPattern').innerHTML = `
+                <div style="margin-bottom:4px;">門檻: ${patterns.低溢價得標.門檻}</div>
+                <div style="margin-bottom:4px;">平均理論價: ${patterns.低溢價得標.平均理論價}元</div>
+                <div style="margin-bottom:4px;">平均投標倍數: ${patterns.低溢價得標.平均投標倍數}倍</div>
+            `;
         }
-    });
+        if (patterns.高溢價得標) {
+            document.getElementById('statsHighPremiumPattern').innerHTML = `
+                <div style="margin-bottom:4px;">門檻: ${patterns.高溢價得標.門檻}</div>
+                <div style="margin-bottom:4px;">平均理論價: ${patterns.高溢價得標.平均理論價}元</div>
+                <div style="margin-bottom:4px;">平均投標倍數: ${patterns.高溢價得標.平均投標倍數}倍</div>
+            `;
+        }
+        if (patterns.成功關鍵條件 && patterns.成功關鍵條件.length > 0) {
+            document.getElementById('statsSuccessConditions').innerHTML = patterns.成功關鍵條件.map(c => 
+                `<li><span class="findings-icon">✓</span> ${c}</li>`
+            ).join('');
+        }
+    }
     
-    const industries = Object.entries(industryStats)
-        .filter(([k, v]) => v.count >= 3)
-        .map(([ind, stats]) => ({
-            name: ind,
-            avgPrem: stats.premiums.reduce((a, b) => a + b, 0) / stats.premiums.length,
-            avgMult: stats.multiples.reduce((a, b) => a + b, 0) / stats.multiples.length,
-            count: stats.count
-        }))
-        .sort((a, b) => b.avgPrem - a.avgPrem);
+    // 投標建議
+    const recommend = analyzer.generateRecommendations();
+    if (recommend && recommend.溢價率建議區間) {
+        document.getElementById('statsRecommendConservative').textContent = recommend.溢價率建議區間.保守;
+        document.getElementById('statsRecommendBalanced').textContent = recommend.溢價率建議區間.平衡;
+        document.getElementById('statsRecommendAggressive').textContent = recommend.溢價率建議區間.積極;
+    }
     
-    const top5 = industries.slice(0, 5);
-    const bottom5 = industries.slice(-5).reverse();
-    
-    // 擔保類型統計
-    const securedData = data.filter(d => d.擔保 === '有擔保');
-    const unsecuredData = data.filter(d => d.擔保 === '無擔保');
-    const securedAvg = securedData.length > 0 ? 
-        securedData.reduce((a, d) => a + (d.平均溢價 || 0) * 100, 0) / securedData.length : 0;
-    const unsecuredAvg = unsecuredData.length > 0 ? 
-        unsecuredData.reduce((a, d) => a + (d.平均溢價 || 0) * 100, 0) / unsecuredData.length : 0;
-    
-    container.innerHTML = `
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(110px, 1fr)); gap:10px; margin-bottom:15px;">
-            <div class="ai-stat-card">
-                <div class="ai-stat-label">有擔保平均</div>
-                <div class="ai-stat-value green">${securedAvg.toFixed(1)}%</div>
-                <div class="ai-stat-sub">${securedData.length}檔</div>
+    // 季節策略
+    if (season) {
+        document.getElementById('statsSeasonStrategy').innerHTML = `
+            <div style="font-size:12px; color:#e65100;">
+                <strong>📅 季節策略：</strong>${season.hottest}市場競爭激烈需提高出價，${season.coldest}可保守投標
             </div>
-            <div class="ai-stat-card">
-                <div class="ai-stat-label">無擔保平均</div>
-                <div class="ai-stat-value orange">${unsecuredAvg.toFixed(1)}%</div>
-                <div class="ai-stat-sub">${unsecuredData.length}檔</div>
-            </div>
-            <div class="ai-stat-card">
-                <div class="ai-stat-label">擔保溢價差</div>
-                <div class="ai-stat-value blue">+${(securedAvg - unsecuredAvg).toFixed(1)}%</div>
-                <div class="ai-stat-sub">有擔保較高</div>
-            </div>
-            <div class="ai-stat-card">
-                <div class="ai-stat-label">產業數</div>
-                <div class="ai-stat-value teal">${industries.length}</div>
-                <div class="ai-stat-sub">≥3檔</div>
-            </div>
-        </div>
-        
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:15px;">
-            <div style="background:#e8f5e9; border-radius:8px; padding:12px;">
-                <div style="font-size:13px; font-weight:700; color:#2e7d32; margin-bottom:10px;">🔥 熱門產業 TOP 5</div>
-                ${top5.map((ind, i) => `
-                    <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(0,0,0,0.05);">
-                        <span style="font-size:12px;">
-                            <span style="color:#4caf50; font-weight:700;">${i+1}.</span> ${ind.name}
-                        </span>
-                        <span style="font-size:12px; font-weight:700; color:#2e7d32;">${ind.avgPrem.toFixed(1)}%</span>
-                    </div>
-                `).join('')}
-            </div>
-            <div style="background:#ffebee; border-radius:8px; padding:12px;">
-                <div style="font-size:13px; font-weight:700; color:#c62828; margin-bottom:10px;">❄️ 冷門產業 TOP 5</div>
-                ${bottom5.map((ind, i) => `
-                    <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(0,0,0,0.05);">
-                        <span style="font-size:12px;">
-                            <span style="color:#f44336; font-weight:700;">${i+1}.</span> ${ind.name}
-                        </span>
-                        <span style="font-size:12px; font-weight:700; color:#c62828;">${ind.avgPrem.toFixed(1)}%</span>
-                    </div>
-                `).join('')}
-            </div>
-        </div>
-        
-        <div class="ai-insight-box">
-            <div class="ai-insight-title">💡 Rex大叔投資洞察</div>
-            <div class="ai-insight-text">
-                產業分析顯示：<strong>${top5[0]?.name || '-'}</strong>溢價率最高（${top5[0]?.avgPrem.toFixed(1) || 0}%），
-                <strong>${bottom5[0]?.name || '-'}</strong>最低（${bottom5[0]?.avgPrem.toFixed(1) || 0}%）。
-                有擔保CB平均比無擔保高${(securedAvg - unsecuredAvg).toFixed(1)}個百分點。
-                投標時應考慮產業熱度差異，熱門產業需要更積極的出價策略。
-            </div>
-        </div>
-    `;
+        `;
+    }
 }
 
 /**
- * 極端案例分析
+ * 切換統計面板
  */
-function renderOutlierAnalysis(container) {
-    const data = window.auctionData || [];
-    if (data.length === 0) {
-        container.innerHTML = '<div style="padding:20px; text-align:center; color:#888;">無競拍數據</div>';
-        return;
-    }
+function showStatsPanel(panelId) {
+    document.querySelectorAll('.stats-panel-container').forEach(el => el.style.display = 'none');
+    const panel = document.getElementById('statsPanel_' + panelId);
+    if (panel) panel.style.display = 'block';
     
-    // 計算Z-score
-    const premiums = data.map(d => (d.平均溢價 || 0) * 100).filter(p => !isNaN(p));
-    const mean = premiums.reduce((a, b) => a + b, 0) / premiums.length;
-    const std = Math.sqrt(premiums.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / premiums.length);
-    
-    const withZScore = data.map(d => ({
-        ...d,
-        premPct: (d.平均溢價 || 0) * 100,
-        zScore: ((d.平均溢價 || 0) * 100 - mean) / std
-    })).filter(d => !isNaN(d.zScore));
-    
-    // 極端高溢價（Z > 2）
-    const highOutliers = withZScore.filter(d => d.zScore > 2).sort((a, b) => b.zScore - a.zScore).slice(0, 8);
-    // 極端低溢價（Z < -1.5）
-    const lowOutliers = withZScore.filter(d => d.zScore < -1.5).sort((a, b) => a.zScore - b.zScore).slice(0, 8);
-    
-    container.innerHTML = `
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(100px, 1fr)); gap:10px; margin-bottom:15px;">
-            <div class="ai-stat-card">
-                <div class="ai-stat-label">極高溢價案例</div>
-                <div class="ai-stat-value red">${highOutliers.length}</div>
-                <div class="ai-stat-sub">Z > 2</div>
-            </div>
-            <div class="ai-stat-card">
-                <div class="ai-stat-label">極低/負溢價案例</div>
-                <div class="ai-stat-value blue">${lowOutliers.length}</div>
-                <div class="ai-stat-sub">Z < -1.5</div>
-            </div>
-            <div class="ai-stat-card">
-                <div class="ai-stat-label">溢價率平均</div>
-                <div class="ai-stat-value teal">${mean.toFixed(1)}%</div>
-                <div class="ai-stat-sub">μ</div>
-            </div>
-            <div class="ai-stat-card">
-                <div class="ai-stat-label">標準差</div>
-                <div class="ai-stat-value orange">${std.toFixed(1)}%</div>
-                <div class="ai-stat-sub">σ</div>
-            </div>
-        </div>
-        
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:15px;">
-            <div style="background:#ffebee; border-radius:8px; padding:12px;">
-                <div style="font-size:13px; font-weight:700; color:#c62828; margin-bottom:10px;">🔥 極端高溢價案例</div>
-                <div style="font-size:10px; overflow-x:auto;">
-                    <table style="width:100%; border-collapse:collapse;">
-                        <thead>
-                            <tr style="background:#ffcdd2;">
-                                <th style="padding:4px; text-align:left;">名稱</th>
-                                <th style="padding:4px; text-align:right;">溢價</th>
-                                <th style="padding:4px; text-align:right;">理論價</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${highOutliers.map(d => `
-                                <tr style="border-bottom:1px solid #ffcdd2;">
-                                    <td style="padding:4px;">${d.名稱 || '-'}</td>
-                                    <td style="padding:4px; text-align:right; color:#c62828; font-weight:700;">${d.premPct.toFixed(1)}%</td>
-                                    <td style="padding:4px; text-align:right;">${d.理論價?.toFixed(1) || '-'}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            <div style="background:#e3f2fd; border-radius:8px; padding:12px;">
-                <div style="font-size:13px; font-weight:700; color:#1565c0; margin-bottom:10px;">❄️ 極低/負溢價案例</div>
-                <div style="font-size:10px; overflow-x:auto;">
-                    <table style="width:100%; border-collapse:collapse;">
-                        <thead>
-                            <tr style="background:#bbdefb;">
-                                <th style="padding:4px; text-align:left;">名稱</th>
-                                <th style="padding:4px; text-align:right;">溢價</th>
-                                <th style="padding:4px; text-align:right;">理論價</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${lowOutliers.map(d => `
-                                <tr style="border-bottom:1px solid #bbdefb;">
-                                    <td style="padding:4px;">${d.名稱 || '-'}</td>
-                                    <td style="padding:4px; text-align:right; color:#1565c0; font-weight:700;">${d.premPct.toFixed(1)}%</td>
-                                    <td style="padding:4px; text-align:right;">${d.理論價?.toFixed(1) || '-'}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-        
-        <div class="ai-insight-box">
-            <div class="ai-insight-title">💡 Rex大叔投資洞察</div>
-            <div class="ai-insight-text">
-                極端案例分析：高溢價案例多出現在<strong>低理論價</strong>（<95元）的CB，
-                通常伴隨產業題材或市場熱度；低/負溢價案例則多為<strong>高理論價</strong>（>105元）CB。
-                極端案例往往反映市場非理性情緒，可作為反向指標參考。
-                ${highOutliers[0] ? `近期最高溢價案例：${highOutliers[0].名稱}（${highOutliers[0].premPct.toFixed(1)}%）` : ''}
-            </div>
-        </div>
-    `;
-}
-
-/**
- * 初始化AI統計分析模組
- */
-function initAIStatisticsModule() {
-    // 確認auctionData已載入後才渲染
-    if (window.auctionData && window.auctionData.length > 0) {
-        showAIStats('montecarlo', null);
-    } else {
-        // 延遲等待數據載入
-        setTimeout(initAIStatisticsModule, 1000);
-    }
+    document.querySelectorAll('.stats-tab-btn').forEach(tab => tab.classList.remove('active'));
+    event.target.classList.add('active');
 }
 
 // 系統啟動
@@ -35901,11 +36114,6 @@ window.addEventListener('DOMContentLoaded', function() {
             loadCbasHistoryData();
         }
     }, 12000);
-    
-    // v3.99: 初始化AI統計分析模組
-    setTimeout(() => {
-        initAIStatisticsModule();
-    }, 2000);
     
     // v3.97-dr: 融資融券不自動載入，改為在套利頁面選擇CB時才載入
 });

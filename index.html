@@ -2539,6 +2539,10 @@ button:active, .clickable:active {
     <div id="cbTitleHeader" style="display:none;">
         <!-- 由displayResult動態填入 -->
     </div>
+    <!-- v3.99S: Rex大叔提醒區塊（放在標題下方） -->
+    <div id="step0Reminder" style="display:none; background:linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border-left:4px solid #ff9800; border-radius:0 12px 12px 0; padding:15px; margin-bottom:15px;">
+        <!-- 由displayResult動態填入 -->
+    </div>
     <!-- ========== v3.97j 步驟式AI評估報告（三階段分析） ========== -->
     <div id="stepReport" style="display:none;">
 <!-- Step 1: 基礎數據分析（溢價率法/得標均價法 × 無加權/有加權） -->
@@ -3126,11 +3130,32 @@ button:active, .clickable:active {
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
                         <div style="background:white; padding:10px; border-radius:6px; border-left:3px solid #2196f3;">
                             <div style="font-size:16px; color:#444;">參考樣本數</div>
-                            <div style="font-size:16px; font-weight:bold; color:#1565c0;" id="step3SampleCount">--筆</div>
+                            <div style="font-size:18px; font-weight:bold; color:#1565c0;" id="step3SampleCount">--筆</div>
                         </div>
                         <div style="background:white; padding:10px; border-radius:6px; border-left:3px solid #4caf50;">
                             <div style="font-size:16px; color:#444;">溢價率標準差</div>
-                            <div style="font-size:16px; font-weight:bold; color:#2e7d32;" id="step3StdDev">--%</div>
+                            <div style="font-size:18px; font-weight:bold; color:#2e7d32;" id="step3StdDev">--%</div>
+                        </div>
+                    </div>
+                    <!-- v3.99S新增：各方法預測值詳情 -->
+                    <div style="background:white; padding:12px; border-radius:6px; margin-bottom:10px; border-left:3px solid #ff9800;">
+                        <div style="font-size:16px; font-weight:bold; color:#e65100; margin-bottom:8px;">📊 各方法預測值</div>
+                        <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px;">
+                            <div style="text-align:center; padding:8px; background:#fff3e0; border-radius:6px;">
+                                <div style="font-size:14px; color:#666;">溢價率法</div>
+                                <div style="font-size:18px; font-weight:bold; color:#e65100;" id="step3MethodDetail1">--元</div>
+                                <div style="font-size:13px; color:#888;" id="step3MethodNote1">--</div>
+                            </div>
+                            <div style="text-align:center; padding:8px; background:#e3f2fd; border-radius:6px;">
+                                <div style="font-size:14px; color:#666;">均價法</div>
+                                <div style="font-size:18px; font-weight:bold; color:#1565c0;" id="step3MethodDetail2">--元</div>
+                                <div style="font-size:13px; color:#888;" id="step3MethodNote2">--</div>
+                            </div>
+                            <div style="text-align:center; padding:8px; background:#fce4ec; border-radius:6px;">
+                                <div style="font-size:14px; color:#666;">熱度法</div>
+                                <div style="font-size:18px; font-weight:bold; color:#c2185b;" id="step3MethodDetail3">--元</div>
+                                <div style="font-size:13px; color:#888;" id="step3MethodNote3">--</div>
+                            </div>
                         </div>
                     </div>
                     <div style="background:white; padding:10px; border-radius:6px; margin-bottom:10px;">
@@ -14978,6 +15003,7 @@ function displayResult(r) {
         reminderHTML += `</div>`;
         reminderHTML += `</div>`;
         step0ReminderEl.innerHTML = reminderHTML;
+        step0ReminderEl.style.display = 'block';  // v3.99S: 確保顯示
     }
     // ========== Step 1: 基礎數據分析 ==========
     const stockPrice = r.inputData.stockPrice || 0;
@@ -15508,12 +15534,18 @@ function displayResult(r) {
             </div>`;
             // 各維度表格
             validDims.forEach(d => {
-                const dimName = { industry: '🏭 產業', market: '📈 市場氛圍', theo: '💰 理論價區間', rating: '⭐ 信評' }[d.key];
+                // v3.99S修正：第四維度key是'fourth'，需要根據擔保類型顯示不同名稱
+                const dimName = { 
+                    industry: '🏭 產業', 
+                    market: '📈 市場氛圍', 
+                    theo: '💰 理論價區間', 
+                    fourth: isGuaranteedStep4 ? '📦 發行規模' : '⭐ 信評'
+                }[d.key];
                 const dimLabel = {
                     industry: step4Industry,
                     market: '最近N檔',
                     theo: currentZone.label,
-                    rating: step4Rating
+                    fourth: isGuaranteedStep4 ? `${sizeMin.toFixed(1)}~${sizeMax.toFixed(1)}億` : (step4Rating ? `TCRI ${step4Rating}` : '未指定')
                 }[d.key];
                 // v3.97-ct：異常值警示
                 const outlierWarning = d.result.outlierInfo && d.result.outlierInfo.hasOutliers 
@@ -15759,13 +15791,20 @@ function displayResult(r) {
                 ensembleResult.methods.forEach((m, i) => {
                     if (m && typeof m.value === 'number' && !isNaN(m.value)) {
                         updateElement(`step3Method${i + 1}`, m.value.toFixed(2) + '元');
+                        // v3.99S新增：更新詳細數據區塊
+                        updateElement(`step3MethodDetail${i + 1}`, m.value.toFixed(2) + '元');
+                        updateElement(`step3MethodNote${i + 1}`, m.detail || '');
                     } else {
                         updateElement(`step3Method${i + 1}`, '--元');
+                        updateElement(`step3MethodDetail${i + 1}`, '--元');
+                        updateElement(`step3MethodNote${i + 1}`, '數據不足');
                     }
                 });
                 // 填充剩餘的方法欄位（如果方法數少於3個）
                 for (let i = ensembleResult.methods.length; i < 3; i++) {
                     updateElement(`step3Method${i + 1}`, '--元');
+                    updateElement(`step3MethodDetail${i + 1}`, '--元');
+                    updateElement(`step3MethodNote${i + 1}`, '數據不足');
                 }
                 // 更新集成結果 - 加入安全檢查
                 if (typeof ensembleResult.value === 'number' && !isNaN(ensembleResult.value)) {

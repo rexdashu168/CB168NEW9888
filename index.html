@@ -3,8 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.99R7 (精簡版)</title>
-<!-- v3.99R7: 閃電帶入精簡、代號+名稱修正、移除分析法一二 -->
+<title>AI智能可轉債競拍系統 v3.99R (溢價率參數優化版)</title>
+<!-- v3.99R: 新增307檔完整溢價率參數表（有擔保/無擔保 × 投標倍數 × 規模 × TCRI）-->
+<!-- v3.99Q: 閃電帶入精簡、代號+名稱修正、移除分析法一二 -->
 <!-- 
      ═══════════════════════════════════════════════════════════════
      v3.98h 新增功能（整合自 cbas_tracker 版本）
@@ -1632,7 +1633,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     .input-panel { padding: 15px; border-radius: 12px; }
     .result-panel { padding: 15px; border-radius: 12px; margin-top: 10px; }
     .supply-analysis, .ranking-section, .realperf-section, .profitloss-section, .market-trend-section { padding: 10px; margin-top: 10px; }
-    /* v3.99R7: 右側區塊左右邊距 */
+    /* v3.99Q: 右側區塊左右邊距 */
     .right-section { margin-left: 8px; margin-right: 8px; }
     .welcome-message > div:first-child { margin-left: 8px; margin-right: 8px; }
     /* v3.97-el: 表格優化 */
@@ -2531,7 +2532,7 @@ button:active, .clickable:active {
 </div><!-- input-panel結束 -->
 <div class="resizer" id="resizer"></div>
 <div class="result-panel" id="resultPanel">
-    <!-- v3.99R7: CB標題區塊（放在步驟報告前） -->
+    <!-- v3.99Q: CB標題區塊（放在步驟報告前） -->
     <div id="cbTitleHeader" style="display:none;">
         <!-- 由displayResult動態填入 -->
     </div>
@@ -2901,16 +2902,96 @@ button:active, .clickable:active {
                     <div style="font-size:8px; color:#f44336;" id="step3StratUltimateProb">得標~--%</div>
                 </div>
             </div>
-            <!-- v3.99R7 新增：策略方向提示 -->
-            <div id="step3StrategyTip" style="margin-top:8px; padding:10px; background:rgba(255,255,255,0.15); border-radius:6px; font-size:11px; line-height:1.5;">
-                <div style="font-weight:bold; margin-bottom:4px;">💡 策略選擇提示</div>
-                <div id="step3StrategyTipContent">
-                    • <b>冷門低倍數(＜2x)</b>：用<span style="color:#4caf50;">保守價</span>嘗試低成本得標，沒人搶就是撿便宜的機會<br>
-                    • <b>一般倍數(2-3x)</b>：用<span style="color:#2196f3;">穩健價</span>平衡成本與得標機率<br>
-                    • <b>熱門高倍數(＞3x)</b>：競爭激烈，追高成本風險大，需審慎評估是否值得
+        </div>
+        <!-- v3.99R 新增：溢價率參數速查表 -->
+        <details style="background:#fff8e1; border-radius:8px; overflow:hidden; margin-bottom:12px; border:2px solid #ffc107;">
+            <summary style="padding:12px; cursor:pointer; font-size:13px; font-weight:bold; color:#f57c00; background:#fff3e0; display:flex; align-items:center; gap:8px;">
+                <span>📊</span>
+                <span>溢價率參數速查表（307檔統計）</span>
+                <span style="margin-left:auto; font-size:11px; color:#666; font-weight:normal;">點擊展開</span>
+            </summary>
+            <div style="padding:12px;">
+                <div id="premiumParamsDisplay">
+                    <!-- 有擔保參數表 -->
+                    <div style="margin-bottom:15px;">
+                        <div style="font-weight:bold; color:#2e7d32; margin-bottom:8px; font-size:12px;">🛡️ 有擔保標的（101檔）整體中位溢價：9.68%</div>
+                        <table style="width:100%; border-collapse:collapse; font-size:10px;">
+                            <tr style="background:#e8f5e9;">
+                                <th style="padding:6px; text-align:left; border:1px solid #c8e6c9;">投標熱度</th>
+                                <th style="padding:6px; text-align:center; border:1px solid #c8e6c9;">保守(Q25)</th>
+                                <th style="padding:6px; text-align:center; border:1px solid #c8e6c9;">中位(Q50)</th>
+                                <th style="padding:6px; text-align:center; border:1px solid #c8e6c9;">積極(Q75)</th>
+                                <th style="padding:6px; text-align:center; border:1px solid #c8e6c9;">樣本</th>
+                            </tr>
+                            <tr>
+                                <td style="padding:6px; border:1px solid #c8e6c9;">冷門(≤2倍)</td>
+                                <td style="padding:6px; text-align:center; border:1px solid #c8e6c9; color:#4caf50; font-weight:bold;">6.48%</td>
+                                <td style="padding:6px; text-align:center; border:1px solid #c8e6c9; color:#2196f3; font-weight:bold;">8.57%</td>
+                                <td style="padding:6px; text-align:center; border:1px solid #c8e6c9; color:#ff9800; font-weight:bold;">13.02%</td>
+                                <td style="padding:6px; text-align:center; border:1px solid #c8e6c9;">25</td>
+                            </tr>
+                            <tr style="background:#f5f5f5;">
+                                <td style="padding:6px; border:1px solid #c8e6c9;">中等(2-4倍)</td>
+                                <td style="padding:6px; text-align:center; border:1px solid #c8e6c9; color:#4caf50; font-weight:bold;">3.74%</td>
+                                <td style="padding:6px; text-align:center; border:1px solid #c8e6c9; color:#2196f3; font-weight:bold;">9.68%</td>
+                                <td style="padding:6px; text-align:center; border:1px solid #c8e6c9; color:#ff9800; font-weight:bold;">15.10%</td>
+                                <td style="padding:6px; text-align:center; border:1px solid #c8e6c9;">51</td>
+                            </tr>
+                            <tr>
+                                <td style="padding:6px; border:1px solid #c8e6c9;">熱門(>4倍)</td>
+                                <td style="padding:6px; text-align:center; border:1px solid #c8e6c9; color:#4caf50; font-weight:bold;">9.40%</td>
+                                <td style="padding:6px; text-align:center; border:1px solid #c8e6c9; color:#2196f3; font-weight:bold;">11.96%</td>
+                                <td style="padding:6px; text-align:center; border:1px solid #c8e6c9; color:#ff9800; font-weight:bold;">14.85%</td>
+                                <td style="padding:6px; text-align:center; border:1px solid #c8e6c9;">25</td>
+                            </tr>
+                        </table>
+                    </div>
+                    <!-- 無擔保參數表 -->
+                    <div style="margin-bottom:15px;">
+                        <div style="font-weight:bold; color:#1565c0; margin-bottom:8px; font-size:12px;">📋 無擔保標的（206檔）整體中位溢價：6.78%</div>
+                        <table style="width:100%; border-collapse:collapse; font-size:10px;">
+                            <tr style="background:#e3f2fd;">
+                                <th style="padding:6px; text-align:left; border:1px solid #bbdefb;">投標熱度</th>
+                                <th style="padding:6px; text-align:center; border:1px solid #bbdefb;">保守(Q25)</th>
+                                <th style="padding:6px; text-align:center; border:1px solid #bbdefb;">中位(Q50)</th>
+                                <th style="padding:6px; text-align:center; border:1px solid #bbdefb;">積極(Q75)</th>
+                                <th style="padding:6px; text-align:center; border:1px solid #bbdefb;">樣本</th>
+                            </tr>
+                            <tr>
+                                <td style="padding:6px; border:1px solid #bbdefb;">冷門(≤2倍)</td>
+                                <td style="padding:6px; text-align:center; border:1px solid #bbdefb; color:#4caf50; font-weight:bold;">1.29%</td>
+                                <td style="padding:6px; text-align:center; border:1px solid #bbdefb; color:#2196f3; font-weight:bold;">3.50%</td>
+                                <td style="padding:6px; text-align:center; border:1px solid #bbdefb; color:#ff9800; font-weight:bold;">6.76%</td>
+                                <td style="padding:6px; text-align:center; border:1px solid #bbdefb;">77</td>
+                            </tr>
+                            <tr style="background:#f5f5f5;">
+                                <td style="padding:6px; border:1px solid #bbdefb;">中等(2-4倍)</td>
+                                <td style="padding:6px; text-align:center; border:1px solid #bbdefb; color:#4caf50; font-weight:bold;">3.81%</td>
+                                <td style="padding:6px; text-align:center; border:1px solid #bbdefb; color:#2196f3; font-weight:bold;">7.43%</td>
+                                <td style="padding:6px; text-align:center; border:1px solid #bbdefb; color:#ff9800; font-weight:bold;">12.26%</td>
+                                <td style="padding:6px; text-align:center; border:1px solid #bbdefb;">79</td>
+                            </tr>
+                            <tr>
+                                <td style="padding:6px; border:1px solid #bbdefb;">熱門(>4倍)</td>
+                                <td style="padding:6px; text-align:center; border:1px solid #bbdefb; color:#4caf50; font-weight:bold;">8.98%</td>
+                                <td style="padding:6px; text-align:center; border:1px solid #bbdefb; color:#2196f3; font-weight:bold;">12.55%</td>
+                                <td style="padding:6px; text-align:center; border:1px solid #bbdefb; color:#ff9800; font-weight:bold;">16.47%</td>
+                                <td style="padding:6px; text-align:center; border:1px solid #bbdefb;">50</td>
+                            </tr>
+                        </table>
+                    </div>
+                    <!-- 使用說明 -->
+                    <div style="background:#f5f5f5; padding:10px; border-radius:6px; font-size:10px; color:#666; line-height:1.6;">
+                        <div style="font-weight:bold; margin-bottom:4px;">💡 使用說明：</div>
+                        <div>• <b>投標價 = 理論價 × (1 + 溢價率)</b></div>
+                        <div>• 保守(Q25)：約27%得標機率，適合追求最低成本</div>
+                        <div>• 中位(Q50)：約50%得標機率，平衡成本與得標率</div>
+                        <div>• 積極(Q75)：約73%得標機率，適合確保得標</div>
+                        <div style="margin-top:6px; color:#d32f2f;">⚠️ 有擔保標的可拆解CBAS降低風險，無擔保需承擔現股套牢風險</div>
+                    </div>
                 </div>
             </div>
-        </div>
+        </details>
         <!-- 原有的雙軌預測結果（保留作為參考） -->
         <details style="background:#f8f9fa; border-radius:8px; overflow:hidden; margin-bottom:12px;">
             <summary style="padding:12px; cursor:pointer; font-size:13px; font-weight:bold; color:#1565c0; background:#e3f2fd; display:flex; align-items:center; gap:8px;">
@@ -3010,55 +3091,6 @@ button:active, .clickable:active {
                 • 市場熱度偏熱時建議參考積極策略，偏冷時建議保守策略<br>
                 • 投標前請確認截標日13:30收盤的理論價格
             </div>
-        </div>
-        <!-- ========== v3.99R7 新增：冷卻期提醒 ========== -->
-        <div style="background:linear-gradient(135deg, #ff9800 0%, #f57c00 100%); color:white; border-radius:10px; padding:12px; margin-top:12px;">
-            <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
-                <span style="font-size:18px;">⏰</span>
-                <span style="font-size:13px; font-weight:bold;">冷卻期(閉鎖期)提醒</span>
-            </div>
-            <div style="font-size:11px; line-height:1.6; background:rgba(0,0,0,0.15); padding:10px; border-radius:6px;">
-                <div style="margin-bottom:4px;">📌 競拍得標後<b>不能立即賣出</b>，需等待撥券日後才能交易</div>
-                <div style="margin-bottom:4px;">📌 撥券日通常在開標日後 <b>7-10個營業日</b></div>
-                <div style="margin-bottom:4px;">📌 閉鎖期間股價波動風險需自行承擔</div>
-                <div style="color:#ffeb3b;">⚠️ 投標前請確認能承受閉鎖期間的價格變動風險</div>
-            </div>
-        </div>
-        <!-- ========== v3.99R7 新增：底標100元得標分析 ========== -->
-        <div style="background:linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); color:white; border-radius:10px; padding:12px; margin-top:12px;">
-            <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
-                <span style="font-size:18px;">💯</span>
-                <span style="font-size:13px; font-weight:bold;">底標100元得標分析</span>
-            </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-                <!-- 有擔保 -->
-                <div style="background:rgba(255,255,255,0.2); padding:10px; border-radius:8px;">
-                    <div style="font-size:12px; font-weight:bold; margin-bottom:4px;">🛡️ 有擔保CB</div>
-                    <div style="font-size:16px; font-weight:bold; color:#ffeb3b; margin-bottom:4px;">100% 勝率</div>
-                    <div style="font-size:10px; line-height:1.4;">
-                        ✅ 到期保證還本100元<br>
-                        ✅ 100元得標=零風險<br>
-                        ✅ 穩賺不賠的機會
-                    </div>
-                </div>
-                <!-- 無擔保 -->
-                <div style="background:rgba(255,255,255,0.2); padding:10px; border-radius:8px;">
-                    <div style="font-size:12px; font-weight:bold; margin-bottom:4px;">📄 無擔保CB</div>
-                    <div style="font-size:16px; font-weight:bold; color:#ffcc80; margin-bottom:4px;">仍有風險</div>
-                    <div style="font-size:10px; line-height:1.4;">
-                        ⚠️ 公司違約血本無歸<br>
-                        ⚠️ 需評估公司財務<br>
-                        ⚠️ 信評越低風險越高
-                    </div>
-                </div>
-            </div>
-            <div style="margin-top:8px; padding:8px; background:rgba(0,0,0,0.2); border-radius:6px; font-size:10px;">
-                <b>💡 Rex大叔提醒：</b>冷門標的若能以底標100元得標，<b>有擔保的就是撿到寶</b>，無擔保則要看公司體質。
-            </div>
-        </div>
-        <!-- v3.99R7 新增：CBAS持倉追蹤容器 -->
-        <div id="cbasTrackerContainer" style="display:none; margin-top:12px;">
-            <!-- 由renderCBASTrackerSection動態填充 -->
         </div>
     </div>
 </div>
@@ -4819,6 +4851,99 @@ const AICore = {
             } else {
                 return { range: '>5倍', minPrice: 113.13, avgPrice: 115.65, gap: 2.52, count: 40 };
             }
+        },
+        // ========== v3.99R 新增：溢價率參數表（307檔完整統計）==========
+        // 依擔保類型 × 投標倍數分群的溢價率統計
+        // Q25=保守策略, Q50=中位策略, Q75=積極策略
+        premiumParams: {
+            // 有擔保標的（101檔）
+            guaranteed: {
+                overall: { avgPrem: 11.11, medPrem: 9.68, avgMinBid: 108.56, medMinBid: 108.60, count: 101 },
+                byMult: {
+                    cold:   { range: '≤2倍', q25: 6.48, q50: 8.57, q75: 13.02, avgMinBid: 102.27, medMinBid: 102.51, count: 25 },
+                    medium: { range: '2-4倍', q25: 3.74, q50: 9.68, q75: 15.10, avgMinBid: 108.78, medMinBid: 108.73, count: 51 },
+                    hot:    { range: '>4倍', q25: 9.40, q50: 11.96, q75: 14.85, avgMinBid: 112.64, medMinBid: 112.62, count: 25 }
+                },
+                bySize: {
+                    small:  { range: '≤3億', q25: 4.13, q50: 9.24, q75: 14.02, count: 43 },
+                    medium: { range: '3-5億', q25: 8.53, q50: 13.02, q75: 17.87, count: 27 },
+                    large:  { range: '5-10億', q25: 5.97, q50: 10.65, q75: 14.73, count: 22 },
+                    xlarge: { range: '>10億', q25: 4.08, q50: 8.53, q75: 13.59, count: 9 }
+                },
+                byTCRI: {
+                    4: { q50: 9.68, adj: 1.00, count: 3 },
+                    5: { q50: 9.78, adj: 1.01, count: 4 },
+                    6: { q50: 13.06, adj: 1.35, count: 38 },
+                    7: { q50: 9.04, adj: 0.93, count: 34 },
+                    8: { q50: 12.59, adj: 1.30, count: 16 },
+                    9: { q50: 5.57, adj: 0.58, count: 6 }
+                }
+            },
+            // 無擔保標的（206檔）
+            unguaranteed: {
+                overall: { avgPrem: 7.60, medPrem: 6.78, avgMinBid: 106.30, medMinBid: 105.06, count: 206 },
+                byMult: {
+                    cold:   { range: '≤2倍', q25: 1.29, q50: 3.50, q75: 6.76, avgMinBid: 101.90, medMinBid: 101.00, count: 77 },
+                    medium: { range: '2-4倍', q25: 3.81, q50: 7.43, q75: 12.26, avgMinBid: 106.90, medMinBid: 106.38, count: 79 },
+                    hot:    { range: '>4倍', q25: 8.98, q50: 12.55, q75: 16.47, avgMinBid: 112.49, medMinBid: 111.60, count: 50 }
+                },
+                bySize: {
+                    small:  { range: '≤3億', q25: 2.42, q50: 6.84, q75: 12.08, count: 55 },
+                    medium: { range: '3-5億', q25: 1.90, q50: 6.34, q75: 11.63, count: 43 },
+                    large:  { range: '5-10億', q25: 3.42, q50: 8.00, q75: 14.03, count: 63 },
+                    xlarge: { range: '>10億', q25: 2.63, q50: 6.08, q75: 10.21, count: 45 }
+                },
+                byTCRI: {
+                    3: { q50: 10.48, adj: 1.55, count: 7 },
+                    4: { q50: 6.46, adj: 0.95, count: 36 },
+                    5: { q50: 11.67, adj: 1.72, count: 58 },
+                    6: { q50: 6.42, adj: 0.95, count: 74 },
+                    7: { q50: 2.26, adj: 0.33, count: 21 },
+                    8: { q50: 1.50, adj: 0.22, count: 6 }
+                }
+            }
+        },
+        // 根據參數表計算建議投標價格
+        // theoPrice: 理論價格, guarantee: '有擔保'/'無擔保', expectedMult: 預估投標倍數
+        // strategy: 'conservative'(Q25) / 'balanced'(Q50) / 'aggressive'(Q75)
+        calcSuggestedPrice: function(theoPrice, guarantee, expectedMult, strategy = 'balanced') {
+            const isGuaranteed = (guarantee === '有擔保' || guarantee === '有');
+            const params = isGuaranteed ? this.premiumParams.guaranteed : this.premiumParams.unguaranteed;
+            // 根據預估倍數選擇參數
+            let multParams;
+            if (expectedMult <= 2) {
+                multParams = params.byMult.cold;
+            } else if (expectedMult <= 4) {
+                multParams = params.byMult.medium;
+            } else {
+                multParams = params.byMult.hot;
+            }
+            // 選擇策略對應的溢價率
+            let premiumRate;
+            switch(strategy) {
+                case 'conservative': premiumRate = multParams.q25; break;
+                case 'aggressive': premiumRate = multParams.q75; break;
+                default: premiumRate = multParams.q50; break;
+            }
+            // 計算建議價格
+            const suggestedPrice = theoPrice * (1 + premiumRate / 100);
+            return {
+                price: suggestedPrice,
+                premiumRate: premiumRate,
+                multRange: multParams.range,
+                historicalMinBid: multParams.medMinBid,
+                sampleCount: multParams.count,
+                guaranteeType: isGuaranteed ? '有擔保' : '無擔保',
+                strategy: strategy
+            };
+        },
+        // 取得完整策略價格組合
+        getStrategyPrices: function(theoPrice, guarantee, expectedMult) {
+            return {
+                conservative: this.calcSuggestedPrice(theoPrice, guarantee, expectedMult, 'conservative'),
+                balanced: this.calcSuggestedPrice(theoPrice, guarantee, expectedMult, 'balanced'),
+                aggressive: this.calcSuggestedPrice(theoPrice, guarantee, expectedMult, 'aggressive')
+            };
         }
     },
     // ========== v3.98a 新增：集成預測引擎 (Ensemble Engine) ==========
@@ -14109,7 +14234,7 @@ function updateSmartReminders() {
     }
 }
 function generateRexCommentary(r) {
-    // v3.99R7: Rex大叔提醒 - 100%動態數據驅動
+    // v3.99Q: Rex大叔提醒 - 100%動態數據驅動
     const theo = parseFloat(r.theoreticalPrice) || 0;
     const floor = parseFloat(r.floorPrice) || 100;
     const guarantee = r.inputData?.guarantee || '';
@@ -14513,7 +14638,7 @@ function displayResult(r) {
     window.lastEvalResult = r;
     document.getElementById('welcomeMsg').style.display = 'none';
     
-    // v3.99R7: 顯示CB標題（放在步驟報告前）
+    // v3.99Q: 顯示CB標題（放在步驟報告前）
     const cbTitleHeader = document.getElementById('cbTitleHeader');
     if (cbTitleHeader) {
         let code = window.currentCBCode || '';
@@ -14535,18 +14660,6 @@ function displayResult(r) {
             <div class="result-header">
                 <h2 style="font-size:28px; margin-bottom:5px;">${resultTitle}</h2>
                 <div style="font-size:14px; opacity:0.9;">AI 評估結果</div>
-            </div>
-            <!-- v3.99R7: 基本資訊移到標題下方 -->
-            <div class="detail-section" style="background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%); margin-top:12px;">
-                <h3>📋 基本資訊</h3>
-                <div style="display:flex; gap:30px; flex-wrap:wrap; font-size:16px;">
-                    <div><span style="color:#666;">理論價格：</span><b style="color:#667eea; font-size:24px;">${r.theoreticalPrice || 0}</b> 元</div>
-                    <div><span style="color:#666;">底標價格：</span><b style="font-size:20px;">${r.floorPrice}</b> 元</div>
-                    <div><span style="color:#666;">已填寫維度：</span><b style="color:#1976d2;">${r.filledDimCount}</b> / ${r.totalDimCount}</div>
-                </div>
-                ${r.filledDimCount < r.totalDimCount ? `<div style="margin-top:10px; padding:8px 12px; background:#fff3e0; border-left:4px solid #ff9800; border-radius:0 6px 6px 0; font-size:13px; color:#e65100;">
-                    ⚠️ 您目前填寫了 <b>${r.filledDimCount}</b> 個維度（共 ${r.totalDimCount} 個），系統已按比例調整權重計算。填寫越多維度，評估結果越精準。
-                </div>` : ''}
             </div>`;
         cbTitleHeader.style.display = 'block';
     }
@@ -15411,36 +15524,6 @@ function displayResult(r) {
                     } else if (statsEl) {
                         statsEl.style.display = 'none';
                     }
-                    // v3.99R7 新增：根據預測倍數更新策略提示
-                    const strategyTipEl = document.getElementById('step3StrategyTipContent');
-                    if (strategyTipEl && anomaly.predictedMult) {
-                        const mult = anomaly.predictedMult;
-                        let tipHtml = '';
-                        if (mult < 2) {
-                            // 冷門低倍數
-                            tipHtml = `<div style="color:#4caf50; font-weight:bold;">❄️ 預測倍數 ${mult.toFixed(1)}x 屬於冷門標的</div>
-                                <div style="margin-top:4px;">👉 建議用<b style="color:#4caf50;">保守價</b>嘗試低成本得標</div>
-                                <div>👉 沒人搶就是撿便宜的機會，不需要追高</div>
-                                <div>👉 價高者得：冷門時出低價就有機會得標</div>`;
-                        } else if (mult < 3) {
-                            // 一般倍數
-                            tipHtml = `<div style="color:#2196f3; font-weight:bold;">😐 預測倍數 ${mult.toFixed(1)}x 屬於一般競爭</div>
-                                <div style="margin-top:4px;">👉 建議用<b style="color:#2196f3;">穩健價</b>平衡成本與得標機率</div>
-                                <div>👉 可視個人風險偏好選擇保守或穩健策略</div>`;
-                        } else if (mult < 4) {
-                            // 偏熱
-                            tipHtml = `<div style="color:#ff9800; font-weight:bold;">⚡ 預測倍數 ${mult.toFixed(1)}x 競爭偏熱</div>
-                                <div style="margin-top:4px;">👉 競爭者較多，需考慮是否值得追價</div>
-                                <div>👉 追高成本風險增加，謹慎評估</div>`;
-                        } else {
-                            // 熱門高倍數
-                            tipHtml = `<div style="color:#f44336; font-weight:bold;">🔥 預測倍數 ${mult.toFixed(1)}x 屬於熱門標的</div>
-                                <div style="margin-top:4px;">👉 <b style="color:#f44336;">競爭激烈，追高成本風險大！</b></div>
-                                <div>👉 需審慎評估是否值得參與</div>
-                                <div>👉 寧可放棄也不宜過度追價</div>`;
-                        }
-                        strategyTipEl.innerHTML = tipHtml;
-                    }
                 } else if (anomalyEl) {
                     anomalyEl.style.display = 'none';
                 }
@@ -15563,28 +15646,6 @@ function displayResult(r) {
                 alertEl.style.display = 'none';
             }
         }
-        // v3.99R7 新增：更新CBAS持倉追蹤
-        const cbasContainer = document.getElementById('cbasTrackerContainer');
-        if (cbasContainer && typeof renderCBASTrackerSection === 'function') {
-            try {
-                const cbCode = r.inputData.cbCode || '';
-                const cbPrice = r.theoPrice || 100;
-                if (cbCode) {
-                    const cbasHtml = renderCBASTrackerSection(cbCode, cbPrice);
-                    if (cbasHtml && !cbasHtml.includes('無 CBAS 報價資料')) {
-                        cbasContainer.innerHTML = cbasHtml;
-                        cbasContainer.style.display = 'block';
-                    } else {
-                        cbasContainer.style.display = 'none';
-                    }
-                } else {
-                    cbasContainer.style.display = 'none';
-                }
-            } catch (e) {
-                console.log('CBAS追蹤載入失敗:', e);
-                cbasContainer.style.display = 'none';
-            }
-        }
         console.log('🤖 Step3 AI智能預測 v3.98a:', { historicalAvg, recentAvg, alpha, integratedPremium, confScore });
     } else {
         // 數據不足 - 安全檢查
@@ -15692,8 +15753,18 @@ function displayResult(r) {
             ⚠️ 您目前填寫了 <b>${r.filledDimCount}</b> 個維度（共 ${r.totalDimCount} 個），系統已按比例調整權重計算。填寫越多維度，評估結果越精準。
            </div>`
         : '';
-    // v3.99R7: 基本資訊已移至cbTitleHeader，這裡只保留Rex大叔提醒和隱藏表格
+    // v3.99Q: 標題已移至cbTitleHeader，這裡只顯示基本資訊和Rex大叔提醒
     div.innerHTML = `
+    <!-- ========== 基本資訊 ========== -->
+    <div class="detail-section" style="background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);">
+        <h3>📋 基本資訊</h3>
+        <div style="display:flex; gap:30px; flex-wrap:wrap; font-size:16px;">
+            <div><span style="color:#666;">理論價格：</span><b style="color:#667eea; font-size:24px;">${r.theoreticalPrice || 0}</b> 元</div>
+            <div><span style="color:#666;">底標價格：</span><b style="font-size:20px;">${r.floorPrice}</b> 元</div>
+            <div><span style="color:#666;">已填寫維度：</span><b style="color:#1976d2;">${r.filledDimCount}</b> / ${r.totalDimCount}</div>
+        </div>
+        ${dimWarning}
+    </div>
     ${generateRexCommentary(r)}
     ${generateConditionSummaryHTML(r)}
     <!-- v3.97-as-co: 移除重複的 majorPlayerHTML，已整合到 Step 3 -->
@@ -15928,7 +15999,7 @@ function initQuickSelect() {
         // v3.97 修正：使用includes判斷競拍/詢圈
         const isAuction = c.auctionType && (c.auctionType.includes('競拍') || c.auctionType === '競拍');
         const isInquiry = c.auctionType && (c.auctionType.includes('詢圈') || c.auctionType === '詢圈');
-        // v3.99R7: 極簡選項文字，確保手機單行
+        // v3.99Q: 極簡選項文字，確保手機單行
         // 格式：名稱 | 底標XXX | 擔
         const shortGuarantee = c.guarantee === '無擔保' ? '無' : (c.guarantee === '有擔保' ? '有' : '');
         if (isAuction) {
@@ -15987,7 +16058,7 @@ function handleQuickSelect() {
         c = pendingCases[parseInt(val)];
     }
     if (!c) return;
-    // v3.99R7: 保存完整標的資訊（代號+名稱）
+    // v3.99Q: 保存完整標的資訊（代號+名稱）
     // 優先使用 stockCode 作為代號
     window.currentCBCode = c.cbCode || '';  // 使用CB代號（65101）
     window.currentCBName = c.cbName || '';

@@ -14052,342 +14052,412 @@ function updateSmartReminders() {
     }
 }
 function generateRexCommentary(r) {
-    // v3.99Q: 三面向專業分析
+    // v3.99Q: Rex大叔提醒 - 100%動態數據驅動
     const theo = parseFloat(r.theoreticalPrice) || 0;
     const floor = parseFloat(r.floorPrice) || 100;
     const guarantee = r.inputData?.guarantee || '';
-    const rating = r.inputData?.rating || '';
-    const lowPrem = parseFloat(r.totalLowPremium) || 0;
-    const avgPrem = parseFloat(r.totalAvgPremium) || 0;
-    const wLowBid = parseFloat(r.weightedLowBidPrice) || 0;
-    const wAvgBid = parseFloat(r.weightedAvgBidPrice) || 0;
-    const filledDim = r.filledDimCount || 0;
-    const totalDim = r.totalDimCount || 7;
-    const premLow = (theo * (1 + lowPrem / 100)).toFixed(2);
-    const premHigh = (theo * (1 + avgPrem / 100)).toFixed(2);
-    const premiumConservative = parseFloat(r.premiumBidPrices?.conservative) || 0;
-    let html = `<div class="rex-analysis">
-        <div class="rex-title">🧢 Rex大叔提醒</div>
-        <div class="rex-content" style="font-size:14px; line-height:1.8;">`;
-    // 一、基礎數據分析
-    html += `<div style="margin-bottom:15px; padding-bottom:12px; border-bottom:1px dashed #ddd;">
-        <div style="font-weight:bold; color:#1565c0; margin-bottom:8px; font-size:15px;">📊 一、基礎數據分析</div>`;
-    if (theo >= 97.5) {
-        html += `<div style="margin-bottom:4px;">• 理論價 <b style="color:#1976d2;">${theo.toFixed(2)}元</b>，系統採用<b style="color:#1976d2;">溢價率分析法</b></div>`;
-        html += `<div style="margin-bottom:4px;">• 歷史溢價區間 ${lowPrem.toFixed(2)}%~${avgPrem.toFixed(2)}%</div>`;
-        html += `<div>• 對應投標價區間 <b style="color:#2e7d32;">${premLow}~${premHigh}元</b></div>`;
-    } else {
-        html += `<div style="margin-bottom:4px;">• 理論價 <b style="color:#e65100;">${theo.toFixed(2)}元</b>（<97.5），系統採用<b style="color:#e65100;">得標均價分析法</b></div>`;
-        html += `<div>• 歷史得標價區間 <b style="color:#2e7d32;">${wLowBid.toFixed(2)}~${wAvgBid.toFixed(2)}元</b></div>`;
-    }
-    if (guarantee === '有擔保') {
-        html += `<div style="margin-top:4px;">• <span style="color:#2e7d32; font-weight:bold;">有擔保</span>標的，市場接受度較高</div>`;
-    } else if (guarantee === '無擔保') {
-        html += `<div style="margin-top:4px;">• <span style="color:#c62828; font-weight:bold;">無擔保</span>標的，留意信評與市場氛圍</div>`;
-    }
-    html += `</div>`;
-    // 二、加權維度分析
-    html += `<div style="margin-bottom:15px; padding-bottom:12px; border-bottom:1px dashed #ddd;">
-        <div style="font-weight:bold; color:#7b1fa2; margin-bottom:8px; font-size:15px;">⚖️ 二、加權維度分析</div>`;
-    html += `<div style="margin-bottom:4px;">• 已填寫 <b>${filledDim}/${totalDim}</b> 個維度，`;
-    if (filledDim >= 5) {
-        html += `資訊充足，評估<b style="color:#2e7d32;">可信度高</b></div>`;
-    } else if (filledDim >= 3) {
-        html += `建議補充更多維度提升準確度</div>`;
-    } else {
-        html += `<span style="color:#e65100;">建議至少填寫3個以上維度</span></div>`;
-    }
-    if (rating) {
-        const ratingNum = parseInt(rating.replace(/[^0-9]/g, '')) || 0;
-        if (ratingNum <= 4) {
-            html += `<div>• 信評 TCRI ${ratingNum}，<b style="color:#2e7d32;">優質等級</b>，溢價空間較大</div>`;
-        } else if (ratingNum <= 6) {
-            html += `<div>• 信評 TCRI ${ratingNum}，中等等級，溢價表現適中</div>`;
-        } else {
-            html += `<div>• 信評 TCRI ${ratingNum}，<span style="color:#c62828;">等級偏低</span>，建議保守策略</div>`;
-        }
-    }
-    html += `</div>`;
-    // 三、策略建議
-    html += `<div>
-        <div style="font-weight:bold; color:#e65100; margin-bottom:8px; font-size:15px;">📈 三、策略建議</div>`;
-    if (theo < 95) {
-        html += `<div style="margin-bottom:4px;">• 低理論價區間，歷史投標倍數通常<b>偏低(1~2倍)</b></div>`;
-        html += `<div>• 建議採<b style="color:#2e7d32;">保守策略</b>，控制成本優先</div>`;
-    } else if (theo < 105) {
-        html += `<div style="margin-bottom:4px;">• 理論價位於熱門區間，投標倍數通常<b>較高(2~4倍)</b></div>`;
-        html += `<div>• 市場參與度高，可考慮<b style="color:#1976d2;">平衡策略</b>確保得標</div>`;
-    } else if (theo < 115) {
-        html += `<div style="margin-bottom:4px;">• 中高理論價區間，投標倍數<b>中等(1.5~3倍)</b></div>`;
-        html += `<div>• 建議採<b style="color:#2e7d32;">保守策略</b> ${premiumConservative.toFixed(2)}元，嚴控成本</div>`;
-    } else {
-        html += `<div style="margin-bottom:4px;">• 高理論價區間，溢價空間有限</div>`;
-        html += `<div>• 建議採<b style="color:#c62828;">保守策略</b>或評估是否參與</div>`;
-    }
-    html += `</div>`;
-    html += `</div></div>`;
-    return html;
+
+```
+// 無加權數據
+const overallLowPrem = parseFloat(r.overallLowPremium) || 0;
+const overallAvgPrem = parseFloat(r.overallAvgPremium) || 0;
+const overallLowBid = parseFloat(r.overallLowBidPrice) || 0;
+const overallAvgBid = parseFloat(r.overallAvgBidPrice) || 0;
+
+// 有加權數據
+const lowPrem = parseFloat(r.totalLowPremium) || 0;
+const avgPrem = parseFloat(r.totalAvgPremium) || 0;
+const wLowBid = parseFloat(r.weightedLowBidPrice) || 0;
+const wAvgBid = parseFloat(r.weightedAvgBidPrice) || 0;
+const impliedLowPrem = parseFloat(r.impliedLowPremium) || 0;
+const impliedAvgPrem = parseFloat(r.impliedAvgPremium) || 0;
+
+// 同條件案例
+const similar = r.similarCases || {};
+const allStats = similar.allStats || {};
+const theoRange = similar.theoRange || '';
+
+// 熱度與倍數
+const heat = r.heatAnalysis || {};
+const heatScore = heat.totalScore || 0;
+const heatLevel = heat.heatLevel || '普通';
+const expectedMult = heat.expectedMultiple || 2.0;
+const estBidMult = parseFloat(r.estBidMultiple) || expectedMult;
+
+// 計算價格
+const noWeightPremLow = (theo * (1 + overallLowPrem / 100)).toFixed(2);
+const noWeightPremAvg = (theo * (1 + overallAvgPrem / 100)).toFixed(2);
+const weightedPremLow = (theo * (1 + lowPrem / 100)).toFixed(2);
+const weightedPremAvg = (theo * (1 + avgPrem / 100)).toFixed(2);
+
+let html = '<div class="rex-analysis"><div class="rex-title">🧢 Rex大叔提醒</div><div class="rex-content" style="font-size:13px; line-height:1.7;">';
+
+// 一、基礎數據分析
+html += '<div style="margin-bottom:15px; padding-bottom:12px; border-bottom:2px solid #1976d2;">';
+html += '<div style="font-weight:bold; color:#1565c0; margin-bottom:10px; font-size:15px;">📊 一、基礎數據分析</div>';
+
+html += '<div style="background:#f5f5f5; padding:10px; border-radius:8px; margin-bottom:8px;">';
+html += '<div style="font-weight:bold; color:#666; margin-bottom:5px; font-size:12px;">📋 無加權（歷史全體平均）</div>';
+html += '<div style="font-size:11px;">• 溢價率法：' + overallLowPrem.toFixed(2) + '%~' + overallAvgPrem.toFixed(2) + '% → ' + noWeightPremLow + '~' + noWeightPremAvg + '元</div>';
+html += '<div style="font-size:11px;">• 得標均價法：' + overallLowBid.toFixed(2) + '~' + overallAvgBid.toFixed(2) + '元</div>';
+html += '</div>';
+
+html += '<div style="background:#e3f2fd; padding:10px; border-radius:8px; margin-bottom:8px;">';
+html += '<div style="font-weight:bold; color:#1565c0; margin-bottom:5px; font-size:12px;">⚖️ 有加權（維度條件篩選後）</div>';
+html += '<div style="font-size:11px;">• 溢價率法：<b>' + lowPrem.toFixed(2) + '%~' + avgPrem.toFixed(2) + '%</b> → <b style="color:#2e7d32;">' + weightedPremLow + '~' + weightedPremAvg + '元</b></div>';
+html += '<div style="font-size:11px;">• 得標均價法：<b>' + wLowBid.toFixed(2) + '~' + wAvgBid.toFixed(2) + '元</b>（≈' + impliedLowPrem.toFixed(2) + '%~' + impliedAvgPrem.toFixed(2) + '%）</div>';
+html += '</div>';
+
+// 方法建議
+var usePriceMethod = theo < 97.5;
+if (usePriceMethod) {
+    html += '<div style="background:#fff3e0; padding:8px 10px; border-radius:6px; border-left:4px solid #ff9800; font-size:12px;">';
+    html += '<b style="color:#e65100;">⚠️ 理論價' + theo.toFixed(2) + '元偏低（<97.5）</b><br>';
+    html += '建議採用<b>得標均價法</b>：<b style="color:#2e7d32;">' + wLowBid.toFixed(2) + '~' + wAvgBid.toFixed(2) + '元</b></div>';
+} else {
+    html += '<div style="background:#e8f5e9; padding:8px 10px; border-radius:6px; border-left:4px solid #4caf50; font-size:12px;">';
+    html += '<b style="color:#2e7d32;">✓ 建議採用溢價率分析法</b><br>';
+    html += '投標區間：<b style="color:#1976d2;">' + weightedPremLow + '~' + weightedPremAvg + '元</b></div>';
+}
+html += '</div>';
+
+// 二、最強大腦分析
+html += '<div style="margin-bottom:15px; padding-bottom:12px; border-bottom:2px solid #7b1fa2;">';
+html += '<div style="font-weight:bold; color:#7b1fa2; margin-bottom:10px; font-size:15px;">🧠 二、最強大腦分析</div>';
+
+var allCount = allStats.count || 0;
+var allAvgPrem = allStats.avgPremium || avgPrem;
+var allAvgMult = allStats.avgMultiple || estBidMult;
+
+html += '<div style="background:#f3e5f5; padding:10px; border-radius:8px; margin-bottom:8px;">';
+html += '<div style="font-weight:bold; color:#7b1fa2; margin-bottom:5px; font-size:12px;">📈 同理論價區間（' + theoRange + '元）</div>';
+html += '<div style="font-size:11px;">• 歷史案例數：<b>' + allCount + '檔</b></div>';
+html += '<div style="font-size:11px;">• 平均溢價率：<b>' + allAvgPrem.toFixed(2) + '%</b></div>';
+html += '<div style="font-size:11px;">• 平均投標倍數：<b>' + allAvgMult.toFixed(2) + '倍</b></div>';
+html += '</div>';
+
+var heatColorMap = { '極熱': '#c62828', '偏熱': '#e65100', '普通': '#1976d2', '偏冷': '#0288d1', '極冷': '#455a64' };
+var heatC = heatColorMap[heatLevel] || '#1976d2';
+html += '<div style="background:#ede7f6; padding:10px; border-radius:8px; margin-bottom:8px;">';
+html += '<div style="font-weight:bold; color:#512da8; margin-bottom:5px; font-size:12px;">🔥 市場熱度</div>';
+html += '<div style="display:flex; align-items:center; gap:10px;">';
+html += '<div style="font-size:24px; font-weight:bold; color:' + heatC + ';">' + heatScore + '</div>';
+html += '<div><div style="font-size:13px; font-weight:bold; color:' + heatC + ';">' + heatLevel + '</div>';
+html += '<div style="font-size:11px; color:#666;">預估倍數：' + expectedMult.toFixed(1) + '倍</div></div></div></div>';
+
+var suggestLow = usePriceMethod ? wLowBid : parseFloat(weightedPremLow);
+var suggestHigh = usePriceMethod ? wAvgBid : parseFloat(weightedPremAvg);
+html += '<div style="background:linear-gradient(135deg, #7b1fa2 0%, #9c27b0 100%); color:white; padding:12px; border-radius:8px;">';
+html += '<div style="font-weight:bold; margin-bottom:4px; font-size:12px;">💡 綜合建議投標區間</div>';
+html += '<div style="font-size:20px; font-weight:bold;">' + suggestLow.toFixed(2) + ' ~ ' + suggestHigh.toFixed(2) + ' 元</div></div>';
+html += '</div>';
+
+// 三、投標倍數情境模擬
+html += '<div style="margin-bottom:10px;">';
+html += '<div style="font-weight:bold; color:#e65100; margin-bottom:10px; font-size:15px;">🎯 三、投標倍數情境模擬</div>';
+
+html += '<div style="background:#fff3e0; padding:10px; border-radius:8px; margin-bottom:8px;">';
+html += '<div style="font-weight:bold; color:#e65100; margin-bottom:5px; font-size:12px;">📊 倍數參考</div>';
+html += '<div style="font-size:12px;">• 同條件歷史平均：<b>' + allAvgMult.toFixed(2) + '倍</b></div>';
+html += '<div style="font-size:12px;">• <b style="color:#e65100;">系統預測：' + estBidMult.toFixed(2) + '倍</b></div></div>';
+
+var baseMult = Math.round(estBidMult * 10) / 10;
+var basePrem = avgPrem > 0 ? avgPrem : allAvgPrem;
+var premPerMult = basePrem > 0 && baseMult > 0 ? basePrem / baseMult : 2.5;
+
+html += '<div style="background:#fbe9e7; padding:10px; border-radius:8px;">';
+html += '<div style="font-weight:bold; color:#bf360c; margin-bottom:6px; font-size:12px;">🔮 不同倍數情境</div>';
+html += '<table style="width:100%; border-collapse:collapse; font-size:11px;">';
+html += '<tr style="background:#ffccbc;"><th style="padding:5px; border:1px solid #ffab91;">倍數</th><th style="padding:5px; border:1px solid #ffab91;">溢價率</th><th style="padding:5px; border:1px solid #ffab91;">投標價</th></tr>';
+
+var scenarios = [
+    { mult: baseMult, label: '預測', hl: true },
+    { mult: baseMult + 1, label: '+1', hl: false },
+    { mult: baseMult + 2, label: '+2', hl: false },
+    { mult: baseMult + 3, label: '+3', hl: false }
+];
+
+for (var i = 0; i < scenarios.length; i++) {
+    var s = scenarios[i];
+    var estPrem = basePrem + (s.mult - baseMult) * premPerMult;
+    var estPrice = (theo * (1 + estPrem / 100)).toFixed(2);
+    var bg = s.hl ? '#fff3e0' : '#ffffff';
+    var fw = s.hl ? 'bold' : 'normal';
+    html += '<tr style="background:' + bg + ';">';
+    html += '<td style="padding:5px; border:1px solid #ffab91; font-weight:' + fw + ';">' + s.mult.toFixed(1) + '倍' + s.label + '</td>';
+    html += '<td style="padding:5px; border:1px solid #ffab91; text-align:center;">' + estPrem.toFixed(2) + '%</td>';
+    html += '<td style="padding:5px; border:1px solid #ffab91; text-align:center; font-weight:' + fw + '; color:#bf360c;">' + estPrice + '元</td></tr>';
+}
+
+html += '</table>';
+html += '<div style="margin-top:6px; font-size:10px; color:#666;">💡 預測倍數越高，需要更高價格才能得標</div></div>';
+html += '</div>';
+
+html += '</div></div>';
+return html;
+```
+
 }
 function calculateEvaluation(d) {
-    // v3.69 修改：同時計算兩種分析法，都呈現給用戶參考
-    // 從區間字串提取中間值用於計算
-    function getRangeMidValue(rangeStr, type) {
-        if (typeof rangeStr === 'number' && !isNaN(rangeStr)) return rangeStr;
-        const str = String(rangeStr || '');
-        // 轉換價區間
-        if (type === 'conversion') {
-            if (str.includes('小於20')) return 15;
-            if (str.includes('20~50')) return 35;
-            if (str.includes('50~100')) return 75;
-            if (str.includes('100~150')) return 125;
-            if (str.includes('150~200')) return 175;
-            if (str.includes('大於200')) return 250;
-        }
-        // 股本區間
-        if (type === 'capital') {
-            if (str.includes('小於3')) return 2;
-            if (str.includes('3~6')) return 4.5;
-            if (str.includes('6~10')) return 8;
-            if (str.includes('10~15')) return 12.5;
-            if (str.includes('15~20')) return 17.5;
-            if (str.includes('大於20')) return 30;
-        }
-        // 發行規模區間
-        if (type === 'size') {
-            if (str.includes('小於2')) return 1.5;
-            if (str.includes('2~5')) return 3.5;
-            if (str.includes('5~10')) return 7.5;
-            if (str.includes('10~15')) return 12.5;
-            if (str.includes('15~20')) return 17.5;
-            if (str.includes('大於20')) return 30;
-        }
-        // 嘗試解析為數字
-        const num = parseFloat(str);
-        return isNaN(num) ? 0 : num;
-    }
-    // v3.72 修改：理論價計算支援兩種方式
-    // 方式一：從股價和轉換價計算（優先）
-    // 方式二：從理論價區間獲取中間值（備用）
-    const actualConvPrice = d.actualConversionPrice || 0;
-    let theo = 0;
-    if (d.stockPrice > 0 && actualConvPrice > 0) {
-        // 方式一：精確計算
-        theo = (d.stockPrice / actualConvPrice) * 100;
-    } else if (d.theoRange) {
-        // 方式二：從區間取中間值
-        theo = getRangeMidValue(d.theoRange, 'theoRange');
-    }
-    const floorPrice = d.floorPrice || 100; // 底標價格，預設100元
-    const brokerName = d.broker || "";
-    // v3.72 修改：根據75檔CB分析結論，重新優化維度權重
-    // 按顯著性排序：理論價(30%)>承銷商(18%)>規模(12%)>產業(12%)>年期(8%)>股本(5%)>信評(3%)
-    // 擔保作為調整因素（不進維度表）
-    // v3.90 修正：按建議權重配置調整
-    // 產業30%、信評22%、理論價15%、券商13%、規模10%、股本5%、年期5%
-    const allDims = [
-        {k:'industry',c:'產業',baseW:0.30,v:d.industry},            // ★★★★★ 產業30% 實證影響最大
-        {k:'rating',c:'信評',baseW:0.22,v:d.rating},                // ★★★★☆ 信評22% 原本嚴重低估
-        {k:'theoRange',c:'理論價',baseW:0.15,v:d.theoRange},        // ★★★☆☆ 理論價15% 原本過高
-        {k:'broker',c:'發行券商',baseW:0.13,v:brokerName},          // ★★★☆☆ 券商13% 降低過度擬合
-        {k:'size',c:'發行規模',baseW:0.10,v:d.issueSize},           // ★★☆☆☆ 規模10% 中等影響
-        {k:'capital',c:'股本',baseW:0.05,v:d.capital},              // ★☆☆☆☆ 股本5% 影響較小
-        {k:'years',c:'年期',baseW:0.05,v:d.years}                   // ★☆☆☆☆ 年期5% 影響最小
-    ];
-    // 篩選有填寫的維度
-    const filledDims = allDims.filter(x => x.v && x.v !== '');
-    // 計算有填寫維度的總權重
-    const totalBaseWeight = filledDims.reduce((sum, x) => sum + x.baseW, 0);
-    // 動態調整權重（按比例分配到100%）
-    const dims = filledDims.map(x => ({
-        ...x,
-        w: totalBaseWeight > 0 ? x.baseW / totalBaseWeight : 0
-    }));
-    // v3.98h: 取得擔保類型用於數據分離
-    const guaranteeType = d.guarantee || null;
-    // === 計算各維度數據（兩種方法都要）===
-    let wL=0, wA=0, resDims={};
-    let wLowBid=0, wAvgBid=0; // 得標價格分析法用
-    dims.forEach(x=>{
-        // v3.98h: 傳入擔保類型，讓維度數據依據擔保類型分離計算
-        const s = getStatsSmart(x.c, x.v, guaranteeType), coef = getWeightCoefficient(x.k, x.v);
-        // 溢價率數據
-        resDims[x.k] = {
-            ...s,
-            coefficient: coef,
-            weight: x.w,
-            range: x.v,
-            weightedLow: s.low*x.w*coef,
-            weightedAvg: s.avg*x.w*coef
-        };
-        // 得標價格數據（從rawData取得）
-        const lowBidPrice = s.rawData && s.rawData['平均最低得標價'] ? s.rawData['平均最低得標價'] : 0;
-        const avgBidPrice = s.rawData && s.rawData['平均得標價'] ? s.rawData['平均得標價'] : 0;
-        resDims[x.k].lowBidPrice = lowBidPrice;
-        resDims[x.k].avgBidPrice = avgBidPrice;
-        resDims[x.k].weightedLowBid = lowBidPrice * x.w * coef;
-        resDims[x.k].weightedAvgBid = avgBidPrice * x.w * coef;
-        if (s.rawData && s.rawData['區間名稱']) resDims[x.k].displayRange = s.rawData['區間名稱'];
-        else resDims[x.k].displayRange = x.v;
-        wL += resDims[x.k].weightedLow;
-        wA += resDims[x.k].weightedAvg;
-        wLowBid += resDims[x.k].weightedLowBid;
-        wAvgBid += resDims[x.k].weightedAvgBid;
-    });
-    const subR = (d.subjectiveWeight||0)/100, objR = 1-subR;
-    let tL = (wL*objR)+((d.subjectiveLowPremium||0)*subR);
-    let tA = (wA*objR)+((d.subjectiveAvgPremium||0)*subR);
-    // v3.98h: 移除擔保調整（已整合進維度數據分離計算）
-    // 原本：有擔保 +1.0%，無擔保 +0%
-    // 現在：六維度數據已依據擔保類型分別計算，不需額外調整
-    const guaranteeAdj = 0;  // 保留變數但不調整，避免影響其他地方
-    const gap = tA-tL;
-    // === 溢價率分析法計算 ===
-    const rawPremiumP1 = theo*(1+tL/100);  // 原始計算值
-    const rawPremiumP2 = theo*(1+tA/100);
-    const rawPremiumP3 = theo*(1+(tA+gap)/100);
-    const rawPremiumP4 = theo*(1+(tA+gap*2)/100);
-    const premiumBelowFloor = rawPremiumP1 < floorPrice;
-    // v3.69 修改：當低於底標時，以底標為基準計算
-    let premiumP1, premiumP2, premiumP3, premiumP4;
-    let floorBasedPremium = 0;  // 以底標投標的溢價率
-    if (premiumBelowFloor) {
-        // 保守=底標，平衡=底標+3%，積極=底標+5%，極致=底標+7%
-        premiumP1 = floorPrice;
-        premiumP2 = floorPrice * 1.03;
-        premiumP3 = floorPrice * 1.05;
-        premiumP4 = floorPrice * 1.07;
-        // 計算以底標投標的隱含溢價率
-        floorBasedPremium = theo > 0 ? ((floorPrice/theo) - 1) * 100 : 0;
-    } else {
-        premiumP1 = rawPremiumP1;
-        premiumP2 = rawPremiumP2;
-        premiumP3 = rawPremiumP3;
-        premiumP4 = rawPremiumP4;
-    }
-    // === 得標價格分析法計算 ===
-    // v3.97-as-cs: 加入歷史落差調整係數
-    // 根據理論價區間決定調整係數（基於歷史數據分析：平均得標價往往低於實際成交價）
-    let priceMethodAdjustment = 0;
-    let adjustmentReason = '';
-    if (theo < 90) {
-        // 極低理論價：歷史落差較大，調整 +5%
-        priceMethodAdjustment = 0.05;
-        adjustmentReason = '極低理論價區間，歷史落差較大';
-    } else if (theo < 95) {
-        // 低理論價：調整 +3%
-        priceMethodAdjustment = 0.03;
-        adjustmentReason = '低理論價區間';
-    } else if (theo < 97.5) {
-        // 邊界理論價：調整 +2%
-        priceMethodAdjustment = 0.02;
-        adjustmentReason = '邊界理論價區間';
-    }
-    // 理論價 >= 97.5 時使用溢價率法，不需要調整
-    // 原始加權得標價
-    const rawWeightedLowBidPrice = wLowBid > 0 ? wLowBid : floorPrice;
-    const rawWeightedAvgBidPrice = wAvgBid > 0 ? wAvgBid : floorPrice + 2;
-    // 加入調整係數後的得標價
-    const weightedLowBidPrice = rawWeightedLowBidPrice * (1 + priceMethodAdjustment);
-    const weightedAvgBidPrice = rawWeightedAvgBidPrice * (1 + priceMethodAdjustment);
-    const bidGap = weightedAvgBidPrice - weightedLowBidPrice;
-    // 確保不低於底標價格
-    const priceP1 = Math.max(weightedLowBidPrice, floorPrice);
-    const priceP2 = Math.max(weightedAvgBidPrice, floorPrice);
-    const priceP3 = Math.max(weightedAvgBidPrice + bidGap, floorPrice);
-    const priceP4 = Math.max(weightedAvgBidPrice + bidGap * 2, floorPrice);
-    // 反推溢價率（相對於理論價）
-    const impliedLowPremium = theo > 0 ? ((priceP1/theo) - 1) * 100 : 0;
-    const impliedAvgPremium = theo > 0 ? ((priceP2/theo) - 1) * 100 : 0;
-    // === v3.70 新增：熱度分析（回測功能）===
-    const atmosphere = calcMarketAtmosphere(5);
-    const atmosphereIndex = atmosphere ? atmosphere.atmosphereIndex : 50;
-    const sizeMid = getRangeMidValue(d.issueSize, 'size');
-    const heatResult = calcHeatIndex({
-        issueSize: sizeMid,
-        theoreticalPrice: theo,
-        industry: d.industry,
-        years: d.years || 3,
-        atmosphereIndex: atmosphereIndex,
-        rating: d.rating || '5',           // v3.82 新增
-        broker: d.broker || '',            // v3.82 新增
-        stockCap: getRangeMidValue(d.capital, 'capital') || 10  // v3.82 新增
-    });
-    // v3.82 同類案件統計（用於統計顯示，保持向後兼容）
-    const similarCasesStats = findSimilarCasesForStats({
-        theoreticalPrice: theo,
-        issueSize: sizeMid,
-        industry: d.industry
-    });
-    // === v3.72 新增：主力模擬出價預測 ===
-    const estBidMultiple = d.estBidMultiple || (heatResult ? heatResult.expectedMultiple : 2.5);
-    // v3.98h: 使用前面已宣告的 guaranteeType，不重複宣告
-    const yearsNum = parseInt(d.years) || 3;
-    const industryName = d.industry || '';
-    const majorPlayerResult = predictMajorPlayerBid(
-        theo,
-        estBidMultiple,
-        sizeMid,
-        brokerName,
-        guaranteeType || '',  // v3.98h: 直接使用前面宣告的變數
-        yearsNum,
-        industryName  // v3.73 新增：傳入產業參數
-    );
-    return {
-        cbName: d.cbName,
-        theoreticalPrice: safeFixed(theo),
-        floorPrice: floorPrice,
-        dimensions: resDims,
-        filledDimCount: dims.length,  // v3.69 新增：已填寫維度數量
-        totalDimCount: allDims.length,  // v3.69 新增：總維度數量
-        // === 溢價率分析法結果 ===
-        totalLowPremium: safeFixed(tL),
-        totalAvgPremium: safeFixed(tA),
-        premiumBidPrices: {
-            conservative: safeFixed(premiumP1),
-            balanced: safeFixed(premiumP2),
-            aggressive: safeFixed(premiumP3),
-            ultimate: safeFixed(premiumP4)
-        },
-        premiumBelowFloor: premiumBelowFloor,
-        floorBasedPremium: safeFixed(floorBasedPremium),  // v3.69 以底標投標的隱含溢價率
-        guaranteeAdj: guaranteeAdj,  // v3.72 新增：擔保調整值
-        // === 得標價格分析法結果 ===
-        weightedLowBidPrice: safeFixed(weightedLowBidPrice),
-        weightedAvgBidPrice: safeFixed(weightedAvgBidPrice),
-        rawWeightedLowBidPrice: safeFixed(rawWeightedLowBidPrice),  // v3.97-as-cs: 未調整的原始值
-        rawWeightedAvgBidPrice: safeFixed(rawWeightedAvgBidPrice),  // v3.97-as-cs: 未調整的原始值
-        priceMethodAdjustment: priceMethodAdjustment,  // v3.97-as-cs: 調整係數
-        priceMethodAdjustmentPct: (priceMethodAdjustment * 100).toFixed(0),  // v3.97-as-cs: 調整百分比
-        adjustmentReason: adjustmentReason,  // v3.97-as-cs: 調整原因
-        impliedLowPremium: safeFixed(impliedLowPremium),
-        impliedAvgPremium: safeFixed(impliedAvgPremium),
-        priceBidPrices: {
-            conservative: safeFixed(priceP1),
-            balanced: safeFixed(priceP2),
-            aggressive: safeFixed(priceP3),
-            ultimate: safeFixed(priceP4)
-        },
-        inputData: d,
-        weightedSubjectiveLow: safeFixed(((d.subjectiveLowPremium||0)*subR)),
-        weightedSubjectiveAvg: safeFixed(((d.subjectiveAvgPremium||0)*subR)),
-        // === v3.70 新增：熱度分析結果 ===
-        heatAnalysis: heatResult,
-        similarCases: similarCasesStats,  // v3.82 保持向後兼容，使用統計版本
-        marketAtmosphere: atmosphere,
-        // === v3.72 新增：主力模擬出價結果 ===
-        majorPlayerResult: majorPlayerResult,
-        estBidMultiple: estBidMultiple,
-        // === v3.97o 新增：整體歷史無加權數據（用於Step 1對比） ===
-        overallLowPremium: window.OVERALL_STATS?.avgLowPremium || 6.5,
-        overallAvgPremium: window.OVERALL_STATS?.avgAvgPremium || 8.0,
-        overallLowBidPrice: window.OVERALL_STATS?.avgMinBid || 106.5,
-        overallAvgBidPrice: window.OVERALL_STATS?.avgAvgBid || 108.0
-    };
+// v3.69 修改：同時計算兩種分析法，都呈現給用戶參考
+// 從區間字串提取中間值用於計算
+function getRangeMidValue(rangeStr, type) {
+if (typeof rangeStr === ‘number’ && !isNaN(rangeStr)) return rangeStr;
+const str = String(rangeStr || ‘’);
+// 轉換價區間
+if (type === ‘conversion’) {
+if (str.includes(‘小於20’)) return 15;
+if (str.includes(‘20~50’)) return 35;
+if (str.includes(’50~100’)) return 75;
+if (str.includes(‘100~150’)) return 125;
+if (str.includes(’150~200’)) return 175;
+if (str.includes(‘大於200’)) return 250;
+}
+// 股本區間
+if (type === ‘capital’) {
+if (str.includes(‘小於3’)) return 2;
+if (str.includes(‘3~6’)) return 4.5;
+if (str.includes(’6~10’)) return 8;
+if (str.includes(‘10~15’)) return 12.5;
+if (str.includes(’15~20’)) return 17.5;
+if (str.includes(‘大於20’)) return 30;
+}
+// 發行規模區間
+if (type === ‘size’) {
+if (str.includes(‘小於2’)) return 1.5;
+if (str.includes(‘2~5’)) return 3.5;
+if (str.includes(’5~10’)) return 7.5;
+if (str.includes(‘10~15’)) return 12.5;
+if (str.includes(’15~20’)) return 17.5;
+if (str.includes(‘大於20’)) return 30;
+}
+// 嘗試解析為數字
+const num = parseFloat(str);
+return isNaN(num) ? 0 : num;
+}
+// v3.72 修改：理論價計算支援兩種方式
+// 方式一：從股價和轉換價計算（優先）
+// 方式二：從理論價區間獲取中間值（備用）
+const actualConvPrice = d.actualConversionPrice || 0;
+let theo = 0;
+if (d.stockPrice > 0 && actualConvPrice > 0) {
+// 方式一：精確計算
+theo = (d.stockPrice / actualConvPrice) * 100;
+} else if (d.theoRange) {
+// 方式二：從區間取中間值
+theo = getRangeMidValue(d.theoRange, ‘theoRange’);
+}
+const floorPrice = d.floorPrice || 100; // 底標價格，預設100元
+const brokerName = d.broker || “”;
+// v3.72 修改：根據75檔CB分析結論，重新優化維度權重
+// 按顯著性排序：理論價(30%)>承銷商(18%)>規模(12%)>產業(12%)>年期(8%)>股本(5%)>信評(3%)
+// 擔保作為調整因素（不進維度表）
+// v3.90 修正：按建議權重配置調整
+// 產業30%、信評22%、理論價15%、券商13%、規模10%、股本5%、年期5%
+const allDims = [
+{k:‘industry’,c:‘產業’,baseW:0.30,v:d.industry},            // ★★★★★ 產業30% 實證影響最大
+{k:‘rating’,c:‘信評’,baseW:0.22,v:d.rating},                // ★★★★☆ 信評22% 原本嚴重低估
+{k:‘theoRange’,c:‘理論價’,baseW:0.15,v:d.theoRange},        // ★★★☆☆ 理論價15% 原本過高
+{k:‘broker’,c:‘發行券商’,baseW:0.13,v:brokerName},          // ★★★☆☆ 券商13% 降低過度擬合
+{k:‘size’,c:‘發行規模’,baseW:0.10,v:d.issueSize},           // ★★☆☆☆ 規模10% 中等影響
+{k:‘capital’,c:‘股本’,baseW:0.05,v:d.capital},              // ★☆☆☆☆ 股本5% 影響較小
+{k:‘years’,c:‘年期’,baseW:0.05,v:d.years}                   // ★☆☆☆☆ 年期5% 影響最小
+];
+// 篩選有填寫的維度
+const filledDims = allDims.filter(x => x.v && x.v !== ‘’);
+// 計算有填寫維度的總權重
+const totalBaseWeight = filledDims.reduce((sum, x) => sum + x.baseW, 0);
+// 動態調整權重（按比例分配到100%）
+const dims = filledDims.map(x => ({
+…x,
+w: totalBaseWeight > 0 ? x.baseW / totalBaseWeight : 0
+}));
+// v3.98h: 取得擔保類型用於數據分離
+const guaranteeType = d.guarantee || null;
+// === 計算各維度數據（兩種方法都要）===
+let wL=0, wA=0, resDims={};
+let wLowBid=0, wAvgBid=0; // 得標價格分析法用
+dims.forEach(x=>{
+// v3.98h: 傳入擔保類型，讓維度數據依據擔保類型分離計算
+const s = getStatsSmart(x.c, x.v, guaranteeType), coef = getWeightCoefficient(x.k, x.v);
+// 溢價率數據
+resDims[x.k] = {
+…s,
+coefficient: coef,
+weight: x.w,
+range: x.v,
+weightedLow: s.low*x.w*coef,
+weightedAvg: s.avg*x.w*coef
+};
+// 得標價格數據（從rawData取得）
+const lowBidPrice = s.rawData && s.rawData[‘平均最低得標價’] ? s.rawData[‘平均最低得標價’] : 0;
+const avgBidPrice = s.rawData && s.rawData[‘平均得標價’] ? s.rawData[‘平均得標價’] : 0;
+resDims[x.k].lowBidPrice = lowBidPrice;
+resDims[x.k].avgBidPrice = avgBidPrice;
+resDims[x.k].weightedLowBid = lowBidPrice * x.w * coef;
+resDims[x.k].weightedAvgBid = avgBidPrice * x.w * coef;
+if (s.rawData && s.rawData[‘區間名稱’]) resDims[x.k].displayRange = s.rawData[‘區間名稱’];
+else resDims[x.k].displayRange = x.v;
+wL += resDims[x.k].weightedLow;
+wA += resDims[x.k].weightedAvg;
+wLowBid += resDims[x.k].weightedLowBid;
+wAvgBid += resDims[x.k].weightedAvgBid;
+});
+const subR = (d.subjectiveWeight||0)/100, objR = 1-subR;
+let tL = (wL*objR)+((d.subjectiveLowPremium||0)*subR);
+let tA = (wA*objR)+((d.subjectiveAvgPremium||0)*subR);
+// v3.98h: 移除擔保調整（已整合進維度數據分離計算）
+// 原本：有擔保 +1.0%，無擔保 +0%
+// 現在：六維度數據已依據擔保類型分別計算，不需額外調整
+const guaranteeAdj = 0;  // 保留變數但不調整，避免影響其他地方
+const gap = tA-tL;
+// === 溢價率分析法計算 ===
+const rawPremiumP1 = theo*(1+tL/100);  // 原始計算值
+const rawPremiumP2 = theo*(1+tA/100);
+const rawPremiumP3 = theo*(1+(tA+gap)/100);
+const rawPremiumP4 = theo*(1+(tA+gap*2)/100);
+const premiumBelowFloor = rawPremiumP1 < floorPrice;
+// v3.69 修改：當低於底標時，以底標為基準計算
+let premiumP1, premiumP2, premiumP3, premiumP4;
+let floorBasedPremium = 0;  // 以底標投標的溢價率
+if (premiumBelowFloor) {
+// 保守=底標，平衡=底標+3%，積極=底標+5%，極致=底標+7%
+premiumP1 = floorPrice;
+premiumP2 = floorPrice * 1.03;
+premiumP3 = floorPrice * 1.05;
+premiumP4 = floorPrice * 1.07;
+// 計算以底標投標的隱含溢價率
+floorBasedPremium = theo > 0 ? ((floorPrice/theo) - 1) * 100 : 0;
+} else {
+premiumP1 = rawPremiumP1;
+premiumP2 = rawPremiumP2;
+premiumP3 = rawPremiumP3;
+premiumP4 = rawPremiumP4;
+}
+// === 得標價格分析法計算 ===
+// v3.97-as-cs: 加入歷史落差調整係數
+// 根據理論價區間決定調整係數（基於歷史數據分析：平均得標價往往低於實際成交價）
+let priceMethodAdjustment = 0;
+let adjustmentReason = ‘’;
+if (theo < 90) {
+// 極低理論價：歷史落差較大，調整 +5%
+priceMethodAdjustment = 0.05;
+adjustmentReason = ‘極低理論價區間，歷史落差較大’;
+} else if (theo < 95) {
+// 低理論價：調整 +3%
+priceMethodAdjustment = 0.03;
+adjustmentReason = ‘低理論價區間’;
+} else if (theo < 97.5) {
+// 邊界理論價：調整 +2%
+priceMethodAdjustment = 0.02;
+adjustmentReason = ‘邊界理論價區間’;
+}
+// 理論價 >= 97.5 時使用溢價率法，不需要調整
+// 原始加權得標價
+const rawWeightedLowBidPrice = wLowBid > 0 ? wLowBid : floorPrice;
+const rawWeightedAvgBidPrice = wAvgBid > 0 ? wAvgBid : floorPrice + 2;
+// 加入調整係數後的得標價
+const weightedLowBidPrice = rawWeightedLowBidPrice * (1 + priceMethodAdjustment);
+const weightedAvgBidPrice = rawWeightedAvgBidPrice * (1 + priceMethodAdjustment);
+const bidGap = weightedAvgBidPrice - weightedLowBidPrice;
+// 確保不低於底標價格
+const priceP1 = Math.max(weightedLowBidPrice, floorPrice);
+const priceP2 = Math.max(weightedAvgBidPrice, floorPrice);
+const priceP3 = Math.max(weightedAvgBidPrice + bidGap, floorPrice);
+const priceP4 = Math.max(weightedAvgBidPrice + bidGap * 2, floorPrice);
+// 反推溢價率（相對於理論價）
+const impliedLowPremium = theo > 0 ? ((priceP1/theo) - 1) * 100 : 0;
+const impliedAvgPremium = theo > 0 ? ((priceP2/theo) - 1) * 100 : 0;
+// === v3.70 新增：熱度分析（回測功能）===
+const atmosphere = calcMarketAtmosphere(5);
+const atmosphereIndex = atmosphere ? atmosphere.atmosphereIndex : 50;
+const sizeMid = getRangeMidValue(d.issueSize, ‘size’);
+const heatResult = calcHeatIndex({
+issueSize: sizeMid,
+theoreticalPrice: theo,
+industry: d.industry,
+years: d.years || 3,
+atmosphereIndex: atmosphereIndex,
+rating: d.rating || ‘5’,           // v3.82 新增
+broker: d.broker || ‘’,            // v3.82 新增
+stockCap: getRangeMidValue(d.capital, ‘capital’) || 10  // v3.82 新增
+});
+// v3.82 同類案件統計（用於統計顯示，保持向後兼容）
+const similarCasesStats = findSimilarCasesForStats({
+theoreticalPrice: theo,
+issueSize: sizeMid,
+industry: d.industry
+});
+// === v3.72 新增：主力模擬出價預測 ===
+const estBidMultiple = d.estBidMultiple || (heatResult ? heatResult.expectedMultiple : 2.5);
+// v3.98h: 使用前面已宣告的 guaranteeType，不重複宣告
+const yearsNum = parseInt(d.years) || 3;
+const industryName = d.industry || ‘’;
+const majorPlayerResult = predictMajorPlayerBid(
+theo,
+estBidMultiple,
+sizeMid,
+brokerName,
+guaranteeType || ‘’,  // v3.98h: 直接使用前面宣告的變數
+yearsNum,
+industryName  // v3.73 新增：傳入產業參數
+);
+return {
+cbName: d.cbName,
+theoreticalPrice: safeFixed(theo),
+floorPrice: floorPrice,
+dimensions: resDims,
+filledDimCount: dims.length,  // v3.69 新增：已填寫維度數量
+totalDimCount: allDims.length,  // v3.69 新增：總維度數量
+// === 溢價率分析法結果 ===
+totalLowPremium: safeFixed(tL),
+totalAvgPremium: safeFixed(tA),
+premiumBidPrices: {
+conservative: safeFixed(premiumP1),
+balanced: safeFixed(premiumP2),
+aggressive: safeFixed(premiumP3),
+ultimate: safeFixed(premiumP4)
+},
+premiumBelowFloor: premiumBelowFloor,
+floorBasedPremium: safeFixed(floorBasedPremium),  // v3.69 以底標投標的隱含溢價率
+guaranteeAdj: guaranteeAdj,  // v3.72 新增：擔保調整值
+// === 得標價格分析法結果 ===
+weightedLowBidPrice: safeFixed(weightedLowBidPrice),
+weightedAvgBidPrice: safeFixed(weightedAvgBidPrice),
+rawWeightedLowBidPrice: safeFixed(rawWeightedLowBidPrice),  // v3.97-as-cs: 未調整的原始值
+rawWeightedAvgBidPrice: safeFixed(rawWeightedAvgBidPrice),  // v3.97-as-cs: 未調整的原始值
+priceMethodAdjustment: priceMethodAdjustment,  // v3.97-as-cs: 調整係數
+priceMethodAdjustmentPct: (priceMethodAdjustment * 100).toFixed(0),  // v3.97-as-cs: 調整百分比
+adjustmentReason: adjustmentReason,  // v3.97-as-cs: 調整原因
+impliedLowPremium: safeFixed(impliedLowPremium),
+impliedAvgPremium: safeFixed(impliedAvgPremium),
+priceBidPrices: {
+conservative: safeFixed(priceP1),
+balanced: safeFixed(priceP2),
+aggressive: safeFixed(priceP3),
+ultimate: safeFixed(priceP4)
+},
+inputData: d,
+weightedSubjectiveLow: safeFixed(((d.subjectiveLowPremium||0)*subR)),
+weightedSubjectiveAvg: safeFixed(((d.subjectiveAvgPremium||0)*subR)),
+// === v3.70 新增：熱度分析結果 ===
+heatAnalysis: heatResult,
+similarCases: similarCasesStats,  // v3.82 保持向後兼容，使用統計版本
+marketAtmosphere: atmosphere,
+// === v3.72 新增：主力模擬出價結果 ===
+majorPlayerResult: majorPlayerResult,
+estBidMultiple: estBidMultiple,
+// === v3.97o 新增：整體歷史無加權數據（用於Step 1對比） ===
+overallLowPremium: window.OVERALL_STATS?.avgLowPremium || 6.5,
+overallAvgPremium: window.OVERALL_STATS?.avgAvgPremium || 8.0,
+overallLowBidPrice: window.OVERALL_STATS?.avgMinBid || 106.5,
+overallAvgBidPrice: window.OVERALL_STATS?.avgAvgBid || 108.0
+};
 }
 function displayResult(r) {
-    // v3.98h 新增：保存評估結果供切換加權/無加權時使用
-    window.lastEvalResult = r;
-    document.getElementById('welcomeMsg').style.display = 'none';
+// v3.98h 新增：保存評估結果供切換加權/無加權時使用
+window.lastEvalResult = r;
+document.getElementById(‘welcomeMsg’).style.display = ‘none’;
 
 ```
 // v3.99Q: 顯示CB標題（放在步驟報告前）

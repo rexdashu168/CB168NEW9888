@@ -782,18 +782,22 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     display: flex;
     gap: 5px;
     margin-bottom: 10px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 5px;
 }
 .market-trend-tab {
-    padding: 10px 16px;
+    padding: 8px 12px;
     border: none;
     border-radius: 6px;
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 700;
     cursor: pointer;
     transition: all 0.2s;
     background: #ffcc80;
     color: #e65100;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 .market-trend-tab:hover {
     background: #ffb74d;
@@ -7634,6 +7638,7 @@ async function loadStatistics() {
                 'industry': getSmartValue(row, 'industry'),
                 'broker': getSmartValue(row, 'broker'),
                 'guarantee': getSmartValue(row, 'guarantee'),
+                'guaranteed': (getSmartValue(row, 'guarantee') === '有擔保' || getSmartValue(row, 'guarantee') === '有'),  // v3.99S: 布林值
                 'rating': normalizedRating,
                 'capital': safeFloat(getSmartValue(row, 'capital')),
                 'issueSize': safeFloat(getSmartValue(row, 'issueSize')),
@@ -10908,7 +10913,7 @@ function showRiskAdjusted(type, event) {
             <div style="font-size:16px; font-weight:bold; color:#c62828; margin-bottom:8px;">
                 📋 近期破底案例 <span style="font-weight:normal;">（掛牌低 < 100元）</span>
             </div>
-            <div style="max-height:150px; overflow-y:auto;">
+            <div style="max-height:320px; overflow-y:auto;">
                 <table style="width:100%; font-size:16px; border-collapse:collapse;">
                     <tr style="background:#ffcdd2; position:sticky; top:0;">
                         <th style="padding:6px;">CB名稱</th>
@@ -11096,10 +11101,10 @@ function generateBidDecisionData() {
     const theoGroups = {};
     theoRanges.forEach(r => theoGroups[r.key] = []);
     auctionRawData.forEach(d => {
-        if (!d.minBidPrice || d.minBidPrice <= 0 || !d.marketHigh || !d.theoPrice) return;
+        if (!d.minBidPrice || d.minBidPrice <= 0 || !d.marketHigh || !d.theoreticalPrice) return;
         const returnToHigh = ((d.marketHigh - d.minBidPrice) / d.minBidPrice * 100);
         const returnToLow = ((d.marketLow - d.minBidPrice) / d.minBidPrice * 100);
-        const theo = d.theoPrice;
+        const theo = d.theoreticalPrice;
         for (const r of theoRanges) {
             if (theo >= r.min && theo < r.max) {
                 theoGroups[r.key].push({
@@ -11144,16 +11149,16 @@ function generateBidDecisionData() {
     const premiumGroups = {};
     premiumRanges.forEach(r => premiumGroups[r.key] = []);
     auctionRawData.forEach(d => {
-        if (!d.minBidPrice || d.minBidPrice <= 0 || !d.marketHigh || !d.theoPrice || d.theoPrice <= 0) return;
+        if (!d.minBidPrice || d.minBidPrice <= 0 || !d.marketHigh || !d.theoreticalPrice || d.theoreticalPrice <= 0) return;
         const returnToHigh = ((d.marketHigh - d.minBidPrice) / d.minBidPrice * 100);
         const returnToLow = ((d.marketLow - d.minBidPrice) / d.minBidPrice * 100);
-        const premium = ((d.minBidPrice - d.theoPrice) / d.theoPrice * 100);
+        const premium = ((d.minBidPrice - d.theoreticalPrice) / d.theoreticalPrice * 100);
         for (const r of premiumRanges) {
             if (premium >= r.min && premium < r.max) {
                 premiumGroups[r.key].push({
                     name: d.name,
                     premium: premium,
-                    theo: d.theoPrice,
+                    theo: d.theoreticalPrice,
                     minBid: d.minBidPrice,
                     high: d.marketHigh,
                     low: d.marketLow,
@@ -13585,7 +13590,15 @@ function renderTypeCompare() {
     const i = marketTrendData.type.inquiry;
     const winner = a.avgAmp > i.avgAmp ? '競拍' : '詢圈';
     const diff = Math.abs(a.avgAmp - i.avgAmp).toFixed(1);
+    
+    // v3.99S: 收集個股明細用於排序表格
+    const allCBData = window.allCBData || [];
+    const auctionItems = allCBData.filter(d => d.type === '競拍' && d.hasMarket);
+    const inquiryItems = allCBData.filter(d => d.type === '詢圈' && d.hasMarket);
+    
     let html = `
+    <!-- 統計摘要 -->
+    <div style="font-size:16px; font-weight:bold; color:#e65100; margin-bottom:10px;">📊 競拍vs詢圈 整體統計</div>
     <div class="trend-compare-grid">
         <div class="trend-compare-card">
             <h4>🎯 競拍</h4>
@@ -13626,6 +13639,71 @@ function renderTypeCompare() {
             </div>
         </div>
     </div>`;
+    
+    // 個股明細表格 - 競拍
+    html += `
+    <div style="font-size:16px; font-weight:bold; color:#ff6f00; margin:15px 0 10px 0; cursor:pointer;" onclick="toggleTypeDetail('auction')">
+        🎯 競拍個股明細 (${auctionItems.length}檔) <span id="type-auction-icon" style="font-size:14px;">▶</span>
+    </div>
+    <div id="type-auction-detail" style="display:none; max-height:300px; overflow-y:auto; margin-bottom:15px;">
+        <table class="trend-year-table" id="typeAuctionTable" style="font-size:15px;">
+            <thead>
+                <tr style="background:#fff3e0; position:sticky; top:0;">
+                    <th class="sortable" onclick="sortTypeTable('auction', 'code')" style="cursor:pointer; padding:6px;">代號</th>
+                    <th class="sortable" onclick="sortTypeTable('auction', 'name')" style="cursor:pointer; padding:6px;">名稱</th>
+                    <th class="sortable" onclick="sortTypeTable('auction', 'year')" style="cursor:pointer; padding:6px;">年度</th>
+                    <th class="sortable" onclick="sortTypeTable('auction', 'high')" style="cursor:pointer; padding:6px;">掛牌高▼</th>
+                    <th class="sortable" onclick="sortTypeTable('auction', 'low')" style="cursor:pointer; padding:6px;">掛牌低</th>
+                    <th class="sortable" onclick="sortTypeTable('auction', 'amp')" style="cursor:pointer; padding:6px;">振幅</th>
+                </tr>
+            </thead>
+            <tbody id="typeAuctionBody">
+            ${auctionItems.sort((x,y) => y.high - x.high).map(item => `
+                <tr>
+                    <td style="padding:4px; color:#1565c0; font-weight:600;">${item.code || '-'}</td>
+                    <td style="padding:4px;">${item.name || '-'}</td>
+                    <td style="padding:4px; text-align:center;">${item.year || '-'}</td>
+                    <td style="padding:4px; text-align:right; color:#2e7d32;">${item.high > 0 ? item.high.toFixed(1) : '-'}</td>
+                    <td style="padding:4px; text-align:right; color:#c62828;">${item.low > 0 ? item.low.toFixed(1) : '-'}</td>
+                    <td style="padding:4px; text-align:right; font-weight:600; color:${item.amp >= 50 ? '#2e7d32' : '#333'};">${item.amp > 0 ? item.amp.toFixed(1) + '%' : '-'}</td>
+                </tr>
+            `).join('')}
+            </tbody>
+        </table>
+    </div>`;
+    
+    // 個股明細表格 - 詢圈
+    html += `
+    <div style="font-size:16px; font-weight:bold; color:#1565c0; margin:15px 0 10px 0; cursor:pointer;" onclick="toggleTypeDetail('inquiry')">
+        📋 詢圈個股明細 (${inquiryItems.length}檔) <span id="type-inquiry-icon" style="font-size:14px;">▶</span>
+    </div>
+    <div id="type-inquiry-detail" style="display:none; max-height:300px; overflow-y:auto; margin-bottom:15px;">
+        <table class="trend-year-table" id="typeInquiryTable" style="font-size:15px;">
+            <thead>
+                <tr style="background:#e3f2fd; position:sticky; top:0;">
+                    <th class="sortable" onclick="sortTypeTable('inquiry', 'code')" style="cursor:pointer; padding:6px;">代號</th>
+                    <th class="sortable" onclick="sortTypeTable('inquiry', 'name')" style="cursor:pointer; padding:6px;">名稱</th>
+                    <th class="sortable" onclick="sortTypeTable('inquiry', 'year')" style="cursor:pointer; padding:6px;">年度</th>
+                    <th class="sortable" onclick="sortTypeTable('inquiry', 'high')" style="cursor:pointer; padding:6px;">掛牌高▼</th>
+                    <th class="sortable" onclick="sortTypeTable('inquiry', 'low')" style="cursor:pointer; padding:6px;">掛牌低</th>
+                    <th class="sortable" onclick="sortTypeTable('inquiry', 'amp')" style="cursor:pointer; padding:6px;">振幅</th>
+                </tr>
+            </thead>
+            <tbody id="typeInquiryBody">
+            ${inquiryItems.sort((x,y) => y.high - x.high).map(item => `
+                <tr>
+                    <td style="padding:4px; color:#1565c0; font-weight:600;">${item.code || '-'}</td>
+                    <td style="padding:4px;">${item.name || '-'}</td>
+                    <td style="padding:4px; text-align:center;">${item.year || '-'}</td>
+                    <td style="padding:4px; text-align:right; color:#2e7d32;">${item.high > 0 ? item.high.toFixed(1) : '-'}</td>
+                    <td style="padding:4px; text-align:right; color:#c62828;">${item.low > 0 ? item.low.toFixed(1) : '-'}</td>
+                    <td style="padding:4px; text-align:right; font-weight:600; color:${item.amp >= 50 ? '#2e7d32' : '#333'};">${item.amp > 0 ? item.amp.toFixed(1) + '%' : '-'}</td>
+                </tr>
+            `).join('')}
+            </tbody>
+        </table>
+    </div>`;
+    
     // v3.92 新增：年度競拍VS詢圈比較表格
     const yearly = marketTrendData.type.yearly;
     if (yearly && yearly.length > 0) {
@@ -13664,6 +13742,55 @@ function renderTypeCompare() {
         </div>
     </div>`;
     return html;
+}
+
+// v3.99S: 切換競拍/詢圈明細
+function toggleTypeDetail(type) {
+    const detail = document.getElementById(`type-${type}-detail`);
+    const icon = document.getElementById(`type-${type}-icon`);
+    if (detail.style.display === 'none') {
+        detail.style.display = 'block';
+        if (icon) icon.textContent = '▼';
+    } else {
+        detail.style.display = 'none';
+        if (icon) icon.textContent = '▶';
+    }
+}
+
+// v3.99S: 競拍/詢圈表格排序
+window.typeTableSortState = { auction: { col: 'high', asc: false }, inquiry: { col: 'high', asc: false } };
+function sortTypeTable(type, col) {
+    const state = window.typeTableSortState[type];
+    if (state.col === col) {
+        state.asc = !state.asc;
+    } else {
+        state.col = col;
+        state.asc = false;
+    }
+    const allCBData = window.allCBData || [];
+    const items = allCBData.filter(d => (type === 'auction' ? d.type === '競拍' : d.type === '詢圈') && d.hasMarket);
+    items.sort((a, b) => {
+        let va = a[col], vb = b[col];
+        if (col === 'code' || col === 'name') {
+            va = va || ''; vb = vb || '';
+            return state.asc ? va.localeCompare(vb) : vb.localeCompare(va);
+        }
+        va = parseFloat(va) || 0; vb = parseFloat(vb) || 0;
+        return state.asc ? va - vb : vb - va;
+    });
+    const tbody = document.getElementById(`type${type.charAt(0).toUpperCase() + type.slice(1)}Body`);
+    if (tbody) {
+        tbody.innerHTML = items.map(item => `
+            <tr>
+                <td style="padding:4px; color:#1565c0; font-weight:600;">${item.code || '-'}</td>
+                <td style="padding:4px;">${item.name || '-'}</td>
+                <td style="padding:4px; text-align:center;">${item.year || '-'}</td>
+                <td style="padding:4px; text-align:right; color:#2e7d32;">${item.high > 0 ? item.high.toFixed(1) : '-'}</td>
+                <td style="padding:4px; text-align:right; color:#c62828;">${item.low > 0 ? item.low.toFixed(1) : '-'}</td>
+                <td style="padding:4px; text-align:right; font-weight:600; color:${item.amp >= 50 ? '#2e7d32' : '#333'};">${item.amp > 0 ? item.amp.toFixed(1) + '%' : '-'}</td>
+            </tr>
+        `).join('');
+    }
 }
 // v3.59 新增：發行次數分析
 function renderIssueNumAnalysis() {

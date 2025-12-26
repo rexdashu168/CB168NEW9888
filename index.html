@@ -16303,29 +16303,44 @@ function renderSizeCompare() {
             <td class="${ampClass}">${r.avgAmp.toFixed(1)}%</td>
         </tr>
         <tr id="size-detail-${idx}" style="display:none;">
-            <td colspan="5" style="padding:0; background:#f5f5f5;">
-                <div style="max-height:200px; overflow-y:auto; padding:8px;">
-                    <table style="width:100%; font-size:11px; border-collapse:collapse;">
-                        <tr style="background:#e0e0e0;">
-                            <th style="padding:3px 5px; text-align:left;">代號</th>
-                            <th style="padding:3px 5px; text-align:left;">名稱</th>
-                            <th style="padding:3px 5px; text-align:center;">類型</th>
-                            <th style="padding:3px 5px; text-align:right;">掛牌高</th>
-                            <th style="padding:3px 5px; text-align:right;">掛牌低</th>
-                            <th style="padding:3px 5px; text-align:right;">振幅</th>
-                        </tr>
-                        ${hasItems ? r.items.sort((a,b) => b.amp - a.amp).map(item => `
-                        <tr style="border-bottom:1px solid #eee;">
-                            <td style="padding:3px 5px; color:#1565c0; font-weight:600;">${item.code || '-'}</td>
-                            <td style="padding:3px 5px;">${item.name || '-'}</td>
-                            <td style="padding:3px 5px; text-align:center; color:${item.type === '競拍' ? '#ff6f00' : '#1565c0'};">${item.type || '-'}</td>
-                            <td style="padding:3px 5px; text-align:right; color:#2e7d32;">${item.high > 0 ? item.high.toFixed(1) : '-'}</td>
-                            <td style="padding:3px 5px; text-align:right; color:#c62828;">${item.low > 0 ? item.low.toFixed(1) : '-'}</td>
-                            <td style="padding:3px 5px; text-align:right; font-weight:600; color:${item.amp >= 50 ? '#2e7d32' : (item.amp < 20 ? '#c62828' : '#333')};">${item.amp > 0 ? item.amp.toFixed(1) + '%' : '-'}</td>
-                        </tr>
-                        `).join('') : '<tr><td colspan="6" style="text-align:center; padding:10px; color:#888;">無明細資料</td></tr>'}
+            <td colspan="5" style="padding:0; background:#fafafa;">
+                <div style="max-height:280px; overflow-y:auto;">
+                    <table class="detail-table" data-sort-table="size-${idx}" style="width:100%; font-size:11px; border-collapse:collapse;">
+                        <thead>
+                            <tr style="background:#e0e0e0; position:sticky; top:0;">
+                                <th class="sortable" data-sort="code" style="padding:4px 3px; cursor:pointer;">代號</th>
+                                <th class="sortable" data-sort="name" style="padding:4px 3px; cursor:pointer;">名稱</th>
+                                <th class="sortable" data-sort="type" style="padding:4px 3px; cursor:pointer;">類型</th>
+                                <th class="sortable" data-sort="high" style="padding:4px 3px; cursor:pointer;">掛牌高</th>
+                                <th class="sortable" data-sort="low" style="padding:4px 3px; cursor:pointer;">掛牌低</th>
+                                <th class="sortable" data-sort="amp" style="padding:4px 3px; cursor:pointer;">振幅▼</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        ${hasItems ? r.items.sort((a,b) => b.amp - a.amp).slice(0, 10).map(item => `
+                            <tr style="border-bottom:1px solid #eee;">
+                                <td style="padding:3px; color:#1565c0; font-weight:600;">${item.code || '-'}</td>
+                                <td style="padding:3px;">${item.name || '-'}</td>
+                                <td style="padding:3px; text-align:center; color:${item.type === '競拍' ? '#ff6f00' : '#1565c0'};">${item.type || '-'}</td>
+                                <td style="padding:3px; text-align:right; color:#2e7d32;">${item.high > 0 ? item.high.toFixed(1) : '-'}</td>
+                                <td style="padding:3px; text-align:right; color:#c62828;">${item.low > 0 ? item.low.toFixed(1) : '-'}</td>
+                                <td style="padding:3px; text-align:right; font-weight:600; color:${item.amp >= 50 ? '#2e7d32' : (item.amp < 20 ? '#c62828' : '#333')};">${item.amp > 0 ? item.amp.toFixed(1) + '%' : '-'}</td>
+                            </tr>
+                        `).join('') : '<tr><td colspan="6" style="text-align:center; padding:8px; color:#888;">無明細資料</td></tr>'}
+                        ${hasItems && r.items.length > 10 ? r.items.sort((a,b) => b.amp - a.amp).slice(10).map(item => `
+                            <tr style="border-bottom:1px solid #eee;">
+                                <td style="padding:3px; color:#1565c0; font-weight:600;">${item.code || '-'}</td>
+                                <td style="padding:3px;">${item.name || '-'}</td>
+                                <td style="padding:3px; text-align:center; color:${item.type === '競拍' ? '#ff6f00' : '#1565c0'};">${item.type || '-'}</td>
+                                <td style="padding:3px; text-align:right; color:#2e7d32;">${item.high > 0 ? item.high.toFixed(1) : '-'}</td>
+                                <td style="padding:3px; text-align:right; color:#c62828;">${item.low > 0 ? item.low.toFixed(1) : '-'}</td>
+                                <td style="padding:3px; text-align:right; font-weight:600; color:${item.amp >= 50 ? '#2e7d32' : (item.amp < 20 ? '#c62828' : '#333')};">${item.amp > 0 ? item.amp.toFixed(1) + '%' : '-'}</td>
+                            </tr>
+                        `).join('') : ''}
+                        </tbody>
                     </table>
                 </div>
+                ${hasItems && r.items.length > 10 ? `<div style="text-align:center; padding:4px; font-size:10px; color:#888; background:#f5f5f5;">共 ${r.items.length} 筆，向下滑動查看更多</div>` : ''}
             </td>
         </tr>`;
     });
@@ -16401,29 +16416,44 @@ function renderCapitalCompare() {
             <td class="${ampClass}">${r.avgAmp.toFixed(1)}%</td>
         </tr>
         <tr id="capital-detail-${idx}" style="display:none;">
-            <td colspan="5" style="padding:0; background:#f5f5f5;">
-                <div style="max-height:200px; overflow-y:auto; padding:8px;">
-                    <table style="width:100%; font-size:11px; border-collapse:collapse;">
-                        <tr style="background:#e0e0e0;">
-                            <th style="padding:3px 5px; text-align:left;">代號</th>
-                            <th style="padding:3px 5px; text-align:left;">名稱</th>
-                            <th style="padding:3px 5px; text-align:center;">類型</th>
-                            <th style="padding:3px 5px; text-align:right;">掛牌高</th>
-                            <th style="padding:3px 5px; text-align:right;">掛牌低</th>
-                            <th style="padding:3px 5px; text-align:right;">振幅</th>
-                        </tr>
-                        ${hasItems ? r.items.sort((a,b) => b.amp - a.amp).map(item => `
-                        <tr style="border-bottom:1px solid #eee;">
-                            <td style="padding:3px 5px; color:#1565c0; font-weight:600;">${item.code || '-'}</td>
-                            <td style="padding:3px 5px;">${item.name || '-'}</td>
-                            <td style="padding:3px 5px; text-align:center; color:${item.type === '競拍' ? '#ff6f00' : '#1565c0'};">${item.type || '-'}</td>
-                            <td style="padding:3px 5px; text-align:right; color:#2e7d32;">${item.high > 0 ? item.high.toFixed(1) : '-'}</td>
-                            <td style="padding:3px 5px; text-align:right; color:#c62828;">${item.low > 0 ? item.low.toFixed(1) : '-'}</td>
-                            <td style="padding:3px 5px; text-align:right; font-weight:600; color:${item.amp >= 50 ? '#2e7d32' : (item.amp < 20 ? '#c62828' : '#333')};">${item.amp > 0 ? item.amp.toFixed(1) + '%' : '-'}</td>
-                        </tr>
-                        `).join('') : '<tr><td colspan="6" style="text-align:center; padding:10px; color:#888;">無明細資料</td></tr>'}
+            <td colspan="5" style="padding:0; background:#fafafa;">
+                <div style="max-height:280px; overflow-y:auto;">
+                    <table class="detail-table" data-sort-table="capital-${idx}" style="width:100%; font-size:11px; border-collapse:collapse;">
+                        <thead>
+                            <tr style="background:#e0e0e0; position:sticky; top:0;">
+                                <th class="sortable" data-sort="code" style="padding:4px 3px; cursor:pointer;">代號</th>
+                                <th class="sortable" data-sort="name" style="padding:4px 3px; cursor:pointer;">名稱</th>
+                                <th class="sortable" data-sort="type" style="padding:4px 3px; cursor:pointer;">類型</th>
+                                <th class="sortable" data-sort="high" style="padding:4px 3px; cursor:pointer;">掛牌高</th>
+                                <th class="sortable" data-sort="low" style="padding:4px 3px; cursor:pointer;">掛牌低</th>
+                                <th class="sortable" data-sort="amp" style="padding:4px 3px; cursor:pointer;">振幅▼</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        ${hasItems ? r.items.sort((a,b) => b.amp - a.amp).slice(0, 10).map(item => `
+                            <tr style="border-bottom:1px solid #eee;">
+                                <td style="padding:3px; color:#1565c0; font-weight:600;">${item.code || '-'}</td>
+                                <td style="padding:3px;">${item.name || '-'}</td>
+                                <td style="padding:3px; text-align:center; color:${item.type === '競拍' ? '#ff6f00' : '#1565c0'};">${item.type || '-'}</td>
+                                <td style="padding:3px; text-align:right; color:#2e7d32;">${item.high > 0 ? item.high.toFixed(1) : '-'}</td>
+                                <td style="padding:3px; text-align:right; color:#c62828;">${item.low > 0 ? item.low.toFixed(1) : '-'}</td>
+                                <td style="padding:3px; text-align:right; font-weight:600; color:${item.amp >= 50 ? '#2e7d32' : (item.amp < 20 ? '#c62828' : '#333')};">${item.amp > 0 ? item.amp.toFixed(1) + '%' : '-'}</td>
+                            </tr>
+                        `).join('') : '<tr><td colspan="6" style="text-align:center; padding:8px; color:#888;">無明細資料</td></tr>'}
+                        ${hasItems && r.items.length > 10 ? r.items.sort((a,b) => b.amp - a.amp).slice(10).map(item => `
+                            <tr style="border-bottom:1px solid #eee;">
+                                <td style="padding:3px; color:#1565c0; font-weight:600;">${item.code || '-'}</td>
+                                <td style="padding:3px;">${item.name || '-'}</td>
+                                <td style="padding:3px; text-align:center; color:${item.type === '競拍' ? '#ff6f00' : '#1565c0'};">${item.type || '-'}</td>
+                                <td style="padding:3px; text-align:right; color:#2e7d32;">${item.high > 0 ? item.high.toFixed(1) : '-'}</td>
+                                <td style="padding:3px; text-align:right; color:#c62828;">${item.low > 0 ? item.low.toFixed(1) : '-'}</td>
+                                <td style="padding:3px; text-align:right; font-weight:600; color:${item.amp >= 50 ? '#2e7d32' : (item.amp < 20 ? '#c62828' : '#333')};">${item.amp > 0 ? item.amp.toFixed(1) + '%' : '-'}</td>
+                            </tr>
+                        `).join('') : ''}
+                        </tbody>
                     </table>
                 </div>
+                ${hasItems && r.items.length > 10 ? `<div style="text-align:center; padding:4px; font-size:10px; color:#888; background:#f5f5f5;">共 ${r.items.length} 筆，向下滑動查看更多</div>` : ''}
             </td>
         </tr>`;
     });
@@ -16462,29 +16492,65 @@ function renderConversionCompare() {
     if (!ranges || ranges.length === 0) return '<div>暫無數據</div>';
 
     let html = `
-    <div style="font-size:12px; font-weight:bold; color:#e65100; margin-bottom:10px;">📊 轉換價區間統計（全部年度，依05工作表設定）</div>
-    <table class="trend-year-table">
+    <div style="font-size:12px; font-weight:bold; color:#e65100; margin-bottom:10px;">📊 轉換價區間統計 <span style="font-size:11px; font-weight:normal; color:#888;">(點擊區間展開明細)</span></div>
+    <div class="trend-table-wrapper">
+    <table class="trend-year-table" id="conversionTable">
         <tr>
-            <th class="sortable">轉換價區間</th>
-            <th class="sortable">檔數</th>
-            <th class="sortable">掛牌均高</th>
-            <th class="sortable">掛牌均低</th>
-            <th class="sortable">平均振幅</th>
+            <th class="sortable" style="width:25%;">轉換價區間</th>
+            <th class="sortable" style="width:15%;">檔數</th>
+            <th class="sortable" style="width:15%;">掛牌均高</th>
+            <th class="sortable" style="width:15%;">掛牌均低</th>
+            <th class="sortable" style="width:15%;">平均振幅</th>
         </tr>`;
 
     const maxAmp = Math.max(...ranges.map(r => r.avgAmp));
-    ranges.forEach(r => {
+    ranges.forEach((r, idx) => {
         const ampClass = r.avgAmp === maxAmp ? 'amp-high' : (r.avgAmp < 60 ? 'amp-low' : '');
+        const hasItems = r.items && r.items.length > 0;
         html += `
-        <tr>
-            <td class="year-cell">${r.label}</td>
-            <td>${r.count}</td>
-            <td>${r.avgHigh.toFixed(1)}</td>
-            <td>${r.avgLow.toFixed(1)}</td>
+        <tr onclick="toggleConversionDetail(${idx})" style="cursor:${hasItems ? 'pointer' : 'default'};" class="conversion-row" id="conversion-row-${idx}">
+            <td class="year-cell" style="text-align:left;">
+                <span id="conversion-icon-${idx}" style="display:inline-block; width:16px; transition:transform 0.2s;">${hasItems ? '▶' : ''}</span>
+                ${r.label}
+            </td>
+            <td><b>${r.count}</b></td>
+            <td style="color:#2e7d32;">${r.avgHigh.toFixed(1)}</td>
+            <td style="color:#c62828;">${r.avgLow.toFixed(1)}</td>
             <td class="${ampClass}">${r.avgAmp.toFixed(1)}%</td>
+        </tr>
+        <tr id="conversion-detail-${idx}" style="display:none;">
+            <td colspan="5" style="padding:0; background:#fafafa;">
+                <div style="max-height:280px; overflow-y:auto;">
+                    <table class="detail-table" style="width:100%; font-size:11px; border-collapse:collapse;">
+                        <thead>
+                            <tr style="background:#e0e0e0; position:sticky; top:0;">
+                                <th style="padding:4px 3px;">代號</th>
+                                <th style="padding:4px 3px;">名稱</th>
+                                <th style="padding:4px 3px;">類型</th>
+                                <th style="padding:4px 3px;">掛牌高</th>
+                                <th style="padding:4px 3px;">掛牌低</th>
+                                <th style="padding:4px 3px;">振幅▼</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        ${hasItems ? r.items.sort((a,b) => b.amp - a.amp).map(item => `
+                            <tr style="border-bottom:1px solid #eee;">
+                                <td style="padding:3px; color:#1565c0; font-weight:600;">${item.code || '-'}</td>
+                                <td style="padding:3px;">${item.name || '-'}</td>
+                                <td style="padding:3px; text-align:center; color:${item.type === '競拍' ? '#ff6f00' : '#1565c0'};">${item.type || '-'}</td>
+                                <td style="padding:3px; text-align:right; color:#2e7d32;">${item.high > 0 ? item.high.toFixed(1) : '-'}</td>
+                                <td style="padding:3px; text-align:right; color:#c62828;">${item.low > 0 ? item.low.toFixed(1) : '-'}</td>
+                                <td style="padding:3px; text-align:right; font-weight:600; color:${item.amp >= 50 ? '#2e7d32' : (item.amp < 20 ? '#c62828' : '#333')};">${item.amp > 0 ? item.amp.toFixed(1) + '%' : '-'}</td>
+                            </tr>
+                        `).join('') : '<tr><td colspan="6" style="text-align:center; padding:8px; color:#888;">無明細資料</td></tr>'}
+                        </tbody>
+                    </table>
+                </div>
+                ${hasItems && r.items.length > 10 ? `<div style="text-align:center; padding:4px; font-size:10px; color:#888; background:#f5f5f5;">共 ${r.items.length} 筆，向下滑動查看更多</div>` : ''}
+            </td>
         </tr>`;
     });
-    html += `</table>`;
+    html += `</table></div>`;
 
     html += `
     <div class="trend-insight-box">
@@ -16497,6 +16563,20 @@ function renderConversionCompare() {
     </div>`;
 
     return html;
+}
+
+// v3.98h: 切換轉換價明細顯示
+function toggleConversionDetail(idx) {
+    const detailRow = document.getElementById(`conversion-detail-${idx}`);
+    const icon = document.getElementById(`conversion-icon-${idx}`);
+    
+    if (detailRow.style.display === 'none') {
+        detailRow.style.display = 'table-row';
+        if (icon) icon.style.transform = 'rotate(90deg)';
+    } else {
+        detailRow.style.display = 'none';
+        if (icon) icon.style.transform = 'rotate(0deg)';
+    }
 }
 
 // v3.59 新增：信評區間分析
@@ -16536,29 +16616,44 @@ function renderRatingCompare() {
             <td class="${ampClass}">${r.avgAmp > 0 ? r.avgAmp.toFixed(1) + '%' : '-'}</td>
         </tr>
         <tr id="rating-detail-${idx}" style="display:none;">
-            <td colspan="5" style="padding:0; background:#f5f5f5;">
-                <div style="max-height:200px; overflow-y:auto; padding:8px;">
-                    <table style="width:100%; font-size:11px; border-collapse:collapse;">
-                        <tr style="background:#e0e0e0;">
-                            <th style="padding:3px 5px; text-align:left;">代號</th>
-                            <th style="padding:3px 5px; text-align:left;">名稱</th>
-                            <th style="padding:3px 5px; text-align:center;">類型</th>
-                            <th style="padding:3px 5px; text-align:right;">掛牌高</th>
-                            <th style="padding:3px 5px; text-align:right;">掛牌低</th>
-                            <th style="padding:3px 5px; text-align:right;">振幅</th>
-                        </tr>
-                        ${hasItems ? r.items.sort((a,b) => b.amp - a.amp).map(item => `
-                        <tr style="border-bottom:1px solid #eee;">
-                            <td style="padding:3px 5px; color:#1565c0; font-weight:600;">${item.code || '-'}</td>
-                            <td style="padding:3px 5px;">${item.name || '-'}</td>
-                            <td style="padding:3px 5px; text-align:center; color:${item.type === '競拍' ? '#ff6f00' : '#1565c0'};">${item.type || '-'}</td>
-                            <td style="padding:3px 5px; text-align:right; color:#2e7d32;">${item.high > 0 ? item.high.toFixed(1) : '-'}</td>
-                            <td style="padding:3px 5px; text-align:right; color:#c62828;">${item.low > 0 ? item.low.toFixed(1) : '-'}</td>
-                            <td style="padding:3px 5px; text-align:right; font-weight:600; color:${item.amp >= 50 ? '#2e7d32' : (item.amp < 20 ? '#c62828' : '#333')};">${item.amp > 0 ? item.amp.toFixed(1) + '%' : '-'}</td>
-                        </tr>
-                        `).join('') : '<tr><td colspan="6" style="text-align:center; padding:10px; color:#888;">無明細資料</td></tr>'}
+            <td colspan="5" style="padding:0; background:#fafafa;">
+                <div style="max-height:280px; overflow-y:auto;">
+                    <table class="detail-table" data-sort-table="rating-${idx}" style="width:100%; font-size:11px; border-collapse:collapse;">
+                        <thead>
+                            <tr style="background:#e0e0e0; position:sticky; top:0;">
+                                <th class="sortable" data-sort="code" style="padding:4px 3px; cursor:pointer;">代號</th>
+                                <th class="sortable" data-sort="name" style="padding:4px 3px; cursor:pointer;">名稱</th>
+                                <th class="sortable" data-sort="type" style="padding:4px 3px; cursor:pointer;">類型</th>
+                                <th class="sortable" data-sort="high" style="padding:4px 3px; cursor:pointer;">掛牌高</th>
+                                <th class="sortable" data-sort="low" style="padding:4px 3px; cursor:pointer;">掛牌低</th>
+                                <th class="sortable" data-sort="amp" style="padding:4px 3px; cursor:pointer;">振幅▼</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        ${hasItems ? r.items.sort((a,b) => b.amp - a.amp).slice(0, 10).map(item => `
+                            <tr style="border-bottom:1px solid #eee;">
+                                <td style="padding:3px; color:#1565c0; font-weight:600;">${item.code || '-'}</td>
+                                <td style="padding:3px;">${item.name || '-'}</td>
+                                <td style="padding:3px; text-align:center; color:${item.type === '競拍' ? '#ff6f00' : '#1565c0'};">${item.type || '-'}</td>
+                                <td style="padding:3px; text-align:right; color:#2e7d32;">${item.high > 0 ? item.high.toFixed(1) : '-'}</td>
+                                <td style="padding:3px; text-align:right; color:#c62828;">${item.low > 0 ? item.low.toFixed(1) : '-'}</td>
+                                <td style="padding:3px; text-align:right; font-weight:600; color:${item.amp >= 50 ? '#2e7d32' : (item.amp < 20 ? '#c62828' : '#333')};">${item.amp > 0 ? item.amp.toFixed(1) + '%' : '-'}</td>
+                            </tr>
+                        `).join('') : '<tr><td colspan="6" style="text-align:center; padding:8px; color:#888;">無明細資料</td></tr>'}
+                        ${hasItems && r.items.length > 10 ? r.items.sort((a,b) => b.amp - a.amp).slice(10).map(item => `
+                            <tr style="border-bottom:1px solid #eee;">
+                                <td style="padding:3px; color:#1565c0; font-weight:600;">${item.code || '-'}</td>
+                                <td style="padding:3px;">${item.name || '-'}</td>
+                                <td style="padding:3px; text-align:center; color:${item.type === '競拍' ? '#ff6f00' : '#1565c0'};">${item.type || '-'}</td>
+                                <td style="padding:3px; text-align:right; color:#2e7d32;">${item.high > 0 ? item.high.toFixed(1) : '-'}</td>
+                                <td style="padding:3px; text-align:right; color:#c62828;">${item.low > 0 ? item.low.toFixed(1) : '-'}</td>
+                                <td style="padding:3px; text-align:right; font-weight:600; color:${item.amp >= 50 ? '#2e7d32' : (item.amp < 20 ? '#c62828' : '#333')};">${item.amp > 0 ? item.amp.toFixed(1) + '%' : '-'}</td>
+                            </tr>
+                        `).join('') : ''}
+                        </tbody>
                     </table>
                 </div>
+                ${hasItems && r.items.length > 10 ? `<div style="text-align:center; padding:4px; font-size:10px; color:#888; background:#f5f5f5;">共 ${r.items.length} 筆，向下滑動查看更多</div>` : ''}
             </td>
         </tr>`;
     });
@@ -16956,29 +17051,34 @@ function renderIndustryAnalysis() {
             <td class="${ampClass}">${d.avgAmp > 0 ? d.avgAmp.toFixed(1) + '%' : '-'}${outlierBadge}</td>
         </tr>
         <tr id="industry-detail-${idx}" style="display:none;">
-            <td colspan="6" style="padding:0; background:#f5f5f5;">
-                <div style="max-height:200px; overflow-y:auto; padding:8px;">
-                    <table style="width:100%; font-size:11px; border-collapse:collapse;">
-                        <tr style="background:#e0e0e0;">
-                            <th style="padding:4px 6px; text-align:left;">代號</th>
-                            <th style="padding:4px 6px; text-align:left;">名稱</th>
-                            <th style="padding:4px 6px; text-align:center;">類型</th>
-                            <th style="padding:4px 6px; text-align:right;">掛牌高</th>
-                            <th style="padding:4px 6px; text-align:right;">掛牌低</th>
-                            <th style="padding:4px 6px; text-align:right;">振幅</th>
-                        </tr>
+            <td colspan="6" style="padding:0; background:#fafafa;">
+                <div style="max-height:280px; overflow-y:auto;">
+                    <table class="detail-table" style="width:100%; font-size:11px; border-collapse:collapse;">
+                        <thead>
+                            <tr style="background:#e0e0e0; position:sticky; top:0;">
+                                <th style="padding:4px 3px;">代號</th>
+                                <th style="padding:4px 3px;">名稱</th>
+                                <th style="padding:4px 3px;">類型</th>
+                                <th style="padding:4px 3px;">掛牌高</th>
+                                <th style="padding:4px 3px;">掛牌低</th>
+                                <th style="padding:4px 3px;">振幅▼</th>
+                            </tr>
+                        </thead>
+                        <tbody>
                         ${d.items.sort((a,b) => b.amp - a.amp).map(item => `
-                        <tr style="border-bottom:1px solid #eee;">
-                            <td style="padding:4px 6px; color:#1565c0; font-weight:600;">${item.code}</td>
-                            <td style="padding:4px 6px;">${item.name}</td>
-                            <td style="padding:4px 6px; text-align:center; color:${item.type === '競拍' ? '#ff6f00' : '#1565c0'};">${item.type}</td>
-                            <td style="padding:4px 6px; text-align:right; color:#2e7d32;">${item.high > 0 ? item.high.toFixed(1) : '-'}</td>
-                            <td style="padding:4px 6px; text-align:right; color:#c62828;">${item.low > 0 ? item.low.toFixed(1) : '-'}</td>
-                            <td style="padding:4px 6px; text-align:right; font-weight:600; color:${item.amp >= 50 ? '#2e7d32' : (item.amp < 20 ? '#c62828' : '#333')};">${item.amp > 0 ? item.amp.toFixed(1) + '%' : '-'}</td>
-                        </tr>
+                            <tr style="border-bottom:1px solid #eee;">
+                                <td style="padding:3px; color:#1565c0; font-weight:600;">${item.code}</td>
+                                <td style="padding:3px;">${item.name}</td>
+                                <td style="padding:3px; text-align:center; color:${item.type === '競拍' ? '#ff6f00' : '#1565c0'};">${item.type}</td>
+                                <td style="padding:3px; text-align:right; color:#2e7d32;">${item.high > 0 ? item.high.toFixed(1) : '-'}</td>
+                                <td style="padding:3px; text-align:right; color:#c62828;">${item.low > 0 ? item.low.toFixed(1) : '-'}</td>
+                                <td style="padding:3px; text-align:right; font-weight:600; color:${item.amp >= 50 ? '#2e7d32' : (item.amp < 20 ? '#c62828' : '#333')};">${item.amp > 0 ? item.amp.toFixed(1) + '%' : '-'}</td>
+                            </tr>
                         `).join('')}
+                        </tbody>
                     </table>
                 </div>
+                ${d.items.length > 10 ? `<div style="text-align:center; padding:4px; font-size:10px; color:#888; background:#f5f5f5;">共 ${d.items.length} 筆，向下滑動查看更多</div>` : ''}
             </td>
         </tr>`;
     });

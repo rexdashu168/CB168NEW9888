@@ -3,7 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.99S (全區字體優化版)</title>
+<title>AI智能可轉債競拍系統 v3.99T (圖表互動優化版)</title>
+<!-- v3.99T: 所有圖表加入動態tooltip -->
+<!-- v3.99T: CB價格走勢標籤功能修復 -->
+<!-- v3.99T: 籌碼轉換分析balance單位修正 -->
+<!-- v3.99T: 融資融券根據市場別(上市/上櫃)查詢正確資料庫 -->
+<!-- v3.99T: CBAS歷史權利金標籤簡化（低/高/均權利金）-->
 <!-- v3.99S: 全區字體放大優化（8-15px → 12-16px）-->
 <!-- v3.99S: 文字顏色加深（#888/#999/#aaa → #444/#555）-->
 <!-- v3.99S: 透明度提高（0.5-0.7 → 0.75-0.85）-->
@@ -6369,16 +6374,28 @@ async function loadStatistics() {
         window.sheet12Data = sheetCallExecute || []; // v3.97-as-bz 新增：強制贖回執行
         window.sheet13Data = sheetSuspend || []; // v3.97-zs-aj 新增：暫停轉換資訊
         // v3.72 新增：建立產業分類對照表（從16工作表）
+        // v3.99S 擴展：同時建立市場別對照表
         window.industryMap = {};
+        window.marketTypeMap = {}; // 新增：市場別對照（上市/上櫃）
         if (sheetIndustry && sheetIndustry.length > 0) {
             sheetIndustry.forEach(row => {
                 const stockCode = String(row['股票代號'] || '').replace('.0', '').trim();
                 const industry = row['產業分類'] || '';
-                if (stockCode && industry) {
-                    window.industryMap[stockCode] = industry;
+                // v3.99S: 嘗試讀取市場別欄位
+                const marketType = row['市場別'] || row['上市上櫃'] || row['市場'] || '';
+                if (stockCode) {
+                    if (industry) {
+                        window.industryMap[stockCode] = industry;
+                    }
+                    // 儲存市場別
+                    if (marketType) {
+                        // 標準化市場別名稱
+                        const normalizedMarket = marketType.includes('上櫃') || marketType.includes('OTC') ? 'OTC' : 'TSE';
+                        window.marketTypeMap[stockCode] = normalizedMarket;
+                    }
                 }
             });
-            console.log(`載入產業分類對照表: ${Object.keys(window.industryMap).length} 筆`);
+            console.log(`載入產業分類對照表: ${Object.keys(window.industryMap).length} 筆, 市場別: ${Object.keys(window.marketTypeMap).length} 筆`);
         }
         // v3.72 新增：從01工作表動態計算半年度統計（取代hardcodedStats）
         window.halfYearStats = {};
@@ -23215,6 +23232,10 @@ async function renderFullTracker(cbCode) {
     if (!window.marginData?.loaded && !window.marginData?.loading) {
         loadPromises.push(loadMarginData());
     }
+    // v3.99S: 同時載入上櫃融資融券
+    if (!window.otcMarginData?.loaded && !window.otcMarginData?.loading) {
+        loadPromises.push(loadOtcMarginData());
+    }
     if (!window.cbPriceData?.loaded && !window.cbPriceData?.loading) {
         loadPromises.push(loadCBPriceData());
     }
@@ -23739,6 +23760,10 @@ async function renderConversionTable(cbCode) {
     if (!window.marginData.loaded && !window.marginData.loading) {
         loadMarginData(); // 背景載入，不阻塞
     }
+    // v3.99S: 同時載入上櫃融資融券
+    if (!window.otcMarginData?.loaded && !window.otcMarginData?.loading) {
+        loadOtcMarginData(); // 背景載入，不阻塞
+    }
     // v3.97-zs-bb: 取得股票代號以查詢融資融券
     const stockCode = getStockCodeFromCB(searchCode);
     // v3.98g: 同時檢查上市和上櫃融資融券資料
@@ -24156,8 +24181,12 @@ async function renderCBHistory(cbCode, container, period) {
                     window.cbPriceData.data[cbCode] = rows.map(row => {
                         const obj = {};
                         cols.forEach((col, i) => obj[col] = row[i]);
+                        const dateStr = obj.date || '';
+                        // v3.99T: 加入dateNum以支援期間篩選
+                        const dateNum = parseInt(String(dateStr).replace(/[-\/]/g, '')) || 0;
                         return {
-                            date: obj.date,
+                            date: dateStr,
+                            dateNum: dateNum,
                             close: parseFloat(obj.close) || 0,
                             volume: parseFloat(obj.volume) || 0
                         };
@@ -24172,11 +24201,16 @@ async function renderCBHistory(cbCode, container, period) {
     // 從 kanbanData 取得資料（備援）
     let priceData = window.cbPriceData?.data?.[cbCode] || [];
     if (priceData.length === 0 && window.kanbanData?.data?.[cbCode]) {
-        priceData = window.kanbanData.data[cbCode].map(d => ({
-            date: d.date,
-            close: d.cbPrice || 0,
-            volume: 0
-        })).filter(d => d.close > 0);
+        priceData = window.kanbanData.data[cbCode].map(d => {
+            const dateStr = d.date || '';
+            const dateNum = parseInt(String(dateStr).replace(/[-\/]/g, '')) || d.dateNum || 0;
+            return {
+                date: dateStr,
+                dateNum: dateNum,
+                close: d.cbPrice || 0,
+                volume: 0
+            };
+        }).filter(d => d.close > 0);
     }
     if (priceData.length === 0) {
         container.innerHTML = `<div style="text-align:center; padding:40px; color:#444; background:#fff; border-radius:12px;">
@@ -24497,15 +24531,15 @@ function renderCBASHistoryResult(cbCode, cbName, monthlyData, rawData, container
                     <div style="font-size:22px; font-weight:bold;">${totalTrades.toLocaleString()}</div>
                 </div>
                 <div style="background:linear-gradient(135deg, #2e7d32, #388e3c); color:white; padding:15px; border-radius:10px; text-align:center;">
-                    <div style="font-size:16px; opacity:0.9;">最低權利金</div>
+                    <div style="font-size:16px; opacity:0.9;">低權利金</div>
                     <div style="font-size:22px; font-weight:bold;">${overallMinPremium.toFixed(2)}</div>
                 </div>
                 <div style="background:linear-gradient(135deg, #c62828, #d32f2f); color:white; padding:15px; border-radius:10px; text-align:center;">
-                    <div style="font-size:16px; opacity:0.9;">最高權利金</div>
+                    <div style="font-size:16px; opacity:0.9;">高權利金</div>
                     <div style="font-size:22px; font-weight:bold;">${overallMaxPremium.toFixed(2)}</div>
                 </div>
                 <div style="background:linear-gradient(135deg, #e65100, #ef6c00); color:white; padding:15px; border-radius:10px; text-align:center;">
-                    <div style="font-size:16px; opacity:0.9;">平均權利金</div>
+                    <div style="font-size:16px; opacity:0.9;">均權利金</div>
                     <div style="font-size:22px; font-weight:bold;">${overallAvgPremium.toFixed(2)}</div>
                 </div>
                 <div style="background:linear-gradient(135deg, #37474f, #455a64); color:white; padding:15px; border-radius:10px; text-align:center;">
@@ -25178,18 +25212,51 @@ async function loadCbasYearData(SQL, year) {
  */
 function getMarginDataForDate(stockCode, dateStr) {
     if (!stockCode) return null;
-    // 先查上市融資融券
-    let stockData = null;
-    if (window.marginData?.loaded && window.marginData?.data?.[stockCode]) {
-        stockData = window.marginData.data[stockCode];
+    // v3.99S: 根據市場別決定優先查詢哪個資料庫
+    // 1. 先從 marketTypeMap 查詢市場別
+    // 2. 如果沒有，從股票代號判斷（上櫃通常是3或5開頭的4位數，或特定範圍）
+    let isOTC = false;
+    if (window.marketTypeMap && window.marketTypeMap[stockCode]) {
+        isOTC = window.marketTypeMap[stockCode] === 'OTC';
+    } else {
+        // 從代號判斷：上櫃股票代號特徵
+        // 3xxx, 4xxx（部分）, 5xxx, 6xxx（部分）, 8xxx
+        const codeNum = parseInt(stockCode);
+        if (codeNum >= 3000 && codeNum < 4000) isOTC = true;  // 3開頭
+        else if (codeNum >= 5000 && codeNum < 7000) isOTC = true;  // 5,6開頭
+        else if (codeNum >= 8000 && codeNum < 9000) isOTC = true;  // 8開頭
+        // 更精確的判斷：檢查資料庫中實際有哪個
+        if (!isOTC && window.otcMarginData?.data?.[stockCode] && !window.marginData?.data?.[stockCode]) {
+            isOTC = true;
+        }
     }
-    // 如果上市沒找到，查上櫃融資融券
-    if (!stockData && window.otcMarginData?.loaded && window.otcMarginData?.data?.[stockCode]) {
-        stockData = window.otcMarginData.data[stockCode];
+    let stockData = null;
+    if (isOTC) {
+        // 上櫃：優先查 otcMarginData
+        if (window.otcMarginData?.loaded && window.otcMarginData?.data?.[stockCode]) {
+            stockData = window.otcMarginData.data[stockCode];
+        }
+        // 備援：查上市
+        if (!stockData && window.marginData?.loaded && window.marginData?.data?.[stockCode]) {
+            stockData = window.marginData.data[stockCode];
+        }
+    } else {
+        // 上市：優先查 marginData (tpxlenging)
+        if (window.marginData?.loaded && window.marginData?.data?.[stockCode]) {
+            stockData = window.marginData.data[stockCode];
+        }
+        // 備援：查上櫃
+        if (!stockData && window.otcMarginData?.loaded && window.otcMarginData?.data?.[stockCode]) {
+            stockData = window.otcMarginData.data[stockCode];
+        }
     }
     if (!stockData) return null;
     // 直接匹配日期
-    if (stockData[dateStr]) return stockData[dateStr];
+    if (stockData[dateStr]) {
+        const data = stockData[dateStr];
+        // 計算增減（找前一天的資料）
+        return getMarginDataWithChange(stockData, dateStr, data);
+    }
     // 找最接近的日期（週資料可能在假日，找最近的交易日）
     const dates = Object.keys(stockData).sort();
     const targetNum = parseInt(dateStr.replace(/\//g, ''));
@@ -25203,7 +25270,32 @@ function getMarginDataForDate(stockCode, dateStr) {
             closestDate = d;
         }
     }
-    return closestDate ? stockData[closestDate] : null;
+    if (closestDate) {
+        const data = stockData[closestDate];
+        return getMarginDataWithChange(stockData, closestDate, data);
+    }
+    return null;
+}
+/**
+ * v3.99S: 計算融資融券增減
+ */
+function getMarginDataWithChange(stockData, dateStr, currentData) {
+    // 找前一天的資料
+    const dates = Object.keys(stockData).sort();
+    const idx = dates.indexOf(dateStr);
+    const prevDate = idx > 0 ? dates[idx - 1] : null;
+    const prevData = prevDate ? stockData[prevDate] : null;
+    return {
+        marginBalance: currentData.marginBalance || 0,
+        marginBuy: currentData.marginBuy || 0,
+        marginSell: currentData.marginSell || 0,
+        shortBalance: currentData.shortBalance || 0,
+        shortBuy: currentData.shortBuy || 0,
+        shortSell: currentData.shortSell || 0,
+        shortCover: currentData.shortSell || 0, // 券償 = 融券賣出（還券）
+        marginChange: prevData ? (currentData.marginBalance - prevData.marginBalance) : 0,
+        shortChange: prevData ? (currentData.shortBalance - prevData.shortBalance) : 0
+    };
 }
 /**
  * v3.97-zs-at 新增：載入週餘額時間序列
@@ -26111,33 +26203,74 @@ function renderStockPriceChartSVG(data, stockPrices, convPrices, labels) {
         const x = xScale(idx);
         return `<text x="${x}" y="${height - 12}" text-anchor="middle" font-size="12" fill="#666">${label}</text>`;
     }).join('');
+    // v3.99S: 生成互動點
+    let interactivePoints = data.map((d, i) => {
+        const x = xScale(i);
+        const stockY = yScale(stockPrices[i] || 0);
+        const convY = yScale(convPrices[i] || 0);
+        const dateLabel = d.date || labels[i] || '';
+        return `<circle cx="${x}" cy="${stockY}" r="12" fill="transparent" class="chart-hover-point"
+                    data-date="${dateLabel}" data-stock="${(stockPrices[i] || 0).toFixed(2)}" data-conv="${(convPrices[i] || 0).toFixed(2)}"/>`;
+    }).join('');
+    const chartId = 'stockPriceChart_' + Date.now();
     container.innerHTML = `
-        <svg width="100%" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" style="display:block; margin:0 auto;">
-            <!-- 背景 -->
-            <rect x="${padding.left}" y="${padding.top}" width="${chartWidth}" height="${chartHeight}" fill="#fafafa" rx="4"/>
-            <!-- Y軸刻度線和標籤 -->
-            ${yTicksHTML}
-            <!-- 股價填充區域 -->
-            <path d="${stockFillPath}" fill="rgba(25, 118, 210, 0.15)"/>
-            <!-- 股價線 -->
-            <path d="${stockPath}" fill="none" stroke="#1976d2" stroke-width="2.5"/>
-            <!-- 轉換價線（虛線）-->
-            <path d="${convPath}" fill="none" stroke="#e65100" stroke-width="2.5" stroke-dasharray="8,4"/>
-            <!-- 圖例 -->
-            <g transform="translate(${padding.left + 10}, ${padding.top - 18})">
-                <line x1="0" y1="0" x2="25" y2="0" stroke="#1976d2" stroke-width="3"/>
-                <text x="30" y="5" font-size="14" fill="#1976d2" font-weight="600">股價</text>
-                <line x1="80" y1="0" x2="105" y2="0" stroke="#e65100" stroke-width="3" stroke-dasharray="8,4"/>
-                <text x="110" y="5" font-size="14" fill="#e65100" font-weight="600">轉換價</text>
-            </g>
-            <!-- X軸標籤 -->
-            ${xLabelsHTML}
-            <!-- Y軸標題 -->
-            <text x="${padding.left - 45}" y="${height/2}" text-anchor="middle" font-size="13" fill="#666" font-weight="500" transform="rotate(-90, ${padding.left - 45}, ${height/2})">價格(元)</text>
-            <!-- 邊框 -->
-            <rect x="${padding.left}" y="${padding.top}" width="${chartWidth}" height="${chartHeight}" fill="none" stroke="#ccc" stroke-width="1" rx="4"/>
-        </svg>
+        <div style="position:relative;">
+            <svg id="${chartId}" width="100%" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" style="display:block; margin:0 auto;">
+                <!-- 背景 -->
+                <rect x="${padding.left}" y="${padding.top}" width="${chartWidth}" height="${chartHeight}" fill="#fafafa" rx="4"/>
+                <!-- Y軸刻度線和標籤 -->
+                ${yTicksHTML}
+                <!-- 股價填充區域 -->
+                <path d="${stockFillPath}" fill="rgba(25, 118, 210, 0.15)"/>
+                <!-- 股價線 -->
+                <path d="${stockPath}" fill="none" stroke="#1976d2" stroke-width="2.5"/>
+                <!-- 轉換價線（虛線）-->
+                <path d="${convPath}" fill="none" stroke="#e65100" stroke-width="2.5" stroke-dasharray="8,4"/>
+                <!-- 互動點 -->
+                ${interactivePoints}
+                <!-- 圖例 -->
+                <g transform="translate(${padding.left + 10}, ${padding.top - 18})">
+                    <line x1="0" y1="0" x2="25" y2="0" stroke="#1976d2" stroke-width="3"/>
+                    <text x="30" y="5" font-size="14" fill="#1976d2" font-weight="600">股價</text>
+                    <line x1="80" y1="0" x2="105" y2="0" stroke="#e65100" stroke-width="3" stroke-dasharray="8,4"/>
+                    <text x="110" y="5" font-size="14" fill="#e65100" font-weight="600">轉換價</text>
+                </g>
+                <!-- X軸標籤 -->
+                ${xLabelsHTML}
+                <!-- Y軸標題 -->
+                <text x="${padding.left - 45}" y="${height/2}" text-anchor="middle" font-size="13" fill="#666" font-weight="500" transform="rotate(-90, ${padding.left - 45}, ${height/2})">價格(元)</text>
+                <!-- 邊框 -->
+                <rect x="${padding.left}" y="${padding.top}" width="${chartWidth}" height="${chartHeight}" fill="none" stroke="#ccc" stroke-width="1" rx="4"/>
+            </svg>
+            <div id="${chartId}_tooltip" style="display:none; position:absolute; background:rgba(50,50,50,0.9); color:white; padding:10px 14px; border-radius:8px; font-size:13px; pointer-events:none; z-index:100; box-shadow:0 2px 8px rgba(0,0,0,0.3); min-width:140px;"></div>
+        </div>
     `;
+    // 綁定hover事件
+    const svg = document.getElementById(chartId);
+    const tooltip = document.getElementById(chartId + '_tooltip');
+    if (svg && tooltip) {
+        svg.querySelectorAll('.chart-hover-point').forEach(point => {
+            point.addEventListener('mouseenter', (e) => {
+                const date = point.getAttribute('data-date');
+                const stock = point.getAttribute('data-stock');
+                const conv = point.getAttribute('data-conv');
+                tooltip.innerHTML = `
+                    <div style="font-weight:bold; margin-bottom:6px; border-bottom:1px solid #666; padding-bottom:4px;">${date}</div>
+                    <div style="color:#64b5f6;">■ 股價: ${stock} 元</div>
+                    <div style="color:#ffb74d;">■ 轉換價: ${conv} 元</div>
+                `;
+                tooltip.style.display = 'block';
+            });
+            point.addEventListener('mousemove', (e) => {
+                const rect = container.getBoundingClientRect();
+                tooltip.style.left = (e.clientX - rect.left + 15) + 'px';
+                tooltip.style.top = (e.clientY - rect.top - 10) + 'px';
+            });
+            point.addEventListener('mouseleave', () => {
+                tooltip.style.display = 'none';
+            });
+        });
+    }
 }
 /**
  * 渲染理論價值分析圖（CB價格 vs 理論價格 + 折溢價比率）
@@ -26365,37 +26498,81 @@ function renderCBPriceChartSVG(data, cbPrices, convValues, premiums, labels) {
         const x = xScale(idx);
         return `<text x="${x}" y="${height - 12}" text-anchor="middle" font-size="12" fill="#666">${label}</text>`;
     }).join('');
+    // v3.99S: 生成互動點
+    let interactivePoints = data.map((d, i) => {
+        const x = xScale(i);
+        const cbY = yPriceScale(cbPrices[i] || 0);
+        const dateLabel = d.date || '';
+        return `<circle cx="${x}" cy="${cbY}" r="12" fill="transparent" class="chart-hover-point"
+                    data-date="${dateLabel}" data-cb="${(cbPrices[i] || 0).toFixed(2)}" 
+                    data-conv="${(convValues[i] || 0).toFixed(2)}" data-premium="${(premiums[i] || 0).toFixed(2)}"/>`;
+    }).join('');
+    const chartId = 'cbPriceChart_' + Date.now();
     container.innerHTML = `
-        <svg width="100%" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" style="display:block; margin:0 auto;">
-            <!-- 背景 -->
-            <rect x="${padding.left}" y="${padding.top}" width="${chartWidth}" height="${chartHeight}" fill="#fafafa" rx="4"/>
-            <!-- Y軸刻度線和標籤 -->
-            ${yPriceTicksHTML}
-            ${yPremiumTicksHTML}
-            <!-- 折溢價柱狀圖 -->
-            ${barsHTML}
-            <!-- CB價格線 -->
-            <path d="${cbPath}" fill="none" stroke="#7b1fa2" stroke-width="2.5"/>
-            <!-- 理論價格線（虛線）-->
-            <path d="${convPath}" fill="none" stroke="#2e7d32" stroke-width="2.5" stroke-dasharray="8,4"/>
-            <!-- 圖例 -->
-            <g transform="translate(${padding.left + 5}, ${padding.top - 20})">
-                <line x1="0" y1="0" x2="22" y2="0" stroke="#7b1fa2" stroke-width="3"/>
-                <text x="27" y="5" font-size="13" fill="#7b1fa2" font-weight="600">CB價格</text>
-                <line x1="95" y1="0" x2="117" y2="0" stroke="#2e7d32" stroke-width="3" stroke-dasharray="8,4"/>
-                <text x="122" y="5" font-size="13" fill="#2e7d32" font-weight="600">理論價格</text>
-                <rect x="200" y="-6" width="14" height="12" fill="rgba(255, 152, 0, 0.5)" stroke="#ff9800" stroke-width="1"/>
-                <text x="220" y="5" font-size="13" fill="#ff9800" font-weight="600">折溢價%</text>
-            </g>
-            <!-- X軸標籤 -->
-            ${xLabelsHTML}
-            <!-- Y軸標題 -->
-            <text x="${padding.left - 45}" y="${height/2}" text-anchor="middle" font-size="13" fill="#7b1fa2" font-weight="500" transform="rotate(-90, ${padding.left - 45}, ${height/2})">價格(元)</text>
-            <text x="${width - padding.right + 50}" y="${height/2}" text-anchor="middle" font-size="13" fill="#ff9800" font-weight="500" transform="rotate(90, ${width - padding.right + 50}, ${height/2})">折溢價率</text>
-            <!-- 邊框 -->
-            <rect x="${padding.left}" y="${padding.top}" width="${chartWidth}" height="${chartHeight}" fill="none" stroke="#ccc" stroke-width="1" rx="4"/>
-        </svg>
+        <div style="position:relative;">
+            <svg id="${chartId}" width="100%" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" style="display:block; margin:0 auto;">
+                <!-- 背景 -->
+                <rect x="${padding.left}" y="${padding.top}" width="${chartWidth}" height="${chartHeight}" fill="#fafafa" rx="4"/>
+                <!-- Y軸刻度線和標籤 -->
+                ${yPriceTicksHTML}
+                ${yPremiumTicksHTML}
+                <!-- 折溢價柱狀圖 -->
+                ${barsHTML}
+                <!-- CB價格線 -->
+                <path d="${cbPath}" fill="none" stroke="#7b1fa2" stroke-width="2.5"/>
+                <!-- 理論價格線（虛線）-->
+                <path d="${convPath}" fill="none" stroke="#2e7d32" stroke-width="2.5" stroke-dasharray="8,4"/>
+                <!-- 互動點 -->
+                ${interactivePoints}
+                <!-- 圖例 -->
+                <g transform="translate(${padding.left + 5}, ${padding.top - 20})">
+                    <line x1="0" y1="0" x2="22" y2="0" stroke="#7b1fa2" stroke-width="3"/>
+                    <text x="27" y="5" font-size="13" fill="#7b1fa2" font-weight="600">CB價格</text>
+                    <line x1="95" y1="0" x2="117" y2="0" stroke="#2e7d32" stroke-width="3" stroke-dasharray="8,4"/>
+                    <text x="122" y="5" font-size="13" fill="#2e7d32" font-weight="600">理論價格</text>
+                    <rect x="200" y="-6" width="14" height="12" fill="rgba(255, 152, 0, 0.5)" stroke="#ff9800" stroke-width="1"/>
+                    <text x="220" y="5" font-size="13" fill="#ff9800" font-weight="600">折溢價%</text>
+                </g>
+                <!-- X軸標籤 -->
+                ${xLabelsHTML}
+                <!-- Y軸標題 -->
+                <text x="${padding.left - 45}" y="${height/2}" text-anchor="middle" font-size="13" fill="#7b1fa2" font-weight="500" transform="rotate(-90, ${padding.left - 45}, ${height/2})">價格(元)</text>
+                <text x="${width - padding.right + 50}" y="${height/2}" text-anchor="middle" font-size="13" fill="#ff9800" font-weight="500" transform="rotate(90, ${width - padding.right + 50}, ${height/2})">折溢價率</text>
+                <!-- 邊框 -->
+                <rect x="${padding.left}" y="${padding.top}" width="${chartWidth}" height="${chartHeight}" fill="none" stroke="#ccc" stroke-width="1" rx="4"/>
+            </svg>
+            <div id="${chartId}_tooltip" style="display:none; position:absolute; background:rgba(50,50,50,0.9); color:white; padding:10px 14px; border-radius:8px; font-size:13px; pointer-events:none; z-index:100; box-shadow:0 2px 8px rgba(0,0,0,0.3); min-width:160px;"></div>
+        </div>
     `;
+    // 綁定hover事件
+    const svg = document.getElementById(chartId);
+    const tooltip = document.getElementById(chartId + '_tooltip');
+    if (svg && tooltip) {
+        svg.querySelectorAll('.chart-hover-point').forEach(point => {
+            point.addEventListener('mouseenter', (e) => {
+                const date = point.getAttribute('data-date');
+                const cb = point.getAttribute('data-cb');
+                const conv = point.getAttribute('data-conv');
+                const premium = point.getAttribute('data-premium');
+                const premiumColor = parseFloat(premium) >= 0 ? '#ffb74d' : '#81c784';
+                tooltip.innerHTML = `
+                    <div style="font-weight:bold; margin-bottom:6px; border-bottom:1px solid #666; padding-bottom:4px;">${date}</div>
+                    <div style="color:#ce93d8;">■ CB價格: ${cb} 元</div>
+                    <div style="color:#81c784;">■ 理論價: ${conv} 元</div>
+                    <div style="color:${premiumColor};">■ 溢價率: ${premium}%</div>
+                `;
+                tooltip.style.display = 'block';
+            });
+            point.addEventListener('mousemove', (e) => {
+                const rect = container.getBoundingClientRect();
+                tooltip.style.left = (e.clientX - rect.left + 15) + 'px';
+                tooltip.style.top = (e.clientY - rect.top - 10) + 'px';
+            });
+            point.addEventListener('mouseleave', () => {
+                tooltip.style.display = 'none';
+            });
+        });
+    }
 }
 /**
  * 渲染籌碼轉換分析圖（CB張數、約當股票張數、佔股本比）
@@ -26675,35 +26852,76 @@ function renderBalanceChartSVG(data, cbShares, stockShares, labels) {
         const x = xScale(idx);
         return `<text x="${x}" y="${height - 12}" text-anchor="middle" font-size="12" fill="#666">${label}</text>`;
     }).join('');
+    // v3.99S: 生成互動點
+    let interactivePoints = data.map((d, i) => {
+        const x = xScale(i);
+        const cbY = yCBScale(cbShares[i] || 0);
+        const dateLabel = d.date || '';
+        return `<circle cx="${x}" cy="${cbY}" r="12" fill="transparent" class="chart-hover-point"
+                    data-date="${dateLabel}" data-cb="${Math.round(cbShares[i] || 0).toLocaleString()}" 
+                    data-stock="${Math.round(stockShares[i] || 0).toLocaleString()}"/>`;
+    }).join('');
+    const chartId = 'balanceChart_' + Date.now();
     container.innerHTML = `
-        <svg width="100%" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" style="display:block; margin:0 auto;">
-            <!-- 背景 -->
-            <rect x="${padding.left}" y="${padding.top}" width="${chartWidth}" height="${chartHeight}" fill="#fafafa" rx="4"/>
-            <!-- Y軸刻度線和標籤 -->
-            ${yCBTicksHTML}
-            ${yStockTicksHTML}
-            <!-- CB張數填充區域 -->
-            <path d="${cbFillPath}" fill="rgba(25, 118, 210, 0.15)"/>
-            <!-- CB張數線 -->
-            <path d="${cbPath}" fill="none" stroke="#1976d2" stroke-width="2.5"/>
-            <!-- 約當股票張數線（虛線）-->
-            <path d="${stockPath}" fill="none" stroke="#2e7d32" stroke-width="2.5" stroke-dasharray="8,4"/>
-            <!-- 圖例 -->
-            <g transform="translate(${padding.left + 10}, ${padding.top - 18})">
-                <line x1="0" y1="0" x2="25" y2="0" stroke="#1976d2" stroke-width="3"/>
-                <text x="30" y="5" font-size="13" fill="#1976d2" font-weight="600">CB張數</text>
-                <line x1="105" y1="0" x2="130" y2="0" stroke="#2e7d32" stroke-width="3" stroke-dasharray="8,4"/>
-                <text x="135" y="5" font-size="13" fill="#2e7d32" font-weight="600">約當股票張數</text>
-            </g>
-            <!-- X軸標籤 -->
-            ${xLabelsHTML}
-            <!-- Y軸標題 -->
-            <text x="${padding.left - 55}" y="${height/2}" text-anchor="middle" font-size="13" fill="#1976d2" font-weight="500" transform="rotate(-90, ${padding.left - 55}, ${height/2})">CB張數</text>
-            <text x="${width - padding.right + 60}" y="${height/2}" text-anchor="middle" font-size="13" fill="#2e7d32" font-weight="500" transform="rotate(90, ${width - padding.right + 60}, ${height/2})">約當股票張數</text>
-            <!-- 邊框 -->
-            <rect x="${padding.left}" y="${padding.top}" width="${chartWidth}" height="${chartHeight}" fill="none" stroke="#ccc" stroke-width="1" rx="4"/>
-        </svg>
+        <div style="position:relative;">
+            <svg id="${chartId}" width="100%" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" style="display:block; margin:0 auto;">
+                <!-- 背景 -->
+                <rect x="${padding.left}" y="${padding.top}" width="${chartWidth}" height="${chartHeight}" fill="#fafafa" rx="4"/>
+                <!-- Y軸刻度線和標籤 -->
+                ${yCBTicksHTML}
+                ${yStockTicksHTML}
+                <!-- CB張數填充區域 -->
+                <path d="${cbFillPath}" fill="rgba(25, 118, 210, 0.15)"/>
+                <!-- CB張數線 -->
+                <path d="${cbPath}" fill="none" stroke="#1976d2" stroke-width="2.5"/>
+                <!-- 約當股票張數線（虛線）-->
+                <path d="${stockPath}" fill="none" stroke="#2e7d32" stroke-width="2.5" stroke-dasharray="8,4"/>
+                <!-- 互動點 -->
+                ${interactivePoints}
+                <!-- 圖例 -->
+                <g transform="translate(${padding.left + 10}, ${padding.top - 18})">
+                    <line x1="0" y1="0" x2="25" y2="0" stroke="#1976d2" stroke-width="3"/>
+                    <text x="30" y="5" font-size="13" fill="#1976d2" font-weight="600">CB張數</text>
+                    <line x1="105" y1="0" x2="130" y2="0" stroke="#2e7d32" stroke-width="3" stroke-dasharray="8,4"/>
+                    <text x="135" y="5" font-size="13" fill="#2e7d32" font-weight="600">約當股票張數</text>
+                </g>
+                <!-- X軸標籤 -->
+                ${xLabelsHTML}
+                <!-- Y軸標題 -->
+                <text x="${padding.left - 55}" y="${height/2}" text-anchor="middle" font-size="13" fill="#1976d2" font-weight="500" transform="rotate(-90, ${padding.left - 55}, ${height/2})">CB張數</text>
+                <text x="${width - padding.right + 60}" y="${height/2}" text-anchor="middle" font-size="13" fill="#2e7d32" font-weight="500" transform="rotate(90, ${width - padding.right + 60}, ${height/2})">約當股票張數</text>
+                <!-- 邊框 -->
+                <rect x="${padding.left}" y="${padding.top}" width="${chartWidth}" height="${chartHeight}" fill="none" stroke="#ccc" stroke-width="1" rx="4"/>
+            </svg>
+            <div id="${chartId}_tooltip" style="display:none; position:absolute; background:rgba(50,50,50,0.9); color:white; padding:10px 14px; border-radius:8px; font-size:13px; pointer-events:none; z-index:100; box-shadow:0 2px 8px rgba(0,0,0,0.3); min-width:150px;"></div>
+        </div>
     `;
+    // 綁定hover事件
+    const svg = document.getElementById(chartId);
+    const tooltip = document.getElementById(chartId + '_tooltip');
+    if (svg && tooltip) {
+        svg.querySelectorAll('.chart-hover-point').forEach(point => {
+            point.addEventListener('mouseenter', (e) => {
+                const date = point.getAttribute('data-date');
+                const cb = point.getAttribute('data-cb');
+                const stock = point.getAttribute('data-stock');
+                tooltip.innerHTML = `
+                    <div style="font-weight:bold; margin-bottom:6px; border-bottom:1px solid #666; padding-bottom:4px;">${date}</div>
+                    <div style="color:#64b5f6;">■ CB張數: ${cb} 張</div>
+                    <div style="color:#81c784;">■ 約當股票: ${stock} 張</div>
+                `;
+                tooltip.style.display = 'block';
+            });
+            point.addEventListener('mousemove', (e) => {
+                const rect = container.getBoundingClientRect();
+                tooltip.style.left = (e.clientX - rect.left + 15) + 'px';
+                tooltip.style.top = (e.clientY - rect.top - 10) + 'px';
+            });
+            point.addEventListener('mouseleave', () => {
+                tooltip.style.display = 'none';
+            });
+        });
+    }
 }
 /**
  * 渲染CBAS選擇權拆解分析圖

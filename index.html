@@ -463,10 +463,11 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
     cursor: pointer;
 }
 #quickSelect option {
-    padding: 10px 12px;
+    padding: 8px 12px;
     font-size: 13px;
-    white-space: normal;
-    line-height: 1.6;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 /* 競拍選項 - 橘色系背景 */
 #quickSelect optgroup[id*="Auction"] {
@@ -496,17 +497,6 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 #quickSelect optgroup[id*="recent"] option {
     background: #f5f5f5;
     color: #666;
-}
-/* v3.99P: 手機版select優化 */
-@media (max-width: 768px) {
-    #quickSelect {
-        font-size: 15px;
-        padding: 12px;
-    }
-    #quickSelect option {
-        font-size: 14px;
-        padding: 12px;
-    }
 }
 
 /* v3.97-as-ce: 移除舊的 ranking-period CSS，改用 inline style */
@@ -17367,12 +17357,16 @@ function displayResult(r) {
            </div>`
         : '';
 
-    // v3.97y: 組合標題（優先用閃電帶入的CB代號+名稱）
-    let resultTitle = r.cbName || '未命名標的';
+    // v3.99P: 組合標題（代號 + 名稱）
+    let resultTitle = '未命名標的';
     if (window.currentCBCode && window.currentCBName) {
         resultTitle = `${window.currentCBCode} ${window.currentCBName}`;
+    } else if (window.currentCBCode) {
+        resultTitle = window.currentCBCode;
     } else if (window.currentCBName) {
         resultTitle = window.currentCBName;
+    } else if (r.cbName) {
+        resultTitle = r.cbName;
     }
 
     div.innerHTML = `
@@ -17393,127 +17387,7 @@ function displayResult(r) {
         ${dimWarning}
     </div>
 
-    <!-- ========== 溢價率分析法 ========== -->
-    <div class="detail-section" style="border: 2px solid #1976d2; border-radius: 12px;">
-        <h3 style="color:#1976d2;">📈 分析法一：溢價率分析法</h3>
-        <p style="color:#666; font-size:13px; margin-bottom:10px;">
-            適用情境：理論價 ≥ 95元時，在理論價基礎上加上歷史平均溢價率計算投標價
-            <span style="display:inline-block; background:${r.inputData.guarantee === '有擔保' ? '#e8f5e9' : '#fce4ec'}; padding:2px 8px; border-radius:4px; margin-left:8px; font-weight:600; color:${r.inputData.guarantee === '有擔保' ? '#2e7d32' : '#c62828'};">
-                數據來源：${r.inputData.guarantee === '有擔保' ? '有擔保案例' : r.inputData.guarantee === '無擔保' ? '無擔保案例' : '全部案例'}
-            </span>
-        </p>
-
-        <!-- 溢價率法核心數據 -->
-        <div style="background:#e3f2fd; padding:12px 15px; border-radius:8px; margin-bottom:15px;">
-            <div style="display:flex; gap:20px; flex-wrap:wrap; align-items:center;">
-                <div style="flex:1; min-width:150px;">
-                    <div style="color:#1565c0; font-size:13px;">預估溢價區間</div>
-                    <div style="font-size:20px; font-weight:bold; color:#0d47a1;">${r.totalLowPremium}% ~ ${r.totalAvgPremium}%</div>
-                </div>
-                <div style="flex:1; min-width:150px;">
-                    <div style="color:#1565c0; font-size:13px;">保守投標價</div>
-                    <div style="font-size:20px; font-weight:bold; color:#2e7d32;">${r.premiumBidPrices.conservative} 元</div>
-                </div>
-                <div style="flex:1; min-width:150px;">
-                    <div style="color:#1565c0; font-size:13px;">平衡投標價</div>
-                    <div style="font-size:20px; font-weight:bold; color:#1565c0;">${r.premiumBidPrices.balanced} 元</div>
-                </div>
-            </div>
-        </div>
-
-        <div style="overflow-x:auto;">
-            <table class="data-table">
-                <thead><tr>
-                    <th>維度</th><th>條件</th>
-                    <th>最低<br>溢價</th><th>平均<br>溢價</th>
-                    <th>權重</th><th>加權<br>最低</th><th>加權<br>平均</th>
-                </tr></thead>
-                <tbody>${premiumRows}</tbody>
-            </table>
-        </div>
-        ${premiumWarning}
-        <div class="price-grid" style="margin-top:15px;">
-            <div class="strategy-card conservative">
-                <h4>🛡️ 保守</h4>
-                <div class="price">${r.premiumBidPrices.conservative}</div>
-                <div style="font-size:11px; color:#666;">${conservativeDesc}</div>
-            </div>
-            <div class="strategy-card balanced">
-                <h4>⚖️ 平衡</h4>
-                <div class="price">${r.premiumBidPrices.balanced}</div>
-                <div style="font-size:11px; color:#666;">${balancedDesc}</div>
-            </div>
-            <div class="strategy-card aggressive">
-                <h4>🚀 積極</h4>
-                <div class="price">${r.premiumBidPrices.aggressive}</div>
-                <div style="font-size:11px; color:#666;">${aggressiveDesc}</div>
-            </div>
-            <div class="strategy-card ultimate">
-                <h4>🔥 極致</h4>
-                <div class="price">${r.premiumBidPrices.ultimate}</div>
-                <div style="font-size:11px; color:#666;">${ultimateDesc}</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ========== 得標價格分析法 ========== -->
-    <div class="detail-section" style="border: 2px solid #e65100; border-radius: 12px;">
-        <h3 style="color:#e65100;">📊 分析法二：得標價格分析法</h3>
-        <p style="color:#666; font-size:13px; margin-bottom:10px;">
-            適用情境：理論價 < 95元 或 溢價率法低於底標時，直接用歷史平均得標價格加權計算
-        </p>
-
-        <!-- 得標價格法核心數據 -->
-        <div style="background:#fff3e0; padding:12px 15px; border-radius:8px; margin-bottom:15px;">
-            <div style="display:flex; gap:20px; flex-wrap:wrap; align-items:center;">
-                <div style="flex:1; min-width:150px;">
-                    <div style="color:#e65100; font-size:13px;">加權最低得標價</div>
-                    <div style="font-size:20px; font-weight:bold; color:#2e7d32;">${r.weightedLowBidPrice} 元</div>
-                    <div style="font-size:12px; color:#666;">≈ 溢價率 ${r.impliedLowPremium}%</div>
-                </div>
-                <div style="flex:1; min-width:150px;">
-                    <div style="color:#e65100; font-size:13px;">加權平均得標價</div>
-                    <div style="font-size:20px; font-weight:bold; color:#bf360c;">${r.weightedAvgBidPrice} 元</div>
-                    <div style="font-size:12px; color:#666;">≈ 溢價率 ${r.impliedAvgPremium}%</div>
-                </div>
-                <div style="flex:1; min-width:150px;">
-                    <div style="color:#e65100; font-size:13px;">底標價格</div>
-                    <div style="font-size:20px; font-weight:bold; color:#333;">${r.floorPrice} 元</div>
-                </div>
-            </div>
-        </div>
-
-        <div style="overflow-x:auto;">
-            <table class="data-table">
-                <thead><tr>
-                    <th>維度</th><th>條件</th>
-                    <th>最低<br>得標價</th><th>平均<br>得標價</th>
-                    <th>權重</th><th>加權<br>最低</th><th>加權<br>平均</th>
-                </tr></thead>
-                <tbody>${priceRows}</tbody>
-            </table>
-        </div>
-        <div class="price-grid" style="margin-top:15px;">
-            <div class="strategy-card conservative" style="border-color:#e65100;">
-                <h4>🛡️ 保守</h4>
-                <div class="price">${r.priceBidPrices.conservative}</div>
-                <div style="font-size:11px; color:#666;">加權最低得標價</div>
-            </div>
-            <div class="strategy-card balanced" style="border-color:#e65100;">
-                <h4>⚖️ 平衡</h4>
-                <div class="price">${r.priceBidPrices.balanced}</div>
-                <div style="font-size:11px; color:#666;">加權平均得標價</div>
-            </div>
-            <div class="strategy-card aggressive" style="border-color:#e65100;">
-                <h4>🚀 積極</h4>
-                <div class="price">${r.priceBidPrices.aggressive}</div>
-            </div>
-            <div class="strategy-card ultimate" style="border-color:#e65100;">
-                <h4>🔥 極致</h4>
-                <div class="price">${r.priceBidPrices.ultimate}</div>
-            </div>
-        </div>
-    </div>
+    <!-- v3.99P: 移除重複的分析法一、分析法二，已整合至Step 1明細 -->
 
     ${generateRexCommentary(r)}
 
@@ -17872,9 +17746,22 @@ function handleQuickSelect() {
 
     if (!c) return;
 
-    // v3.97y: 保存完整標的資訊供結果標題使用
-    window.currentCBCode = c.cbCode || '';
-    window.currentCBName = c.cbName || '';
+    // v3.99P: 保存完整標的資訊供結果標題使用
+    // cbCode可能為空，嘗試從stockCode或其他欄位取得
+    let cbCode = c.cbCode || c.stockCode || '';
+    let cbName = c.cbName || '';
+    
+    // 如果cbName包含代號（如"6510 精測一"），分離出來
+    if (cbName && !cbCode) {
+        const match = cbName.match(/^(\d+)\s*/);
+        if (match) {
+            cbCode = match[1];
+            cbName = cbName.replace(/^\d+\s*/, '').trim();
+        }
+    }
+    
+    window.currentCBCode = cbCode;
+    window.currentCBName = cbName;
     console.log('⚡ 閃電帶入標的:', window.currentCBCode, window.currentCBName);
 
     // 帶入各欄位

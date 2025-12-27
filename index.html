@@ -30336,15 +30336,15 @@ const TrendScanModule = {
     // 生成熱力圖顏色
     // v3.99U: 台灣股市「紅漲綠跌」配色漸層
     getHeatColor(percent) {
-        // 紅色系漸層（強勢）到 綠色系漸層（弱勢）
-        if (percent >= 80) return { bg: '#b71c1c', text: 'white' };  // 深紅 - 極強
-        if (percent >= 70) return { bg: '#c62828', text: 'white' };  // 紅色 - 很強
-        if (percent >= 60) return { bg: '#e53935', text: 'white' };  // 亮紅 - 強勢
-        if (percent >= 50) return { bg: '#ef5350', text: 'white' };  // 淺紅 - 偏多
-        if (percent >= 40) return { bg: '#ffb74d', text: 'black' };  // 橘黃 - 中性偏弱
-        if (percent >= 30) return { bg: '#81c784', text: 'black' };  // 淺綠 - 弱勢
-        if (percent >= 20) return { bg: '#4caf50', text: 'white' };  // 綠色 - 很弱
-        return { bg: '#2e7d32', text: 'white' };  // 深綠 - 極弱
+        // v3.99W: 優化色調，降低亮度使整體更柔和
+        if (percent >= 80) return { bg: '#8b0000', text: 'white' };  // 暗紅 - 極強
+        if (percent >= 70) return { bg: '#a52a2a', text: 'white' };  // 棕紅 - 很強
+        if (percent >= 60) return { bg: '#cd5c5c', text: 'white' };  // 印度紅 - 強勢
+        if (percent >= 50) return { bg: '#d98880', text: 'white' };  // 淺紅棕 - 偏多
+        if (percent >= 40) return { bg: '#e8a838', text: 'white' };  // 深黃 - 中性偏弱
+        if (percent >= 30) return { bg: '#7daa6d', text: 'white' };  // 橄欖綠 - 弱勢
+        if (percent >= 20) return { bg: '#3d8b3d', text: 'white' };  // 森林綠 - 很弱
+        return { bg: '#1e5631', text: 'white' };  // 深綠 - 極弱
     },
     
     // 渲染結果
@@ -30390,20 +30390,21 @@ const TrendScanModule = {
         let heatmapHTML = `
             <div style="font-size:15px; font-weight:bold; color:#333; margin-bottom:10px;">
                 🔥 產業強弱熱力圖（${maDays}日均線）
-                <span style="font-size:13px; color:#666; font-weight:normal;">站上均線比例</span>
+                <span style="font-size:13px; color:#666; font-weight:normal; margin-left:10px;">站上均線比例</span>
             </div>
-            <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(100px, 1fr)); gap:6px;">
+            <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(105px, 1fr)); gap:8px;">
         `;
         
         sortedIndustries.forEach(([industry, stat]) => {
             const color = this.getHeatColor(stat.percent);
             heatmapHTML += `
                 <div onclick="TrendScanModule.showIndustryDetail('${industry}')" 
-                     style="background:${color.bg}; color:${color.text}; padding:8px 6px; border-radius:6px; text-align:center; cursor:pointer; transition:transform 0.2s;"
-                     onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-                    <div style="font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${industry}</div>
-                    <div style="font-size:18px; font-weight:bold;">${stat.percent}%</div>
-                    <div style="font-size:11px; opacity:0.8;">${stat.above}/${stat.total}</div>
+                     style="background:${color.bg}; color:${color.text}; padding:10px 8px; border-radius:8px; text-align:center; cursor:pointer; transition:all 0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.15); min-height:70px; display:flex; flex-direction:column; justify-content:center;"
+                     onmouseover="this.style.transform='scale(1.03)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.25)';" 
+                     onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.15)';">
+                    <div style="font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; opacity:0.95; margin-bottom:2px;">${industry}</div>
+                    <div style="font-size:20px; font-weight:bold; line-height:1.2;">${stat.percent}%</div>
+                    <div style="font-size:11px; opacity:0.85; margin-top:2px;">${stat.above}/${stat.total}</div>
                 </div>
             `;
         });

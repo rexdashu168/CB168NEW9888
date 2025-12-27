@@ -14535,9 +14535,6 @@ function renderIndexMarginAnalysis() {
         <span style="font-size:12px; font-weight:normal; color:#4caf50; margin-left:10px;">✓ ${totalRecords} 筆</span>
     </div>`;
     
-    // 無資料提示
-    if (data.tse.length === 0 && data.otc.length === 0 && data.stock2330.length === 0) {
-        html += `
     // 統計卡片
     html += `
     <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:12px; margin-bottom:15px;">
@@ -23886,49 +23883,30 @@ function renderBasicInfoBalance(cbCode, container) {
                 </div>
             </div>
             ` : ''}
-            <!-- v3.97-zs-at: 週餘額/月餘額切換標籤 -->
+            <!-- v3.99W: 簡化標籤，只保留完整追蹤和月餘額 -->
             <div style="margin-bottom:15px;">
-                <div style="display:flex; gap:5px; margin-bottom:12px; align-items:center; flex-wrap:wrap;">
-                    <button type="button" class="balance-sub-tab active" data-tab="weekChart" onclick="switchBalanceSubTab('${searchCode}', 'weekChart', this)"
-                            style="padding:8px 14px; border:none; background:#00838f; color:white; border-radius:6px 6px 0 0; cursor:pointer; font-size:16px; font-weight:bold;">
-                        📈 週走勢
-                    </button>
-                    <button type="button" class="balance-sub-tab" data-tab="weekTable" onclick="switchBalanceSubTab('${searchCode}', 'weekTable', this)"
-                            style="padding:8px 14px; border:none; background:#b2ebf2; color:#00838f; border-radius:6px 6px 0 0; cursor:pointer; font-size:16px;">
-                        📋 週記錄
+                <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center; flex-wrap:wrap;">
+                    <button type="button" class="balance-sub-tab active" data-tab="fullTracker" onclick="switchBalanceSubTab('${searchCode}', 'fullTracker', this)"
+                            style="padding:10px 18px; border:none; background:#ff9800; color:white; border-radius:8px; cursor:pointer; font-size:15px; font-weight:bold; box-shadow:0 2px 6px rgba(255,152,0,0.3);">
+                        📊 完整追蹤
                     </button>
                     <button type="button" class="balance-sub-tab" data-tab="monthChart" onclick="switchBalanceSubTab('${searchCode}', 'monthChart', this)"
-                            style="padding:8px 14px; border:none; background:#b2ebf2; color:#00838f; border-radius:6px 6px 0 0; cursor:pointer; font-size:16px;">
-                        📊 月走勢
-                    </button>
-                    <button type="button" class="balance-sub-tab" data-tab="monthTable" onclick="switchBalanceSubTab('${searchCode}', 'monthTable', this)"
-                            style="padding:8px 14px; border:none; background:#b2ebf2; color:#00838f; border-radius:6px 6px 0 0; cursor:pointer; font-size:16px;">
-                        📑 月記錄
-                    </button>
-                    <!-- v3.98i 新增：完整追蹤表 -->
-                    <button type="button" class="balance-sub-tab" data-tab="fullTracker" onclick="switchBalanceSubTab('${searchCode}', 'fullTracker', this)"
-                            style="padding:8px 14px; border:none; background:#fff3e0; color:#e65100; border-radius:6px 6px 0 0; cursor:pointer; font-size:16px; font-weight:600; border:2px solid #ff9800;">
-                        📊 完整追蹤
+                            style="padding:10px 18px; border:none; background:#e0f2f1; color:#00838f; border-radius:8px; cursor:pointer; font-size:15px; font-weight:500;">
+                        📈 月餘額走勢
                     </button>
                     <div style="margin-left:auto;">
                         <select id="balancePeriod_${searchCode}" onchange="updateBalancePeriod('${searchCode}')"
-                                style="padding:6px 10px; border:1px solid #00838f; border-radius:6px; font-size:16px; color:#00838f;">
-                            <option value="30">1個月</option>
-                            <option value="90">3個月</option>
+                                style="padding:6px 10px; border:1px solid #00838f; border-radius:6px; font-size:14px; color:#00838f;">
                             <option value="180" selected>6個月</option>
                             <option value="365">1年</option>
                             <option value="730">2年</option>
-                            <option value="1095">3年</option>
                             <option value="all">全部</option>
                         </select>
                     </div>
                 </div>
-                <div style="font-size:16px; color:#555; margin-bottom:8px; padding-left:5px;">
-                    💡 週餘額來自元大資料(每週更新)，月餘額來自CB_kanban(每月更新)
-                </div>
-                <div id="balanceSubContent_${searchCode}" style="background:white; padding:18px; border-radius:0 10px 10px 10px; min-height:200px;">
+                <div id="balanceSubContent_${searchCode}" style="background:white; padding:15px; border-radius:10px; min-height:200px; border:1px solid #e0e0e0;">
                     <div style="text-align:center; color:#555; padding:40px;">
-                        📊 載入週餘額走勢資料中...
+                        📊 請點擊上方標籤載入資料
                     </div>
                 </div>
             </div>
@@ -23940,9 +23918,9 @@ function renderBasicInfoBalance(cbCode, container) {
         </div>
     `;
     container.innerHTML = html;
-    // v3.97-zs-at: 自動載入週餘額走勢圖
+    // v3.99W: 預設顯示完整追蹤標籤（手動載入模式）
     setTimeout(() => {
-        renderWeeklyChart(searchCode);
+        renderFullTracker(searchCode);
     }, 100);
 }
 /**
@@ -24558,49 +24536,40 @@ function updateBalancePeriod(cbCode) {
     if (!container) return;
     // 從按鈕找當前標籤
     const tabButtons = container.parentElement?.querySelectorAll('.balance-sub-tab');
-    let currentTab = 'weekChart';
+    let currentTab = 'fullTracker';
     tabButtons?.forEach(btn => {
         if (btn.classList.contains('active')) {
             currentTab = btn.dataset.tab;
         }
     });
-    // v3.99U: 根據當前標籤重新渲染（加入fullTracker）
+    // v3.99W: 只處理兩個標籤
     switch(currentTab) {
-        case 'weekChart':
-            renderWeeklyChart(cbCode);
-            break;
-        case 'weekTable':
-            renderWeeklyTable(cbCode);
-            break;
         case 'monthChart':
             renderConversionChart(cbCode);
-            break;
-        case 'monthTable':
-            renderConversionTable(cbCode);
             break;
         case 'fullTracker':
             renderFullTracker(cbCode);
             break;
         default:
-            renderWeeklyChart(cbCode);
+            renderFullTracker(cbCode);
     }
 }
 /**
- * v3.97-zs-at 修改：切換餘額子標籤（週/月走勢圖/記錄表）
+ * v3.99W 修改：切換餘額子標籤（只保留完整追蹤和月餘額）
  */
 function switchBalanceSubTab(cbCode, tabType, btnElement) {
     // 更新按鈕樣式
     const buttons = btnElement.parentElement.querySelectorAll('.balance-sub-tab');
     buttons.forEach(btn => {
         if (btn === btnElement) {
-            // v3.98i: 完整追蹤表用橘色
             if (btn.dataset.tab === 'fullTracker') {
                 btn.style.background = '#ff9800';
                 btn.style.color = 'white';
-                btn.style.border = '2px solid #ff9800';
+                btn.style.boxShadow = '0 2px 6px rgba(255,152,0,0.3)';
             } else {
                 btn.style.background = '#00838f';
                 btn.style.color = 'white';
+                btn.style.boxShadow = '0 2px 6px rgba(0,131,143,0.3)';
             }
             btn.style.fontWeight = 'bold';
             btn.classList.add('active');
@@ -24608,32 +24577,25 @@ function switchBalanceSubTab(cbCode, tabType, btnElement) {
             if (btn.dataset.tab === 'fullTracker') {
                 btn.style.background = '#fff3e0';
                 btn.style.color = '#e65100';
-                btn.style.border = '2px solid #ff9800';
             } else {
-                btn.style.background = '#b2ebf2';
+                btn.style.background = '#e0f2f1';
                 btn.style.color = '#00838f';
             }
-            btn.style.fontWeight = 'normal';
+            btn.style.fontWeight = '500';
+            btn.style.boxShadow = 'none';
             btn.classList.remove('active');
         }
     });
     // 渲染對應內容
     switch(tabType) {
-        case 'weekChart':
-            renderWeeklyChart(cbCode);
-            break;
-        case 'weekTable':
-            renderWeeklyTable(cbCode);
-            break;
         case 'monthChart':
             renderConversionChart(cbCode);
             break;
-        case 'monthTable':
-            renderConversionTable(cbCode);
-            break;
         case 'fullTracker':
-            renderFullTracker(cbCode);  // v3.98i 新增
+            renderFullTracker(cbCode);
             break;
+        default:
+            renderFullTracker(cbCode);
     }
 }
 /**
@@ -25108,9 +25070,15 @@ async function renderFullTrackerContent(cbCode, container) {
     const searchCode = String(cbCode).trim();
     const weeklyData = window.weeklyBalanceData?.data?.[searchCode];
     if (!weeklyData || weeklyData.length === 0) {
-        container.innerHTML = `<div style="text-align:center; padding:40px; color:#444;">
-            <div style="font-size:32px; margin-bottom:10px;">📭</div>
-            <div>找不到 ${searchCode} 的餘額資料</div>
+        container.innerHTML = `<div style="text-align:center; padding:30px; color:#444;">
+            <div style="font-size:40px; margin-bottom:12px;">📭</div>
+            <div style="font-size:15px; margin-bottom:8px;">找不到 ${searchCode} 的週餘額資料</div>
+            <div style="font-size:13px; color:#666; margin-bottom:15px;">
+                週餘額資料來自元大，已下市標的可能無此資料
+            </div>
+            <div style="padding:12px; background:#e0f2f1; border-radius:8px; font-size:13px; color:#00695c;">
+                💡 建議：點擊「📈 月餘額走勢」查看歷年 CB_kanban 資料
+            </div>
         </div>`;
         return;
     }
@@ -25313,6 +25281,34 @@ async function renderFullTrackerContent(cbCode, container) {
     container.innerHTML = tableHtml;
 }
 /**
+ * v3.99W 新增：載入全部歷年kanban資料後重新渲染月餘額走勢
+ */
+async function loadAllKanbanAndRender(cbCode) {
+    const statusEl = document.getElementById('kanbanAllLoadStatus');
+    if (statusEl) statusEl.innerHTML = '<span style="color:#00838f;">⏳ 載入全部歷年資料中...</span>';
+    
+    try {
+        // 重置載入狀態，強制重新載入全部
+        window.kanbanData.loaded = false;
+        window.kanbanData.loading = false;
+        
+        // 載入全部年份
+        await loadAllKanbanData(true);
+        
+        if (statusEl) statusEl.innerHTML = '<span style="color:#4caf50;">✓ 載入完成</span>';
+        
+        // 重新渲染
+        setTimeout(() => {
+            renderConversionChart(cbCode);
+        }, 200);
+        
+    } catch (e) {
+        console.error('載入歷年kanban失敗:', e);
+        if (statusEl) statusEl.innerHTML = '<span style="color:#c62828;">❌ 載入失敗</span>';
+    }
+}
+
+/**
  * v3.97-zs-al 修改：渲染轉換走勢圖（加入時間區間選擇）
  */
 async function renderConversionChart(cbCode) {
@@ -25375,6 +25371,32 @@ async function renderConversionChart(cbCode) {
         const allKeys = Object.keys(window.kanbanData.data);
         // 檢查是否有包含 searchCode 的 key
         const matchingKeys = allKeys.filter(k => k.includes(searchCode.slice(-4)));
+    }
+    // v3.99W: 如果找不到資料，嘗試載入全部歷年資料（已下市CB可能在較早年份）
+    if (allData.length === 0 && !window.kanbanData.loadedAll) {
+        container.innerHTML = `
+            <div style="text-align:center; padding:30px;">
+                <div style="font-size:40px; margin-bottom:15px;">📊</div>
+                <div style="font-size:14px; color:#666; margin-bottom:15px;">
+                    近3年資料中未找到 ${searchCode}，可能是已下市標的
+                </div>
+                <button onclick="loadAllKanbanAndRender('${searchCode}')" style="
+                    background:linear-gradient(135deg, #00838f, #006064);
+                    color:white;
+                    border:none;
+                    padding:12px 25px;
+                    border-radius:8px;
+                    font-size:15px;
+                    font-weight:bold;
+                    cursor:pointer;
+                    box-shadow:0 3px 10px rgba(0,131,143,0.3);
+                ">
+                    📥 載入全部歷年資料 (2017-2025)
+                </button>
+                <div id="kanbanAllLoadStatus" style="margin-top:12px; font-size:13px; color:#666;"></div>
+            </div>
+        `;
+        return;
     }
     if (allData.length === 0) {
         container.innerHTML = `

@@ -3463,6 +3463,10 @@ button:active, .clickable:active {
             <div style="display:flex; align-items:center; gap:10px;">
                 <span id="basicInfoStatus" style="font-size:13px; color:#888;"></span>
                 <span id="cbListCount" style="font-size:13px; color:#1976d2; font-weight:600; padding:4px 10px; background:#e3f2fd; border-radius:4px;"></span>
+                <span style="font-size:12px; color:#888; padding-left:8px; border-left:1px solid #ddd;">
+                    <span style="background:#fff3e0; padding:2px 6px; border-radius:3px; color:#e65100;">🎯</span>=競拍
+                    <span style="background:#e3f2fd; padding:2px 6px; border-radius:3px; color:#1565c0; margin-left:6px;">📋</span>=詢圈
+                </span>
             </div>
         </div>
     </div>
@@ -3514,6 +3518,44 @@ button:active, .clickable:active {
                 <option value="">-- 請選擇CB代號 --</option>
             </select>
             <button type="button" onclick="refreshPriceTrendList()" style="padding:10px 14px; background:#9c27b0; color:white; border:none; border-radius:8px; cursor:pointer; font-size:15px; font-weight:500;">🔄</button>
+        </div>
+        <!-- v3.99W: 第二排篩選條件（跟第三區一樣）-->
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; padding:8px 12px; background:white; border-radius:6px; margin-bottom:10px;">
+            <div style="display:flex; align-items:center; gap:15px; flex-wrap:wrap;">
+                <div style="display:flex; align-items:center; gap:6px;">
+                    <span style="font-size:13px; color:#666;">發行：</span>
+                    <label style="font-size:13px; cursor:pointer; padding:3px 8px; border-radius:4px; background:#f5f5f5;">
+                        <input type="radio" name="priceTrendIssue" value="all" checked onchange="filterPriceTrendList()" style="margin-right:3px;"> 全部
+                    </label>
+                    <label style="font-size:13px; cursor:pointer; padding:3px 8px; border-radius:4px; background:#fff3e0; color:#e65100;">
+                        <input type="radio" name="priceTrendIssue" value="auction" onchange="filterPriceTrendList()" style="margin-right:3px;"> 競拍<span id="priceTrendAuctionCount" style="font-size:13px;"></span>
+                    </label>
+                    <label style="font-size:13px; cursor:pointer; padding:3px 8px; border-radius:4px; background:#e3f2fd; color:#1565c0;">
+                        <input type="radio" name="priceTrendIssue" value="inquiry" onchange="filterPriceTrendList()" style="margin-right:3px;"> 詢圈<span id="priceTrendInquiryCount" style="font-size:13px;"></span>
+                    </label>
+                </div>
+                <div style="height:16px; width:1px; background:#ddd;"></div>
+                <div style="display:flex; align-items:center; gap:6px;">
+                    <span style="font-size:13px; color:#666;">狀態：</span>
+                    <label style="font-size:13px; cursor:pointer; padding:3px 8px; border-radius:4px; background:#f5f5f5;">
+                        <input type="radio" name="priceTrendStatus" value="all" checked onchange="filterPriceTrendList()" style="margin-right:3px;"> 全部
+                    </label>
+                    <label style="font-size:13px; cursor:pointer; padding:3px 8px; border-radius:4px; background:#e8f5e9; color:#2e7d32;">
+                        <input type="radio" name="priceTrendStatus" value="listed" onchange="filterPriceTrendList()" style="margin-right:3px;"> 掛牌中<span id="priceTrendListedCount" style="font-size:13px;"></span>
+                    </label>
+                    <label style="font-size:13px; cursor:pointer; padding:3px 8px; border-radius:4px; background:#f5f5f5; color:#757575;">
+                        <input type="radio" name="priceTrendStatus" value="delisted" onchange="filterPriceTrendList()" style="margin-right:3px;"> 已下市<span id="priceTrendDelistedCount" style="font-size:13px;"></span>
+                    </label>
+                </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+                <span id="priceTrendLoadStatus" style="font-size:13px; color:#888;"></span>
+                <span id="priceTrendListCount" style="font-size:13px; color:#9c27b0; font-weight:600; padding:4px 10px; background:#f3e5f5; border-radius:4px;"></span>
+                <span style="font-size:12px; color:#888; padding-left:8px; border-left:1px solid #ddd;">
+                    <span style="background:#fff3e0; padding:2px 6px; border-radius:3px; color:#e65100;">🎯</span>=競拍
+                    <span style="background:#e3f2fd; padding:2px 6px; border-radius:3px; color:#1565c0; margin-left:6px;">📋</span>=詢圈
+                </span>
+            </div>
         </div>
         <!-- v3.99U: 標籤頁按鈕 -->
         <div style="display:flex; gap:6px; flex-wrap:nowrap; overflow-x:auto;">
@@ -3617,6 +3659,32 @@ button:active, .clickable:active {
             
             <!-- 產業趨勢標籤內容（原有內容）-->
             <div id="trendTabIndustryContent" style="display:none;">
+                <!-- v3.99W: 外電熱門標籤區 -->
+                <div id="foreignNewsHotTags" style="margin-bottom:15px; padding:15px; background:linear-gradient(135deg, #fff3e0, #ffecb3); border-radius:10px; border:2px solid #ff9800; display:none;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <div style="font-size:16px; font-weight:bold; color:#e65100;">
+                            🔥 外電熱門標籤
+                        </div>
+                        <button onclick="loadForeignNewsHotTags()" style="padding:4px 12px; background:#ff9800; color:white; border:none; border-radius:4px; cursor:pointer; font-size:13px;">🔄 更新</button>
+                    </div>
+                    <div id="hotTagsContainer" style="display:flex; flex-wrap:wrap; gap:8px;">
+                        <!-- 動態填入熱門標籤 -->
+                    </div>
+                </div>
+                
+                <!-- v3.99W: 外電熱門股票區 -->
+                <div id="foreignNewsHotStocks" style="margin-bottom:15px; padding:15px; background:linear-gradient(135deg, #ffebee, #fce4ec); border-radius:10px; border:2px solid #c62828; display:none;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <div style="font-size:16px; font-weight:bold; color:#c62828;">
+                            📰 外電熱門股票 TOP 15
+                        </div>
+                        <span style="font-size:13px; color:#666;">依券商報導熱度排序</span>
+                    </div>
+                    <div id="hotStocksContainer" style="display:flex; flex-wrap:wrap; gap:8px;">
+                        <!-- 動態填入熱門股票 -->
+                    </div>
+                </div>
+                
                 <!-- 控制區 -->
                 <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:15px; padding:10px; background:#ffebee; border-radius:8px;">
                     <div>
@@ -26126,7 +26194,90 @@ function clearPriceTrendSearch() {
 // v3.99W: 重新整理價格走勢清單
 function refreshPriceTrendList() {
     initPriceTrendOptions();
+    updatePriceTrendCounts();
 }
+
+// v3.99W: 更新第四區篩選計數
+function updatePriceTrendCounts() {
+    const data = window.cbDataCache || [];
+    let auctionCount = 0, inquiryCount = 0, listedCount = 0, delistedCount = 0;
+    
+    data.forEach(cb => {
+        const method = cb['發行方式'] || cb.issueMethod || '';
+        const status = cb['掛牌狀態'] || cb.status || '';
+        
+        if (method.includes('競拍') || method.includes('競價')) auctionCount++;
+        if (method.includes('詢圈') || method.includes('詢價')) inquiryCount++;
+        if (status.includes('掛牌') || status === '上市' || status === '上櫃') listedCount++;
+        if (status.includes('下市') || status.includes('下櫃') || status.includes('到期')) delistedCount++;
+    });
+    
+    const auctionEl = document.getElementById('priceTrendAuctionCount');
+    const inquiryEl = document.getElementById('priceTrendInquiryCount');
+    const listedEl = document.getElementById('priceTrendListedCount');
+    const delistedEl = document.getElementById('priceTrendDelistedCount');
+    
+    if (auctionEl) auctionEl.textContent = `(${auctionCount})`;
+    if (inquiryEl) inquiryEl.textContent = `(${inquiryCount})`;
+    if (listedEl) listedEl.textContent = `(${listedCount})`;
+    if (delistedEl) delistedEl.textContent = `(${delistedCount})`;
+}
+
+// v3.99W: 第四區篩選功能
+function filterPriceTrendList() {
+    const issueFilter = document.querySelector('input[name="priceTrendIssue"]:checked')?.value || 'all';
+    const statusFilter = document.querySelector('input[name="priceTrendStatus"]:checked')?.value || 'all';
+    
+    const select = document.getElementById('priceTrendCBSelect');
+    if (!select) return;
+    
+    const data = window.cbDataCache || [];
+    let filtered = data;
+    
+    // 發行方式篩選
+    if (issueFilter === 'auction') {
+        filtered = filtered.filter(cb => {
+            const method = cb['發行方式'] || cb.issueMethod || '';
+            return method.includes('競拍') || method.includes('競價');
+        });
+    } else if (issueFilter === 'inquiry') {
+        filtered = filtered.filter(cb => {
+            const method = cb['發行方式'] || cb.issueMethod || '';
+            return method.includes('詢圈') || method.includes('詢價');
+        });
+    }
+    
+    // 狀態篩選
+    if (statusFilter === 'listed') {
+        filtered = filtered.filter(cb => {
+            const status = cb['掛牌狀態'] || cb.status || '';
+            return status.includes('掛牌') || status === '上市' || status === '上櫃';
+        });
+    } else if (statusFilter === 'delisted') {
+        filtered = filtered.filter(cb => {
+            const status = cb['掛牌狀態'] || cb.status || '';
+            return status.includes('下市') || status.includes('下櫃') || status.includes('到期');
+        });
+    }
+    
+    // 更新下拉選單
+    select.innerHTML = '<option value="">-- 請選擇CB代號 --</option>';
+    filtered.forEach(cb => {
+        const code = cb.code || cb['CB代號'] || '';
+        const name = cb.name || cb['CB名稱'] || '';
+        const method = cb['發行方式'] || cb.issueMethod || '';
+        const icon = (method.includes('競拍') || method.includes('競價')) ? '🎯' : '📋';
+        const opt = document.createElement('option');
+        opt.value = code;
+        opt.textContent = `${icon} ${code} ${name}`;
+        select.appendChild(opt);
+    });
+    
+    // 更新計數
+    const countEl = document.getElementById('priceTrendListCount');
+    if (countEl) countEl.textContent = `資料庫共 ${filtered.length} 檔`;
+}
+
 // 點擊其他地方關閉搜尋結果
 document.addEventListener('click', function(e) {
     const resultsDiv = document.getElementById('priceTrendSearchResults');
@@ -30706,9 +30857,29 @@ async function renderForeignNews(cbCode, container) {
             return;
         }
         
-        // 從CB代號取得股票代號（去掉後綴數字）
-        const stockCode = cbCode.replace(/[一二三四五六七八九十\d]+$/, '');
-        const stockName = cb.name?.replace(/[一二三四五六七八九十\d]+$/, '') || '';
+        // v3.99W: 修正股票代號提取邏輯
+        // 優先使用 CB 資料中的 stockCode 欄位
+        // 若無，則從 CB 代號取前4位（如 23837 → 2383）
+        // 若是中文代號，則去除後綴
+        let stockCode = cb.stockCode || cb['股票代號'] || '';
+        if (!stockCode) {
+            if (/^\d{5,}$/.test(cbCode)) {
+                // 5位以上數字代號，取前4位
+                stockCode = cbCode.substring(0, 4);
+            } else {
+                // 中文代號，去除後綴數字
+                stockCode = cbCode.replace(/[一二三四五六七八九十\d]+$/, '');
+            }
+        }
+        stockCode = String(stockCode).replace('.0', '').trim();
+        
+        // 取得股票名稱
+        let stockName = cb.name?.replace(/[一二三四五六七八九十\d]+$/, '') || '';
+        if (!stockName && cb.name) {
+            stockName = cb.name.substring(0, cb.name.length - 1);  // 去掉最後一個字（期數）
+        }
+        
+        console.log(`[renderForeignNews] CB代號: ${cbCode}, 股票代號: ${stockCode}, 股票名稱: ${stockName}`);
         
         // 載入外電資料和熱度資料
         await Promise.all([
@@ -30992,11 +31163,40 @@ const MarketIndexModule = {
         }
     },
     
-    // v3.99W: 格式化日期標籤
+    // v3.99W: 格式化日期標籤（圖表X軸用，較短）
     formatDateLabel(dateStr) {
         // 處理 2000/1/4 或 2024/12/20 或 20241220 格式
         if (!dateStr) return '';
-        // 確保是字串
+        const str = String(dateStr);
+        
+        // 處理 YYYY/M/D 或 YYYY/MM/DD 格式
+        if (str.includes('/')) {
+            const parts = str.split('/');
+            if (parts.length >= 3) {
+                const year = parts[0].substring(2);  // 取後2位年份
+                const month = parts[1].padStart(2, '0');
+                const day = parts[2].padStart(2, '0');
+                return `${year}/${month}/${day}`;
+            }
+        }
+        // 處理 YYYYMMDD 格式（8位數字）
+        if (/^\d{8}$/.test(str)) {
+            return `${str.substring(2,4)}/${str.substring(4,6)}/${str.substring(6,8)}`;
+        }
+        // 處理 YYYY-MM-DD 格式
+        if (str.includes('-')) {
+            const parts = str.split('-');
+            if (parts.length >= 3) {
+                const year = parts[0].substring(2);
+                return `${year}/${parts[1]}/${parts[2]}`;
+            }
+        }
+        return str;
+    },
+    
+    // v3.99W: 格式化日期（帶完整年份，用於最高最低價顯示）
+    formatDateWithYear(dateStr) {
+        if (!dateStr) return '';
         const str = String(dateStr);
         
         // 處理 YYYY/M/D 或 YYYY/MM/DD 格式
@@ -31005,19 +31205,16 @@ const MarketIndexModule = {
             if (parts.length >= 3) {
                 const month = parts[1].padStart(2, '0');
                 const day = parts[2].padStart(2, '0');
-                return `${month}/${day}`;
+                return `${parts[0]}/${month}/${day}`;
             }
         }
-        // 處理 YYYYMMDD 格式（8位數字）
+        // 處理 YYYYMMDD 格式
         if (/^\d{8}$/.test(str)) {
-            return `${str.substring(4,6)}/${str.substring(6,8)}`;
+            return `${str.substring(0,4)}/${str.substring(4,6)}/${str.substring(6,8)}`;
         }
         // 處理 YYYY-MM-DD 格式
         if (str.includes('-')) {
-            const parts = str.split('-');
-            if (parts.length >= 3) {
-                return `${parts[1]}/${parts[2]}`;
-            }
+            return str;
         }
         return str;
     },
@@ -31057,7 +31254,9 @@ const MarketIndexModule = {
             chartColor = '#9c27b0';  // 紫色
         }
         
-        const chartData = sourceData.slice(-days);
+        // v3.99W: 過濾掉無效資料（價格為0、null、undefined或負數）
+        const validData = sourceData.filter(d => d.close && d.close > 0);
+        const chartData = validData.slice(-days);
         
         if (chartData.length === 0) {
             container.innerHTML = '<div style="text-align:center; padding:40px; color:#999;">暫無資料</div>';
@@ -31164,8 +31363,8 @@ const MarketIndexModule = {
         });
         const highestPrice = chartData[highestIdx].close;
         const lowestPrice = chartData[lowestIdx].close;
-        const highestDate = this.formatDateLabel(chartData[highestIdx].date);
-        const lowestDate = this.formatDateLabel(chartData[lowestIdx].date);
+        const highestDate = this.formatDateWithYear(chartData[highestIdx].date);
+        const lowestDate = this.formatDateWithYear(chartData[lowestIdx].date);
         
         // v3.99W: 取得最新均線值
         const lastMA13 = ma13[ma13.length - 1];
@@ -31180,12 +31379,12 @@ const MarketIndexModule = {
                     </div>
                     <div style="display:flex; align-items:center; gap:15px;">
                         <div style="font-size:12px; color:#666; text-align:center;">
-                            <div style="color:#c62828;">H: ${highestPrice.toFixed(decimals)}</div>
-                            <div style="color:#999; font-size:10px;">${highestDate}</div>
+                            <div style="color:#c62828; font-weight:600;">H: ${highestPrice.toFixed(decimals)}</div>
+                            <div style="color:#888; font-size:11px;">${highestDate}</div>
                         </div>
                         <div style="font-size:12px; color:#666; text-align:center;">
-                            <div style="color:#2e7d32;">L: ${lowestPrice.toFixed(decimals)}</div>
-                            <div style="color:#999; font-size:10px;">${lowestDate}</div>
+                            <div style="color:#2e7d32; font-weight:600;">L: ${lowestPrice.toFixed(decimals)}</div>
+                            <div style="color:#888; font-size:11px;">${lowestDate}</div>
                         </div>
                         <div style="border-left:1px solid #ddd; padding-left:12px;">
                             <span style="font-size:20px; font-weight:bold; color:${priceChangeColor};">${lastPrice.toFixed(decimals)}</span>
@@ -31546,6 +31745,193 @@ function updateTrendScan() {
     
     // 渲染結果
     TrendScanModule.render(stats, maDays);
+    
+    // v3.99W: 同時載入外電熱門標籤
+    loadForeignNewsHotTags();
+}
+
+// v3.99W: 載入外電熱門標籤和熱門股票
+async function loadForeignNewsHotTags() {
+    try {
+        // 載入外電資料
+        await ForeignNewsModule.loadData();
+        await ForeignNewsModule.loadHeatData();
+        
+        // 顯示區塊
+        document.getElementById('foreignNewsHotTags').style.display = 'block';
+        document.getElementById('foreignNewsHotStocks').style.display = 'block';
+        
+        // 統計標籤熱度
+        const tagCounts = {};
+        ForeignNewsModule.data.forEach(report => {
+            if (!report.tags) return;
+            const tags = report.tags.split(/[#\s]+/).filter(t => t.startsWith('#') || t.length > 1);
+            const tagList = report.tags.match(/#[^\s#]+/g) || [];
+            tagList.forEach(tag => {
+                const weight = report.importanceNum || 1;
+                tagCounts[tag] = (tagCounts[tag] || 0) + weight;
+            });
+        });
+        
+        // 排序取前20
+        const topTags = Object.entries(tagCounts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 20);
+        
+        // 渲染熱門標籤
+        const hotTagsContainer = document.getElementById('hotTagsContainer');
+        if (topTags.length > 0) {
+            hotTagsContainer.innerHTML = topTags.map(([tag, count], idx) => {
+                const size = idx < 5 ? '15px' : idx < 10 ? '14px' : '13px';
+                const bgColor = idx < 3 ? '#ff5722' : idx < 7 ? '#ff9800' : '#ffc107';
+                const textColor = idx < 7 ? 'white' : '#333';
+                return `<span style="background:${bgColor}; color:${textColor}; padding:5px 12px; border-radius:20px; font-size:${size}; font-weight:${idx < 5 ? '600' : '500'}; cursor:pointer;" 
+                    onclick="searchForeignNewsByTag('${tag}')">${tag} <span style="opacity:0.8; font-size:11px;">(${count})</span></span>`;
+            }).join('');
+        } else {
+            hotTagsContainer.innerHTML = '<span style="color:#999;">暫無標籤資料</span>';
+        }
+        
+        // 渲染熱門股票
+        const hotStocksContainer = document.getElementById('hotStocksContainer');
+        const heatData = ForeignNewsModule.heatData;
+        const topStocks = Object.entries(heatData)
+            .sort((a, b) => b[1].heat - a[1].heat)
+            .slice(0, 15);
+        
+        if (topStocks.length > 0) {
+            hotStocksContainer.innerHTML = topStocks.map(([code, data], idx) => {
+                const heatColor = ForeignNewsModule.getHeatColor(data.heat);
+                const sentimentIcon = data.sentiment === '正面' ? '📈' : data.sentiment === '負面' ? '📉' : '➡️';
+                return `
+                    <div style="background:white; border:2px solid ${heatColor}; border-radius:8px; padding:8px 12px; cursor:pointer; min-width:120px;"
+                         onclick="showForeignStockDetail('${code}')">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span style="font-weight:700; color:#333;">${code}</span>
+                            <span style="font-size:12px; color:${heatColor};">${data.level.replace(/🔥|📈|📊/g, '')}</span>
+                        </div>
+                        <div style="font-size:13px; color:#666; margin-top:2px;">${data.company || ''}</div>
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">
+                            <span style="font-size:12px; color:${heatColor};">熱度 ${data.heat.toFixed(0)}</span>
+                            <span style="font-size:12px;">${sentimentIcon} ${data.reports}篇</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        } else {
+            hotStocksContainer.innerHTML = '<span style="color:#999;">暫無熱門股票資料</span>';
+        }
+        
+    } catch (e) {
+        console.error('[loadForeignNewsHotTags] 錯誤:', e);
+    }
+}
+
+// v3.99W: 根據標籤搜尋外電報導
+function searchForeignNewsByTag(tag) {
+    const reports = ForeignNewsModule.data.filter(r => r.tags && r.tags.includes(tag));
+    if (reports.length === 0) {
+        alert(`找不到包含 ${tag} 的報導`);
+        return;
+    }
+    
+    // 建立彈窗顯示結果
+    const modal = document.createElement('div');
+    modal.id = 'tagSearchModal';
+    modal.style.cssText = `position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:9999; display:flex; align-items:center; justify-content:center; padding:20px; box-sizing:border-box;`;
+    
+    let reportsHTML = reports.slice(0, 30).map((r, idx) => `
+        <div style="background:#f5f5f5; padding:10px 15px; border-radius:6px; margin-bottom:8px; border-left:4px solid ${r.importanceNum >= 5 ? '#c62828' : r.importanceNum >= 4 ? '#ff9800' : '#1976d2'};">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                <span style="font-weight:600;">${r.company || '-'} (${r.code || '-'})</span>
+                <span style="color:#666; font-size:13px;">${r.date || '-'}</span>
+            </div>
+            <div style="font-size:13px; color:#666;">${r.source} | ${r.category} | ${r.importance}</div>
+            <div style="font-size:13px; color:#333; margin-top:5px; line-height:1.5;">${(r.content || '').substring(0, 150)}...</div>
+        </div>
+    `).join('');
+    
+    modal.innerHTML = `
+        <div style="background:white; border-radius:16px; max-width:800px; width:95%; max-height:85vh; overflow:hidden; box-shadow:0 15px 50px rgba(0,0,0,0.4);">
+            <div style="background:linear-gradient(135deg, #ff9800, #ff5722); color:white; padding:20px 25px; display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <div style="font-size:20px; font-weight:bold;">🏷️ ${tag} 相關報導</div>
+                    <div style="font-size:14px; opacity:0.9; margin-top:4px;">共 ${reports.length} 篇報導</div>
+                </div>
+                <div onclick="document.getElementById('tagSearchModal').remove()" style="cursor:pointer; font-size:28px; padding:5px 15px; background:rgba(255,255,255,0.2); border-radius:8px;">✕</div>
+            </div>
+            <div style="padding:20px 25px; max-height:calc(85vh - 100px); overflow-y:auto;">
+                ${reportsHTML}
+                ${reports.length > 30 ? `<div style="text-align:center; color:#666; padding:10px;">顯示前 30 篇，共 ${reports.length} 篇</div>` : ''}
+            </div>
+        </div>
+    `;
+    
+    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+    document.body.appendChild(modal);
+}
+
+// v3.99W: 顯示熱門股票詳細外電
+function showForeignStockDetail(stockCode) {
+    const reports = ForeignNewsModule.searchByCode(stockCode);
+    const heatInfo = ForeignNewsModule.getStockHeat(stockCode);
+    
+    if (reports.length === 0 && !heatInfo) {
+        alert(`找不到 ${stockCode} 的外電報導`);
+        return;
+    }
+    
+    const modal = document.createElement('div');
+    modal.id = 'stockDetailModal';
+    modal.style.cssText = `position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:9999; display:flex; align-items:center; justify-content:center; padding:20px; box-sizing:border-box;`;
+    
+    const heatColor = heatInfo ? ForeignNewsModule.getHeatColor(heatInfo.heat) : '#666';
+    const advice = heatInfo ? ForeignNewsModule.getAuctionAdvice(heatInfo.heat, heatInfo.sentiment) : null;
+    
+    let heatHTML = heatInfo ? `
+        <div style="background:${heatColor}15; border:2px solid ${heatColor}; border-radius:10px; padding:15px; margin-bottom:15px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                <div style="font-size:18px; font-weight:bold; color:${heatColor};">${heatInfo.level} 熱度：${heatInfo.heat.toFixed(0)}</div>
+                <div style="display:flex; gap:8px;">
+                    <span style="background:#e8f5e9; padding:4px 10px; border-radius:4px; color:#2e7d32; font-size:13px;">👍 ${heatInfo.positive}篇</span>
+                    <span style="background:#ffebee; padding:4px 10px; border-radius:4px; color:#c62828; font-size:13px;">👎 ${heatInfo.negative}篇</span>
+                </div>
+            </div>
+            ${heatInfo.tags.length > 0 ? `<div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:10px;">${heatInfo.tags.map(t => `<span style="background:${heatColor}20; color:${heatColor}; padding:3px 8px; border-radius:4px; font-size:12px;">#${t.replace('#','')}</span>`).join('')}</div>` : ''}
+            ${advice ? `<div style="background:white; border-radius:6px; padding:10px; margin-top:10px;"><span style="color:#666;">🎯 競拍建議：</span><strong style="color:${advice.color};">${advice.adjust}</strong> <span style="color:#888; font-size:13px;">(${advice.reason})</span></div>` : ''}
+        </div>
+    ` : '';
+    
+    let reportsHTML = reports.slice(0, 20).map(r => `
+        <div style="background:#f5f5f5; padding:10px 15px; border-radius:6px; margin-bottom:8px; border-left:4px solid ${r.importanceNum >= 5 ? '#c62828' : r.importanceNum >= 4 ? '#ff9800' : '#1976d2'};">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                <span style="font-weight:600;">${r.date || '-'} | ${r.source || '-'}</span>
+                <span style="color:#666; font-size:13px;">${r.category} ${r.importance}</span>
+            </div>
+            <div style="font-size:13px; color:#333; line-height:1.6;">${(r.content || '').substring(0, 200)}...</div>
+        </div>
+    `).join('');
+    
+    modal.innerHTML = `
+        <div style="background:white; border-radius:16px; max-width:800px; width:95%; max-height:85vh; overflow:hidden; box-shadow:0 15px 50px rgba(0,0,0,0.4);">
+            <div style="background:linear-gradient(135deg, ${heatColor}, ${heatColor}dd); color:white; padding:20px 25px; display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <div style="font-size:20px; font-weight:bold;">📰 ${heatInfo?.company || stockCode} (${stockCode})</div>
+                    <div style="font-size:14px; opacity:0.9; margin-top:4px;">共 ${reports.length} 篇外電報導</div>
+                </div>
+                <div onclick="document.getElementById('stockDetailModal').remove()" style="cursor:pointer; font-size:28px; padding:5px 15px; background:rgba(255,255,255,0.2); border-radius:8px;">✕</div>
+            </div>
+            <div style="padding:20px 25px; max-height:calc(85vh - 100px); overflow-y:auto;">
+                ${heatHTML}
+                <div style="font-size:16px; font-weight:bold; color:#333; margin-bottom:10px;">📋 報導列表</div>
+                ${reportsHTML || '<div style="color:#999; text-align:center; padding:20px;">暫無報導</div>'}
+                ${reports.length > 20 ? `<div style="text-align:center; color:#666; padding:10px;">顯示前 20 篇，共 ${reports.length} 篇</div>` : ''}
+            </div>
+        </div>
+    `;
+    
+    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+    document.body.appendChild(modal);
 }
 
 // 系統啟動

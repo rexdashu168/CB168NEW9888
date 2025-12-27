@@ -22205,30 +22205,53 @@ function renderBasicInfoSchedule(cbCode, container) {
     // v3.99U: 取得股票代號以查詢股價
     const stockCode = getStockCodeFromCB(searchCode);
     
-    // v3.99U: 取得各日期的股價資料
+    // v3.99U: 取得各日期的股價資料（改進版）
     const getStockPriceForDate = (dateVal) => {
         if (!stockCode || !dateVal || dateVal === '-') return null;
-        // 從股價資料中查找
-        let priceData = window.tseStockPrice?.data?.[stockCode] || window.otcStockPrice?.data?.[stockCode];
+        // 從股價資料中查找（優先用上市，再用上櫃）
+        let priceData = null;
+        if (window.tseStockPrice?.loaded && window.tseStockPrice?.data?.[stockCode]) {
+            priceData = window.tseStockPrice.data[stockCode];
+        } else if (window.otcStockPrice?.loaded && window.otcStockPrice?.data?.[stockCode]) {
+            priceData = window.otcStockPrice.data[stockCode];
+        }
         if (!priceData || priceData.length === 0) return null;
-        // 解析日期
+        
+        // 解析目標日期
         let targetDate;
         if (typeof dateVal === 'number') {
+            // Excel 日期格式
             targetDate = new Date((dateVal - 25569) * 86400 * 1000);
         } else {
-            targetDate = new Date(String(dateVal).replace(/\//g, '-'));
+            // 字串格式 YYYY/MM/DD 或 YYYY-MM-DD
+            const dateStr = String(dateVal).replace(/\//g, '-');
+            targetDate = new Date(dateStr);
         }
         if (isNaN(targetDate.getTime())) return null;
-        const targetNum = parseInt(targetDate.toISOString().slice(0, 10).replace(/-/g, ''));
-        // 找最接近的日期（7天內）
+        
+        // 轉換為 YYYYMMDD 數字格式
+        const y = targetDate.getFullYear();
+        const m = String(targetDate.getMonth() + 1).padStart(2, '0');
+        const d = String(targetDate.getDate()).padStart(2, '0');
+        const targetNum = parseInt(`${y}${m}${d}`);
+        const today = new Date();
+        const todayNum = parseInt(`${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`);
+        
+        // 如果目標日期在未來，返回 null
+        if (targetNum > todayNum) return null;
+        
+        // 找最接近的日期（往前找14天內）
         let closest = null;
         let minDiff = Infinity;
         for (const p of priceData) {
             const pNum = parseInt(p.date);
-            const diff = Math.abs(pNum - targetNum);
-            if (diff <= 7 && diff < minDiff) {
-                minDiff = diff;
-                closest = p;
+            // 只找目標日期當天或之前的資料
+            if (pNum <= targetNum) {
+                const diff = targetNum - pNum;
+                if (diff <= 14 && diff < minDiff) {
+                    minDiff = diff;
+                    closest = p;
+                }
             }
         }
         return closest?.close || null;
@@ -22244,7 +22267,7 @@ function renderBasicInfoSchedule(cbCode, container) {
     const boardDate = getValue(scheduleData?.['董事會公告']);
     const boardPrice = getStockPriceForDate(boardDate);
     
-    // 各階段股價
+    // 各階段股價（到期日若在未來則不查）
     const prices = {
         board: boardPrice,
         submit: getStockPriceForDate(getValue(scheduleData?.['送件日期'])),
@@ -22302,29 +22325,51 @@ function renderBasicInfoSchedule(cbCode, container) {
         };
         
         const periods = [1, 3, 6, 12, 18, 24, 30, 36];
+        const today = new Date();
         const periodData = periods.map(m => {
             const targetDate = getDateAfterMonths(listDateVal, m);
-            if (!targetDate) return { month: m, price: null, change: null };
-            const price = getStockPriceForDate(targetDate.toISOString().slice(0, 10));
+            if (!targetDate) return { month: m, price: null, change: null, future: true };
+            // 檢查是否在未來
+            if (targetDate > today) return { month: m, price: null, change: null, future: true };
+            // 轉換為 YYYY-MM-DD 格式
+            const dateStr = targetDate.toISOString().slice(0, 10);
+            const price = getStockPriceForDate(dateStr);
             const change = calcChange(listPrice, price);
-            return { month: m, price, change };
+            return { month: m, price, change, future: false };
         });
+        
+        // 檢查是否有任何有效資料
+        const hasAnyData = periodData.some(p => p.price !== null);
         
         postListHtml = `
             <div style="background:white; padding:12px; border-radius:8px; margin-top:12px; border:2px solid #1976d2;">
                 <div style="font-size:14px; font-weight:bold; color:#1976d2; margin-bottom:10px; display:flex; align-items:center; gap:6px;">
                     📈 掛牌後股價表現
-                    ${listPrice ? `<span style="font-size:12px; color:#666; font-weight:normal;">（基期：掛牌日 ${listPrice.toFixed(1)} 元）</span>` : ''}
+                    ${listPrice ? `<span style="font-size:12px; color:#666; font-weight:normal;">（基期：掛牌日 ${listPrice.toFixed(1)} 元）</span>` : '<span style="font-size:12px; color:#999; font-weight:normal;">（需載入股價資料）</span>'}
                 </div>
                 <div style="display:grid; grid-template-columns:repeat(8, 1fr); gap:6px;">
                     ${periodData.map(p => {
-                        const bgColor = p.change === null ? '#f5f5f5' : (p.change >= 0 ? '#ffebee' : '#e8f5e9');
-                        const textColor = p.change === null ? '#999' : (p.change >= 0 ? '#c62828' : '#2e7d32');
-                        const changeText = p.change !== null ? (p.change >= 0 ? '+' : '') + p.change.toFixed(1) + '%' : '-';
+                        let bgColor, textColor, changeText;
+                        if (p.future) {
+                            // 未來日期
+                            bgColor = '#fafafa';
+                            textColor = '#bbb';
+                            changeText = '尚未到期';
+                        } else if (p.change === null) {
+                            // 沒有資料
+                            bgColor = '#f5f5f5';
+                            textColor = '#999';
+                            changeText = '-';
+                        } else {
+                            // 有資料
+                            bgColor = p.change >= 0 ? '#ffebee' : '#e8f5e9';
+                            textColor = p.change >= 0 ? '#c62828' : '#2e7d32';
+                            changeText = (p.change >= 0 ? '+' : '') + p.change.toFixed(1) + '%';
+                        }
                         return `
                             <div style="background:${bgColor}; padding:8px 4px; border-radius:6px; text-align:center;">
                                 <div style="font-size:11px; color:#666; margin-bottom:2px;">${p.month}個月</div>
-                                <div style="font-size:14px; font-weight:bold; color:${textColor};">${changeText}</div>
+                                <div style="font-size:${p.future ? '10' : '14'}px; font-weight:bold; color:${textColor};">${changeText}</div>
                                 ${p.price ? `<div style="font-size:10px; color:#888;">${p.price.toFixed(1)}</div>` : ''}
                             </div>
                         `;

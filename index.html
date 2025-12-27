@@ -29880,17 +29880,34 @@ const TrendScanModule = {
             const dates = dateQuery[0].values.map(v => v[0]);
             if (dates.length === 0) return results;
             
-            // 查詢這些日期的所有股票收盤價
+            // 查詢這些日期的所有股票收盤價（嘗試包含Name欄位）
             const dateList = dates.join(',');
-            const priceQuery = db.exec(`SELECT Code, Date, Close FROM ${tableName} WHERE Date IN (${dateList}) ORDER BY Code, Date DESC`);
+            let priceQuery;
+            try {
+                // 嘗試查詢包含Name的資料
+                priceQuery = db.exec(`SELECT Code, Name, Date, Close FROM ${tableName} WHERE Date IN (${dateList}) ORDER BY Code, Date DESC`);
+            } catch (e) {
+                // 如果沒有Name欄位，fallback到原本的查詢
+                priceQuery = db.exec(`SELECT Code, Date, Close FROM ${tableName} WHERE Date IN (${dateList}) ORDER BY Code, Date DESC`);
+            }
             if (!priceQuery[0]) return results;
             
+            const hasName = priceQuery[0].columns && priceQuery[0].columns.length === 4;
             priceQuery[0].values.forEach(row => {
-                const code = String(row[0]);
-                const date = row[1];
-                const close = row[2];
-                if (!results[code]) results[code] = [];
-                results[code].push({ date, close });
+                if (hasName) {
+                    const code = String(row[0]);
+                    const name = String(row[1] || code);
+                    const date = row[2];
+                    const close = row[3];
+                    if (!results[code]) results[code] = [];
+                    results[code].push({ date, close, name });
+                } else {
+                    const code = String(row[0]);
+                    const date = row[1];
+                    const close = row[2];
+                    if (!results[code]) results[code] = [];
+                    results[code].push({ date, close, name: code });
+                }
             });
             
             return results;
@@ -30161,16 +30178,19 @@ const TrendScanModule = {
         const chartArea = document.getElementById('industryChartArea');
         if (!chartArea) return;
         
-        // 從 tseStockPrice 或 otcStockPrice 取得價格資料
+        // v3.99W: 優先從 TrendScanModule.priceData 取得資料
         let priceData = null;
-        if (window.tseStockPrice?.data?.[code]) {
+        if (TrendScanModule.priceData?.[code]) {
+            // priceData 是按日期降序，需要反轉為升序
+            priceData = [...TrendScanModule.priceData[code]].reverse();
+        } else if (window.tseStockPrice?.data?.[code]) {
             priceData = window.tseStockPrice.data[code];
         } else if (window.otcStockPrice?.data?.[code]) {
             priceData = window.otcStockPrice.data[code];
         }
         
         if (!priceData || priceData.length === 0) {
-            chartArea.innerHTML = `<div style="color:#999;">無法取得 ${code} ${name} 的價格資料</div>`;
+            chartArea.innerHTML = `<div style="color:#999; text-align:center; padding:20px;">無法取得 ${code} ${name} 的價格資料</div>`;
             return;
         }
         

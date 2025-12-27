@@ -30651,15 +30651,32 @@ const MarketIndexModule = {
     
     // v3.99W: 格式化日期標籤
     formatDateLabel(dateStr) {
-        // 處理 2000/1/4 或 2024/12/20 格式
+        // 處理 2000/1/4 或 2024/12/20 或 20241220 格式
         if (!dateStr) return '';
-        const parts = dateStr.split('/');
-        if (parts.length >= 3) {
-            const month = parts[1].padStart(2, '0');
-            const day = parts[2].padStart(2, '0');
-            return `${month}/${day}`;
+        // 確保是字串
+        const str = String(dateStr);
+        
+        // 處理 YYYY/M/D 或 YYYY/MM/DD 格式
+        if (str.includes('/')) {
+            const parts = str.split('/');
+            if (parts.length >= 3) {
+                const month = parts[1].padStart(2, '0');
+                const day = parts[2].padStart(2, '0');
+                return `${month}/${day}`;
+            }
         }
-        return dateStr;
+        // 處理 YYYYMMDD 格式（8位數字）
+        if (/^\d{8}$/.test(str)) {
+            return `${str.substring(4,6)}/${str.substring(6,8)}`;
+        }
+        // 處理 YYYY-MM-DD 格式
+        if (str.includes('-')) {
+            const parts = str.split('-');
+            if (parts.length >= 3) {
+                return `${parts[1]}/${parts[2]}`;
+            }
+        }
+        return str;
     },
     
     // 渲染走勢圖
@@ -30966,7 +30983,7 @@ async function searchStockPrice() {
                 `);
                 if (result.length > 0 && result[0].values.length > 0) {
                     stockData = result[0].values.map(row => ({
-                        date: row[0],
+                        date: String(row[0]),  // v3.99W: 確保轉為字串
                         close: parseFloat(row[1]) || 0
                     }));
                     stockName = result[0].values[0][2] || stockCode;
@@ -30995,7 +31012,7 @@ async function searchStockPrice() {
                     `);
                     if (result.length > 0 && result[0].values.length > 0) {
                         stockData = result[0].values.map(row => ({
-                            date: row[0],
+                            date: String(row[0]),  // v3.99W: 確保轉為字串
                             close: parseFloat(row[1]) || 0
                         }));
                         stockName = result[0].values[0][2] || stockCode;

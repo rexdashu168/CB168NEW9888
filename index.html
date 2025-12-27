@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.99V (發債DNA資料整合版)</title>
-<!-- v3.99V: 發債DNA資料整合 - 合併01_basic掛牌最高/最低到auctionDataCache -->
+<title>AI智能可轉債競拍系統 v3.99W (百分位數策略版)</title>
+<!-- v3.99W: 百分位數策略 - 基於307檔歷史統計，提供30%/50%/70%/85%中獎率對應的建議價格 -->
 <!-- v3.99U: 所有圖表加入動態tooltip -->
 <!-- v3.99U: CB價格走勢標籤功能修復 -->
 <!-- v3.99U: 籌碼轉換分析balance單位修正 -->
@@ -170,7 +170,7 @@ body { font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif; backgro
 @media (max-width: 768px) {
     .resizer { display: none !important; }
 }
-.input-panel { background: white; border-radius: 15px; padding: 20px; box-shadow: 0 5px 20px rgba(0,0,0,0.15); position: sticky; top: 20px; border: 2px solid rgba(102, 126, 234, 0.3); border-left: 6px solid #667eea; box-sizing: border-box; max-height: calc(100vh - 40px); overflow-y: auto; overflow-x: hidden; min-width: 320px; min-height: fit-content; }
+.input-panel { background: white; border-radius: 15px; padding: 20px; box-shadow: 0 5px 20px rgba(0,0,0,0.15); position: sticky; top: 20px; border: 2px solid rgba(102, 126, 234, 0.3); border-left: 6px solid #667eea; box-sizing: border-box; max-height: calc(100vh - 40px); overflow-y: auto; overflow-x: hidden; min-width: 320px; min-height: fit-content; transition: all 0.3s ease; }
 .input-panel::-webkit-scrollbar { width: 8px; }
 .input-panel::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
 .input-panel::-webkit-scrollbar-thumb { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 4px; }
@@ -2960,65 +2960,55 @@ button:active, .clickable:active {
                 </div>
             </div>
         </div>
-        <!-- v3.99S 新增：307檔統計建議價格 -->
+        <!-- v3.99W 修正：百分位數策略建議價格（基於307檔歷史統計）-->
         <div id="step3StatisticalPrice" style="display:none; background:linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border:2px solid #4caf50; border-radius:10px; padding:12px; margin-bottom:12px;">
             <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
-                <div style="font-size:16px; font-weight:bold; color:#2e7d32;">📈 307檔統計建議價格</div>
-                <div style="font-size:16px; color:#444;" id="step3StatGuaranteeType">--</div>
-            </div>
-            <!-- 調整因子明細 -->
-            <div style="background:white; border-radius:8px; padding:10px; margin-bottom:10px;">
-                <div style="font-size:16px; color:#444; margin-bottom:8px;">調整因子明細</div>
-                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(75px, 1fr)); gap:6px; font-size:16px;">
-                    <div style="text-align:center; background:#f5f5f5; padding:6px; border-radius:4px;">
-                        <div style="color:#444;">倍數</div>
-                        <div style="font-weight:bold;" id="step3StatMultLevel">--</div>
-                        <div style="font-size:16px; color:#555;">權重50%</div>
-                    </div>
-                    <div style="text-align:center; background:#f5f5f5; padding:6px; border-radius:4px;">
-                        <div style="color:#444;">規模</div>
-                        <div style="font-weight:bold;" id="step3StatSizeAdj">--</div>
-                        <div style="font-size:16px; color:#555;">權重15%</div>
-                    </div>
-                    <div style="text-align:center; background:#f5f5f5; padding:6px; border-radius:4px;">
-                        <div style="color:#444;">TCRI</div>
-                        <div style="font-weight:bold;" id="step3StatTcriAdj">--</div>
-                        <div style="font-size:16px; color:#555;">權重20%</div>
-                    </div>
-                    <div style="text-align:center; background:#f5f5f5; padding:6px; border-radius:4px;">
-                        <div style="color:#444;">產業</div>
-                        <div style="font-weight:bold;" id="step3StatIndustryAdj">--</div>
-                        <div style="font-size:16px; color:#555;">權重15%</div>
-                    </div>
+                <div style="font-size:16px; font-weight:bold; color:#2e7d32;">📊 百分位數策略（307檔統計）</div>
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <span style="font-size:13px; color:#444;" id="step3StatMethod">--</span>
+                    <span style="font-size:13px; padding:2px 8px; border-radius:4px;" id="step3StatGuaranteeType">--</span>
                 </div>
             </div>
-            <!-- 策略建議價格 -->
-            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(100px, 1fr)); gap:8px;">
-                <div style="text-align:center; background:rgba(76,175,80,0.2); padding:10px; border-radius:8px; border:2px solid #4caf50;">
-                    <div style="font-size:16px; color:#2e7d32;">🛡️ 保守(Q25)</div>
-                    <div style="font-size:18px; font-weight:bold; color:#1b5e20;" id="step3StatConservative">--</div>
-                    <div style="font-size:16px; color:#444;">溢價 <span id="step3StatConservativePrem">--%</span></div>
+            <!-- 說明區 -->
+            <div style="background:white; border-radius:8px; padding:10px; margin-bottom:10px; font-size:13px; color:#555;">
+                <div style="margin-bottom:4px;">💡 <strong>中獎率</strong> = 歷史上以該價格出價，有多少比例會得標</div>
+                <div>📌 理論價≥97.5採用「溢價率法」，&lt;97.5採用「得標均價法」</div>
+            </div>
+            <!-- 四檔策略建議價格 -->
+            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:6px;">
+                <div style="text-align:center; background:rgba(76,175,80,0.15); padding:10px 6px; border-radius:8px; border:2px solid #4caf50;">
+                    <div style="font-size:12px; color:#2e7d32;">🛡️ 保守</div>
+                    <div style="font-size:11px; color:#666;">30%中獎</div>
+                    <div style="font-size:17px; font-weight:bold; color:#1b5e20; margin:4px 0;" id="step3StatConservative">--</div>
+                    <div style="font-size:11px; color:#444;" id="step3StatConservativePrem">--</div>
                 </div>
-                <div style="text-align:center; background:rgba(33,150,243,0.2); padding:10px; border-radius:8px; border:2px solid #2196f3;">
-                    <div style="font-size:16px; color:#1565c0;">⚖️ 中位(Q50)</div>
-                    <div style="font-size:18px; font-weight:bold; color:#0d47a1;" id="step3StatBalanced">--</div>
-                    <div style="font-size:16px; color:#444;">溢價 <span id="step3StatBalancedPrem">--%</span></div>
+                <div style="text-align:center; background:rgba(33,150,243,0.15); padding:10px 6px; border-radius:8px; border:2px solid #2196f3;">
+                    <div style="font-size:12px; color:#1565c0;">⚖️ 穩健</div>
+                    <div style="font-size:11px; color:#666;">50%中獎</div>
+                    <div style="font-size:17px; font-weight:bold; color:#0d47a1; margin:4px 0;" id="step3StatBalanced">--</div>
+                    <div style="font-size:11px; color:#444;" id="step3StatBalancedPrem">--</div>
                 </div>
-                <div style="text-align:center; background:rgba(255,152,0,0.2); padding:10px; border-radius:8px; border:2px solid #ff9800;">
-                    <div style="font-size:16px; color:#e65100;">🚀 積極(Q75)</div>
-                    <div style="font-size:18px; font-weight:bold; color:#bf360c;" id="step3StatAggressive">--</div>
-                    <div style="font-size:16px; color:#444;">溢價 <span id="step3StatAggressivePrem">--%</span></div>
+                <div style="text-align:center; background:rgba(255,152,0,0.15); padding:10px 6px; border-radius:8px; border:2px solid #ff9800;">
+                    <div style="font-size:12px; color:#e65100;">🚀 積極</div>
+                    <div style="font-size:11px; color:#666;">70%中獎</div>
+                    <div style="font-size:17px; font-weight:bold; color:#bf360c; margin:4px 0;" id="step3StatAggressive">--</div>
+                    <div style="font-size:11px; color:#444;" id="step3StatAggressivePrem">--</div>
+                </div>
+                <div style="text-align:center; background:rgba(156,39,176,0.15); padding:10px 6px; border-radius:8px; border:2px solid #9c27b0;">
+                    <div style="font-size:12px; color:#7b1fa2;">🔥 激進</div>
+                    <div style="font-size:11px; color:#666;">85%中獎</div>
+                    <div style="font-size:17px; font-weight:bold; color:#4a148c; margin:4px 0;" id="step3StatExtreme">--</div>
+                    <div style="font-size:11px; color:#444;" id="step3StatExtremePrem">--</div>
                 </div>
             </div>
-            <!-- 信心度與說明 -->
-            <div style="margin-top:10px; padding:8px; background:white; border-radius:6px; font-size:16px;">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <div>
-                        <span style="color:#444;">資料信心度：</span>
-                        <span id="step3StatConfidence" style="font-weight:bold;">--</span>
-                    </div>
-                    <div style="color:#555;" id="step3StatNote">--</div>
+            <!-- 統計資訊 -->
+            <div style="margin-top:10px; padding:8px; background:white; border-radius:6px; font-size:12px; display:flex; justify-content:space-between; align-items:center;">
+                <div style="color:#555;">
+                    樣本：<span id="step3StatSampleCount">--</span>檔 | 
+                    平均：<span id="step3StatMean">--</span> | 
+                    標準差：<span id="step3StatStd">--</span>
                 </div>
+                <div style="color:#888; font-size:11px;">歷史百分位數直接對應中獎率</div>
             </div>
         </div>
         <!-- v3.99S 新增：溢價率參數速查表 -->
@@ -5280,6 +5270,94 @@ const AICore = {
                 conservative: this.calcComprehensivePrice({ ...params, strategy: 'conservative' }),
                 balanced: this.calcComprehensivePrice({ ...params, strategy: 'balanced' }),
                 aggressive: this.calcComprehensivePrice({ ...params, strategy: 'aggressive' })
+            };
+        },
+        // ========== v3.99W 新增：純百分位數策略（基於307檔歷史統計）==========
+        // 直接使用歷史百分位數，不做複雜調整
+        // 保守=P30(30%中獎率), 穩健=P50(50%中獎率), 積極=P70(70%中獎率), 激進=P85(85%中獎率)
+        percentileParams: {
+            // 溢價率分析法（理論價 >= 97.5）- 使用最低溢價的百分位數
+            premiumMethod: {
+                guaranteed: {   // 有擔保 52筆
+                    p30: 2.71, p40: 4.52, p50: 6.76, p60: 8.15, p70: 9.52, p85: 12.85,
+                    mean: 6.64, std: 5.36, count: 52
+                },
+                unguaranteed: { // 無擔保 118筆
+                    p30: 1.46, p40: 2.45, p50: 3.66, p60: 5.21, p70: 6.65, p85: 10.12,
+                    mean: 3.77, std: 6.37, count: 118
+                },
+                overall: {      // 全部 170筆
+                    p30: 1.85, p40: 3.04, p50: 3.92, p60: 6.03, p70: 8.11, p85: 9.96,
+                    mean: 4.65, std: 6.20, count: 170
+                }
+            },
+            // 得標均價分析法（理論價 < 97.5）- 使用最低得標價的百分位數
+            avgBidMethod: {
+                guaranteed: {   // 有擔保 49筆
+                    p30: 103.06, p40: 104.20, p50: 105.77, p60: 107.50, p70: 108.66, p85: 110.50,
+                    mean: 105.72, std: 3.71, count: 49
+                },
+                unguaranteed: { // 無擔保 88筆
+                    p30: 102.01, p40: 102.80, p50: 103.90, p60: 105.40, p70: 107.00, p85: 109.50,
+                    mean: 105.07, std: 4.57, count: 88
+                },
+                overall: {      // 全部 137筆
+                    p30: 102.34, p40: 102.97, p50: 104.50, p60: 105.91, p70: 107.63, p85: 109.80,
+                    mean: 105.30, std: 4.28, count: 137
+                }
+            }
+        },
+        // 計算百分位數策略價格
+        // theoPrice: 理論價格, guarantee: 擔保類型, percentile: 'p30'/'p50'/'p70'/'p85'
+        calcPercentilePrice: function(theoPrice, guarantee, percentile = 'p50') {
+            const isGuaranteed = (guarantee === '有擔保' || guarantee === '有');
+            const usesPremiumMethod = theoPrice >= 97.5;
+            
+            let params, price, winRate;
+            if (usesPremiumMethod) {
+                // 溢價率分析法
+                params = isGuaranteed ? this.percentileParams.premiumMethod.guaranteed 
+                                     : this.percentileParams.premiumMethod.unguaranteed;
+                const premiumRate = params[percentile] || params.p50;
+                price = theoPrice * (1 + premiumRate / 100);
+            } else {
+                // 得標均價分析法
+                params = isGuaranteed ? this.percentileParams.avgBidMethod.guaranteed 
+                                     : this.percentileParams.avgBidMethod.unguaranteed;
+                price = params[percentile] || params.p50;
+            }
+            
+            // 中獎率對應
+            const winRateMap = { p30: 30, p40: 40, p50: 50, p60: 60, p70: 70, p85: 85 };
+            winRate = winRateMap[percentile] || 50;
+            
+            return {
+                price: price,
+                winRate: winRate,
+                method: usesPremiumMethod ? '溢價率法' : '得標均價法',
+                premiumRate: usesPremiumMethod ? (params[percentile] || params.p50) : null,
+                historicalMean: params.mean,
+                historicalStd: params.std,
+                sampleCount: params.count,
+                guaranteeType: isGuaranteed ? '有擔保' : '無擔保',
+                percentile: percentile
+            };
+        },
+        // 取得四檔百分位數策略價格
+        getPercentileStrategyPrices: function(theoPrice, guarantee) {
+            const conservative = this.calcPercentilePrice(theoPrice, guarantee, 'p30');
+            const balanced = this.calcPercentilePrice(theoPrice, guarantee, 'p50');
+            const aggressive = this.calcPercentilePrice(theoPrice, guarantee, 'p70');
+            const extreme = this.calcPercentilePrice(theoPrice, guarantee, 'p85');
+            
+            return {
+                conservative: conservative,  // 30% 中獎率 - 低成本試探
+                balanced: balanced,          // 50% 中獎率 - 歷史中位數
+                aggressive: aggressive,      // 70% 中獎率 - 較高機率
+                extreme: extreme,            // 85% 中獎率 - 幾乎確定中獎
+                method: conservative.method,
+                guaranteeType: conservative.guaranteeType,
+                sampleCount: conservative.sampleCount
             };
         }
     },
@@ -16424,47 +16502,68 @@ function displayResult(r) {
                         const industry = document.getElementById('industry')?.value || '';
                         // 預估投標倍數（使用雙軌預測結果）
                         const expectedMult = ensembleResult.stats?.weightedMult || 3.0;
-                        // 計算綜合建議價格
-                        const statPrices = PredictionEngine.dualTrack.getComprehensiveStrategyPrices({
-                            theoPrice: theoPrice,
-                            guarantee: guarantee,
-                            expectedMult: expectedMult,
-                            issueSize: issueSize,
-                            tcri: tcri,
-                            industry: industry
-                        });
+                        
+                        // ========== v3.99W 改用百分位數策略 ==========
+                        const percentilePrices = PredictionEngine.dualTrack.getPercentileStrategyPrices(theoPrice, guarantee);
+                        
                         // 顯示統計建議價格區塊
                         const statPriceEl = document.getElementById('step3StatisticalPrice');
                         if (statPriceEl) {
                             statPriceEl.style.display = 'block';
-                            // 擔保類型
-                            updateElement('step3StatGuaranteeType', statPrices.balanced.guaranteeType);
-                            // 調整因子
-                            updateElement('step3StatMultLevel', statPrices.balanced.multRange);
-                            const sizeAdj = statPrices.balanced.adjustments.size;
-                            updateElement('step3StatSizeAdj', sizeAdj.level ? `${sizeAdj.level} (${sizeAdj.adj.toFixed(2)})` : '--');
-                            const tcriAdj = statPrices.balanced.adjustments.tcri;
-                            updateElement('step3StatTcriAdj', `TCRI${tcriAdj.value} (${tcriAdj.adj.toFixed(2)})`);
-                            const indAdj = statPrices.balanced.adjustments.industry;
-                            updateElement('step3StatIndustryAdj', indAdj.name !== '未指定' ? `${indAdj.adj.toFixed(2)}` : '--');
-                            // 策略價格
-                            updateElement('step3StatConservative', statPrices.conservative.finalPrice.toFixed(2) + '元');
-                            updateElement('step3StatConservativePrem', statPrices.conservative.adjustedPremium.toFixed(2) + '%');
-                            updateElement('step3StatBalanced', statPrices.balanced.finalPrice.toFixed(2) + '元');
-                            updateElement('step3StatBalancedPrem', statPrices.balanced.adjustedPremium.toFixed(2) + '%');
-                            updateElement('step3StatAggressive', statPrices.aggressive.finalPrice.toFixed(2) + '元');
-                            updateElement('step3StatAggressivePrem', statPrices.aggressive.adjustedPremium.toFixed(2) + '%');
-                            // 信心度
-                            const confColors = { high: '#4caf50', medium: '#ff9800', low: '#f44336' };
-                            const confLabels = { high: '高', medium: '中', low: '低' };
-                            const confEl = document.getElementById('step3StatConfidence');
-                            if (confEl) {
-                                confEl.textContent = confLabels[statPrices.balanced.confidence] || '中';
-                                confEl.style.color = confColors[statPrices.balanced.confidence] || '#ff9800';
+                            
+                            // 方法與擔保類型
+                            updateElement('step3StatMethod', percentilePrices.method);
+                            const guarEl = document.getElementById('step3StatGuaranteeType');
+                            if (guarEl) {
+                                guarEl.textContent = percentilePrices.guaranteeType;
+                                guarEl.style.background = percentilePrices.guaranteeType === '有擔保' ? '#e8f5e9' : '#fff3e0';
+                                guarEl.style.color = percentilePrices.guaranteeType === '有擔保' ? '#2e7d32' : '#e65100';
                             }
-                            updateElement('step3StatNote', `樣本${statPrices.balanced.reference.sampleCount}檔 | ${statPrices.balanced.confidenceNote}`);
+                            
+                            // 四檔策略價格
+                            // 保守 (30% 中獎率)
+                            updateElement('step3StatConservative', percentilePrices.conservative.price.toFixed(2) + '元');
+                            if (percentilePrices.conservative.premiumRate !== null) {
+                                updateElement('step3StatConservativePrem', '溢價 ' + percentilePrices.conservative.premiumRate.toFixed(2) + '%');
+                            } else {
+                                updateElement('step3StatConservativePrem', '歷史P30');
+                            }
+                            
+                            // 穩健 (50% 中獎率)
+                            updateElement('step3StatBalanced', percentilePrices.balanced.price.toFixed(2) + '元');
+                            if (percentilePrices.balanced.premiumRate !== null) {
+                                updateElement('step3StatBalancedPrem', '溢價 ' + percentilePrices.balanced.premiumRate.toFixed(2) + '%');
+                            } else {
+                                updateElement('step3StatBalancedPrem', '歷史P50');
+                            }
+                            
+                            // 積極 (70% 中獎率)
+                            updateElement('step3StatAggressive', percentilePrices.aggressive.price.toFixed(2) + '元');
+                            if (percentilePrices.aggressive.premiumRate !== null) {
+                                updateElement('step3StatAggressivePrem', '溢價 ' + percentilePrices.aggressive.premiumRate.toFixed(2) + '%');
+                            } else {
+                                updateElement('step3StatAggressivePrem', '歷史P70');
+                            }
+                            
+                            // 激進 (85% 中獎率)
+                            updateElement('step3StatExtreme', percentilePrices.extreme.price.toFixed(2) + '元');
+                            if (percentilePrices.extreme.premiumRate !== null) {
+                                updateElement('step3StatExtremePrem', '溢價 ' + percentilePrices.extreme.premiumRate.toFixed(2) + '%');
+                            } else {
+                                updateElement('step3StatExtremePrem', '歷史P85');
+                            }
+                            
+                            // 統計資訊
+                            updateElement('step3StatSampleCount', percentilePrices.sampleCount);
+                            if (percentilePrices.balanced.premiumRate !== null) {
+                                updateElement('step3StatMean', percentilePrices.balanced.historicalMean.toFixed(2) + '%');
+                                updateElement('step3StatStd', percentilePrices.balanced.historicalStd.toFixed(2) + '%');
+                            } else {
+                                updateElement('step3StatMean', percentilePrices.balanced.historicalMean.toFixed(2) + '元');
+                                updateElement('step3StatStd', percentilePrices.balanced.historicalStd.toFixed(2) + '元');
+                            }
                         }
-                        console.log('📊 v3.99S 307檔統計建議價格:', statPrices);
+                        console.log('📊 v3.99W 百分位數策略:', percentilePrices);
                     } catch (e) {
                         console.warn('v3.99S 統計建議價格計算失敗:', e);
                     }
@@ -16745,6 +16844,7 @@ function toggleLeftPanel() {
     const inputPanel = document.getElementById('inputPanel');
     const resizer = document.getElementById('resizer');
     const resizerBtn = document.getElementById('resizerBtn');
+    const resultPanel = document.getElementById('resultPanel');
     if (!container || !inputPanel || !resizer) return;
     
     if (isLeftPanelCollapsed) {
@@ -16752,19 +16852,29 @@ function toggleLeftPanel() {
         container.style.gridTemplateColumns = originalGridColumns;
         inputPanel.style.display = 'block';
         inputPanel.style.opacity = '1';
+        inputPanel.style.width = '';
+        inputPanel.style.minWidth = '320px';
         resizerBtn.textContent = '◀';
         resizerBtn.title = '點擊收合左側面板';
         resizer.classList.remove('collapsed');
+        if (resultPanel) {
+            resultPanel.style.width = '';
+        }
         isLeftPanelCollapsed = false;
     } else {
         // 收合
-        originalGridColumns = container.style.gridTemplateColumns || '38.2% 8px 1fr';
+        originalGridColumns = container.style.gridTemplateColumns || getComputedStyle(container).gridTemplateColumns || '30% 8px 1fr';
         container.style.gridTemplateColumns = '0px 8px 1fr';
         inputPanel.style.display = 'none';
         inputPanel.style.opacity = '0';
+        inputPanel.style.width = '0';
+        inputPanel.style.minWidth = '0';
         resizerBtn.textContent = '▶';
         resizerBtn.title = '點擊展開左側面板';
         resizer.classList.add('collapsed');
+        if (resultPanel) {
+            resultPanel.style.width = '100%';
+        }
         isLeftPanelCollapsed = true;
     }
 }
@@ -22374,12 +22484,12 @@ function renderBasicInfoSchedule(cbCode, container) {
         const hasAnyData = periodData.some(p => p.price !== null);
         
         postListHtml = `
-            <div style="background:white; padding:12px; border-radius:8px; margin-top:12px; border:2px solid #1976d2;">
-                <div style="font-size:14px; font-weight:bold; color:#1976d2; margin-bottom:10px; display:flex; align-items:center; gap:6px;">
+            <div style="background:white; padding:15px; border-radius:10px; margin-top:12px; border:2px solid #1976d2;">
+                <div style="font-size:15px; font-weight:bold; color:#1976d2; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
                     📈 掛牌後股價表現
-                    ${listPrice ? `<span style="font-size:12px; color:#666; font-weight:normal;">（基期：掛牌日 ${listPrice.toFixed(1)} 元）</span>` : '<span style="font-size:12px; color:#999; font-weight:normal;">（需載入股價資料）</span>'}
+                    ${listPrice ? `<span style="font-size:13px; color:#666; font-weight:normal;">（基期：掛牌日 ${listPrice.toFixed(1)} 元）</span>` : '<span style="font-size:13px; color:#999; font-weight:normal;">（需載入股價資料）</span>'}
                 </div>
-                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(70px, 1fr)); gap:4px;">
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(80px, 1fr)); gap:6px;">
                     ${periodData.map(p => {
                         let bgColor, textColor, changeText;
                         if (p.future) {
@@ -22399,10 +22509,10 @@ function renderBasicInfoSchedule(cbCode, container) {
                             changeText = (p.change >= 0 ? '+' : '') + p.change.toFixed(1) + '%';
                         }
                         return `
-                            <div style="background:${bgColor}; padding:8px 4px; border-radius:6px; text-align:center;">
-                                <div style="font-size:11px; color:#666; margin-bottom:2px;">${p.month}個月</div>
-                                <div style="font-size:${p.future ? '10' : '14'}px; font-weight:bold; color:${textColor};">${changeText}</div>
-                                ${p.price ? `<div style="font-size:10px; color:#888;">${p.price.toFixed(1)}</div>` : ''}
+                            <div style="background:${bgColor}; padding:10px 6px; border-radius:8px; text-align:center;">
+                                <div style="font-size:13px; color:#666; margin-bottom:4px;">${p.month}個月</div>
+                                <div style="font-size:${p.future ? '11' : '15'}px; font-weight:bold; color:${textColor};">${changeText}</div>
+                                ${p.price ? `<div style="font-size:12px; color:#888; margin-top:2px;">${p.price.toFixed(1)}</div>` : ''}
                             </div>
                         `;
                     }).join('')}
@@ -22414,59 +22524,59 @@ function renderBasicInfoSchedule(cbCode, container) {
     const html = `
         <div style="background:linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); padding:15px; border-radius:12px;">
             ${renderTabHeader('發行時程', '📅', '#1565c0', completeness.percentage, statusLabel, cbCode, cbName)}
-            <!-- v3.99U: 重要日期時間軸 - 第一排 -->
-            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(85px, 1fr)); gap:6px; margin-bottom:10px;">
-                <div style="background:white; padding:6px 4px; border-radius:6px; text-align:center; border-left:3px solid #9c27b0;">
-                    <div style="font-size:11px; color:#666; margin-bottom:2px;">董事會</div>
-                    <div style="font-size:12px; font-weight:bold; color:#9c27b0;">${formatDate(getValue(scheduleData?.['董事會公告']))}</div>
-                    ${boardPrice ? `<div style="font-size:10px; color:#333; margin-top:2px;">${boardPrice.toFixed(1)}</div>` : ''}
+            <!-- v3.99W: 重要日期時間軸 - 字體加大 -->
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(100px, 1fr)); gap:8px; margin-bottom:12px;">
+                <div style="background:white; padding:10px 8px; border-radius:8px; text-align:center; border-left:4px solid #9c27b0;">
+                    <div style="font-size:13px; color:#666; margin-bottom:4px;">董事會</div>
+                    <div style="font-size:14px; font-weight:bold; color:#9c27b0;">${formatDate(getValue(scheduleData?.['董事會公告']))}</div>
+                    ${boardPrice ? `<div style="font-size:12px; color:#333; margin-top:4px;">${boardPrice.toFixed(1)}</div>` : ''}
                 </div>
-                <div style="background:white; padding:6px 4px; border-radius:6px; text-align:center; border-left:3px solid #673ab7;">
-                    <div style="font-size:11px; color:#666; margin-bottom:2px;">送件</div>
-                    <div style="font-size:12px; font-weight:bold; color:#673ab7;">${formatDate(getValue(scheduleData?.['送件日期']))}</div>
-                    <div style="margin-top:2px;">${renderPriceChange(prices.submit)}</div>
+                <div style="background:white; padding:10px 8px; border-radius:8px; text-align:center; border-left:4px solid #673ab7;">
+                    <div style="font-size:13px; color:#666; margin-bottom:4px;">送件</div>
+                    <div style="font-size:14px; font-weight:bold; color:#673ab7;">${formatDate(getValue(scheduleData?.['送件日期']))}</div>
+                    <div style="margin-top:4px;">${renderPriceChange(prices.submit)}</div>
                 </div>
-                <div style="background:white; padding:6px 4px; border-radius:6px; text-align:center; border-left:3px solid #3f51b5;">
-                    <div style="font-size:11px; color:#666; margin-bottom:2px;">生效</div>
-                    <div style="font-size:12px; font-weight:bold; color:#3f51b5;">${formatDate(getValue(scheduleData?.['生效日期']))}</div>
-                    <div style="margin-top:2px;">${renderPriceChange(prices.effective)}</div>
+                <div style="background:white; padding:10px 8px; border-radius:8px; text-align:center; border-left:4px solid #3f51b5;">
+                    <div style="font-size:13px; color:#666; margin-bottom:4px;">生效</div>
+                    <div style="font-size:14px; font-weight:bold; color:#3f51b5;">${formatDate(getValue(scheduleData?.['生效日期']))}</div>
+                    <div style="margin-top:4px;">${renderPriceChange(prices.effective)}</div>
                 </div>
-                <div style="background:white; padding:6px 4px; border-radius:6px; text-align:center; border-left:3px solid #2196f3;">
-                    <div style="font-size:11px; color:#666; margin-bottom:2px;">競拍日</div>
-                    <div style="font-size:12px; font-weight:bold; color:#2196f3;">${getValue(scheduleData?.['詢圈競拍日期'], formatDate(auctionData?.['截標日']))}</div>
-                    <div style="margin-top:2px;">${renderPriceChange(prices.auction)}</div>
+                <div style="background:white; padding:10px 8px; border-radius:8px; text-align:center; border-left:4px solid #2196f3;">
+                    <div style="font-size:13px; color:#666; margin-bottom:4px;">競拍日</div>
+                    <div style="font-size:14px; font-weight:bold; color:#2196f3;">${getValue(scheduleData?.['詢圈競拍日期'], formatDate(auctionData?.['截標日']))}</div>
+                    <div style="margin-top:4px;">${renderPriceChange(prices.auction)}</div>
                 </div>
-                <div style="background:white; padding:6px 4px; border-radius:6px; text-align:center; border-left:3px solid #009688;">
-                    <div style="font-size:11px; color:#666; margin-bottom:2px;">代收價款</div>
-                    <div style="font-size:12px; font-weight:bold; color:#009688;">${formatDate(getValue(scheduleData?.['代收價款公告']))}</div>
-                    <div style="margin-top:2px;">${renderPriceChange(prices.payment)}</div>
+                <div style="background:white; padding:10px 8px; border-radius:8px; text-align:center; border-left:4px solid #009688;">
+                    <div style="font-size:13px; color:#666; margin-bottom:4px;">代收價款</div>
+                    <div style="font-size:14px; font-weight:bold; color:#009688;">${formatDate(getValue(scheduleData?.['代收價款公告']))}</div>
+                    <div style="margin-top:4px;">${renderPriceChange(prices.payment)}</div>
                 </div>
             </div>
-            <!-- v3.99U: 第二排 - 掛牌日、拆解日、到期日 -->
-            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(85px, 1fr)); gap:6px; margin-bottom:10px;">
-                <div style="background:white; padding:6px 4px; border-radius:6px; text-align:center; border-left:3px solid #4caf50;">
-                    <div style="font-size:11px; color:#666; margin-bottom:2px;">掛牌</div>
-                    <div style="font-size:12px; font-weight:bold; color:#4caf50;">${formatDate(getValue(scheduleData?.['掛牌日期'], sheet08Row?.['掛牌日期'], auctionData?.['掛牌日期'], sheet01Row?.['掛牌日期']))}</div>
-                    <div style="margin-top:2px;">${renderPriceChange(prices.list)}</div>
+            <!-- v3.99W: 第二排 - 字體加大 -->
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(100px, 1fr)); gap:8px; margin-bottom:12px;">
+                <div style="background:white; padding:10px 8px; border-radius:8px; text-align:center; border-left:4px solid #4caf50;">
+                    <div style="font-size:13px; color:#666; margin-bottom:4px;">掛牌</div>
+                    <div style="font-size:14px; font-weight:bold; color:#4caf50;">${formatDate(getValue(scheduleData?.['掛牌日期'], sheet08Row?.['掛牌日期'], auctionData?.['掛牌日期'], sheet01Row?.['掛牌日期']))}</div>
+                    <div style="margin-top:4px;">${renderPriceChange(prices.list)}</div>
                 </div>
-                <div style="background:white; padding:6px 4px; border-radius:6px; text-align:center; border-left:3px solid #ff5722;">
-                    <div style="font-size:11px; color:#666; margin-bottom:2px;">CBAS</div>
-                    <div style="font-size:12px; font-weight:bold; color:#ff5722;">${formatDate(getValue(scheduleData?.['CBAS拆解日']))}</div>
-                    <div style="margin-top:2px;">${renderPriceChange(prices.cbas)}</div>
+                <div style="background:white; padding:10px 8px; border-radius:8px; text-align:center; border-left:4px solid #ff5722;">
+                    <div style="font-size:13px; color:#666; margin-bottom:4px;">CBAS</div>
+                    <div style="font-size:14px; font-weight:bold; color:#ff5722;">${formatDate(getValue(scheduleData?.['CBAS拆解日']))}</div>
+                    <div style="margin-top:4px;">${renderPriceChange(prices.cbas)}</div>
                 </div>
-                <div style="background:white; padding:6px 4px; border-radius:6px; text-align:center; border-left:3px solid #d32f2f;">
-                    <div style="font-size:11px; color:#666; margin-bottom:2px;">到期</div>
-                    <div style="font-size:12px; font-weight:bold; color:#d32f2f;">${formatDate(getValue(scheduleData?.['到期日期'], sheet08Row?.['到期日'], auctionData?.['到期日期'], sheet01Row?.['到期日期']))}</div>
-                    <div style="margin-top:2px;">${renderPriceChange(prices.expire)}</div>
+                <div style="background:white; padding:10px 8px; border-radius:8px; text-align:center; border-left:4px solid #d32f2f;">
+                    <div style="font-size:13px; color:#666; margin-bottom:4px;">到期</div>
+                    <div style="font-size:14px; font-weight:bold; color:#d32f2f;">${formatDate(getValue(scheduleData?.['到期日期'], sheet08Row?.['到期日'], auctionData?.['到期日期'], sheet01Row?.['到期日期']))}</div>
+                    <div style="margin-top:4px;">${renderPriceChange(prices.expire)}</div>
                 </div>
-                <div style="background:white; padding:6px 4px; border-radius:6px; text-align:center; border-left:3px solid #7b1fa2;">
-                    <div style="font-size:11px; color:#666; margin-bottom:2px;">年期</div>
-                    <div style="font-size:14px; font-weight:bold; color:#7b1fa2;">${getValue(sheet08Row?.['還本年限'], auctionData?.['年期'], sheet01Row?.['發行年期'])}年</div>
+                <div style="background:white; padding:10px 8px; border-radius:8px; text-align:center; border-left:4px solid #7b1fa2;">
+                    <div style="font-size:13px; color:#666; margin-bottom:4px;">年期</div>
+                    <div style="font-size:16px; font-weight:bold; color:#7b1fa2;">${getValue(sheet08Row?.['還本年限'], auctionData?.['年期'], sheet01Row?.['發行年期'])}年</div>
                 </div>
-                <div style="background:white; padding:6px 4px; border-radius:6px; text-align:center; border-left:3px solid #00bcd4;">
-                    <div style="font-size:11px; color:#666; margin-bottom:2px;">轉換期</div>
-                    <div style="font-size:10px; font-weight:bold; color:#00bcd4;">${formatDate(getValue(sheet08Row?.['轉換日期起']))}~</div>
-                    <div style="font-size:10px; font-weight:bold; color:#795548;">${formatDate(getValue(sheet08Row?.['轉換日期迄']))}</div>
+                <div style="background:white; padding:10px 8px; border-radius:8px; text-align:center; border-left:4px solid #00bcd4;">
+                    <div style="font-size:13px; color:#666; margin-bottom:4px;">轉換期</div>
+                    <div style="font-size:12px; font-weight:bold; color:#00bcd4;">${formatDate(getValue(sheet08Row?.['轉換日期起']))}~</div>
+                    <div style="font-size:12px; font-weight:bold; color:#795548;">${formatDate(getValue(sheet08Row?.['轉換日期迄']))}</div>
                 </div>
             </div>
             <!-- v3.97-zs-aj: 暫停轉換資訊 -->
@@ -22567,68 +22677,68 @@ function renderBasicInfoPutback(cbCode, container) {
             ${renderTabHeader('賣回條件', '💰', '#e65100', completeness.percentage, statusLabel, cbCode, cbName)}
             
             <!-- v3.99U: 整合式賣回資訊 -->
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
                 <!-- 左側：投資人賣回權 -->
-                <div style="background:white; padding:12px; border-radius:8px; border-left:4px solid #4caf50;">
-                    <div style="font-size:13px; color:#2e7d32; font-weight:bold; margin-bottom:8px;">👤 投資人賣回權</div>
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-                        <div style="background:#f1f8e9; padding:8px; border-radius:6px; text-align:center;">
-                            <div style="font-size:11px; color:#666;">賣回日期1</div>
-                            <div style="font-size:13px; font-weight:bold; color:#2e7d32;">${formatDate(getValue(putbackData?.['賣回日期1']))}</div>
-                            <div style="font-size:11px;">${getDaysText(days1)}</div>
+                <div style="background:white; padding:15px; border-radius:10px; border-left:4px solid #4caf50;">
+                    <div style="font-size:15px; color:#2e7d32; font-weight:bold; margin-bottom:10px;">👤 投資人賣回權</div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                        <div style="background:#f1f8e9; padding:10px; border-radius:8px; text-align:center;">
+                            <div style="font-size:13px; color:#666;">賣回日期1</div>
+                            <div style="font-size:15px; font-weight:bold; color:#2e7d32;">${formatDate(getValue(putbackData?.['賣回日期1']))}</div>
+                            <div style="font-size:13px; color:#888;">${getDaysText(days1)}</div>
                         </div>
-                        <div style="background:#f1f8e9; padding:8px; border-radius:6px; text-align:center;">
-                            <div style="font-size:11px; color:#666;">賣回日期2</div>
-                            <div style="font-size:13px; font-weight:bold; color:#2e7d32;">${formatDate(getValue(putbackData?.['賣回日期2']))}</div>
-                            <div style="font-size:11px;">${getDaysText(days2)}</div>
+                        <div style="background:#f1f8e9; padding:10px; border-radius:8px; text-align:center;">
+                            <div style="font-size:13px; color:#666;">賣回日期2</div>
+                            <div style="font-size:15px; font-weight:bold; color:#2e7d32;">${formatDate(getValue(putbackData?.['賣回日期2']))}</div>
+                            <div style="font-size:13px; color:#888;">${getDaysText(days2)}</div>
                         </div>
                     </div>
-                    <div style="display:flex; justify-content:space-between; margin-top:8px; padding-top:8px; border-top:1px dashed #c8e6c9;">
+                    <div style="display:flex; justify-content:space-between; margin-top:10px; padding-top:10px; border-top:1px dashed #c8e6c9;">
                         <div style="text-align:center; flex:1;">
-                            <div style="font-size:11px; color:#666;">賣回價格</div>
-                            <div style="font-size:15px; font-weight:bold; color:#2e7d32;">${putPrice} 元</div>
+                            <div style="font-size:13px; color:#666;">賣回價格</div>
+                            <div style="font-size:18px; font-weight:bold; color:#2e7d32;">${putPrice} 元</div>
                         </div>
                         <div style="width:1px; background:#c8e6c9;"></div>
                         <div style="text-align:center; flex:1;">
-                            <div style="font-size:11px; color:#666;">賣回條件</div>
-                            <div style="font-size:12px; font-weight:bold; color:#e65100;">${putCondition}</div>
+                            <div style="font-size:13px; color:#666;">賣回條件</div>
+                            <div style="font-size:14px; font-weight:bold; color:#e65100;">${putCondition}</div>
                         </div>
                     </div>
                 </div>
                 
                 <!-- 右側：到期還本資訊 -->
-                <div style="background:white; padding:12px; border-radius:8px; border-left:4px solid #1976d2;">
-                    <div style="font-size:13px; color:#1976d2; font-weight:bold; margin-bottom:8px;">📅 到期還本資訊</div>
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-                        <div style="background:#e3f2fd; padding:10px 8px; border-radius:6px; text-align:center;">
-                            <div style="font-size:11px; color:#666;">到期價格</div>
-                            <div style="font-size:16px; font-weight:bold; color:#d32f2f;">${expirePrice} 元</div>
+                <div style="background:white; padding:15px; border-radius:10px; border-left:4px solid #1976d2;">
+                    <div style="font-size:15px; color:#1976d2; font-weight:bold; margin-bottom:10px;">📅 到期還本資訊</div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                        <div style="background:#e3f2fd; padding:12px 10px; border-radius:8px; text-align:center;">
+                            <div style="font-size:13px; color:#666;">到期價格</div>
+                            <div style="font-size:18px; font-weight:bold; color:#d32f2f;">${expirePrice} 元</div>
                         </div>
-                        <div style="background:#e3f2fd; padding:10px 8px; border-radius:6px; text-align:center;">
-                            <div style="font-size:11px; color:#666;">到期殖利率</div>
-                            <div style="font-size:16px; font-weight:bold; color:#1976d2;">${expireYield}%</div>
+                        <div style="background:#e3f2fd; padding:12px 10px; border-radius:8px; text-align:center;">
+                            <div style="font-size:13px; color:#666;">到期殖利率</div>
+                            <div style="font-size:18px; font-weight:bold; color:#1976d2;">${expireYield}%</div>
                         </div>
                     </div>
-                    <div style="margin-top:8px; padding:8px; background:${isGuaranteed ? '#e8f5e9' : '#f5f5f5'}; border-radius:6px; text-align:center;">
-                        <div style="font-size:11px; color:#666;">擔保狀態</div>
-                        <div style="font-size:14px; font-weight:bold; color:${guaranteeColor};">
+                    <div style="margin-top:10px; padding:10px; background:${isGuaranteed ? '#e8f5e9' : '#f5f5f5'}; border-radius:8px; text-align:center;">
+                        <div style="font-size:13px; color:#666;">擔保狀態</div>
+                        <div style="font-size:16px; font-weight:bold; color:${guaranteeColor};">
                             ${isGuaranteed ? '🛡️ 有擔保' : '📝 無擔保'}
                         </div>
-                        ${isGuaranteed && guaranteeRaw.length > 5 ? `<div style="font-size:10px; color:#2e7d32; margin-top:2px;">${guaranteeRaw.replace('有，', '')}</div>` : ''}
+                        ${isGuaranteed && guaranteeRaw.length > 5 ? `<div style="font-size:12px; color:#2e7d32; margin-top:4px;">${guaranteeRaw.replace('有，', '')}</div>` : ''}
                     </div>
                 </div>
             </div>
             
             <!-- 智能提示 -->
             ${nearestDays !== null && nearestDays > 0 && nearestDays < 365 ? `
-            <div style="padding:10px 12px; background:#e3f2fd; border-radius:6px; font-size:13px; color:#1565c0; display:flex; align-items:center; gap:8px;">
-                <span style="font-size:16px;">💡</span>
+            <div style="padding:12px 15px; background:#e3f2fd; border-radius:8px; font-size:14px; color:#1565c0; display:flex; align-items:center; gap:10px;">
+                <span style="font-size:18px;">💡</span>
                 <span>此CB距離最近賣回日僅剩 <strong>${nearestDays}</strong> 天，若目前價格低於 ${putPrice} 元，可考慮買進後賣回套利。</span>
             </div>
             ` : ''}
             
             ${putbackData?.['賣回條件'] ? `
-            <div style="margin-top:8px; padding:8px 12px; background:rgba(255,152,0,0.1); border-radius:6px; font-size:12px; color:#f57c00;">
+            <div style="margin-top:10px; padding:10px 15px; background:rgba(255,152,0,0.1); border-radius:8px; font-size:14px; color:#f57c00;">
                 <strong>賣回公式：</strong>${putbackData['賣回條件']}
             </div>
             ` : ''}
@@ -22733,45 +22843,45 @@ function renderBasicInfoCallOption(cbCode, container) {
         <div style="background:linear-gradient(135deg, #fce4ec 0%, #f8bbd9 100%); padding:15px; border-radius:12px;">
             ${renderTabHeader('強制贖回', '🔔', '#c2185b', completeness, statusLabel, cbCode, cbName)}
             
-            <!-- v3.99U: 整合式版面 -->
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <!-- v3.99W: 整合式版面 - 字體加大 -->
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
                 <!-- 左側：公司可贖回條件 -->
-                <div style="background:white; padding:12px; border-radius:8px; border-left:4px solid #7b1fa2;">
-                    <div style="font-size:13px; color:#7b1fa2; font-weight:bold; margin-bottom:8px;">📋 公司可贖回條件</div>
-                    <div style="font-size:12px; color:#333; line-height:1.6;">
-                        <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
-                            <span style="background:#7b1fa2; color:white; padding:1px 6px; border-radius:3px; font-size:11px;">1</span>
+                <div style="background:white; padding:15px; border-radius:10px; border-left:4px solid #7b1fa2;">
+                    <div style="font-size:15px; color:#7b1fa2; font-weight:bold; margin-bottom:10px;">📋 公司可贖回條件</div>
+                    <div style="font-size:14px; color:#333; line-height:1.8;">
+                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                            <span style="background:#7b1fa2; color:white; padding:2px 8px; border-radius:4px; font-size:12px;">1</span>
                             <span>流通餘額低於發行總額 <strong style="color:#c62828;">10%</strong></span>
                         </div>
-                        <div style="display:flex; align-items:center; gap:6px;">
-                            <span style="background:#7b1fa2; color:white; padding:1px 6px; border-radius:3px; font-size:11px;">2</span>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span style="background:#7b1fa2; color:white; padding:2px 8px; border-radius:4px; font-size:12px;">2</span>
                             <span>連續 <strong style="color:#c62828;">30日</strong> 股價超過轉換價 <strong style="color:#c62828;">130%</strong></span>
                         </div>
                     </div>
-                    <div style="margin-top:8px; font-size:11px; color:#888; background:#f5f5f5; padding:6px; border-radius:4px;">
+                    <div style="margin-top:10px; font-size:13px; color:#888; background:#f5f5f5; padding:8px; border-radius:6px;">
                         💡 各公司條款略有不同，以公開說明書為準
                     </div>
                 </div>
                 
                 <!-- 右側：發行人贖回權資料 -->
-                <div style="background:white; padding:12px; border-radius:8px; border-left:4px solid #c2185b;">
-                    <div style="font-size:13px; color:#c2185b; font-weight:bold; margin-bottom:8px;">🏢 發行人贖回權</div>
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
-                        <div style="background:#fce4ec; padding:8px; border-radius:6px; text-align:center;">
-                            <div style="font-size:11px; color:#666;">贖回起日</div>
-                            <div style="font-size:12px; font-weight:bold; color:#c2185b;">${callStartDate}</div>
+                <div style="background:white; padding:15px; border-radius:10px; border-left:4px solid #c2185b;">
+                    <div style="font-size:15px; color:#c2185b; font-weight:bold; margin-bottom:10px;">🏢 發行人贖回權</div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                        <div style="background:#fce4ec; padding:10px; border-radius:8px; text-align:center;">
+                            <div style="font-size:13px; color:#666;">贖回起日</div>
+                            <div style="font-size:14px; font-weight:bold; color:#c2185b;">${callStartDate}</div>
                         </div>
-                        <div style="background:#fce4ec; padding:8px; border-radius:6px; text-align:center;">
-                            <div style="font-size:11px; color:#666;">贖回迄日</div>
-                            <div style="font-size:12px; font-weight:bold; color:#c2185b;">${callEndDate}</div>
+                        <div style="background:#fce4ec; padding:10px; border-radius:8px; text-align:center;">
+                            <div style="font-size:13px; color:#666;">贖回迄日</div>
+                            <div style="font-size:14px; font-weight:bold; color:#c2185b;">${callEndDate}</div>
                         </div>
-                        <div style="background:#e8f5e9; padding:8px; border-radius:6px; text-align:center;">
-                            <div style="font-size:11px; color:#666;">贖回價格</div>
-                            <div style="font-size:14px; font-weight:bold; color:#2e7d32;">${callPrice !== '-' && parseFloat(callPrice) > 0 ? callPrice + '元' : '-'}</div>
+                        <div style="background:#e8f5e9; padding:10px; border-radius:8px; text-align:center;">
+                            <div style="font-size:13px; color:#666;">贖回價格</div>
+                            <div style="font-size:16px; font-weight:bold; color:#2e7d32;">${callPrice !== '-' && parseFloat(callPrice) > 0 ? callPrice + '元' : '-'}</div>
                         </div>
-                        <div style="background:${isDelisted ? '#ffebee' : '#fce4ec'}; padding:8px; border-radius:6px; text-align:center;">
-                            <div style="font-size:11px; color:#666;">終止買賣日</div>
-                            <div style="font-size:12px; font-weight:bold; color:${isDelisted ? '#d32f2f' : '#c2185b'};">${delistDate}</div>
+                        <div style="background:${isDelisted ? '#ffebee' : '#fce4ec'}; padding:10px; border-radius:8px; text-align:center;">
+                            <div style="font-size:13px; color:#666;">終止買賣日</div>
+                            <div style="font-size:14px; font-weight:bold; color:${isDelisted ? '#d32f2f' : '#c2185b'};">${delistDate}</div>
                         </div>
                     </div>
                 </div>
@@ -22779,19 +22889,19 @@ function renderBasicInfoCallOption(cbCode, container) {
             
             <!-- 提示訊息 -->
             ${hasCallOption ? `
-            <div style="margin-top:8px; padding:8px 10px; background:#fff3e0; border-radius:6px; font-size:12px; color:#e65100; display:flex; align-items:center; gap:6px;">
+            <div style="margin-top:10px; padding:10px 12px; background:#fff3e0; border-radius:8px; font-size:14px; color:#e65100; display:flex; align-items:center; gap:8px;">
                 <span>⚠️</span>
                 <span>股價觸及強制贖回條件時，公司可執行強制贖回，CB持有人需在期限內轉換或以贖回價賣回</span>
             </div>
             ` : ''}
             ${isDelisted ? `
-            <div style="margin-top:6px; padding:8px 10px; background:#ffebee; border-radius:6px; font-size:12px; color:#c62828; display:flex; align-items:center; gap:6px;">
+            <div style="margin-top:8px; padding:10px 12px; background:#ffebee; border-radius:8px; font-size:14px; color:#c62828; display:flex; align-items:center; gap:8px;">
                 <span>📌</span>
                 <span>此CB已於 ${delistDate} 終止櫃檯買賣</span>
             </div>
             ` : ''}
             ${!hasData ? `
-            <div style="margin-top:8px; padding:8px 10px; background:#fff8e1; border-radius:6px; font-size:12px; color:#f57c00; text-align:center;">
+            <div style="margin-top:10px; padding:10px 12px; background:#fff8e1; border-radius:8px; font-size:14px; color:#f57c00; text-align:center;">
                 ⚠️ 此CB在資料庫中無強制贖回紀錄
             </div>
             ` : ''}
@@ -22851,96 +22961,96 @@ function renderBasicInfoAuction(cbCode, container) {
         <div style="background:linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); padding:15px; border-radius:12px;">
             ${renderTabHeader('競拍資料', '🎯', '#2e7d32', completeness.percentage, statusLabel, cbCode, cbName)}
             
-            <!-- v3.99U: 緊湊版面 -->
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <!-- v3.99W: 緊湊版面 - 字體加大 -->
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
                 <!-- 左上：競拍基本 + 價格 -->
-                <div style="background:white; padding:10px; border-radius:8px; border-left:4px solid #4caf50;">
-                    <div style="font-size:12px; font-weight:bold; color:#2e7d32; margin-bottom:8px;">📅 競拍資訊</div>
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
-                        <div style="background:#f1f8e9; padding:6px; border-radius:4px; text-align:center;">
-                            <div style="font-size:10px; color:#666;">開標日</div>
-                            <div style="font-size:12px; font-weight:bold; color:#2e7d32;">${formatDate(data['開標日期'])}</div>
+                <div style="background:white; padding:12px; border-radius:10px; border-left:4px solid #4caf50;">
+                    <div style="font-size:15px; font-weight:bold; color:#2e7d32; margin-bottom:10px;">📅 競拍資訊</div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                        <div style="background:#f1f8e9; padding:10px 8px; border-radius:6px; text-align:center;">
+                            <div style="font-size:13px; color:#666;">開標日</div>
+                            <div style="font-size:14px; font-weight:bold; color:#2e7d32;">${formatDate(data['開標日期'])}</div>
                         </div>
-                        <div style="background:#f1f8e9; padding:6px; border-radius:4px; text-align:center;">
-                            <div style="font-size:10px; color:#666;">截標日</div>
-                            <div style="font-size:12px; font-weight:bold;">${formatDate(data['截標日'])}</div>
+                        <div style="background:#f1f8e9; padding:10px 8px; border-radius:6px; text-align:center;">
+                            <div style="font-size:13px; color:#666;">截標日</div>
+                            <div style="font-size:14px; font-weight:bold;">${formatDate(data['截標日'])}</div>
                         </div>
-                        <div style="background:#f1f8e9; padding:6px; border-radius:4px; text-align:center;">
-                            <div style="font-size:10px; color:#666;">競拍張數</div>
-                            <div style="font-size:12px; font-weight:bold;">${formatNumber(data['競拍張數'])}張</div>
+                        <div style="background:#f1f8e9; padding:10px 8px; border-radius:6px; text-align:center;">
+                            <div style="font-size:13px; color:#666;">競拍張數</div>
+                            <div style="font-size:14px; font-weight:bold;">${formatNumber(data['競拍張數'])}張</div>
                         </div>
-                        <div style="background:#ffebee; padding:6px; border-radius:4px; text-align:center;">
-                            <div style="font-size:10px; color:#666;">底標價</div>
-                            <div style="font-size:13px; font-weight:bold; color:#c62828;">${data['底標價'] || '-'}元</div>
+                        <div style="background:#ffebee; padding:10px 8px; border-radius:6px; text-align:center;">
+                            <div style="font-size:13px; color:#666;">底標價</div>
+                            <div style="font-size:15px; font-weight:bold; color:#c62828;">${data['底標價'] || '-'}元</div>
                         </div>
                     </div>
                 </div>
                 
                 <!-- 右上：價格資訊 -->
-                <div style="background:white; padding:10px; border-radius:8px; border-left:4px solid #1976d2;">
-                    <div style="font-size:12px; font-weight:bold; color:#1565c0; margin-bottom:8px;">💰 價格資訊</div>
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
-                        <div style="background:#e3f2fd; padding:6px; border-radius:4px; text-align:center;">
-                            <div style="font-size:10px; color:#666;">截標收盤</div>
-                            <div style="font-size:12px; font-weight:bold;">${data['截標收盤'] || '-'}元</div>
+                <div style="background:white; padding:12px; border-radius:10px; border-left:4px solid #1976d2;">
+                    <div style="font-size:15px; font-weight:bold; color:#1565c0; margin-bottom:10px;">💰 價格資訊</div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                        <div style="background:#e3f2fd; padding:10px 8px; border-radius:6px; text-align:center;">
+                            <div style="font-size:13px; color:#666;">截標收盤</div>
+                            <div style="font-size:14px; font-weight:bold;">${data['截標收盤'] || '-'}元</div>
                         </div>
-                        <div style="background:#e3f2fd; padding:6px; border-radius:4px; text-align:center;">
-                            <div style="font-size:10px; color:#666;">轉換價</div>
-                            <div style="font-size:12px; font-weight:bold;">${data['轉換價'] || '-'}元</div>
+                        <div style="background:#e3f2fd; padding:10px 8px; border-radius:6px; text-align:center;">
+                            <div style="font-size:13px; color:#666;">轉換價</div>
+                            <div style="font-size:14px; font-weight:bold;">${data['轉換價'] || '-'}元</div>
                         </div>
-                        <div style="background:#e3f2fd; padding:6px; border-radius:4px; text-align:center;">
-                            <div style="font-size:10px; color:#666;">理論價</div>
-                            <div style="font-size:12px; font-weight:bold; color:#1976d2;">${data['理論價'] ? parseFloat(data['理論價']).toFixed(2) : '-'}元</div>
+                        <div style="background:#e3f2fd; padding:10px 8px; border-radius:6px; text-align:center;">
+                            <div style="font-size:13px; color:#666;">理論價</div>
+                            <div style="font-size:14px; font-weight:bold; color:#1976d2;">${data['理論價'] ? parseFloat(data['理論價']).toFixed(2) : '-'}元</div>
                         </div>
-                        <div style="background:#fff3e0; padding:6px; border-radius:4px; text-align:center;">
-                            <div style="font-size:10px; color:#666;">訂價溢價</div>
-                            <div style="font-size:12px; font-weight:bold; color:#e65100;">${pricingPremium ? (parseFloat(pricingPremium) * 100).toFixed(2) + '%' : '-'}</div>
+                        <div style="background:#fff3e0; padding:10px 8px; border-radius:6px; text-align:center;">
+                            <div style="font-size:13px; color:#666;">訂價溢價</div>
+                            <div style="font-size:14px; font-weight:bold; color:#e65100;">${pricingPremium ? (parseFloat(pricingPremium) * 100).toFixed(2) + '%' : '-'}</div>
                         </div>
                     </div>
                 </div>
                 
                 <!-- 左下：得標結果 -->
-                <div style="background:white; padding:10px; border-radius:8px; border-left:4px solid #ff9800;">
-                    <div style="font-size:12px; font-weight:bold; color:#e65100; margin-bottom:8px;">🏆 得標結果</div>
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
-                        <div style="background:#e8f5e9; padding:8px; border-radius:4px; text-align:center; border:2px solid #4caf50;">
-                            <div style="font-size:10px; color:#666;">最低得標價</div>
-                            <div style="font-size:15px; font-weight:bold; color:#2e7d32;">${data['最低得標'] || '-'}元</div>
+                <div style="background:white; padding:12px; border-radius:10px; border-left:4px solid #ff9800;">
+                    <div style="font-size:15px; font-weight:bold; color:#e65100; margin-bottom:10px;">🏆 得標結果</div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                        <div style="background:#e8f5e9; padding:10px; border-radius:6px; text-align:center; border:2px solid #4caf50;">
+                            <div style="font-size:13px; color:#666;">最低得標價</div>
+                            <div style="font-size:17px; font-weight:bold; color:#2e7d32;">${data['最低得標'] || '-'}元</div>
                         </div>
-                        <div style="background:#e8f5e9; padding:8px; border-radius:4px; text-align:center;">
-                            <div style="font-size:10px; color:#666;">最低溢價</div>
-                            <div style="font-size:12px; font-weight:bold; color:#2e7d32;">${data['最低溢價'] ? (data['最低溢價'] * 100).toFixed(2) + '%' : '-'}</div>
+                        <div style="background:#e8f5e9; padding:10px; border-radius:6px; text-align:center;">
+                            <div style="font-size:13px; color:#666;">最低溢價</div>
+                            <div style="font-size:14px; font-weight:bold; color:#2e7d32;">${data['最低溢價'] ? (data['最低溢價'] * 100).toFixed(2) + '%' : '-'}</div>
                         </div>
-                        <div style="background:#fff3e0; padding:8px; border-radius:4px; text-align:center; border:2px solid #ff9800;">
-                            <div style="font-size:10px; color:#666;">平均得標價</div>
-                            <div style="font-size:15px; font-weight:bold; color:#e65100;">${data['平均得標'] || '-'}元</div>
+                        <div style="background:#fff3e0; padding:10px; border-radius:6px; text-align:center; border:2px solid #ff9800;">
+                            <div style="font-size:13px; color:#666;">平均得標價</div>
+                            <div style="font-size:17px; font-weight:bold; color:#e65100;">${data['平均得標'] || '-'}元</div>
                         </div>
-                        <div style="background:#fff3e0; padding:8px; border-radius:4px; text-align:center;">
-                            <div style="font-size:10px; color:#666;">平均溢價</div>
-                            <div style="font-size:12px; font-weight:bold; color:#e65100;">${data['平均溢價'] ? (data['平均溢價'] * 100).toFixed(2) + '%' : '-'}</div>
+                        <div style="background:#fff3e0; padding:10px; border-radius:6px; text-align:center;">
+                            <div style="font-size:13px; color:#666;">平均溢價</div>
+                            <div style="font-size:14px; font-weight:bold; color:#e65100;">${data['平均溢價'] ? (data['平均溢價'] * 100).toFixed(2) + '%' : '-'}</div>
                         </div>
                     </div>
                 </div>
                 
                 <!-- 右下：投標統計 -->
-                <div style="background:white; padding:10px; border-radius:8px; border-left:4px solid #9c27b0;">
-                    <div style="font-size:12px; font-weight:bold; color:#7b1fa2; margin-bottom:8px;">📊 投標統計</div>
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
-                        <div style="background:#f3e5f5; padding:6px; border-radius:4px; text-align:center;">
-                            <div style="font-size:10px; color:#666;">合格件數</div>
-                            <div style="font-size:12px; font-weight:bold; color:#7b1fa2;">${qualifiedCount ? formatNumber(qualifiedCount) + '件' : '-'}</div>
+                <div style="background:white; padding:12px; border-radius:10px; border-left:4px solid #9c27b0;">
+                    <div style="font-size:15px; font-weight:bold; color:#7b1fa2; margin-bottom:10px;">📊 投標統計</div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                        <div style="background:#f3e5f5; padding:10px 8px; border-radius:6px; text-align:center;">
+                            <div style="font-size:13px; color:#666;">合格件數</div>
+                            <div style="font-size:14px; font-weight:bold; color:#7b1fa2;">${qualifiedCount ? formatNumber(qualifiedCount) + '件' : '-'}</div>
                         </div>
-                        <div style="background:#f3e5f5; padding:6px; border-radius:4px; text-align:center;">
-                            <div style="font-size:10px; color:#666;">投標張數</div>
-                            <div style="font-size:12px; font-weight:bold; color:#7b1fa2;">${bidShares ? formatNumber(bidShares) + '張' : '-'}</div>
+                        <div style="background:#f3e5f5; padding:10px 8px; border-radius:6px; text-align:center;">
+                            <div style="font-size:13px; color:#666;">投標張數</div>
+                            <div style="font-size:14px; font-weight:bold; color:#7b1fa2;">${bidShares ? formatNumber(bidShares) + '張' : '-'}</div>
                         </div>
-                        <div style="background:#f3e5f5; padding:8px; border-radius:4px; text-align:center; border:2px solid #9c27b0;">
-                            <div style="font-size:10px; color:#666;">投標倍數</div>
-                            <div style="font-size:14px; font-weight:bold; color:#7b1fa2;">${bidMultiple ? parseFloat(bidMultiple).toFixed(2) + 'x' : '-'}</div>
+                        <div style="background:#f3e5f5; padding:10px; border-radius:6px; text-align:center; border:2px solid #9c27b0;">
+                            <div style="font-size:13px; color:#666;">投標倍數</div>
+                            <div style="font-size:16px; font-weight:bold; color:#7b1fa2;">${bidMultiple ? parseFloat(bidMultiple).toFixed(2) + 'x' : '-'}</div>
                         </div>
-                        <div style="background:#f3e5f5; padding:6px; border-radius:4px; text-align:center;">
-                            <div style="font-size:10px; color:#666;">投標均張</div>
-                            <div style="font-size:12px; font-weight:bold; color:#7b1fa2;">${avgBidShares ? parseFloat(avgBidShares).toFixed(1) + '張' : '-'}</div>
+                        <div style="background:#f3e5f5; padding:10px 8px; border-radius:6px; text-align:center;">
+                            <div style="font-size:13px; color:#666;">投標均張</div>
+                            <div style="font-size:14px; font-weight:bold; color:#7b1fa2;">${avgBidShares ? parseFloat(avgBidShares).toFixed(1) + '張' : '-'}</div>
                         </div>
                     </div>
                 </div>

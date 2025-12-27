@@ -30460,8 +30460,11 @@ const TrendScanModule = {
             const trendColor = stat.percent >= 50 ? '#c62828' : '#2e7d32';  // 紅漲綠跌
             const rowBg = idx % 2 === 0 ? '#fff' : '#fafafa';
             tableHTML += `
-                <tr style="background:${rowBg};">
-                    <td style="padding:6px 8px; font-weight:600;">${industry}</td>
+                <tr style="background:${rowBg}; cursor:pointer;" 
+                    onclick="TrendScanModule.showIndustryChart('${industry}')"
+                    onmouseover="this.style.background='#fff3e0'" 
+                    onmouseout="this.style.background='${rowBg}'">
+                    <td style="padding:6px 8px; font-weight:600; color:#1976d2;">${industry} 📈</td>
                     <td style="padding:6px 8px; text-align:center;">
                         <span style="background:${color.bg}; color:${color.text}; padding:2px 8px; border-radius:4px; font-weight:bold;">${stat.percent}%</span>
                     </td>
@@ -30563,6 +30566,296 @@ const TrendScanModule = {
         };
         
         document.body.appendChild(modal);
+    },
+    
+    // v3.99W: 顯示產業整體走勢圖（計算產業內所有股票的平均價格）
+    async showIndustryChart(industry) {
+        const stats = this.lastStats;
+        if (!stats || !stats[industry]) {
+            alert('無法取得產業數據');
+            return;
+        }
+        
+        const stat = stats[industry];
+        const stocks = stat.stocks || [];
+        
+        if (stocks.length === 0) {
+            alert('此產業無個股資料');
+            return;
+        }
+        
+        // 建立彈窗
+        const modal = document.createElement('div');
+        modal.id = 'industryChartModal';
+        modal.style.cssText = `
+            position:fixed; top:0; left:0; width:100%; height:100%; 
+            background:rgba(0,0,0,0.7); z-index:9999; 
+            display:flex; align-items:center; justify-content:center;
+            padding:20px; box-sizing:border-box;
+        `;
+        
+        modal.innerHTML = `
+            <div style="background:white; border-radius:16px; max-width:900px; width:95%; max-height:85vh; overflow-y:auto; box-shadow:0 15px 50px rgba(0,0,0,0.4);">
+                <div style="background:linear-gradient(135deg, #1976d2, #1565c0); color:white; padding:20px 25px; border-radius:16px 16px 0 0; display:flex; justify-content:space-between; align-items:center; position:sticky; top:0; z-index:1;">
+                    <div>
+                        <div style="font-size:22px; font-weight:bold;">📊 ${industry} 產業走勢</div>
+                        <div style="font-size:14px; opacity:0.9; margin-top:4px;">共 ${stocks.length} 檔成份股 | 強度 ${stat.percent}%</div>
+                    </div>
+                    <div onclick="document.getElementById('industryChartModal').remove()" 
+                         style="cursor:pointer; font-size:28px; padding:5px 15px; background:rgba(255,255,255,0.2); border-radius:8px;">✕</div>
+                </div>
+                <div style="padding:20px 25px;">
+                    <div id="industryChartContainer" style="height:350px; background:#f8f9fa; border-radius:12px; display:flex; align-items:center; justify-content:center; color:#1976d2; font-size:16px;">
+                        ⏳ 載入產業走勢資料中...
+                    </div>
+                    <div style="margin-top:15px; padding:12px; background:#e3f2fd; border-radius:8px; font-size:13px; color:#1565c0;">
+                        💡 說明：產業走勢圖以成份股的平均漲跌幅計算，基期設為100
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+        document.body.appendChild(modal);
+        
+        // 載入所有成份股的一年資料並計算產業指數
+        await this.loadAndRenderIndustryChart(industry, stocks);
+    },
+    
+    // v3.99W: 載入並渲染產業走勢圖
+    async loadAndRenderIndustryChart(industry, stocks) {
+        const chartContainer = document.getElementById('industryChartContainer');
+        if (!chartContainer) return;
+        
+        try {
+            // 收集所有股票的價格資料
+            const allStockData = {};
+            let validStockCount = 0;
+            
+            for (const stock of stocks) {
+                let priceData = [];
+                
+                // 從資料庫查詢一年資料
+                if (TrendScanModule.tseDB) {
+                    priceData = TrendScanModule.queryStockYearData(TrendScanModule.tseDB, 'stock_price', stock.code);
+                }
+                if (priceData.length === 0 && TrendScanModule.otcDB) {
+                    priceData = TrendScanModule.queryStockYearData(TrendScanModule.otcDB, 'otc_price', stock.code);
+                }
+                
+                if (priceData.length >= 20) {
+                    allStockData[stock.code] = priceData;
+                    validStockCount++;
+                }
+            }
+            
+            if (validStockCount === 0) {
+                chartContainer.innerHTML = '<div style="color:#999;">無法取得足夠的價格資料</div>';
+                return;
+            }
+            
+            // 找出共同的日期範圍
+            const allDates = new Set();
+            Object.values(allStockData).forEach(data => {
+                data.forEach(d => allDates.add(d.date));
+            });
+            const sortedDates = Array.from(allDates).sort();
+            
+            // 取最近252個交易日
+            const recentDates = sortedDates.slice(-252);
+            
+            // 計算每日產業指數（以第一天為基期100）
+            const industryIndex = [];
+            let baseValues = {};  // 各股票的基期價格
+            
+            recentDates.forEach((date, idx) => {
+                let totalReturn = 0;
+                let stockCount = 0;
+                
+                Object.entries(allStockData).forEach(([code, data]) => {
+                    const dayData = data.find(d => d.date === date);
+                    if (dayData && dayData.close > 0) {
+                        if (idx === 0) {
+                            baseValues[code] = dayData.close;
+                        }
+                        if (baseValues[code] && baseValues[code] > 0) {
+                            totalReturn += (dayData.close / baseValues[code] - 1) * 100;
+                            stockCount++;
+                        }
+                    }
+                });
+                
+                if (stockCount > 0) {
+                    const avgReturn = totalReturn / stockCount;
+                    industryIndex.push({
+                        date: date,
+                        close: 100 + avgReturn  // 基期100
+                    });
+                }
+            });
+            
+            if (industryIndex.length < 20) {
+                chartContainer.innerHTML = '<div style="color:#999;">資料點不足，無法繪製走勢圖</div>';
+                return;
+            }
+            
+            // 計算13日和20日均線
+            const ma13 = [], ma20 = [];
+            for (let i = 0; i < industryIndex.length; i++) {
+                if (i < 12) {
+                    ma13.push(null);
+                } else {
+                    const sum = industryIndex.slice(i-12, i+1).reduce((s, d) => s + d.close, 0);
+                    ma13.push(sum / 13);
+                }
+                if (i < 19) {
+                    ma20.push(null);
+                } else {
+                    const sum = industryIndex.slice(i-19, i+1).reduce((s, d) => s + d.close, 0);
+                    ma20.push(sum / 20);
+                }
+            }
+            
+            // 繪製圖表
+            this.renderIndustryChartSVG(chartContainer, industry, industryIndex, ma13, ma20, validStockCount);
+            
+        } catch (e) {
+            console.error('[loadAndRenderIndustryChart] 錯誤:', e);
+            chartContainer.innerHTML = `<div style="color:#c62828;">載入失敗: ${e.message}</div>`;
+        }
+    },
+    
+    // v3.99W: 渲染產業走勢SVG圖表
+    renderIndustryChartSVG(container, industry, data, ma13, ma20, stockCount) {
+        const width = container.clientWidth - 20;
+        const height = 320;
+        const padding = { top: 30, right: 60, bottom: 35, left: 15 };
+        const chartWidth = width - padding.left - padding.right;
+        const chartHeight = height - padding.top - padding.bottom;
+        
+        const prices = data.map(d => d.close);
+        const validMA13 = ma13.filter(v => v !== null);
+        const validMA20 = ma20.filter(v => v !== null);
+        const allValues = [...prices, ...validMA13, ...validMA20];
+        const minPrice = Math.min(...allValues) * 0.98;
+        const maxPrice = Math.max(...allValues) * 1.02;
+        
+        const toX = (i) => padding.left + (i / Math.max(data.length - 1, 1)) * chartWidth;
+        const toY = (price) => padding.top + (1 - (price - minPrice) / (maxPrice - minPrice)) * chartHeight;
+        
+        // 價格路徑
+        let pricePath = '';
+        data.forEach((d, i) => {
+            pricePath += (i === 0 ? 'M' : 'L') + `${toX(i).toFixed(1)},${toY(d.close).toFixed(1)}`;
+        });
+        
+        // MA13路徑
+        let ma13Path = '';
+        ma13.forEach((p, i) => {
+            if (p !== null) {
+                ma13Path += (ma13Path === '' ? 'M' : 'L') + `${toX(i).toFixed(1)},${toY(p).toFixed(1)}`;
+            }
+        });
+        
+        // MA20路徑
+        let ma20Path = '';
+        ma20.forEach((p, i) => {
+            if (p !== null) {
+                ma20Path += (ma20Path === '' ? 'M' : 'L') + `${toX(i).toFixed(1)},${toY(p).toFixed(1)}`;
+            }
+        });
+        
+        // 找最高最低點
+        let highIdx = 0, lowIdx = 0;
+        prices.forEach((p, i) => {
+            if (p > prices[highIdx]) highIdx = i;
+            if (p < prices[lowIdx]) lowIdx = i;
+        });
+        
+        // 價格標籤
+        const priceStep = (maxPrice - minPrice) / 4;
+        const priceLabels = [];
+        for (let i = 0; i <= 4; i++) {
+            const price = minPrice + priceStep * i;
+            priceLabels.push({ y: toY(price), label: price.toFixed(1) });
+        }
+        
+        // 日期標籤
+        const dateLabels = [];
+        const step = Math.max(1, Math.floor(data.length / 5));
+        for (let i = 0; i < data.length; i += step) {
+            dateLabels.push({ x: toX(i), label: MarketIndexModule.formatDateLabel(data[i].date) });
+        }
+        
+        // 最新值
+        const lastPrice = prices[prices.length - 1];
+        const lastMA13 = ma13[ma13.length - 1];
+        const lastMA20 = ma20[ma20.length - 1];
+        const totalChange = lastPrice - 100;
+        const changeColor = totalChange >= 0 ? '#c62828' : '#2e7d32';
+        
+        container.innerHTML = `
+            <div style="padding:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <div style="font-size:16px; font-weight:bold; color:#1976d2;">
+                        📊 ${industry} (${stockCount}檔)
+                    </div>
+                    <div style="display:flex; align-items:center; gap:15px;">
+                        <div style="font-size:13px; color:#c62828; text-align:center;">
+                            <div style="font-weight:600;">H: ${prices[highIdx].toFixed(1)}</div>
+                            <div style="font-size:11px; color:#666;">${MarketIndexModule.formatDateWithYear(data[highIdx].date)}</div>
+                        </div>
+                        <div style="font-size:13px; color:#2e7d32; text-align:center;">
+                            <div style="font-weight:600;">L: ${prices[lowIdx].toFixed(1)}</div>
+                            <div style="font-size:11px; color:#666;">${MarketIndexModule.formatDateWithYear(data[lowIdx].date)}</div>
+                        </div>
+                        <div style="border-left:1px solid #ddd; padding-left:12px;">
+                            <span style="font-size:22px; font-weight:bold; color:${changeColor};">${lastPrice.toFixed(1)}</span>
+                            <span style="font-size:14px; color:${changeColor}; margin-left:6px;">
+                                ${totalChange >= 0 ? '▲' : '▼'} ${Math.abs(totalChange).toFixed(2)}%
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <svg width="${width}" height="${height}" style="background:#fafafa; border-radius:8px;">
+                    <!-- 網格線 -->
+                    ${priceLabels.map(p => `<line x1="${padding.left}" y1="${p.y}" x2="${width - padding.right}" y2="${p.y}" stroke="#e0e0e0" stroke-dasharray="3,3"/>`).join('')}
+                    
+                    <!-- 基準線 100 -->
+                    <line x1="${padding.left}" y1="${toY(100)}" x2="${width - padding.right}" y2="${toY(100)}" stroke="#ff9800" stroke-width="1" stroke-dasharray="5,5"/>
+                    <text x="${width - padding.right + 5}" y="${toY(100) + 4}" font-size="11" fill="#ff9800">基期100</text>
+                    
+                    <!-- 價格軸標籤 -->
+                    ${priceLabels.map(p => `<text x="${width - padding.right + 8}" y="${p.y + 4}" font-size="11" fill="#666">${p.label}</text>`).join('')}
+                    
+                    <!-- 日期軸標籤 -->
+                    ${dateLabels.map(d => `<text x="${d.x}" y="${height - 8}" text-anchor="middle" font-size="11" fill="#666">${d.label}</text>`).join('')}
+                    
+                    <!-- 最高點標記 -->
+                    <circle cx="${toX(highIdx)}" cy="${toY(prices[highIdx])}" r="4" fill="#c62828"/>
+                    
+                    <!-- 最低點標記 -->
+                    <circle cx="${toX(lowIdx)}" cy="${toY(prices[lowIdx])}" r="4" fill="#2e7d32"/>
+                    
+                    <!-- MA13（紫色）-->
+                    <path d="${ma13Path}" fill="none" stroke="#9c27b0" stroke-width="2" stroke-dasharray="6,3"/>
+                    
+                    <!-- MA20（橘色）-->
+                    <path d="${ma20Path}" fill="none" stroke="#ff9800" stroke-width="2" stroke-dasharray="6,3"/>
+                    
+                    <!-- 產業指數線（藍色）-->
+                    <path d="${pricePath}" fill="none" stroke="#1976d2" stroke-width="2.5"/>
+                    
+                    <!-- 最新點 -->
+                    <circle cx="${toX(data.length - 1)}" cy="${toY(lastPrice)}" r="5" fill="#1976d2"/>
+                </svg>
+                <div style="display:flex; justify-content:center; gap:20px; font-size:14px; color:#444; margin-top:10px; padding:10px; background:#f5f5f5; border-radius:6px;">
+                    <span><span style="color:#1976d2;">━</span> 產業指數 <strong style="color:#1976d2;">${lastPrice.toFixed(1)}</strong></span>
+                    <span><span style="color:#9c27b0;">┅</span> MA13 <strong style="color:#9c27b0;">${lastMA13 ? lastMA13.toFixed(1) : '-'}</strong></span>
+                    <span><span style="color:#ff9800;">┅</span> MA20 <strong style="color:#ff9800;">${lastMA20 ? lastMA20.toFixed(1) : '-'}</strong></span>
+                </div>
+            </div>
+        `;
     },
     
     // v3.99U: 顯示個股走勢圖
@@ -30734,13 +31027,13 @@ const ForeignNewsModule = {
                         type: cols[1],        // 個股報導/產業趨勢
                         date: cols[2],
                         company: cols[3],
-                        code: cols[4],        // 股號
+                        code: cols[4],        // 股號（可能是單一或多個）
                         source: cols[5],      // 券商來源
                         category: cols[6],    // 報導重點分類
                         importance: cols[7],  // ⭐符號
                         content: cols[8],     // 完整報導內容
                         tags: cols[9],        // 標籤
-                        importanceNum: parseInt(cols[10]) || 0  // 重要性數字
+                        importanceNum: parseInt(cols[10]) || 0  // 重要性數字（CSV欄位名是importance_num）
                     });
                 }
             }
@@ -30851,10 +31144,23 @@ const ForeignNewsModule = {
     searchByCode(stockCode) {
         if (!stockCode || this.data.length === 0) return [];
         
-        // 搜尋包含該股號的報導
+        const searchCode = String(stockCode).trim();
+        
+        // 搜尋包含該股號的報導（支援多種格式）
         return this.data.filter(item => {
             if (!item.code) return false;
-            return item.code.includes(stockCode);
+            const codeField = String(item.code);
+            
+            // 精確匹配單一代號
+            if (codeField === searchCode) return true;
+            
+            // 包含匹配（如 "2368" 在 "金像電(2368)" 中）
+            if (codeField.includes(searchCode)) return true;
+            
+            // 也檢查 company 欄位（產業趨勢報導的公司名可能在這裡）
+            if (item.company && item.company.includes(searchCode)) return true;
+            
+            return false;
         }).sort((a, b) => {
             // 先按重要性降序，再按日期降序
             if (b.importanceNum !== a.importanceNum) {
@@ -31907,12 +32213,20 @@ async function loadForeignNewsHotTags() {
 // v3.99W: 載入個股外電報導（在走勢圖下方顯示）
 async function loadStockForeignNews(stockCode, stockName) {
     const container = document.getElementById('stockForeignNewsContainer');
-    if (!container) return;
+    if (!container) {
+        console.log('[loadStockForeignNews] 找不到 container');
+        return;
+    }
     
     try {
         await ForeignNewsModule.loadData();
         
+        console.log(`[loadStockForeignNews] 搜尋股票: ${stockCode}, 外電資料筆數: ${ForeignNewsModule.data.length}`);
+        
+        // 使用 ForeignNewsModule 的搜尋方法
         const reports = ForeignNewsModule.searchByCode(stockCode);
+        
+        console.log(`[loadStockForeignNews] 找到 ${reports.length} 篇報導`);
         
         if (reports.length === 0) {
             container.style.display = 'none';
@@ -31933,18 +32247,19 @@ async function loadStockForeignNews(stockCode, stockName) {
                 <div style="display:flex; flex-direction:column; gap:8px; max-height:300px; overflow-y:auto;">
         `;
         
-        reports.slice(0, 20).forEach(r => {
+        reports.slice(0, 20).forEach((r, idx) => {
             const importanceStars = '⭐'.repeat(Math.min(r.importanceNum || 1, 5));
             const borderColor = r.importanceNum >= 5 ? '#c62828' : r.importanceNum >= 4 ? '#ff9800' : '#1976d2';
             
             html += `
                 <div style="background:white; padding:10px 12px; border-radius:6px; border-left:4px solid ${borderColor}; cursor:pointer;"
-                     onclick="showForeignReportDetail(${JSON.stringify(r).replace(/"/g, '&quot;')})">
+                     onclick="showForeignReportDetailByIndex(${idx}, '${stockCode}')">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                         <span style="font-weight:600; color:#333; font-size:14px;">${r.date || '-'} | ${r.source || '-'}</span>
                         <span style="font-size:12px; color:#ff9800;">${importanceStars}</span>
                     </div>
-                    <div style="font-size:13px; color:#666; line-height:1.5;">${(r.content || '').substring(0, 100)}...</div>
+                    <div style="font-size:13px; color:#555; margin-bottom:4px;">${r.company || ''} | ${r.category || ''}</div>
+                    <div style="font-size:13px; color:#666; line-height:1.5;">${(r.content || '').substring(0, 120)}...</div>
                     ${r.tags ? `<div style="margin-top:6px; display:flex; gap:4px; flex-wrap:wrap;">${r.tags.match(/#[^\s#]+/g)?.slice(0,5).map(t => `<span style="background:#fff3e0; color:#e65100; padding:2px 6px; border-radius:3px; font-size:11px;">${t}</span>`).join('') || ''}</div>` : ''}
                 </div>
             `;
@@ -31958,9 +32273,20 @@ async function loadStockForeignNews(stockCode, stockName) {
         
         container.innerHTML = html;
         
+        // 暫存搜尋結果供點擊使用
+        window._lastForeignNewsResults = reports;
+        
     } catch (e) {
         console.error('[loadStockForeignNews] 錯誤:', e);
         container.style.display = 'none';
+    }
+}
+
+// v3.99W: 透過索引顯示報導詳情
+function showForeignReportDetailByIndex(idx, stockCode) {
+    const reports = window._lastForeignNewsResults || ForeignNewsModule.searchByCode(stockCode);
+    if (reports && reports[idx]) {
+        showForeignReportDetail(reports[idx]);
     }
 }
 

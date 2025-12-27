@@ -26183,25 +26183,45 @@ function clearPriceTrendSearch() {
 
 // v3.99W: 重新整理價格走勢清單
 function refreshPriceTrendList() {
-    initPriceTrendOptions();
-    updatePriceTrendCounts();
+    // 使用統一的篩選函數（跟第三區共用 cbDatabase）
+    filterPriceTrendList();
 }
 
-// v3.99W: 更新第四區篩選計數
+// v3.99W: 更新第四區篩選計數（使用 cbDatabase，跟第三區一樣）
 function updatePriceTrendCounts() {
-    const data = window.cbDataCache || [];
-    let auctionCount = 0, inquiryCount = 0, listedCount = 0, delistedCount = 0;
+    const db = window.cbDatabase;
+    if (!db || !db.allCB || db.allCB.length === 0) return;
     
-    data.forEach(cb => {
-        const method = cb['發行方式'] || cb.issueMethod || '';
-        const status = cb['掛牌狀態'] || cb.status || '';
-        
-        if (method.includes('競拍') || method.includes('競價')) auctionCount++;
-        if (method.includes('詢圈') || method.includes('詢價')) inquiryCount++;
-        if (status.includes('掛牌') || status === '上市' || status === '上櫃') listedCount++;
-        if (status.includes('下市') || status.includes('下櫃') || status.includes('到期')) delistedCount++;
-    });
+    const methodFilter = document.querySelector('input[name="priceTrendIssue"]:checked')?.value || 'all';
+    const statusFilter = document.querySelector('input[name="priceTrendStatus"]:checked')?.value || 'all';
     
+    // 根據當前「交易狀態」篩選，計算各發行方式數量
+    let auctionCount, inquiryCount;
+    if (statusFilter === 'listed') {
+        auctionCount = db.allCB.filter(cb => cb.isAuction && cb.isListed).length;
+        inquiryCount = db.allCB.filter(cb => !cb.isAuction && cb.isListed).length;
+    } else if (statusFilter === 'delisted') {
+        auctionCount = db.allCB.filter(cb => cb.isAuction && !cb.isListed).length;
+        inquiryCount = db.allCB.filter(cb => !cb.isAuction && !cb.isListed).length;
+    } else {
+        auctionCount = db.allCB.filter(cb => cb.isAuction).length;
+        inquiryCount = db.allCB.filter(cb => !cb.isAuction).length;
+    }
+    
+    // 根據當前「發行方式」篩選，計算各交易狀態數量
+    let listedCount, delistedCount;
+    if (methodFilter === 'auction') {
+        listedCount = db.allCB.filter(cb => cb.isAuction && cb.isListed).length;
+        delistedCount = db.allCB.filter(cb => cb.isAuction && !cb.isListed).length;
+    } else if (methodFilter === 'inquiry') {
+        listedCount = db.allCB.filter(cb => !cb.isAuction && cb.isListed).length;
+        delistedCount = db.allCB.filter(cb => !cb.isAuction && !cb.isListed).length;
+    } else {
+        listedCount = db.allCB.filter(cb => cb.isListed).length;
+        delistedCount = db.allCB.filter(cb => !cb.isListed).length;
+    }
+    
+    // 更新UI顯示
     const auctionEl = document.getElementById('priceTrendAuctionCount');
     const inquiryEl = document.getElementById('priceTrendInquiryCount');
     const listedEl = document.getElementById('priceTrendListedCount');
@@ -26213,59 +26233,53 @@ function updatePriceTrendCounts() {
     if (delistedEl) delistedEl.textContent = `(${delistedCount})`;
 }
 
-// v3.99W: 第四區篩選功能
+// v3.99W: 第四區篩選功能（使用 cbDatabase，跟第三區一樣）
 function filterPriceTrendList() {
-    const issueFilter = document.querySelector('input[name="priceTrendIssue"]:checked')?.value || 'all';
+    const db = window.cbDatabase;
+    if (!db || !db.allCB || db.allCB.length === 0) {
+        console.log('[filterPriceTrendList] cbDatabase 尚未載入');
+        return;
+    }
+    
+    const methodFilter = document.querySelector('input[name="priceTrendIssue"]:checked')?.value || 'all';
     const statusFilter = document.querySelector('input[name="priceTrendStatus"]:checked')?.value || 'all';
     
-    const select = document.getElementById('priceTrendCBSelect');
-    if (!select) return;
-    
-    const data = window.cbDataCache || [];
-    let filtered = data;
-    
-    // 發行方式篩選
-    if (issueFilter === 'auction') {
-        filtered = filtered.filter(cb => {
-            const method = cb['發行方式'] || cb.issueMethod || '';
-            return method.includes('競拍') || method.includes('競價');
-        });
-    } else if (issueFilter === 'inquiry') {
-        filtered = filtered.filter(cb => {
-            const method = cb['發行方式'] || cb.issueMethod || '';
-            return method.includes('詢圈') || method.includes('詢價');
-        });
-    }
-    
-    // 狀態篩選
-    if (statusFilter === 'listed') {
-        filtered = filtered.filter(cb => {
-            const status = cb['掛牌狀態'] || cb.status || '';
-            return status.includes('掛牌') || status === '上市' || status === '上櫃';
-        });
-    } else if (statusFilter === 'delisted') {
-        filtered = filtered.filter(cb => {
-            const status = cb['掛牌狀態'] || cb.status || '';
-            return status.includes('下市') || status.includes('下櫃') || status.includes('到期');
-        });
-    }
-    
-    // 更新下拉選單
-    select.innerHTML = '<option value="">-- 請選擇CB代號 --</option>';
-    filtered.forEach(cb => {
-        const code = cb.code || cb['CB代號'] || '';
-        const name = cb.name || cb['CB名稱'] || '';
-        const method = cb['發行方式'] || cb.issueMethod || '';
-        const icon = (method.includes('競拍') || method.includes('競價')) ? '🎯' : '📋';
-        const opt = document.createElement('option');
-        opt.value = code;
-        opt.textContent = `${icon} ${code} ${name}`;
-        select.appendChild(opt);
+    // 篩選資料
+    const filtered = db.allCB.filter(cb => {
+        // 發行方式篩選
+        if (methodFilter === 'auction' && !cb.isAuction) return false;
+        if (methodFilter === 'inquiry' && cb.isAuction) return false;
+        // 交易狀態篩選
+        if (statusFilter === 'listed' && !cb.isListed) return false;
+        if (statusFilter === 'delisted' && cb.isListed) return false;
+        return true;
     });
     
-    // 更新計數
+    // 排序（依代號倒序，最新的在前面）
+    const sortedList = [...filtered].sort((a, b) => {
+        return String(b.code).localeCompare(String(a.code));
+    });
+    
+    // 更新下拉選單
+    const select = document.getElementById('priceTrendCBSelect');
+    if (select) {
+        let optionsHTML = '<option value="">-- 請選擇CB代號 --</option>';
+        sortedList.forEach(cb => {
+            const statusIcon = cb.isListed ? '🟢' : '⚫';
+            const methodIcon = cb.isAuction ? '🎯' : '📋';
+            optionsHTML += `<option value="${cb.code}">${statusIcon}${methodIcon} ${cb.code} ${cb.name}</option>`;
+        });
+        select.innerHTML = optionsHTML;
+    }
+    
+    // 更新計數顯示
     const countEl = document.getElementById('priceTrendListCount');
-    if (countEl) countEl.textContent = `資料庫共 ${filtered.length} 檔`;
+    if (countEl) {
+        countEl.textContent = `資料庫共 ${filtered.length} 檔`;
+    }
+    
+    // 更新各選項的計數
+    updatePriceTrendCounts();
 }
 
 // 點擊其他地方關閉搜尋結果

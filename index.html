@@ -6551,43 +6551,10 @@ async function loadStatistics() {
          sheetBalance, sheetCBAS, sheetCallExecute, sheetSuspend,
          sheetPriceAdjust, sheetCbasCalc, sheetIndustry] = csvResults;
         
-        // v3.99W: 載入大盤指數與個股資料（非必要，失敗不影響系統運作）
-        console.log('📂 載入大盤指數資料...');
-        window.indexMarginData = { tse: [], otc: [], stock2330: [] };
-        try {
-            // 指數資料直接放在 data/ 目錄下（非 data/00_cb/）
-            const loadIndexFromData = async (filename) => {
-                try {
-                    const resp = await fetch(`data/${filename}`);
-                    if (!resp.ok) return [];
-                    const buffer = await resp.arrayBuffer();
-                    const decoder = new TextDecoder('Big5');
-                    const text = decoder.decode(buffer);
-                    const lines = text.split('\n').filter(l => l.trim());
-                    if (lines.length < 2) return [];
-                    const headers = lines[0].split(',').map(h => h.trim().replace(/\r/g, ''));
-                    const data = [];
-                    for (let i = 1; i < lines.length; i++) {
-                        const cols = lines[i].split(',');
-                        const row = {};
-                        headers.forEach((h, idx) => { row[h] = cols[idx]?.trim().replace(/\r/g, '') || ''; });
-                        if (row['時間'] && row['收盤價']) data.push(row);
-                    }
-                    return data;
-                } catch (e) { return []; }
-            };
-            const [tseData, otcData, stock2330Data] = await Promise.all([
-                loadIndexFromData('TXINDEX.csv'),
-                loadIndexFromData('OTCindex.csv'),
-                loadIndexFromData('2330.csv')
-            ]);
-            window.indexMarginData.tse = tseData.slice(-300);
-            window.indexMarginData.otc = otcData.slice(-300);
-            window.indexMarginData.stock2330 = stock2330Data.slice(-300);
-            console.log(`✅ 大盤指數: TSE=${tseData.length}筆, OTC=${otcData.length}筆, 2330=${stock2330Data.length}筆`);
-        } catch (e) {
-            console.warn('⚠️ 大盤指數載入失敗（非必要資料）', e);
-        }
+        // v3.99W: 大盤指數資料改為手動載入（點擊標籤時）
+        console.log('📂 大盤指數資料將在點擊「大盤融資」標籤時手動載入');
+        window.indexMarginData = { tse: [], otc: [], stock2330: [], loaded: false };
+        
         // 儲存到全域變數
         window.filterRangeData = sheetFilterRange || [];
         window.priceAdjustData = sheetPriceAdjust || [];
@@ -14417,8 +14384,102 @@ function renderKYAnalysis() {
 }
 
 // v3.99W: 大盤融資走勢分析
+// v3.99W: 手動載入大盤指數資料
+async function loadIndexMarginData() {
+    const statusEl = document.getElementById('indexMarginLoadStatus');
+    if (statusEl) statusEl.innerHTML = '<span style="color:#1976d2;">⏳ 載入中...</span>';
+    
+    try {
+        const loadIndexCSV = async (filename) => {
+            try {
+                const resp = await fetch(`data/${filename}`);
+                if (!resp.ok) return [];
+                const buffer = await resp.arrayBuffer();
+                const decoder = new TextDecoder('Big5');
+                const text = decoder.decode(buffer);
+                const lines = text.split('\n').filter(l => l.trim());
+                if (lines.length < 2) return [];
+                const headers = lines[0].split(',').map(h => h.trim().replace(/\r/g, ''));
+                const data = [];
+                for (let i = 1; i < lines.length; i++) {
+                    const cols = lines[i].split(',');
+                    const row = {};
+                    headers.forEach((h, idx) => { row[h] = cols[idx]?.trim().replace(/\r/g, '') || ''; });
+                    if (row['時間'] && row['收盤價']) data.push(row);
+                }
+                return data;
+            } catch (e) { return []; }
+        };
+        
+        const [tseData, otcData, stock2330Data] = await Promise.all([
+            loadIndexCSV('TXINDEX.csv'),
+            loadIndexCSV('OTCindex.csv'),
+            loadIndexCSV('2330.csv')
+        ]);
+        
+        window.indexMarginData = {
+            tse: tseData.slice(-300),
+            otc: otcData.slice(-300),
+            stock2330: stock2330Data.slice(-300),
+            loaded: true
+        };
+        
+        const totalRecords = tseData.length + otcData.length + stock2330Data.length;
+        console.log(`✅ 大盤指數載入完成: TSE=${tseData.length}筆, OTC=${otcData.length}筆, 2330=${stock2330Data.length}筆`);
+        
+        if (statusEl) statusEl.innerHTML = `<span style="color:#4caf50;">✓ 載入完成 ${totalRecords} 筆</span>`;
+        
+        // 重新渲染
+        setTimeout(() => {
+            showMarketTrendTab('indexMargin');
+        }, 300);
+        
+    } catch (e) {
+        console.error('載入大盤指數失敗:', e);
+        if (statusEl) statusEl.innerHTML = '<span style="color:#c62828;">❌ 載入失敗，請確認檔案存在</span>';
+    }
+}
+
 function renderIndexMarginAnalysis() {
-    const data = window.indexMarginData || { tse: [], otc: [], stock2330: [] };
+    const data = window.indexMarginData || { tse: [], otc: [], stock2330: [], loaded: false };
+    
+    // 如果尚未載入，顯示載入按鈕
+    if (!data.loaded) {
+        return `
+        <div style="padding:15px;">
+            <div style="font-size:15px; font-weight:bold; color:#1565c0; margin-bottom:15px;">
+                📈 大盤指數與融資走勢分析
+            </div>
+            <div style="background:#e3f2fd; border-radius:10px; padding:20px; text-align:center;">
+                <div style="margin-bottom:15px; color:#1565c0;">
+                    <span style="font-size:40px;">📊</span>
+                </div>
+                <div style="font-size:14px; color:#666; margin-bottom:15px;">
+                    載入加權指數、櫃買指數、台積電的價格與融資走勢
+                </div>
+                <button onclick="loadIndexMarginData()" style="
+                    background:linear-gradient(135deg, #1976d2, #1565c0);
+                    color:white;
+                    border:none;
+                    padding:12px 30px;
+                    border-radius:8px;
+                    font-size:16px;
+                    font-weight:bold;
+                    cursor:pointer;
+                    box-shadow:0 3px 10px rgba(25,118,210,0.3);
+                ">
+                    📥 載入資料
+                </button>
+                <div id="indexMarginLoadStatus" style="margin-top:10px; font-size:13px; color:#666;"></div>
+            </div>
+            <div style="background:#fff3e0; border-left:4px solid #ff9800; padding:12px; border-radius:0 8px 8px 0; margin-top:15px;">
+                <div style="font-size:13px; color:#666; line-height:1.6;">
+                    <strong>資料檔案位置：</strong><code style="background:#f5f5f5; padding:2px 6px; border-radius:4px;">data/</code><br>
+                    • TXINDEX.csv（加權指數）• OTCindex.csv（櫃買指數）• 2330.csv（台積電）
+                </div>
+            </div>
+        </div>`;
+    }
     
     // 解析融資金額（支援億、萬等單位）
     const parseMargin = (val) => {
@@ -14461,30 +14522,22 @@ function renderIndexMarginAnalysis() {
     const stockMargin = calcChange(data.stock2330, '', true, '融資(張)');
     
     // 取最近日期
-    const latestDate = data.tse.length > 0 ? data.tse[data.tse.length - 1]['時間'] : '--';
-    const firstDate = data.tse.length > 0 ? data.tse[0]['時間'] : '--';
+    const latestDate = data.tse.length > 0 ? data.tse[data.tse.length - 1]['時間'] : (data.otc.length > 0 ? data.otc[data.otc.length - 1]['時間'] : '--');
+    const firstDate = data.tse.length > 0 ? data.tse[0]['時間'] : (data.otc.length > 0 ? data.otc[0]['時間'] : '--');
+    
+    // 計算筆數統計
+    const totalRecords = data.tse.length + data.otc.length + data.stock2330.length;
     
     let html = `
     <div style="font-size:15px; font-weight:bold; color:#1565c0; margin-bottom:10px;">
         📈 大盤指數與融資走勢分析
         <span style="font-size:12px; font-weight:normal; color:#666; margin-left:10px;">期間：${firstDate} ~ ${latestDate}</span>
+        <span style="font-size:12px; font-weight:normal; color:#4caf50; margin-left:10px;">✓ ${totalRecords} 筆</span>
     </div>`;
     
     // 無資料提示
     if (data.tse.length === 0 && data.otc.length === 0 && data.stock2330.length === 0) {
         html += `
-        <div style="background:#fff3e0; border-left:4px solid #ff9800; padding:15px; border-radius:0 8px 8px 0; margin-bottom:15px;">
-            <div style="font-weight:bold; color:#e65100; margin-bottom:8px;">📂 請放置資料檔案</div>
-            <div style="color:#666; font-size:14px; line-height:1.6;">
-                將以下 CSV 檔案放入 <code style="background:#f5f5f5; padding:2px 6px; border-radius:4px;">data/</code> 資料夾：<br>
-                • <strong>TXINDEX.csv</strong> - 加權指數<br>
-                • <strong>OTCindex.csv</strong> - 櫃買指數<br>
-                • <strong>2330.csv</strong> - 台積電（或其他個股）
-            </div>
-        </div>`;
-        return html;
-    }
-    
     // 統計卡片
     html += `
     <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:12px; margin-bottom:15px;">
@@ -24951,40 +25004,108 @@ async function renderWeeklyTable(cbCode) {
 }
 /**
  * v3.98i 新增：完整追蹤表（整合融資融券+CB價格+流通餘額）
+ * v3.99W 修改：改為手動載入模式
  * 參考 Rex大叔 Excel 格式
  */
 async function renderFullTracker(cbCode) {
     const container = document.getElementById(`balanceSubContent_${cbCode}`);
     if (!container) return;
     const searchCode = String(cbCode).trim();
-    // 顯示載入中
-    container.innerHTML = `<div style="text-align:center; padding:40px; color:#444;">
-        <div style="font-size:24px; margin-bottom:10px;">⏳</div>
-        <div>整合完整追蹤資料中...</div>
-    </div>`;
-    // 確保各資料源已載入
-    const loadPromises = [];
-    if (!window.weeklyBalanceData?.loaded && !window.weeklyBalanceData?.loading) {
-        loadPromises.push(loadWeeklyBalanceData());
+    
+    // 檢查是否已載入必要資料
+    const hasWeeklyData = window.weeklyBalanceData?.loaded && window.weeklyBalanceData?.data?.[searchCode];
+    const hasMarginData = window.marginData?.loaded || window.otcMarginData?.loaded;
+    
+    // 如果資料都已載入，直接渲染
+    if (hasWeeklyData && hasMarginData) {
+        await renderFullTrackerContent(cbCode, container);
+        return;
     }
-    if (!window.marginData?.loaded && !window.marginData?.loading) {
-        loadPromises.push(loadMarginData());
+    
+    // 顯示手動載入按鈕
+    container.innerHTML = `
+        <div style="text-align:center; padding:30px;">
+            <div style="font-size:40px; margin-bottom:15px;">📊</div>
+            <div style="font-size:16px; color:#e65100; font-weight:bold; margin-bottom:8px;">完整追蹤表</div>
+            <div style="font-size:14px; color:#666; margin-bottom:20px;">
+                整合 ${searchCode} 的融資融券、借券、CB價格、流通餘額
+            </div>
+            <button onclick="loadFullTrackerManual('${searchCode}')" style="
+                background:linear-gradient(135deg, #ff9800, #f57c00);
+                color:white;
+                border:none;
+                padding:12px 30px;
+                border-radius:8px;
+                font-size:16px;
+                font-weight:bold;
+                cursor:pointer;
+                box-shadow:0 3px 10px rgba(255,152,0,0.3);
+            ">
+                📥 載入追蹤資料
+            </button>
+            <div id="fullTrackerLoadStatus_${searchCode}" style="margin-top:12px; font-size:13px; color:#666;"></div>
+            <div style="margin-top:15px; padding:10px; background:#fff3e0; border-radius:8px; font-size:12px; color:#666;">
+                💡 將載入融資融券DB、借券CSV、CB價格等多項資料
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * v3.99W 新增：手動載入完整追蹤資料
+ */
+async function loadFullTrackerManual(cbCode) {
+    const statusEl = document.getElementById(`fullTrackerLoadStatus_${cbCode}`);
+    const container = document.getElementById(`balanceSubContent_${cbCode}`);
+    
+    if (statusEl) statusEl.innerHTML = '<span style="color:#e65100;">⏳ 載入資料中... 請稍候</span>';
+    
+    try {
+        // 載入必要資料
+        const loadPromises = [];
+        if (!window.weeklyBalanceData?.loaded && !window.weeklyBalanceData?.loading) {
+            loadPromises.push(loadWeeklyBalanceData());
+        }
+        if (!window.marginData?.loaded && !window.marginData?.loading) {
+            loadPromises.push(loadMarginData());
+        }
+        if (!window.otcMarginData?.loaded && !window.otcMarginData?.loading) {
+            loadPromises.push(loadOtcMarginData());
+        }
+        if (!window.sblData?.loaded && !window.sblData?.loading) {
+            loadPromises.push(loadSblData());
+        }
+        if (!window.cbPriceData?.loaded && !window.cbPriceData?.loading) {
+            loadPromises.push(loadCBPriceData());
+        }
+        
+        if (loadPromises.length > 0) {
+            if (statusEl) statusEl.innerHTML = `<span style="color:#e65100;">⏳ 載入 ${loadPromises.length} 項資料中...</span>`;
+            await Promise.all(loadPromises);
+        }
+        
+        // 渲染內容
+        await renderFullTrackerContent(cbCode, container);
+        
+    } catch (e) {
+        console.error('完整追蹤載入失敗:', e);
+        if (container) {
+            container.innerHTML = `
+                <div style="text-align:center; padding:40px;">
+                    <div style="font-size:48px; margin-bottom:15px;">❌</div>
+                    <div style="font-size:16px; color:#c62828;">載入失敗</div>
+                    <div style="font-size:14px; color:#666; margin-top:10px;">${e.message}</div>
+                </div>
+            `;
+        }
     }
-    // v3.99S: 同時載入上櫃融資融券
-    if (!window.otcMarginData?.loaded && !window.otcMarginData?.loading) {
-        loadPromises.push(loadOtcMarginData());
-    }
-    // v3.99U: 載入借券資料
-    if (!window.sblData?.loaded && !window.sblData?.loading) {
-        loadPromises.push(loadSblData());
-    }
-    if (!window.cbPriceData?.loaded && !window.cbPriceData?.loading) {
-        loadPromises.push(loadCBPriceData());
-    }
-    if (loadPromises.length > 0) {
-        await Promise.all(loadPromises);
-    }
-    // 取得週餘額資料
+}
+
+/**
+ * v3.99W 新增：渲染完整追蹤內容（從原renderFullTracker拆出）
+ */
+async function renderFullTrackerContent(cbCode, container) {
+    const searchCode = String(cbCode).trim();
     const weeklyData = window.weeklyBalanceData?.data?.[searchCode];
     if (!weeklyData || weeklyData.length === 0) {
         container.innerHTML = `<div style="text-align:center; padding:40px; color:#444;">
@@ -26252,15 +26373,57 @@ const CBASHistoryManager = {
 };
 /**
  * v3.98S 新增：渲染 CBAS 歷史月拆解標籤
+ * v3.99W 修改：改為手動載入模式
  */
 async function renderCBASHistoryTab(cbCode, container) {
+    // 檢查是否已載入過此CB的資料
+    const existingData = CBASHistoryManager.data[cbCode];
+    if (existingData && existingData.length > 0) {
+        // 已有資料，直接渲染
+        const monthlyData = CBASHistoryManager.aggregateToMonthly(existingData);
+        const cbName = monthlyData[0]?.cbName || '';
+        renderCBASHistoryResult(cbCode, cbName, monthlyData, existingData, container);
+        return;
+    }
+    
+    // 顯示手動載入按鈕
     container.innerHTML = `
-        <div style="text-align:center; padding:40px; color:#444; background:#fff; border-radius:12px;">
-            <div style="font-size:24px; margin-bottom:10px;">⏳</div>
-            <div>載入 ${cbCode} CBAS歷史拆解資料中...</div>
-            <div style="font-size:16px; margin-top:5px; color:#444;">首次載入可能需要較長時間（載入 2011-2025 年資料）</div>
+        <div style="text-align:center; padding:30px; background:#fff; border-radius:12px;">
+            <div style="font-size:40px; margin-bottom:15px;">📊</div>
+            <div style="font-size:16px; color:#7b1fa2; font-weight:bold; margin-bottom:8px;">CBAS 歷史拆解資料</div>
+            <div style="font-size:14px; color:#666; margin-bottom:20px;">
+                查詢 ${cbCode} 的歷史權利金交易記錄（2011-2025年）
+            </div>
+            <button onclick="loadCBASHistoryManual('${cbCode}')" style="
+                background:linear-gradient(135deg, #9c27b0, #7b1fa2);
+                color:white;
+                border:none;
+                padding:12px 30px;
+                border-radius:8px;
+                font-size:16px;
+                font-weight:bold;
+                cursor:pointer;
+                box-shadow:0 3px 10px rgba(156,39,176,0.3);
+            ">
+                📥 載入CBAS歷史
+            </button>
+            <div id="cbasHistoryLoadStatus_${cbCode}" style="margin-top:12px; font-size:13px; color:#666;"></div>
+            <div style="margin-top:15px; padding:10px; background:#f3e5f5; border-radius:8px; font-size:12px; color:#666;">
+                💡 首次載入需下載多年度資料，可能需要較長時間
+            </div>
         </div>
     `;
+}
+
+/**
+ * v3.99W 新增：手動載入CBAS歷史資料
+ */
+async function loadCBASHistoryManual(cbCode) {
+    const statusEl = document.getElementById(`cbasHistoryLoadStatus_${cbCode}`);
+    const container = document.getElementById('priceTrendContent');
+    
+    if (statusEl) statusEl.innerHTML = '<span style="color:#9c27b0;">⏳ 載入中... 請稍候</span>';
+    
     try {
         const rawData = await CBASHistoryManager.getCBASHistory(cbCode);
         if (!rawData || rawData.length === 0) {
@@ -26268,7 +26431,7 @@ async function renderCBASHistoryTab(cbCode, container) {
                 <div style="text-align:center; padding:40px; background:#fff; border-radius:12px;">
                     <div style="font-size:48px; margin-bottom:15px;">📭</div>
                     <div style="font-size:16px; color:#444;">查無 ${cbCode} 的 CBAS 歷史拆解資料</div>
-                    <div style="font-size:16px; color:#444; margin-top:10px;">
+                    <div style="font-size:14px; color:#666; margin-top:10px;">
                         可能原因：該CB尚未有CBAS拆解交易，或代號輸入錯誤
                     </div>
                 </div>
@@ -26285,7 +26448,7 @@ async function renderCBASHistoryTab(cbCode, container) {
             <div style="text-align:center; padding:40px; background:#fff; border-radius:12px;">
                 <div style="font-size:48px; margin-bottom:15px;">❌</div>
                 <div style="font-size:16px; color:#c62828;">載入失敗</div>
-                <div style="font-size:16px; color:#444; margin-top:10px;">${e.message}</div>
+                <div style="font-size:14px; color:#666; margin-top:10px;">${e.message}</div>
             </div>
         `;
     }

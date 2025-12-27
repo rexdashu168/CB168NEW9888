@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI智能可轉債競拍系統 v3.99U (圖表互動優化版)</title>
+<title>AI智能可轉債競拍系統 v3.99V (發債DNA資料整合版)</title>
+<!-- v3.99V: 發債DNA資料整合 - 合併01_basic掛牌最高/最低到auctionDataCache -->
 <!-- v3.99U: 所有圖表加入動態tooltip -->
 <!-- v3.99U: CB價格走勢標籤功能修復 -->
 <!-- v3.99U: 籌碼轉換分析balance單位修正 -->
@@ -6425,6 +6426,38 @@ async function loadStatistics() {
         }
         // v3.81 新增：保存競拍數據供KNN超級預測引擎使用
         window.auctionDataCache = sheetAuction;
+        // v3.99V 新增：合併 01_basic 的掛牌最高/最低到 auctionDataCache
+        // 解決發債DNA無法取得掛牌表現資料的問題
+        if (sheetAllCB && sheetAllCB.length > 0 && window.auctionDataCache && window.auctionDataCache.length > 0) {
+            // 建立 01_basic CB代號對照表
+            const basicMap = {};
+            sheetAllCB.forEach(row => {
+                const cbCode = String(row['CB代號'] || '').trim();
+                if (cbCode) {
+                    basicMap[cbCode] = {
+                        '掛牌最高': parseFloat(row['掛牌最高']) || 0,
+                        '掛牌最低': parseFloat(row['掛牌最低']) || 0,
+                        '產業地位': row['產業地位'] || '',
+                        '掛牌日期': row['掛牌日期'] || '',
+                        '到期日期': row['到期日期'] || ''
+                    };
+                }
+            });
+            // 合併到 auctionDataCache
+            let mergedCount = 0;
+            window.auctionDataCache.forEach(row => {
+                const cbCode = String(row['CB代號'] || '').trim();
+                if (cbCode && basicMap[cbCode]) {
+                    row['掛牌最高'] = basicMap[cbCode]['掛牌最高'];
+                    row['掛牌最低'] = basicMap[cbCode]['掛牌最低'];
+                    row['產業地位'] = basicMap[cbCode]['產業地位'];
+                    row['掛牌日期'] = basicMap[cbCode]['掛牌日期'];
+                    row['到期日期'] = basicMap[cbCode]['到期日期'];
+                    if (basicMap[cbCode]['掛牌最高'] > 0) mergedCount++;
+                }
+            });
+            console.log(`🧬 發債DNA資料合併完成: ${mergedCount}/${window.auctionDataCache.length} 筆有掛牌表現資料`);
+        }
         // v3.97-ct 新增：初始化AICore統計
         if (window.AICore && sheetAuction && sheetAuction.length > 0) {
             window.AICore.updateStats(sheetAuction);
@@ -23716,6 +23749,9 @@ function renderDNAAnalysis(cbCode, container) {
     if (allAuctionCases.length > 0) {
         console.log('[renderDNAAnalysis] 第一筆資料欄位:', Object.keys(allAuctionCases[0]));
         console.log('[renderDNAAnalysis] 第一筆資料:', allAuctionCases[0]);
+        // v3.99V: 檢查掛牌最高欄位合併狀況
+        const casesWithHigh = allAuctionCases.filter(c => parseFloat(c['掛牌最高']) > 0).length;
+        console.log(`[renderDNAAnalysis] 有掛牌最高資料: ${casesWithHigh}/${allAuctionCases.length} 筆`);
     }
     if (allAuctionCases.length === 0) {
         container.innerHTML = `

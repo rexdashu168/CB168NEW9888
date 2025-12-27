@@ -6555,12 +6555,13 @@ async function loadStatistics() {
         console.log('📂 載入大盤指數資料...');
         window.indexMarginData = { tse: [], otc: [], stock2330: [] };
         try {
-            const loadIndexCSV = async (filename, encoding = 'Big5') => {
+            // 指數資料直接放在 data/ 目錄下（非 data/00_cb/）
+            const loadIndexFromData = async (filename) => {
                 try {
                     const resp = await fetch(`data/${filename}`);
                     if (!resp.ok) return [];
                     const buffer = await resp.arrayBuffer();
-                    const decoder = new TextDecoder(encoding);
+                    const decoder = new TextDecoder('Big5');
                     const text = decoder.decode(buffer);
                     const lines = text.split('\n').filter(l => l.trim());
                     if (lines.length < 2) return [];
@@ -6576,9 +6577,9 @@ async function loadStatistics() {
                 } catch (e) { return []; }
             };
             const [tseData, otcData, stock2330Data] = await Promise.all([
-                loadIndexCSV('TXINDEX.csv'),
-                loadIndexCSV('OTCindex.csv'),
-                loadIndexCSV('2330.csv')
+                loadIndexFromData('TXINDEX.csv'),
+                loadIndexFromData('OTCindex.csv'),
+                loadIndexFromData('2330.csv')
             ]);
             window.indexMarginData.tse = tseData.slice(-300);
             window.indexMarginData.otc = otcData.slice(-300);

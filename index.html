@@ -30373,7 +30373,8 @@ const TrendScanModule = {
 // ==========================================
 const MarketIndexModule = {
     chartInstance: null,
-    currentPeriod: '3M',
+    currentPeriod: '1Y',
+    currentIndex: 'tsmc',  // v3.99W: 當前選擇的指數 (tse/otc/tsmc)
     indexData: {
         taiex: [],    // 加權指數
         otc: [],      // 櫃買指數
@@ -30417,16 +30418,17 @@ const MarketIndexModule = {
         container.innerHTML = '<div style="text-align:center; padding:40px; color:#1976d2;"><div style="font-size:24px; margin-bottom:10px;">⏳</div><div>載入大盤資料中...</div></div>';
         
         try {
-            // v3.99W: 從CSV載入加權指數和櫃買指數
+            // v3.99W: 從CSV載入加權指數和櫃買指數（全部歷年資料）
             const [taiexData, otcData, tsmcData] = await Promise.all([
                 this.loadCSV('TXINDEX.csv'),
                 this.loadCSV('OTCindex.csv'),
                 this.loadCSV('2330.csv')
             ]);
             
-            this.indexData.taiex = taiexData.slice(-365);
-            this.indexData.otc = otcData.slice(-365);
-            this.indexData.tsmc = tsmcData.slice(-365);
+            // 儲存全部資料
+            this.indexData.taiex = taiexData;
+            this.indexData.otc = otcData;
+            this.indexData.tsmc = tsmcData;
             
             console.log(`[MarketIndex] 載入完成: 加權=${taiexData.length}, 櫃買=${otcData.length}, 台積電=${tsmcData.length}`);
             
@@ -30454,12 +30456,17 @@ const MarketIndexModule = {
             changeEl.style.color = change >= 0 ? '#c62828' : '#2e7d32';
         }
         
-        // 加權指數（如果有資料）- 暫時顯示提示
+        // 加權指數
         const taiexEl = document.getElementById('taiexPrice');
         const taiexChangeEl = document.getElementById('taiexChange');
         if (this.indexData.taiex.length > 0) {
             const latest = this.indexData.taiex[this.indexData.taiex.length - 1];
+            const prev = this.indexData.taiex.length > 1 ? this.indexData.taiex[this.indexData.taiex.length - 2] : latest;
+            const change = latest.close - prev.close;
+            const changePercent = (change / prev.close * 100);
             taiexEl.textContent = latest.close.toFixed(0);
+            taiexChangeEl.textContent = `${change >= 0 ? '+' : ''}${change.toFixed(0)} (${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%)`;
+            taiexChangeEl.style.color = change >= 0 ? '#c62828' : '#2e7d32';
         } else {
             taiexEl.textContent = '---';
             taiexChangeEl.textContent = '需外部資料';
@@ -30471,7 +30478,12 @@ const MarketIndexModule = {
         const otcChangeEl = document.getElementById('otcChange');
         if (this.indexData.otc.length > 0) {
             const latest = this.indexData.otc[this.indexData.otc.length - 1];
+            const prev = this.indexData.otc.length > 1 ? this.indexData.otc[this.indexData.otc.length - 2] : latest;
+            const change = latest.close - prev.close;
+            const changePercent = (change / prev.close * 100);
             otcEl.textContent = latest.close.toFixed(2);
+            otcChangeEl.textContent = `${change >= 0 ? '+' : ''}${change.toFixed(2)} (${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%)`;
+            otcChangeEl.style.color = change >= 0 ? '#c62828' : '#2e7d32';
         } else {
             otcEl.textContent = '---';
             otcChangeEl.textContent = '需外部資料';
@@ -30479,17 +30491,52 @@ const MarketIndexModule = {
         }
     },
     
+    // v3.99W: 格式化日期標籤
+    formatDateLabel(dateStr) {
+        // 處理 2000/1/4 或 2024/12/20 格式
+        if (!dateStr) return '';
+        const parts = dateStr.split('/');
+        if (parts.length >= 3) {
+            const month = parts[1].padStart(2, '0');
+            const day = parts[2].padStart(2, '0');
+            return `${month}/${day}`;
+        }
+        return dateStr;
+    },
+    
     // 渲染走勢圖
     renderChart() {
         const container = document.getElementById('marketChartContainer');
         
-        // 根據時間區間過濾資料
-        const periodDays = { '1M': 22, '3M': 66, '6M': 132, '1Y': 252 };
-        const days = periodDays[this.currentPeriod] || 66;
+        // v3.99W: 支援更多時間區間
+        const periodDays = { 
+            '1M': 22, '3M': 66, '6M': 132, '1Y': 252,
+            '3Y': 756, '5Y': 1260, '10Y': 2520, 'ALL': 999999
+        };
+        const periodLabels = {
+            '1M': '1個月', '3M': '3個月', '6M': '6個月', '1Y': '1年',
+            '3Y': '3年', '5Y': '5年', '10Y': '10年', 'ALL': '全部'
+        };
+        const days = periodDays[this.currentPeriod] || 252;
         
-        const tsmcData = this.indexData.tsmc.slice(-days);
+        // 根據選擇的指數取資料
+        let sourceData = this.indexData.tsmc;
+        let chartTitle = '台積電(2330)';
+        let chartColor = '#c62828';
         
-        if (tsmcData.length === 0) {
+        if (this.currentIndex === 'tse' && this.indexData.taiex.length > 0) {
+            sourceData = this.indexData.taiex;
+            chartTitle = '加權指數';
+            chartColor = '#1976d2';
+        } else if (this.currentIndex === 'otc' && this.indexData.otc.length > 0) {
+            sourceData = this.indexData.otc;
+            chartTitle = '櫃買指數';
+            chartColor = '#2e7d32';
+        }
+        
+        const chartData = sourceData.slice(-days);
+        
+        if (chartData.length === 0) {
             container.innerHTML = '<div style="text-align:center; padding:40px; color:#999;">暫無資料</div>';
             return;
         }
@@ -30500,29 +30547,29 @@ const MarketIndexModule = {
         const padding = { top: 30, right: 60, bottom: 40, left: 60 };
         
         // 計算價格範圍
-        const prices = tsmcData.map(d => d.close);
+        const prices = chartData.map(d => d.close);
         const minPrice = Math.min(...prices) * 0.98;
         const maxPrice = Math.max(...prices) * 1.02;
         
         const chartWidth = width - padding.left - padding.right;
         const chartHeight = height - padding.top - padding.bottom;
         
-        const toX = (i) => padding.left + (i / (tsmcData.length - 1)) * chartWidth;
+        const toX = (i) => padding.left + (i / Math.max(chartData.length - 1, 1)) * chartWidth;
         const toY = (price) => padding.top + (1 - (price - minPrice) / (maxPrice - minPrice)) * chartHeight;
         
         // 繪製價格路徑
         let pricePath = '';
-        tsmcData.forEach((d, i) => {
+        chartData.forEach((d, i) => {
             pricePath += (i === 0 ? 'M' : 'L') + `${toX(i).toFixed(1)},${toY(d.close).toFixed(1)}`;
         });
         
         // 計算20日均線
         const ma20 = [];
-        for (let i = 0; i < tsmcData.length; i++) {
+        for (let i = 0; i < chartData.length; i++) {
             if (i < 19) {
                 ma20.push(null);
             } else {
-                const sum = tsmcData.slice(i - 19, i + 1).reduce((a, b) => a + b.close, 0);
+                const sum = chartData.slice(i - 19, i + 1).reduce((a, b) => a + b.close, 0);
                 ma20.push(sum / 20);
             }
         }
@@ -30534,14 +30581,21 @@ const MarketIndexModule = {
             }
         });
         
-        // 生成日期標籤
+        // v3.99W: 修正日期標籤格式
         const dateLabels = [];
-        const step = Math.floor(tsmcData.length / 5);
-        for (let i = 0; i < tsmcData.length; i += step) {
-            const d = tsmcData[i].date;
+        const step = Math.max(1, Math.floor(chartData.length / 5));
+        for (let i = 0; i < chartData.length; i += step) {
+            const d = chartData[i].date;
             dateLabels.push({
                 x: toX(i),
-                label: `${d.substring(4,6)}/${d.substring(6,8)}`
+                label: this.formatDateLabel(d)
+            });
+        }
+        // 確保最後一個點有標籤
+        if (dateLabels.length > 0 && dateLabels[dateLabels.length - 1].x < toX(chartData.length - 1) - 30) {
+            dateLabels.push({
+                x: toX(chartData.length - 1),
+                label: this.formatDateLabel(chartData[chartData.length - 1].date)
             });
         }
         
@@ -30556,20 +30610,20 @@ const MarketIndexModule = {
             });
         }
         
-        const lastPrice = tsmcData[tsmcData.length - 1].close;
-        const firstPrice = tsmcData[0].close;
+        const lastPrice = chartData[chartData.length - 1].close;
+        const firstPrice = chartData[0].close;
         const totalChange = ((lastPrice - firstPrice) / firstPrice * 100);
-        const priceColor = totalChange >= 0 ? '#c62828' : '#2e7d32';
+        const priceChangeColor = totalChange >= 0 ? '#c62828' : '#2e7d32';
         
         container.innerHTML = `
             <div style="padding:10px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                     <div style="font-size:16px; font-weight:bold; color:#333;">
-                        📈 台積電(2330) ${this.currentPeriod}走勢
+                        📈 ${chartTitle} ${periodLabels[this.currentPeriod] || this.currentPeriod}走勢
                     </div>
                     <div>
-                        <span style="font-size:20px; font-weight:bold; color:${priceColor};">${lastPrice.toFixed(0)}</span>
-                        <span style="font-size:14px; color:${priceColor}; margin-left:8px;">
+                        <span style="font-size:20px; font-weight:bold; color:${priceChangeColor};">${lastPrice.toFixed(this.currentIndex === 'otc' ? 2 : 0)}</span>
+                        <span style="font-size:14px; color:${priceChangeColor}; margin-left:8px;">
                             ${totalChange >= 0 ? '▲' : '▼'} ${Math.abs(totalChange).toFixed(2)}%
                         </span>
                     </div>
@@ -30588,18 +30642,20 @@ const MarketIndexModule = {
                     <path d="${maPath}" fill="none" stroke="#ff9800" stroke-width="1.5" stroke-dasharray="4,2"/>
                     
                     <!-- 價格線 -->
-                    <path d="${pricePath}" fill="none" stroke="${priceColor}" stroke-width="2"/>
+                    <path d="${pricePath}" fill="none" stroke="${chartColor}" stroke-width="2"/>
                     
                     <!-- 最新價格點 -->
-                    <circle cx="${toX(tsmcData.length - 1)}" cy="${toY(lastPrice)}" r="5" fill="${priceColor}"/>
+                    <circle cx="${toX(chartData.length - 1)}" cy="${toY(lastPrice)}" r="5" fill="${chartColor}"/>
                 </svg>
                 <div style="display:flex; justify-content:center; gap:20px; font-size:12px; color:#666; margin-top:8px;">
-                    <span><span style="color:${priceColor};">━</span> 收盤價</span>
+                    <span><span style="color:${chartColor};">━</span> 收盤價</span>
                     <span><span style="color:#ff9800;">┅</span> 20日均線</span>
                 </div>
+                ${this.currentIndex === 'tsmc' ? `
                 <div style="margin-top:10px; padding:10px; background:#f5f5f5; border-radius:6px; font-size:13px; color:#666; text-align:center;">
-                    💡 加權指數與櫃買指數需外部即時資料源，目前僅顯示台積電走勢
+                    💡 點擊上方指數卡片可切換顯示加權指數、櫃買指數或台積電
                 </div>
+                ` : ''}
             </div>
         `;
     }
@@ -30643,7 +30699,32 @@ function updateMarketChart(period) {
     });
     
     MarketIndexModule.currentPeriod = period;
-    if (MarketIndexModule.indexData.tsmc.length > 0) {
+    if (MarketIndexModule.indexData.tsmc.length > 0 || 
+        MarketIndexModule.indexData.taiex.length > 0 || 
+        MarketIndexModule.indexData.otc.length > 0) {
+        MarketIndexModule.renderChart();
+    }
+}
+
+// v3.99W: 切換顯示的指數
+function switchMarketIndex(index) {
+    MarketIndexModule.currentIndex = index;
+    
+    // 更新卡片樣式
+    document.querySelectorAll('.market-index-card').forEach(card => {
+        if (card.dataset.index === index) {
+            card.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)';
+            card.classList.add('active');
+        } else {
+            card.style.boxShadow = 'none';
+            card.classList.remove('active');
+        }
+    });
+    
+    // 重新渲染圖表
+    if (MarketIndexModule.indexData.tsmc.length > 0 || 
+        MarketIndexModule.indexData.taiex.length > 0 || 
+        MarketIndexModule.indexData.otc.length > 0) {
         MarketIndexModule.renderChart();
     }
 }

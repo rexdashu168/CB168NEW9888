@@ -31094,22 +31094,27 @@ const ForeignNewsModule = {
             const headers = this.parseCSVLine(lines[0]);
             this.data = [];
             
-            for (let i = 1; i < lines.length; i++) {
-                const cols = this.parseCSVLine(lines[i]);
-                if (cols.length >= 10) {
+            // 處理 CSV 多行內容的問題（content 欄位可能包含換行）
+            let csvContent = text;
+            // 合併被引號包圍的多行內容
+            const records = this.parseCSVWithMultiline(csvContent);
+            
+            for (let i = 1; i < records.length; i++) {
+                const cols = records[i];
+                if (cols.length >= 8) {  // 至少要有8欄基本資料
                     this.data.push({
-                        id: cols[0],
-                        type: cols[1],        // 個股報導/產業趨勢
-                        date: cols[2],
-                        company: cols[3],     // 公司名稱或產業主題
-                        code: cols[4],        // 股號（可能是單一或多個，用逗號分隔）
-                        source: cols[5],      // 券商來源
-                        category: cols[6],    // 報導重點分類
-                        importance: cols[7],  // ⭐符號
-                        content: cols[8],     // 完整報導內容
-                        tags: cols[9],        // 標籤
-                        importanceNum: parseInt(cols[10]) || 0,  // 重要性數字
-                        relatedCompanies: cols[11] || ''  // 相關公司群（產業趨勢用）
+                        id: cols[0] || '',
+                        type: cols[1] || '個股報導',
+                        date: cols[2] || '',
+                        company: cols[3] || '',
+                        code: cols[4] || '',
+                        source: cols[5] || '',
+                        category: cols[6] || '',
+                        importance: cols[7] || '',
+                        content: cols[8] || '',
+                        tags: cols[9] || '',
+                        importanceNum: parseInt(cols[10]) || (cols[7] ? (cols[7].match(/⭐/g) || []).length : 0),
+                        relatedCompanies: cols[11] || ''
                     });
                 }
             }
@@ -31122,6 +31127,52 @@ const ForeignNewsModule = {
             console.error('[ForeignNews] 載入失敗:', e);
             return [];
         }
+    },
+    
+    // 解析含有多行內容的 CSV
+    parseCSVWithMultiline(text) {
+        const records = [];
+        let currentRecord = [];
+        let currentField = '';
+        let inQuotes = false;
+        
+        for (let i = 0; i < text.length; i++) {
+            const char = text[i];
+            const nextChar = text[i + 1];
+            
+            if (char === '"') {
+                if (inQuotes && nextChar === '"') {
+                    // 轉義的引號
+                    currentField += '"';
+                    i++;
+                } else {
+                    inQuotes = !inQuotes;
+                }
+            } else if (char === ',' && !inQuotes) {
+                currentRecord.push(currentField.trim());
+                currentField = '';
+            } else if ((char === '\n' || (char === '\r' && nextChar === '\n')) && !inQuotes) {
+                currentRecord.push(currentField.trim());
+                if (currentRecord.some(f => f)) {  // 至少有一個非空欄位
+                    records.push(currentRecord);
+                }
+                currentRecord = [];
+                currentField = '';
+                if (char === '\r') i++;  // 跳過 \r\n 的 \n
+            } else if (char !== '\r') {
+                currentField += char;
+            }
+        }
+        
+        // 處理最後一筆
+        if (currentField || currentRecord.length > 0) {
+            currentRecord.push(currentField.trim());
+            if (currentRecord.some(f => f)) {
+                records.push(currentRecord);
+            }
+        }
+        
+        return records;
     },
     
     // 載入股票熱度資料
@@ -31216,7 +31267,7 @@ const ForeignNewsModule = {
         return result;
     },
     
-    // 根據股票代號搜尋報導（支援新的 CSV 格式）
+    // 根據股票代號搜尋報導（支援各種 CSV 格式）
     searchByCode(stockCode) {
         if (!stockCode || this.data.length === 0) return [];
         
@@ -31224,27 +31275,37 @@ const ForeignNewsModule = {
         
         // 搜尋包含該股號的報導
         return this.data.filter(item => {
-            // 檢查 code 欄位（可能是單一代號或逗號分隔的多個代號）
+            // 檢查 code 欄位
             if (item.code) {
                 const codeField = String(item.code);
-                // 精確匹配單一代號
+                
+                // 精確匹配單一代號（如 "2368"）
                 if (codeField === searchCode) return true;
+                
                 // 多股號格式：用逗號分隔，如 "2330,2308,2382"
                 if (codeField.includes(',')) {
                     const codes = codeField.split(',').map(c => c.trim());
                     if (codes.includes(searchCode)) return true;
                 }
-                // 包含匹配（如 "2368" 在 "金像電(2368)" 中）
+                
+                // 從括號中提取股號，如 "台達電(2308)、金像電(2368)"
+                const bracketMatches = codeField.match(/\((\d{4,5})\)/g);
+                if (bracketMatches) {
+                    const codes = bracketMatches.map(m => m.replace(/[()]/g, ''));
+                    if (codes.includes(searchCode)) return true;
+                }
+                
+                // 直接包含匹配
                 if (codeField.includes(searchCode)) return true;
             }
             
-            // 檢查 relatedCompanies 欄位（產業趨勢報導）
+            // 檢查 relatedCompanies 欄位（新格式的產業趨勢報導）
             if (item.relatedCompanies) {
-                if (item.relatedCompanies.includes(searchCode)) return true;
-                // 從括號中提取股號，如 "台積電(2330)"
-                const match = item.relatedCompanies.match(/\((\d{4})\)/g);
-                if (match) {
-                    const codes = match.map(m => m.replace(/[()]/g, ''));
+                const related = String(item.relatedCompanies);
+                if (related.includes(searchCode)) return true;
+                const bracketMatches = related.match(/\((\d{4,5})\)/g);
+                if (bracketMatches) {
+                    const codes = bracketMatches.map(m => m.replace(/[()]/g, ''));
                     if (codes.includes(searchCode)) return true;
                 }
             }

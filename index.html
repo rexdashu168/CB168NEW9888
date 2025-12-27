@@ -3474,17 +3474,6 @@ button:active, .clickable:active {
                     <option value="">-- 請選擇CB代號 --</option>
                 </select>
             </div>
-            <!-- 期間 -->
-            <div style="min-width:80px;">
-                <div style="font-size:14px; color:#7b1fa2; margin-bottom:4px; font-weight:600;">📅 期間</div>
-                <select id="priceTrendPeriod" onchange="updatePriceTrendPeriod()" style="width:100%; padding:10px 12px; border:2px solid #9c27b0; border-radius:8px; font-size:16px; background:white;">
-                    <option value="30">1月</option>
-                    <option value="90" selected>3月</option>
-                    <option value="180">6月</option>
-                    <option value="365">1年</option>
-                    <option value="all">全部</option>
-                </select>
-            </div>
             <!-- 清除按鈕 -->
             <button type="button" onclick="clearPriceTrendSearch()" style="padding:10px 16px; background:#9e9e9e; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:600; white-space:nowrap;">✕</button>
         </div>
@@ -26069,8 +26058,7 @@ function showPriceTrendTab(tabName, event) {
     }
     // v3.97-zs-br: CB價格走勢標籤 - 使用 CB_price 資料庫
     if (tabName === 'cbHistory') {
-        const period = document.getElementById('priceTrendPeriod')?.value || '90';
-        renderCBHistory(cbCode, content, period);
+        renderCBHistory(cbCode, content);
         return;
     }
     // 顯示載入中
@@ -26085,8 +26073,9 @@ function showPriceTrendTab(tabName, event) {
 }
 /**
  * v3.99S 新增：CB價格走勢標籤 - 使用 CB_price 資料庫
+ * v3.99W 修改：直接顯示全部資料，加入20日均線
  */
-async function renderCBHistory(cbCode, container, period) {
+async function renderCBHistory(cbCode, container) {
     container.innerHTML = `<div style="text-align:center; padding:40px; color:#444; background:#fff; border-radius:12px;">
         <div style="font-size:24px; margin-bottom:10px;">⏳</div>
         <div>載入 ${cbCode} CB價格走勢中...</div>
@@ -26111,7 +26100,6 @@ async function renderCBHistory(cbCode, container, period) {
                         const obj = {};
                         cols.forEach((col, i) => obj[col] = row[i]);
                         const dateStr = obj.date || '';
-                        // v3.99U: 加入dateNum以支援期間篩選
                         const dateNum = parseInt(String(dateStr).replace(/[-\/]/g, '')) || 0;
                         return {
                             date: dateStr,
@@ -26148,13 +26136,10 @@ async function renderCBHistory(cbCode, container, period) {
         </div>`;
         return;
     }
-    // 根據期間篩選
-    const filteredData = filterDataByPeriod(priceData, period);
-    if (filteredData.length === 0) {
-        container.innerHTML = `<div style="text-align:center; padding:40px; color:#444;">無選定期間資料</div>`;
-        return;
-    }
-    const periodLabel = getPeriodLabel(period);
+    
+    // v3.99W: 使用全部資料
+    const filteredData = priceData;
+    
     const latestData = filteredData[filteredData.length - 1];
     const firstData = filteredData[0];
     const cbPrice = latestData.close || 0;
@@ -26163,37 +26148,74 @@ async function renderCBHistory(cbCode, container, period) {
     const priceChangePct = firstPrice > 0 ? (priceChange / firstPrice * 100) : 0;
     const changeColor = priceChange >= 0 ? '#d32f2f' : '#2e7d32';
     const changeSign = priceChange >= 0 ? '+' : '';
+    
+    // v3.99W: 計算20日均線
+    const ma20 = [];
+    const prices = filteredData.map(d => d.close);
+    for (let i = 0; i < filteredData.length; i++) {
+        if (i < 19) {
+            ma20.push(null);
+        } else {
+            const sum = prices.slice(i - 19, i + 1).reduce((s, p) => s + p, 0);
+            ma20.push(sum / 20);
+        }
+    }
+    
     // 繪製圖表
     const width = 800, height = 350, padding = 60;
     const chartWidth = width - padding * 2;
     const chartHeight = height - padding * 2;
-    const prices = filteredData.map(d => d.close);
-    const maxPrice = Math.max(...prices);
-    const minPrice = Math.min(...prices);
+    const maxPrice = Math.max(...prices, ...ma20.filter(v => v));
+    const minPrice = Math.min(...prices, ...ma20.filter(v => v));
     const priceRange = maxPrice - minPrice || 1;
     const yMin = minPrice - priceRange * 0.1;
     const yMax = maxPrice + priceRange * 0.1;
     const range = yMax - yMin;
-    // 生成路徑
+    
+    // 生成價格路徑
     const pathPoints = filteredData.map((d, i) => {
         const x = padding + (i / (filteredData.length - 1)) * chartWidth;
         const y = padding + chartHeight - ((d.close - yMin) / range) * chartHeight;
         return `${i === 0 ? 'M' : 'L'}${x},${y}`;
     }).join(' ');
+    
+    // v3.99W: 生成20日均線路徑
+    let maPath = '';
+    ma20.forEach((val, i) => {
+        if (val !== null) {
+            const x = padding + (i / (filteredData.length - 1)) * chartWidth;
+            const y = padding + chartHeight - ((val - yMin) / range) * chartHeight;
+            maPath += (maPath === '' ? 'M' : 'L') + `${x},${y}`;
+        }
+    });
+    
+    // v3.99W: 判斷站上或跌破均線
+    const lastMA = ma20[ma20.length - 1];
+    const aboveMA = lastMA && cbPrice >= lastMA;
+    const maStatus = lastMA ? (aboveMA ? '站上均線 ▲' : '跌破均線 ▼') : '';
+    const maStatusColor = aboveMA ? '#d32f2f' : '#2e7d32';
+    
     container.innerHTML = `
         <div style="background:#fff; padding:15px; border-radius:8px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:8px;">
                 <div style="font-weight:bold; color:#7b1fa2; font-size:16px;">
-                    💰 ${cbCode} CB價格走勢 <span style="font-size:14px; color:#444; font-weight:normal;">(${periodLabel})</span>
+                    💰 ${cbCode} CB價格走勢 <span style="font-size:14px; color:#444; font-weight:normal;">(全部期間)</span>
                 </div>
-                <div style="font-size:14px; padding:4px 10px; border-radius:12px; background:${priceChange >= 0 ? '#ffebee' : '#e8f5e9'}; color:${changeColor};">
-                    ${changeSign}${priceChange.toFixed(2)}元 (${changeSign}${priceChangePct.toFixed(2)}%)
+                <div style="display:flex; gap:10px; align-items:center;">
+                    ${lastMA ? `<span style="font-size:13px; color:${maStatusColor}; font-weight:bold;">${maStatus}</span>` : ''}
+                    <div style="font-size:14px; padding:4px 10px; border-radius:12px; background:${priceChange >= 0 ? '#ffebee' : '#e8f5e9'}; color:${changeColor};">
+                        ${changeSign}${priceChange.toFixed(2)}元 (${changeSign}${priceChangePct.toFixed(2)}%)
+                    </div>
                 </div>
             </div>
             <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(100px, 1fr)); gap:10px; margin-bottom:15px;">
                 <div style="background:#f3e5f5; padding:10px; border-radius:6px; text-align:center;">
                     <div style="font-size:13px; color:#444;">最新CB價</div>
                     <div style="font-size:18px; font-weight:bold; color:#7b1fa2;">${cbPrice.toFixed(2)}</div>
+                </div>
+                <div style="background:#fff3e0; padding:10px; border-radius:6px; text-align:center;">
+                    <div style="font-size:13px; color:#444;">20日均線</div>
+                    <div style="font-size:16px; font-weight:bold; color:#ff9800;">${lastMA ? lastMA.toFixed(2) : '--'}</div>
                 </div>
                 <div style="background:#e3f2fd; padding:10px; border-radius:6px; text-align:center;">
                     <div style="font-size:13px; color:#444;">期間最高</div>
@@ -26213,6 +26235,9 @@ async function renderCBHistory(cbCode, container, period) {
                         return `<line x1="${padding}" y1="${y}" x2="${width - padding}" y2="${y}" stroke="#f3e8ff" stroke-dasharray="4,4"/>
                                 <text x="${padding - 8}" y="${y + 4}" text-anchor="end" font-size="12" fill="#6c757d">${val}</text>`;
                     }).join('')}
+                    <!-- 20日均線 -->
+                    <path d="${maPath}" fill="none" stroke="#ff9800" stroke-width="2" stroke-dasharray="6,3"/>
+                    <!-- CB價格線 -->
                     <path d="${pathPoints}" fill="none" stroke="#9c27b0" stroke-width="2.5"/>
                     <circle cx="${padding}" cy="${padding + chartHeight - ((firstPrice - yMin) / range) * chartHeight}" r="5" fill="#1976d2" stroke="white" stroke-width="2"/>
                     <circle cx="${width - padding}" cy="${padding + chartHeight - ((cbPrice - yMin) / range) * chartHeight}" r="5" fill="#9c27b0" stroke="white" stroke-width="2"/>
@@ -26222,6 +26247,10 @@ async function renderCBHistory(cbCode, container, period) {
                     <span>${filteredData[0]?.date || ''}</span>
                     <span style="color:#7b1fa2;">共 ${filteredData.length} 筆資料</span>
                     <span>${filteredData[filteredData.length - 1]?.date || ''}</span>
+                </div>
+                <div style="display:flex; justify-content:center; gap:20px; font-size:12px; color:#666; margin-top:8px;">
+                    <span><span style="color:#9c27b0;">━━</span> CB價格</span>
+                    <span><span style="color:#ff9800;">┅┅</span> 20日均線</span>
                 </div>
             </div>
         </div>
@@ -30276,45 +30305,55 @@ const MarketIndexModule = {
         tsmc: []      // 台積電
     },
     
+    // 載入CSV資料（Big5編碼）
+    async loadCSV(filename) {
+        try {
+            const resp = await fetch(`data/${filename}`);
+            if (!resp.ok) return [];
+            const buffer = await resp.arrayBuffer();
+            const decoder = new TextDecoder('Big5');
+            const text = decoder.decode(buffer);
+            const lines = text.split('\n').filter(l => l.trim());
+            if (lines.length < 2) return [];
+            const headers = lines[0].split(',').map(h => h.trim().replace(/\r/g, ''));
+            const data = [];
+            for (let i = 1; i < lines.length; i++) {
+                const cols = lines[i].split(',');
+                const row = {};
+                headers.forEach((h, idx) => { row[h] = cols[idx]?.trim().replace(/\r/g, '') || ''; });
+                if (row['時間'] && row['收盤價']) {
+                    data.push({
+                        date: row['時間'],
+                        close: parseFloat(row['收盤價']) || 0,
+                        margin: row['融資(元)'] || row['融資(張)'] || ''
+                    });
+                }
+            }
+            return data;
+        } catch (e) {
+            console.warn(`載入 ${filename} 失敗:`, e);
+            return [];
+        }
+    },
+    
     // 載入大盤指數資料
     async loadData() {
         const container = document.getElementById('marketChartContainer');
         container.innerHTML = '<div style="text-align:center; padding:40px; color:#1976d2;"><div style="font-size:24px; margin-bottom:10px;">⏳</div><div>載入大盤資料中...</div></div>';
         
         try {
-            // 載入上市股價資料庫
-            if (!TrendScanModule.sqlEngine) {
-                await TrendScanModule.initSQL();
-            }
+            // v3.99W: 從CSV載入加權指數和櫃買指數
+            const [taiexData, otcData, tsmcData] = await Promise.all([
+                this.loadCSV('TXINDEX.csv'),
+                this.loadCSV('OTCindex.csv'),
+                this.loadCSV('2330.csv')
+            ]);
             
-            const baseUrl = 'https://rexdashu168.github.io/CB168NEW9888/data/';
+            this.indexData.taiex = taiexData.slice(-365);
+            this.indexData.otc = otcData.slice(-365);
+            this.indexData.tsmc = tsmcData.slice(-365);
             
-            // 載入資料庫（如果尚未載入）
-            if (!TrendScanModule.tseDB) {
-                TrendScanModule.tseDB = await TrendScanModule.loadDatabase(baseUrl + 'stock_price_2025.db', '上市');
-            }
-            
-            // 查詢台積電(2330)資料
-            if (TrendScanModule.tseDB) {
-                const result = TrendScanModule.tseDB.exec(`
-                    SELECT date, close FROM stock_price 
-                    WHERE code = '2330' 
-                    ORDER BY date DESC 
-                    LIMIT 365
-                `);
-                if (result.length > 0 && result[0].values.length > 0) {
-                    this.indexData.tsmc = result[0].values.map(row => ({
-                        date: String(row[0]),
-                        close: parseFloat(row[1])
-                    })).reverse();
-                }
-            }
-            
-            // 嘗試從指數資料表取得加權和櫃買（如果有的話）
-            // 這裡假設資料庫沒有指數資料，改用模擬資料或顯示提示
-            
-            // 如果無法取得真實指數，使用已載入的股價資料計算市場均價作為代理
-            // 或者顯示僅有台積電的走勢
+            console.log(`[MarketIndex] 載入完成: 加權=${taiexData.length}, 櫃買=${otcData.length}, 台積電=${tsmcData.length}`);
             
             this.updateDisplay();
             this.renderChart();

@@ -23748,7 +23748,25 @@ function renderBasicInfoBalance(cbCode, container) {
     if (window.auctionDataCache && window.auctionDataCache.length > 0) {
         auctionData = window.auctionDataCache.find(r => String(r['CB代號']).trim() === searchCode);
     }
-    if (!balanceData && !quoteData && !sheet08Row && !auctionData) {
+    
+    // v3.99W: 從 kanbanData 取得餘額資料（支援已下市CB）
+    let kanbanBalanceData = null;
+    if (window.kanbanData?.data?.[searchCode]) {
+        const kanbanList = window.kanbanData.data[searchCode];
+        if (kanbanList && kanbanList.length > 0) {
+            // 取最新一筆
+            const latest = kanbanList[kanbanList.length - 1];
+            kanbanBalanceData = {
+                balance: latest.balance, // 元
+                balanceShares: Math.round((latest.balance || 0) / 100000), // 轉換為張（1張=10萬元）
+                cbPrice: latest.cbPrice,
+                date: latest.date,
+                cbName: latest.cbName
+            };
+        }
+    }
+    
+    if (!balanceData && !quoteData && !sheet08Row && !auctionData && !kanbanBalanceData) {
         container.innerHTML = `<div style="color:#444; padding:20px; text-align:center;">⚠️ 找不到 ${cbCode} 的餘額資料</div>`;
         return;
     }
@@ -23762,10 +23780,11 @@ function renderBasicInfoBalance(cbCode, container) {
     const issueSize = getValue(sheet08Row?.['實際發行總額(百萬)'], auctionData?.['發行規模']);
     const totalShares = issueSize ? Math.round(parseFloat(issueSize) * 10) : null;
     // v3.97-zs-ag: 最新餘額張數 - 優先從10工作表C欄(本週股額)取得
-    // 1張 = 10萬元，所以張數×10萬 = 金額
+    // v3.99W: 如果沒有週餘額，從kanban取得
     const outstandingShares = getValue(
         balanceData?.['本週股額'],  // 10工作表 C欄 - 餘額張數
-        quoteData?.['流通在外餘額(張)']
+        quoteData?.['流通在外餘額(張)'],
+        kanbanBalanceData?.balanceShares  // v3.99W: 從kanban取得
     );
     // 剩餘比率
     const remainRatio = getValue(quoteData?.['剩餘未轉換比率%']);
@@ -23886,10 +23905,10 @@ function renderBasicInfoBalance(cbCode, container) {
                     <div style="margin-left:auto;">
                         <select id="balancePeriod_${searchCode}" onchange="updateBalancePeriod('${searchCode}')"
                                 style="padding:6px 10px; border:1px solid #00838f; border-radius:6px; font-size:14px; color:#00838f;">
-                            <option value="180" selected>6個月</option>
+                            <option value="180">6個月</option>
                             <option value="365">1年</option>
                             <option value="730">2年</option>
-                            <option value="all">全部</option>
+                            <option value="all" selected>全部</option>
                         </select>
                     </div>
                 </div>
@@ -25014,6 +25033,12 @@ async function loadFullTrackerManual(cbCode) {
     try {
         // 載入必要資料
         const loadPromises = [];
+        
+        // v3.99W: 優先載入 kanban 資料（包含已下市CB的餘額和CB價格）
+        if (!window.kanbanData?.loaded && !window.kanbanData?.loading) {
+            loadPromises.push(loadAllKanbanData(true)); // 載入全部年份
+        }
+        
         if (!window.weeklyBalanceData?.loaded && !window.weeklyBalanceData?.loading) {
             loadPromises.push(loadWeeklyBalanceData());
         }
@@ -25057,16 +25082,34 @@ async function loadFullTrackerManual(cbCode) {
  */
 async function renderFullTrackerContent(cbCode, container) {
     const searchCode = String(cbCode).trim();
-    const weeklyData = window.weeklyBalanceData?.data?.[searchCode];
+    
+    // v3.99W: 優先從週餘額取得，如果沒有則從kanban取得
+    let weeklyData = window.weeklyBalanceData?.data?.[searchCode];
+    let dataSource = 'weekly';
+    
+    // 如果沒有週餘額資料，嘗試從kanban取得
+    if (!weeklyData || weeklyData.length === 0) {
+        if (window.kanbanData?.data?.[searchCode]) {
+            const kanbanList = window.kanbanData.data[searchCode];
+            // 轉換kanban格式為週餘額格式
+            weeklyData = kanbanList.map(d => ({
+                date: d.date ? d.date.replace(/(\d{4})(\d{2})(\d{2})/, '$1/$2/$3') : '',
+                balanceShares: Math.round((d.balance || 0) / 100000), // 元轉張
+                cbPrice: d.cbPrice || 0
+            })).filter(d => d.date && d.balanceShares > 0);
+            dataSource = 'kanban';
+        }
+    }
+    
     if (!weeklyData || weeklyData.length === 0) {
         container.innerHTML = `<div style="text-align:center; padding:30px; color:#444;">
             <div style="font-size:40px; margin-bottom:12px;">📭</div>
-            <div style="font-size:15px; margin-bottom:8px;">找不到 ${searchCode} 的週餘額資料</div>
+            <div style="font-size:15px; margin-bottom:8px;">找不到 ${searchCode} 的餘額資料</div>
             <div style="font-size:13px; color:#666; margin-bottom:15px;">
-                週餘額資料來自元大，已下市標的可能無此資料
+                週餘額(元大)與月餘額(kanban)皆無此標的資料
             </div>
             <div style="padding:12px; background:#e0f2f1; border-radius:8px; font-size:13px; color:#00695c;">
-                💡 建議：點擊「📈 月餘額走勢」查看歷年 CB_kanban 資料
+                💡 建議：點擊「📈 月餘額走勢」嘗試載入全部歷年資料
             </div>
         </div>`;
         return;
@@ -25083,26 +25126,30 @@ async function renderFullTrackerContent(cbCode, container) {
             totalIssue = (parseFloat(sheet08Row['實際發行總額(百萬)']) || 0) * 10;
         }
     }
-    // 取得時間區間
-    const periodSelect = document.getElementById(`balancePeriod_${searchCode}`);
-    const period = periodSelect ? periodSelect.value : '180';
+    // v3.99W: 改為顯示全部期間（CB生命週期）
     // 篩選時間範圍
     let displayData = [...weeklyData].sort((a, b) => {
         const dateA = parseInt(a.date.replace(/\//g, ''));
         const dateB = parseInt(b.date.replace(/\//g, ''));
-        return dateB - dateA;
+        return dateB - dateA;  // 降序，最新在前
     });
+    
+    // v3.99W: 預設顯示全部資料
+    const periodSelect = document.getElementById(`balancePeriod_${searchCode}`);
+    const period = periodSelect ? periodSelect.value : 'all';
     if (period !== 'all') {
         const days = parseInt(period) || 180;
         displayData = displayData.slice(0, Math.ceil(days / 7));
     }
+    
     // 建立表格HTML
-    // v3.99U: 收集各資料來源的日期
+    // v3.99W: 顯示資料來源
+    const dataSourceLabel = dataSource === 'kanban' ? 'CB_kanban (歷年月資料)' : '元大週報 (週資料)';
     const dataSources = [];
-    if (window.sheet10Date) dataSources.push(`CB餘額: ${window.sheet10Date}`);
+    dataSources.push(`餘額: ${dataSourceLabel}`);
     if (window.marginData?.date) dataSources.push(`融資券: ${window.marginData.date}`);
     if (window.sblData?.date) dataSources.push(`借券: ${window.sblData.date}`);
-    const dataDateInfo = dataSources.length > 0 ? dataSources.join(' | ') : '請載入資料';
+    const dataDateInfo = dataSources.join(' | ');
     let tableHtml = `
         <div style="text-align:center; margin-bottom:12px;">
             <div style="font-size:14px; font-weight:600; color:#e65100;">
@@ -25110,10 +25157,10 @@ async function renderFullTrackerContent(cbCode, container) {
                 ${stockCode ? `<span style="font-size:13px; color:#444; font-weight:normal; margin-left:8px;">股票代號: ${stockCode}</span>` : ''}
             </div>
             <div style="font-size:12px; color:#555; margin-top:4px;">
-                融資融券 × 借券 × CB價格 × 流通餘額 整合追蹤
+                ${dataSource === 'kanban' ? 'CB生命週期完整追蹤（含已下市）' : '融資融券 × 借券 × CB價格 × 流通餘額 整合追蹤'}
             </div>
             <div style="font-size:11px; color:#888; margin-top:4px; padding:4px 8px; background:#f5f5f5; border-radius:4px; display:inline-block;">
-                📅 資料日期：${dataDateInfo}
+                📅 資料來源：${dataDateInfo}
             </div>
         </div>
         <div style="overflow-x:auto; max-height:450px;">

@@ -3477,6 +3477,7 @@ button:active, .clickable:active {
         <button type="button" class="basic-info-tab" onclick="showBasicInfoTab('balance', event)">📈 餘額變化</button>
         <button type="button" class="basic-info-tab" onclick="showBasicInfoTab('history', event)" style="background:#1565c0; color:white;">📜 歷史發行</button>
         <button type="button" class="basic-info-tab" onclick="showBasicInfoTab('dna', event)" style="background:#7b1fa2; color:white;">🧬 發債DNA</button>
+        <button type="button" class="basic-info-tab" onclick="showBasicInfoTab('foreignNews', event)" style="background:#c62828; color:white;">📰 外電報導</button>
     </div>
     <div id="basicInfoContent" style="min-height:200px; padding:15px; background:#fafafa; border-radius:0 0 8px 8px; border:1px solid #e0e0e0; border-top:none;">
         <div style="text-align:center; color:#444; padding:40px;">
@@ -22033,6 +22034,10 @@ function showBasicInfoTab(tabName, event) {
                 console.log('[showBasicInfoTab] 執行 renderDNAAnalysis');
                 renderDNAAnalysis(cbCode, content);
                 break;
+            case 'foreignNews':
+                console.log('[showBasicInfoTab] 執行 renderForeignNews');
+                renderForeignNews(cbCode, content);
+                break;
             default:
                 content.innerHTML = `<div style="color:#444;">未知標籤：${tabName}</div>`;
         }
@@ -30514,6 +30519,226 @@ const TrendScanModule = {
     // 暫存統計結果
     lastStats: null
 };
+
+// ==========================================
+// v3.99W: 外電報導模組
+// ==========================================
+const ForeignNewsModule = {
+    data: [],
+    isLoaded: false,
+    
+    // 載入CSV資料
+    async loadData() {
+        if (this.isLoaded && this.data.length > 0) return this.data;
+        
+        try {
+            const baseUrl = 'https://rexdashu168.github.io/CB168NEW9888/data/';
+            const resp = await fetch(baseUrl + 'foreign_reports.csv');
+            if (!resp.ok) throw new Error('無法載入外電報導資料');
+            
+            const text = await resp.text();
+            const lines = text.split('\n').filter(l => l.trim());
+            if (lines.length < 2) return [];
+            
+            // 解析CSV（第一行是標題）
+            const headers = this.parseCSVLine(lines[0]);
+            this.data = [];
+            
+            for (let i = 1; i < lines.length; i++) {
+                const cols = this.parseCSVLine(lines[i]);
+                if (cols.length >= 10) {
+                    this.data.push({
+                        id: cols[0],
+                        type: cols[1],        // 個股報導/產業趨勢
+                        date: cols[2],
+                        company: cols[3],
+                        code: cols[4],        // 股號
+                        source: cols[5],      // 券商來源
+                        category: cols[6],    // 報導重點分類
+                        importance: cols[7],  // ⭐符號
+                        content: cols[8],     // 完整報導內容
+                        tags: cols[9],        // 標籤
+                        importanceNum: parseInt(cols[10]) || 0  // 重要性數字
+                    });
+                }
+            }
+            
+            this.isLoaded = true;
+            console.log(`[ForeignNews] 載入完成: ${this.data.length} 筆報導`);
+            return this.data;
+            
+        } catch (e) {
+            console.error('[ForeignNews] 載入失敗:', e);
+            return [];
+        }
+    },
+    
+    // 解析CSV行（處理引號內的逗號）
+    parseCSVLine(line) {
+        const result = [];
+        let current = '';
+        let inQuotes = false;
+        
+        for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+            if (char === '"') {
+                inQuotes = !inQuotes;
+            } else if (char === ',' && !inQuotes) {
+                result.push(current.trim());
+                current = '';
+            } else {
+                current += char;
+            }
+        }
+        result.push(current.trim());
+        return result;
+    },
+    
+    // 根據股票代號搜尋報導
+    searchByCode(stockCode) {
+        if (!stockCode || this.data.length === 0) return [];
+        
+        // 搜尋包含該股號的報導
+        return this.data.filter(item => {
+            if (!item.code) return false;
+            return item.code.includes(stockCode);
+        }).sort((a, b) => {
+            // 先按重要性降序，再按日期降序
+            if (b.importanceNum !== a.importanceNum) {
+                return b.importanceNum - a.importanceNum;
+            }
+            return (b.date || '').localeCompare(a.date || '');
+        });
+    },
+    
+    // 取得產業趨勢報導
+    getIndustryReports() {
+        return this.data.filter(item => item.type === '產業趨勢')
+            .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    }
+};
+
+// v3.99W: 渲染外電報導標籤內容
+async function renderForeignNews(cbCode, container) {
+    container.innerHTML = '<div style="text-align:center; padding:40px; color:#1976d2;">⏳ 載入外電報導中...</div>';
+    
+    try {
+        // 取得CB的股票代號
+        const cb = window.cbDataCache?.find(c => c.code === cbCode);
+        if (!cb) {
+            container.innerHTML = '<div style="text-align:center; padding:40px; color:#999;">找不到該CB資料</div>';
+            return;
+        }
+        
+        // 從CB代號取得股票代號（去掉後綴數字）
+        const stockCode = cbCode.replace(/[一二三四五六七八九十\d]+$/, '');
+        const stockName = cb.name?.replace(/[一二三四五六七八九十\d]+$/, '') || '';
+        
+        // 載入外電資料
+        await ForeignNewsModule.loadData();
+        
+        // 搜尋相關報導
+        const reports = ForeignNewsModule.searchByCode(stockCode);
+        
+        if (reports.length === 0) {
+            container.innerHTML = `
+                <div style="text-align:center; padding:40px;">
+                    <div style="font-size:48px; margin-bottom:15px;">📰</div>
+                    <div style="font-size:16px; color:#666; margin-bottom:10px;">
+                        暫無 <strong>${stockName}(${stockCode})</strong> 的外電報導
+                    </div>
+                    <div style="font-size:14px; color:#999;">
+                        資料來源涵蓋 2025/03 ~ 2025/12 期間的券商報告
+                    </div>
+                </div>
+            `;
+            return;
+        }
+        
+        // 統計
+        const fiveStarCount = reports.filter(r => r.importanceNum === 5).length;
+        const fourStarCount = reports.filter(r => r.importanceNum === 4).length;
+        
+        // 渲染報導列表
+        let html = `
+            <div style="margin-bottom:15px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                    <div style="font-size:18px; font-weight:bold; color:#c62828;">
+                        📰 ${stockName}(${stockCode}) 外電報導
+                    </div>
+                    <div style="display:flex; gap:10px; font-size:14px;">
+                        <span style="background:#ffebee; padding:4px 10px; border-radius:4px; color:#c62828;">
+                            共 <strong>${reports.length}</strong> 篇
+                        </span>
+                        <span style="background:#fff8e1; padding:4px 10px; border-radius:4px; color:#f57c00;">
+                            ⭐⭐⭐⭐⭐ ${fiveStarCount}篇
+                        </span>
+                        <span style="background:#e3f2fd; padding:4px 10px; border-radius:4px; color:#1976d2;">
+                            ⭐⭐⭐⭐ ${fourStarCount}篇
+                        </span>
+                    </div>
+                </div>
+            </div>
+            <div style="max-height:500px; overflow-y:auto;">
+        `;
+        
+        reports.forEach((report, idx) => {
+            const importanceColor = report.importanceNum >= 5 ? '#c62828' : 
+                                   report.importanceNum >= 4 ? '#f57c00' : 
+                                   report.importanceNum >= 3 ? '#1976d2' : '#666';
+            const categoryColor = report.category?.includes('升') ? '#c62828' : 
+                                 report.category?.includes('降') ? '#2e7d32' : '#666';
+            
+            html += `
+                <div style="background:white; border:1px solid #e0e0e0; border-radius:8px; margin-bottom:10px; overflow:hidden;">
+                    <div onclick="toggleForeignNewsContent(${idx})" 
+                         style="padding:12px 15px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; background:#fafafa; border-bottom:1px solid #eee;">
+                        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                            <span style="font-size:14px; color:#666;">${report.date || '-'}</span>
+                            <span style="font-size:14px; font-weight:600; color:#333;">${report.company || '-'}</span>
+                            <span style="background:#f5f5f5; padding:2px 8px; border-radius:4px; font-size:13px; color:#666;">${report.source || '-'}</span>
+                            <span style="background:${categoryColor}20; padding:2px 8px; border-radius:4px; font-size:13px; color:${categoryColor}; font-weight:600;">${report.category || '-'}</span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span style="color:${importanceColor}; font-size:14px;">${report.importance || ''}</span>
+                            <span id="foreignNewsArrow${idx}" style="color:#999; transition:transform 0.2s;">▼</span>
+                        </div>
+                    </div>
+                    <div id="foreignNewsContent${idx}" style="display:none; padding:15px; background:#fff; font-size:14px; line-height:1.8; color:#333; white-space:pre-wrap;">${report.content || '無內容'}</div>
+                    ${report.tags ? `<div style="padding:8px 15px; background:#f9f9f9; border-top:1px solid #eee; font-size:13px; color:#666;">${report.tags}</div>` : ''}
+                </div>
+            `;
+        });
+        
+        html += `
+            </div>
+            <div style="margin-top:10px; padding:10px; background:#f5f5f5; border-radius:6px; font-size:13px; color:#666; text-align:center;">
+                📊 資料來源：外電綜合報導資料庫（2025年券商研究報告整理）
+            </div>
+        `;
+        
+        container.innerHTML = html;
+        
+    } catch (e) {
+        console.error('[renderForeignNews] 錯誤:', e);
+        container.innerHTML = `<div style="text-align:center; padding:40px; color:#c62828;">❌ 載入失敗: ${e.message}</div>`;
+    }
+}
+
+// v3.99W: 展開/收合外電報導內容
+function toggleForeignNewsContent(idx) {
+    const content = document.getElementById(`foreignNewsContent${idx}`);
+    const arrow = document.getElementById(`foreignNewsArrow${idx}`);
+    if (content && arrow) {
+        if (content.style.display === 'none') {
+            content.style.display = 'block';
+            arrow.style.transform = 'rotate(180deg)';
+        } else {
+            content.style.display = 'none';
+            arrow.style.transform = 'rotate(0deg)';
+        }
+    }
+}
 
 // ==========================================
 // v3.99W: 大盤走勢模組

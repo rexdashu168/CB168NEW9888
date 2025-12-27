@@ -3663,15 +3663,19 @@ button:active, .clickable:active {
             
             <!-- 產業趨勢標籤內容（原有內容）-->
             <div id="trendTabIndustryContent" style="display:none;">
-                <!-- v3.99W: 外電熱門摘要（簡化版）-->
+                <!-- v3.99W: 外電熱門摘要（加強版）-->
                 <div id="foreignNewsSummary" style="margin-bottom:15px; padding:12px 15px; background:linear-gradient(135deg, #fff8e1, #ffecb3); border-radius:10px; border:2px solid #ff9800; display:none;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
                         <div style="font-size:15px; font-weight:bold; color:#e65100;">
                             📰 外電熱門追蹤
                         </div>
                         <div id="hotTagsSummary" style="display:flex; flex-wrap:wrap; gap:6px; flex:1; justify-content:flex-end;">
                             <!-- 只顯示TOP 8熱門標籤 -->
                         </div>
+                    </div>
+                    <!-- 產業趨勢報導區（點擊標籤後顯示）-->
+                    <div id="industryNewsContainer" style="display:none; margin-top:12px; padding-top:12px; border-top:1px dashed #ff9800;">
+                        <!-- 動態填入產業趨勢報導 -->
                     </div>
                 </div>
                 
@@ -30735,31 +30739,44 @@ const TrendScanModule = {
             const recentDates = sortedDates.slice(-periodDays);
             
             // 計算每日產業指數（以第一天為基期100）
+            // 使用中位數而非平均數，避免極端值影響
             const industryIndex = [];
             let baseValues = {};  // 各股票的基期價格
             
+            // 先設定所有股票的基期價格（使用期間第一天的收盤價）
+            const firstDate = recentDates[0];
+            Object.entries(allStockData).forEach(([code, data]) => {
+                const firstDayData = data.find(d => d.date === firstDate);
+                if (firstDayData && firstDayData.close > 0) {
+                    baseValues[code] = firstDayData.close;
+                }
+            });
+            
             recentDates.forEach((date, idx) => {
-                let totalReturn = 0;
-                let stockCount = 0;
+                const returns = [];
                 
                 Object.entries(allStockData).forEach(([code, data]) => {
                     const dayData = data.find(d => d.date === date);
-                    if (dayData && dayData.close > 0) {
-                        if (idx === 0) {
-                            baseValues[code] = dayData.close;
-                        }
-                        if (baseValues[code] && baseValues[code] > 0) {
-                            totalReturn += (dayData.close / baseValues[code] - 1) * 100;
-                            stockCount++;
+                    if (dayData && dayData.close > 0 && baseValues[code] && baseValues[code] > 0) {
+                        const returnPct = (dayData.close / baseValues[code] - 1) * 100;
+                        // 過濾極端值（漲跌幅超過 500% 的視為異常）
+                        if (returnPct > -90 && returnPct < 500) {
+                            returns.push(returnPct);
                         }
                     }
                 });
                 
-                if (stockCount > 0) {
-                    const avgReturn = totalReturn / stockCount;
+                if (returns.length > 0) {
+                    // 使用中位數避免極端值影響
+                    returns.sort((a, b) => a - b);
+                    const mid = Math.floor(returns.length / 2);
+                    const medianReturn = returns.length % 2 === 0 
+                        ? (returns[mid - 1] + returns[mid]) / 2 
+                        : returns[mid];
+                    
                     industryIndex.push({
                         date: date,
-                        close: 100 + avgReturn  // 基期100
+                        close: 100 + medianReturn  // 基期100
                     });
                 }
             });
@@ -32350,13 +32367,100 @@ async function loadForeignNewsHotTags() {
         if (topTags.length > 0) {
             hotTagsSummary.innerHTML = topTags.map(([tag, count], idx) => {
                 const bgColor = idx < 2 ? '#e65100' : idx < 5 ? '#ff9800' : '#ffb74d';
-                return `<span style="background:${bgColor}; color:white; padding:4px 10px; border-radius:15px; font-size:13px; cursor:pointer;" 
-                    onclick="searchForeignNewsByTag('${tag}')">${tag}</span>`;
+                return `<span style="background:${bgColor}; color:white; padding:4px 10px; border-radius:15px; font-size:13px; cursor:pointer; transition:all 0.2s;" 
+                    onmouseover="this.style.transform='scale(1.1)'" 
+                    onmouseout="this.style.transform='scale(1)'"
+                    onclick="showIndustryNewsByTag('${tag}')">${tag}</span>`;
             }).join('');
         }
         
     } catch (e) {
         console.error('[loadForeignNewsHotTags] 錯誤:', e);
+    }
+}
+
+// v3.99W: 點擊標籤顯示相關產業趨勢報導
+function showIndustryNewsByTag(tag) {
+    const container = document.getElementById('industryNewsContainer');
+    if (!container) return;
+    
+    // 搜尋包含該標籤的報導（優先顯示產業趨勢）
+    const reports = ForeignNewsModule.data.filter(r => {
+        if (!r.tags) return false;
+        return r.tags.includes(tag);
+    }).sort((a, b) => {
+        // 產業趨勢優先
+        if (a.type === '產業趨勢' && b.type !== '產業趨勢') return -1;
+        if (a.type !== '產業趨勢' && b.type === '產業趨勢') return 1;
+        // 再按重要性和日期排序
+        if (b.importanceNum !== a.importanceNum) return b.importanceNum - a.importanceNum;
+        return (b.date || '').localeCompare(a.date || '');
+    });
+    
+    if (reports.length === 0) {
+        container.style.display = 'none';
+        return;
+    }
+    
+    container.style.display = 'block';
+    
+    // 統計產業趨勢和個股報導數量
+    const industryCount = reports.filter(r => r.type === '產業趨勢').length;
+    const stockCount = reports.filter(r => r.type === '個股報導').length;
+    
+    let html = `
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <div style="font-size:15px; font-weight:bold; color:#c62828;">
+                🔍 ${tag} 相關報導 (${reports.length}篇)
+            </div>
+            <div style="font-size:12px; color:#666;">
+                產業趨勢 ${industryCount} | 個股報導 ${stockCount}
+            </div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:8px; max-height:400px; overflow-y:auto; padding-right:5px;">
+    `;
+    
+    reports.slice(0, 15).forEach((r, idx) => {
+        const importanceStars = '⭐'.repeat(Math.min(r.importanceNum || 1, 5));
+        const typeLabel = r.type === '產業趨勢' 
+            ? '<span style="background:#c62828; color:white; padding:2px 6px; border-radius:3px; font-size:11px; margin-right:6px;">產業</span>'
+            : '<span style="background:#1976d2; color:white; padding:2px 6px; border-radius:3px; font-size:11px; margin-right:6px;">個股</span>';
+        const borderColor = r.type === '產業趨勢' ? '#c62828' : '#ff9800';
+        
+        html += `
+            <div style="background:white; padding:12px 14px; border-radius:8px; border-left:4px solid ${borderColor}; cursor:pointer; transition:all 0.2s;"
+                 onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.15)'" 
+                 onmouseout="this.style.boxShadow='none'"
+                 onclick="showIndustryReportDetail(${idx}, '${tag}')">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <span style="font-weight:600; color:#333; font-size:14px;">${r.date || '-'} | ${r.source || '-'}</span>
+                    <span style="font-size:13px; color:#ff9800;">${importanceStars}</span>
+                </div>
+                <div style="font-size:14px; color:#333; font-weight:600; margin-bottom:6px;">
+                    ${typeLabel}${r.company || ''} ${r.category ? '| ' + r.category : ''}
+                </div>
+                <div style="font-size:13px; color:#555; line-height:1.6;">${(r.content || '').substring(0, 150)}...</div>
+                ${r.relatedCompanies ? `<div style="margin-top:6px; font-size:12px; color:#1976d2;">📊 相關: ${r.relatedCompanies.substring(0, 60)}${r.relatedCompanies.length > 60 ? '...' : ''}</div>` : ''}
+            </div>
+        `;
+    });
+    
+    html += `
+        </div>
+        ${reports.length > 15 ? `<div style="text-align:center; color:#888; font-size:13px; margin-top:10px;">顯示前15篇，共${reports.length}篇報導</div>` : ''}
+    `;
+    
+    container.innerHTML = html;
+    
+    // 暫存搜尋結果
+    window._lastIndustryNewsResults = reports;
+}
+
+// v3.99W: 顯示產業報導詳情
+function showIndustryReportDetail(idx, tag) {
+    const reports = window._lastIndustryNewsResults || [];
+    if (reports && reports[idx]) {
+        showForeignReportDetail(reports[idx]);
     }
 }
 
@@ -32385,7 +32489,7 @@ async function loadStockForeignNews(stockCode, stockName) {
         
         container.style.display = 'block';
         
-        // 渲染外電報導列表
+        // 渲染外電報導列表（加大高度顯示更多篇）
         let html = `
             <div style="background:linear-gradient(135deg, #fff8e1, #fff3e0); border:2px solid #ff9800; border-radius:10px; padding:15px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
@@ -32394,7 +32498,7 @@ async function loadStockForeignNews(stockCode, stockName) {
                     </div>
                     <span style="font-size:13px; color:#888;">點擊查看詳情</span>
                 </div>
-                <div style="display:flex; flex-direction:column; gap:8px; max-height:300px; overflow-y:auto;">
+                <div style="display:flex; flex-direction:column; gap:8px; max-height:480px; overflow-y:auto; padding-right:5px;">
         `;
         
         reports.slice(0, 20).forEach((r, idx) => {
@@ -32402,15 +32506,17 @@ async function loadStockForeignNews(stockCode, stockName) {
             const borderColor = r.importanceNum >= 5 ? '#c62828' : r.importanceNum >= 4 ? '#ff9800' : '#1976d2';
             
             html += `
-                <div style="background:white; padding:10px 12px; border-radius:6px; border-left:4px solid ${borderColor}; cursor:pointer;"
+                <div style="background:white; padding:12px 14px; border-radius:8px; border-left:4px solid ${borderColor}; cursor:pointer; transition:all 0.2s;"
+                     onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.15)'" 
+                     onmouseout="this.style.boxShadow='none'"
                      onclick="showForeignReportDetailByIndex(${idx}, '${stockCode}')">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
                         <span style="font-weight:600; color:#333; font-size:14px;">${r.date || '-'} | ${r.source || '-'}</span>
-                        <span style="font-size:12px; color:#ff9800;">${importanceStars}</span>
+                        <span style="font-size:13px; color:#ff9800;">${importanceStars}</span>
                     </div>
-                    <div style="font-size:13px; color:#555; margin-bottom:4px;">${r.company || ''} | ${r.category || ''}</div>
-                    <div style="font-size:13px; color:#666; line-height:1.5;">${(r.content || '').substring(0, 120)}...</div>
-                    ${r.tags ? `<div style="margin-top:6px; display:flex; gap:4px; flex-wrap:wrap;">${r.tags.match(/#[^\s#]+/g)?.slice(0,5).map(t => `<span style="background:#fff3e0; color:#e65100; padding:2px 6px; border-radius:3px; font-size:11px;">${t}</span>`).join('') || ''}</div>` : ''}
+                    <div style="font-size:14px; color:#1976d2; font-weight:600; margin-bottom:6px;">${r.company || ''} | ${r.category || ''}</div>
+                    <div style="font-size:13px; color:#555; line-height:1.6;">${(r.content || '').substring(0, 150)}...</div>
+                    ${r.tags ? `<div style="margin-top:8px; display:flex; gap:5px; flex-wrap:wrap;">${r.tags.match(/#[^\s#]+/g)?.slice(0,5).map(t => `<span style="background:#fff3e0; color:#e65100; padding:3px 8px; border-radius:4px; font-size:12px;">${t}</span>`).join('') || ''}</div>` : ''}
                 </div>
             `;
         });

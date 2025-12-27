@@ -30881,6 +30881,20 @@ const TrendScanModule = {
         const totalChange = lastPrice - 100;
         const changeColor = totalChange >= 0 ? '#c62828' : '#2e7d32';
         
+        // v3.99W: 計算扣抵值
+        const ma13DeductIdx = data.length - 13;
+        const ma20DeductIdx = data.length - 20;
+        const ma13Deduct = ma13DeductIdx >= 0 ? prices[ma13DeductIdx] : null;
+        const ma20Deduct = ma20DeductIdx >= 0 ? prices[ma20DeductIdx] : null;
+        
+        // 扣抵值正負向判斷（正向紅色，負向綠色）
+        const ma13DeductPositive = ma13Deduct !== null ? ma13Deduct < lastPrice : null;
+        const ma20DeductPositive = ma20Deduct !== null ? ma20Deduct < lastPrice : null;
+        const ma13DeductColor = ma13DeductPositive === null ? '#666' : (ma13DeductPositive ? '#c62828' : '#2e7d32');
+        const ma20DeductColor = ma20DeductPositive === null ? '#666' : (ma20DeductPositive ? '#c62828' : '#2e7d32');
+        const ma13DeductArrow = ma13DeductPositive === null ? '' : (ma13DeductPositive ? '▲' : '▼');
+        const ma20DeductArrow = ma20DeductPositive === null ? '' : (ma20DeductPositive ? '▲' : '▼');
+        
         container.innerHTML = `
             <div style="padding:10px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
@@ -30936,10 +30950,16 @@ const TrendScanModule = {
                     <!-- 最新點 -->
                     <circle cx="${toX(data.length - 1)}" cy="${toY(lastPrice)}" r="5" fill="#1976d2"/>
                 </svg>
-                <div style="display:flex; justify-content:center; gap:20px; font-size:14px; color:#444; margin-top:10px; padding:10px; background:#f5f5f5; border-radius:6px;">
+                <div style="display:flex; justify-content:center; gap:20px; font-size:14px; color:#000; margin-top:10px; padding:10px; background:#f5f5f5; border-radius:6px; flex-wrap:wrap;">
                     <span><span style="color:#1976d2;">━</span> 產業指數 <strong style="color:#1976d2;">${lastPrice.toFixed(1)}</strong></span>
-                    <span><span style="color:#9c27b0;">┅</span> MA13 <strong style="color:#9c27b0;">${lastMA13 ? lastMA13.toFixed(1) : '-'}</strong></span>
-                    <span><span style="color:#ff9800;">┅</span> MA20 <strong style="color:#ff9800;">${lastMA20 ? lastMA20.toFixed(1) : '-'}</strong></span>
+                    <span>
+                        <span style="color:#9c27b0;">┅</span> MA13 <strong style="color:#9c27b0;">${lastMA13 ? lastMA13.toFixed(1) : '-'}</strong>
+                        ${ma13Deduct !== null ? `<span style="color:${ma13DeductColor}; font-size:12px; margin-left:3px;">(扣${ma13Deduct.toFixed(1)}${ma13DeductArrow})</span>` : ''}
+                    </span>
+                    <span>
+                        <span style="color:#ff9800;">┅</span> MA20 <strong style="color:#ff9800;">${lastMA20 ? lastMA20.toFixed(1) : '-'}</strong>
+                        ${ma20Deduct !== null ? `<span style="color:${ma20DeductColor}; font-size:12px; margin-left:3px;">(扣${ma20Deduct.toFixed(1)}${ma20DeductArrow})</span>` : ''}
+                    </span>
                 </div>
             </div>
         `;
@@ -31063,15 +31083,28 @@ const TrendScanModule = {
                     <!-- 最新價格點 -->
                     <circle cx="${toX(prices.length-1)}" cy="${toY(lastPrice)}" r="5" fill="${priceColor}"/>
                 </svg>
+                ${(() => {
+                    // 計算扣抵值
+                    const ma20DeductIdx = recentData.length - 20;
+                    const ma20Deduct = ma20DeductIdx >= 0 ? recentData[ma20DeductIdx].close : null;
+                    const ma20Positive = ma20Deduct !== null ? ma20Deduct < lastPrice : null;
+                    const ma20DeductColor = ma20Positive === null ? '#666' : (ma20Positive ? '#c62828' : '#2e7d32');
+                    const ma20Arrow = ma20Positive === null ? '' : (ma20Positive ? '▲' : '▼');
+                    
+                    return `
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
-                    <div style="display:flex; gap:12px; font-size:12px; color:#666;">
-                        <span><span style="color:${priceColor};">━</span> 收盤價</span>
-                        <span><span style="color:#ff9800;">┅</span> MA20: ${lastMA ? lastMA.toFixed(2) : '--'}</span>
+                    <div style="display:flex; gap:12px; font-size:13px; color:#000;">
+                        <span><span style="color:${priceColor};">━</span> 收盤價 <strong>${lastPrice.toFixed(2)}</strong></span>
+                        <span>
+                            <span style="color:#ff9800;">┅</span> MA20: <strong style="color:#ff9800;">${lastMA ? lastMA.toFixed(2) : '--'}</strong>
+                            ${ma20Deduct !== null ? `<span style="color:${ma20DeductColor}; font-size:12px; margin-left:3px;">(扣${ma20Deduct.toFixed(1)}${ma20Arrow})</span>` : ''}
+                        </span>
                     </div>
-                    <div style="font-size:12px; color:#888;">
+                    <div style="font-size:12px; color:#666;">
                         期間：${recentData.length}日 | 高:${highestPrice.toFixed(1)} 低:${lowestPrice.toFixed(1)}
                     </div>
-                </div>
+                </div>`;
+                })()}
             </div>
         `;
     },
@@ -31870,6 +31903,14 @@ const MarketIndexModule = {
         const lastMA20 = ma20[ma20.length - 1];
         const decimals = this.currentIndex === 'otc' ? 2 : (this.currentIndex === 'custom' ? 1 : 0);
         
+        // v3.99W: 計算扣抵值（明天會被扣除的價格）
+        // MA13扣抵值：往前數第13天的收盤價
+        // MA20扣抵值：往前數第20天的收盤價
+        const ma13DeductIdx = chartData.length - 13;
+        const ma20DeductIdx = chartData.length - 20;
+        const ma13Deduct = ma13DeductIdx >= 0 ? chartData[ma13DeductIdx].close : null;
+        const ma20Deduct = ma20DeductIdx >= 0 ? chartData[ma20DeductIdx].close : null;
+        
         container.innerHTML = `
             <div style="padding:10px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
@@ -31921,7 +31962,7 @@ const MarketIndexModule = {
                     <!-- 最新價格點 -->
                     <circle cx="${toX(chartData.length - 1)}" cy="${toY(lastPrice)}" r="5" fill="${chartColor}"/>
                 </svg>
-                ${this.renderMAAnalysis(lastPrice, lastMA13, lastMA20, decimals, chartColor)}
+                ${this.renderMAAnalysis(lastPrice, lastMA13, lastMA20, decimals, chartColor, ma13Deduct, ma20Deduct)}
                 ${this.currentIndex !== 'custom' ? `
                 <div style="margin-top:10px; padding:10px; background:#f5f5f5; border-radius:6px; font-size:13px; color:#666; text-align:center;">
                     💡 點擊上方指數卡片切換，或輸入股票代號查詢個股走勢
@@ -31936,7 +31977,7 @@ const MarketIndexModule = {
     },
     
     // v3.99W: 渲染均線分析
-    renderMAAnalysis(price, ma13, ma20, decimals, chartColor) {
+    renderMAAnalysis(price, ma13, ma20, decimals, chartColor, ma13Deduct = null, ma20Deduct = null) {
         if (!ma13 || !ma20) {
             return `<div style="display:flex; justify-content:center; gap:20px; font-size:15px; color:#666; margin-top:10px; padding:10px; background:#f9f9f9; border-radius:8px;">
                 <span><span style="color:${chartColor};">━</span> 收盤價 <strong style="color:${chartColor}; font-size:16px;">${price.toFixed(decimals)}</strong></span>
@@ -31949,6 +31990,12 @@ const MarketIndexModule = {
         const priceAboveMA13 = price > ma13;
         const priceAboveMA20 = price > ma20;
         const ma13AboveMA20 = ma13 > ma20;
+        
+        // 計算扣抵值的正負向
+        // 正向（紅色）：扣抵值 < 現價，均線有機會上升
+        // 負向（綠色）：扣抵值 > 現價，均線有壓力下降
+        const ma13DeductPositive = ma13Deduct !== null ? ma13Deduct < price : null;
+        const ma20DeductPositive = ma20Deduct !== null ? ma20Deduct < price : null;
         
         let trendText = '';
         let trendColor = '';
@@ -31999,13 +32046,25 @@ const MarketIndexModule = {
             trendIcon = '🔄';
         }
         
+        // 扣抵值顯示
+        const ma13DeductColor = ma13DeductPositive === null ? '#666' : (ma13DeductPositive ? '#c62828' : '#2e7d32');
+        const ma20DeductColor = ma20DeductPositive === null ? '#666' : (ma20DeductPositive ? '#c62828' : '#2e7d32');
+        const ma13DeductArrow = ma13DeductPositive === null ? '' : (ma13DeductPositive ? '▲' : '▼');
+        const ma20DeductArrow = ma20DeductPositive === null ? '' : (ma20DeductPositive ? '▲' : '▼');
+        
         return `
             <div style="margin-top:10px; padding:12px 15px; background:${trendBg}; border-radius:8px; border-left:4px solid ${trendColor};">
                 <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-                    <div style="display:flex; gap:20px; font-size:15px; color:#444;">
+                    <div style="display:flex; gap:15px; font-size:14px; color:#444; flex-wrap:wrap;">
                         <span><span style="color:${chartColor};">━</span> 收盤 <strong style="color:${chartColor}; font-size:17px;">${price.toFixed(decimals)}</strong></span>
-                        <span><span style="color:#9c27b0;">┅</span> MA13 <strong style="color:#9c27b0; font-size:17px;">${ma13.toFixed(decimals)}</strong></span>
-                        <span><span style="color:#ff9800;">┅</span> MA20 <strong style="color:#ff9800; font-size:17px;">${ma20.toFixed(decimals)}</strong></span>
+                        <span>
+                            <span style="color:#9c27b0;">┅</span> MA13 <strong style="color:#9c27b0; font-size:17px;">${ma13.toFixed(decimals)}</strong>
+                            ${ma13Deduct !== null ? `<span style="color:${ma13DeductColor}; font-size:12px; margin-left:4px;">(扣${ma13Deduct.toFixed(decimals)}${ma13DeductArrow})</span>` : ''}
+                        </span>
+                        <span>
+                            <span style="color:#ff9800;">┅</span> MA20 <strong style="color:#ff9800; font-size:17px;">${ma20.toFixed(decimals)}</strong>
+                            ${ma20Deduct !== null ? `<span style="color:${ma20DeductColor}; font-size:12px; margin-left:4px;">(扣${ma20Deduct.toFixed(decimals)}${ma20DeductArrow})</span>` : ''}
+                        </span>
                     </div>
                     <div style="font-size:14px; font-weight:600; color:${trendColor};">
                         ${trendIcon} ${trendText}

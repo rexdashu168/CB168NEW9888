@@ -30525,7 +30525,9 @@ const TrendScanModule = {
 // ==========================================
 const ForeignNewsModule = {
     data: [],
+    heatData: {},  // 股票熱度資料
     isLoaded: false,
+    isHeatLoaded: false,
     
     // 載入CSV資料
     async loadData() {
@@ -30571,6 +30573,77 @@ const ForeignNewsModule = {
             console.error('[ForeignNews] 載入失敗:', e);
             return [];
         }
+    },
+    
+    // 載入股票熱度資料
+    async loadHeatData() {
+        if (this.isHeatLoaded && Object.keys(this.heatData).length > 0) return this.heatData;
+        
+        try {
+            const baseUrl = 'https://rexdashu168.github.io/CB168NEW9888/data/';
+            const resp = await fetch(baseUrl + 'stock_heat.csv');
+            if (!resp.ok) throw new Error('無法載入熱度資料');
+            
+            const text = await resp.text();
+            const lines = text.split('\n').filter(l => l.trim());
+            if (lines.length < 2) return {};
+            
+            for (let i = 1; i < lines.length; i++) {
+                const cols = this.parseCSVLine(lines[i]);
+                if (cols.length >= 9) {
+                    const code = cols[0];
+                    this.heatData[code] = {
+                        company: cols[1],
+                        heat: parseFloat(cols[2]) || 0,
+                        level: cols[3],
+                        reports: parseInt(cols[4]) || 0,
+                        positive: parseInt(cols[5]) || 0,
+                        negative: parseInt(cols[6]) || 0,
+                        sentiment: cols[7],
+                        tags: cols[8] ? cols[8].split('|') : []
+                    };
+                }
+            }
+            
+            this.isHeatLoaded = true;
+            console.log(`[ForeignNews] 熱度資料載入: ${Object.keys(this.heatData).length} 支股票`);
+            return this.heatData;
+            
+        } catch (e) {
+            console.error('[ForeignNews] 熱度載入失敗:', e);
+            return {};
+        }
+    },
+    
+    // 取得股票熱度
+    getStockHeat(stockCode) {
+        return this.heatData[stockCode] || null;
+    },
+    
+    // 取得熱度等級顏色
+    getHeatColor(heat) {
+        if (heat >= 500) return '#c62828';  // 極熱-深紅
+        if (heat >= 300) return '#e65100';  // 高熱-橘
+        if (heat >= 150) return '#f9a825';  // 中熱-黃
+        if (heat >= 50) return '#1976d2';   // 低熱-藍
+        return '#9e9e9e';  // 微熱-灰
+    },
+    
+    // 取得競拍加碼建議
+    getAuctionAdvice(heat, sentiment) {
+        if (heat >= 500 && sentiment === '正面') {
+            return { adjust: '+1~2元', reason: '外電極熱且正面，市場關注度極高', color: '#c62828' };
+        }
+        if (heat >= 300 && sentiment === '正面') {
+            return { adjust: '+0.5~1元', reason: '外電高熱，券商普遍看好', color: '#e65100' };
+        }
+        if (heat >= 150) {
+            return { adjust: '維持原價', reason: '外電關注度中等', color: '#1976d2' };
+        }
+        if (heat >= 50) {
+            return { adjust: '可略降0.5元', reason: '外電關注度較低', color: '#666' };
+        }
+        return { adjust: '無外電參考', reason: '近期無相關報導', color: '#999' };
     },
     
     // 解析CSV行（處理引號內的逗號）
@@ -30634,13 +30707,55 @@ async function renderForeignNews(cbCode, container) {
         const stockCode = cbCode.replace(/[一二三四五六七八九十\d]+$/, '');
         const stockName = cb.name?.replace(/[一二三四五六七八九十\d]+$/, '') || '';
         
-        // 載入外電資料
-        await ForeignNewsModule.loadData();
+        // 載入外電資料和熱度資料
+        await Promise.all([
+            ForeignNewsModule.loadData(),
+            ForeignNewsModule.loadHeatData()
+        ]);
+        
+        // 取得熱度資料
+        const heatInfo = ForeignNewsModule.getStockHeat(stockCode);
         
         // 搜尋相關報導
         const reports = ForeignNewsModule.searchByCode(stockCode);
         
-        if (reports.length === 0) {
+        // 熱度區塊HTML
+        let heatHTML = '';
+        if (heatInfo) {
+            const heatColor = ForeignNewsModule.getHeatColor(heatInfo.heat);
+            const advice = ForeignNewsModule.getAuctionAdvice(heatInfo.heat, heatInfo.sentiment);
+            
+            heatHTML = `
+                <div style="background:linear-gradient(135deg, ${heatColor}15 0%, ${heatColor}08 100%); border:2px solid ${heatColor}; border-radius:10px; padding:15px; margin-bottom:15px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+                        <div style="font-size:18px; font-weight:bold; color:${heatColor};">
+                            ${heatInfo.level} 外電熱度：${heatInfo.heat.toFixed(0)}
+                        </div>
+                        <div style="display:flex; gap:8px;">
+                            <span style="background:#e8f5e9; padding:4px 10px; border-radius:4px; color:#2e7d32; font-size:13px;">
+                                👍 正面 ${heatInfo.positive}篇
+                            </span>
+                            <span style="background:#ffebee; padding:4px 10px; border-radius:4px; color:#c62828; font-size:13px;">
+                                👎 負面 ${heatInfo.negative}篇
+                            </span>
+                            <span style="background:${heatInfo.sentiment === '正面' ? '#e8f5e9' : heatInfo.sentiment === '負面' ? '#ffebee' : '#f5f5f5'}; padding:4px 10px; border-radius:4px; color:${heatInfo.sentiment === '正面' ? '#2e7d32' : heatInfo.sentiment === '負面' ? '#c62828' : '#666'}; font-size:13px; font-weight:bold;">
+                                ${heatInfo.sentiment === '正面' ? '📈' : heatInfo.sentiment === '負面' ? '📉' : '➡️'} ${heatInfo.sentiment}
+                            </span>
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;">
+                        ${heatInfo.tags.map(tag => `<span style="background:${heatColor}20; color:${heatColor}; padding:3px 8px; border-radius:4px; font-size:12px;">${tag}</span>`).join('')}
+                    </div>
+                    <div style="background:white; border-radius:6px; padding:10px; display:flex; align-items:center; gap:10px;">
+                        <span style="font-size:14px; color:#666;">🎯 競拍建議：</span>
+                        <span style="font-size:15px; font-weight:bold; color:${advice.color};">${advice.adjust}</span>
+                        <span style="font-size:13px; color:#888;">（${advice.reason}）</span>
+                    </div>
+                </div>
+            `;
+        }
+        
+        if (reports.length === 0 && !heatInfo) {
             container.innerHTML = `
                 <div style="text-align:center; padding:40px;">
                     <div style="font-size:48px; margin-bottom:15px;">📰</div>
@@ -30660,7 +30775,7 @@ async function renderForeignNews(cbCode, container) {
         const fourStarCount = reports.filter(r => r.importanceNum === 4).length;
         
         // 渲染報導列表
-        let html = `
+        let html = heatHTML + `
             <div style="margin-bottom:15px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
                     <div style="font-size:18px; font-weight:bold; color:#c62828;">
@@ -30679,7 +30794,7 @@ async function renderForeignNews(cbCode, container) {
                     </div>
                 </div>
             </div>
-            <div style="max-height:500px; overflow-y:auto;">
+            <div style="max-height:400px; overflow-y:auto;">
         `;
         
         reports.forEach((report, idx) => {
@@ -31130,9 +31245,14 @@ function updateMarketChart(period) {
     });
     
     MarketIndexModule.currentPeriod = period;
-    if (MarketIndexModule.indexData.tsmc.length > 0 || 
+    
+    // 檢查是否有任何資料可顯示
+    const hasData = MarketIndexModule.indexData.tsmc.length > 0 || 
         MarketIndexModule.indexData.taiex.length > 0 || 
-        MarketIndexModule.indexData.otc.length > 0) {
+        MarketIndexModule.indexData.otc.length > 0 ||
+        MarketIndexModule.indexData.customStock.length > 0;
+    
+    if (hasData) {
         // v3.99W: 同時更新卡片數據（漲跌幅會根據期間變化）
         MarketIndexModule.updateDisplay();
         MarketIndexModule.renderChart();
@@ -31167,7 +31287,7 @@ function loadMarketIndexData() {
     MarketIndexModule.loadData();
 }
 
-// v3.99W: 個股查詢功能
+// v3.99W: 個股查詢功能（載入多年歷史資料）
 async function searchStockPrice() {
     const input = document.getElementById('stockQueryInput');
     const statusEl = document.getElementById('stockQueryStatus');
@@ -31178,7 +31298,7 @@ async function searchStockPrice() {
         return;
     }
     
-    statusEl.innerHTML = '<span style="color:#1976d2;">⏳ 查詢中...</span>';
+    statusEl.innerHTML = '<span style="color:#1976d2;">⏳ 載入歷年資料中...</span>';
     
     try {
         // 初始化 SQL.js（如果還沒有）
@@ -31187,74 +31307,105 @@ async function searchStockPrice() {
         }
         
         const baseUrl = 'https://rexdashu168.github.io/CB168NEW9888/data/';
-        let stockData = [];
+        let allStockData = [];
         let stockName = stockCode;
+        let isOTC = false;
         
-        // 先嘗試從上市資料庫查詢
-        if (!TrendScanModule.tseDB) {
-            const resp = await fetch(baseUrl + 'stock_price_2025.db');
-            if (resp.ok) {
-                const buffer = await resp.arrayBuffer();
-                TrendScanModule.tseDB = new TrendScanModule.sqlEngine.Database(new Uint8Array(buffer));
+        // v3.99W: 上市2008-2025，上櫃2011-2025
+        const tseYears = ['2008', '2009', '2010', '2011', '2012', '2013', '2014', '2015', '2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023', '2024', '2025'];
+        const otcYears = ['2011', '2012', '2013', '2014', '2015', '2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023', '2024', '2025'];
+        
+        // 先判斷是上市還是上櫃（用2025年資料測試）
+        statusEl.innerHTML = '<span style="color:#1976d2;">⏳ 判斷市場類型...</span>';
+        
+        // 測試上市
+        try {
+            const testResp = await fetch(baseUrl + 'stock_price_2025.db');
+            if (testResp.ok) {
+                const buffer = await testResp.arrayBuffer();
+                const testDB = new TrendScanModule.sqlEngine.Database(new Uint8Array(buffer));
+                const result = testDB.exec(`SELECT name FROM stock_price WHERE code = '${stockCode}' LIMIT 1`);
+                if (result.length > 0 && result[0].values.length > 0) {
+                    stockName = result[0].values[0][0] || stockCode;
+                    isOTC = false;
+                } else {
+                    isOTC = true;  // 上市找不到，嘗試上櫃
+                }
+                testDB.close();
+            }
+        } catch (e) {
+            isOTC = true;
+        }
+        
+        // 如果是上櫃，確認一下
+        if (isOTC) {
+            try {
+                const testResp = await fetch(baseUrl + 'otc_price_2025.db');
+                if (testResp.ok) {
+                    const buffer = await testResp.arrayBuffer();
+                    const testDB = new TrendScanModule.sqlEngine.Database(new Uint8Array(buffer));
+                    const result = testDB.exec(`SELECT name FROM otc_price WHERE code = '${stockCode}' LIMIT 1`);
+                    if (result.length > 0 && result[0].values.length > 0) {
+                        stockName = result[0].values[0][0] || stockCode;
+                    } else {
+                        statusEl.innerHTML = `<span style="color:#c62828;">找不到 ${stockCode}</span>`;
+                        testDB.close();
+                        return;
+                    }
+                    testDB.close();
+                }
+            } catch (e) {
+                statusEl.innerHTML = `<span style="color:#c62828;">找不到 ${stockCode}</span>`;
+                return;
             }
         }
         
-        if (TrendScanModule.tseDB) {
+        const dbPrefix = isOTC ? 'otc_price_' : 'stock_price_';
+        const tableName = isOTC ? 'otc_price' : 'stock_price';
+        const years = isOTC ? otcYears : tseYears;  // 根據市場類型選擇年份範圍
+        
+        // 載入各年資料
+        for (let i = 0; i < years.length; i++) {
+            const year = years[i];
+            statusEl.innerHTML = `<span style="color:#1976d2;">⏳ 載入 ${year} 年資料... (${i+1}/${years.length})</span>`;
+            
             try {
-                const result = TrendScanModule.tseDB.exec(`
-                    SELECT date, close, name FROM stock_price 
+                const resp = await fetch(baseUrl + dbPrefix + year + '.db');
+                if (!resp.ok) continue;
+                
+                const buffer = await resp.arrayBuffer();
+                const db = new TrendScanModule.sqlEngine.Database(new Uint8Array(buffer));
+                
+                const result = db.exec(`
+                    SELECT date, close FROM ${tableName} 
                     WHERE code = '${stockCode}' 
                     ORDER BY date ASC
                 `);
+                
                 if (result.length > 0 && result[0].values.length > 0) {
-                    stockData = result[0].values.map(row => ({
-                        date: String(row[0]),  // v3.99W: 確保轉為字串
+                    const yearData = result[0].values.map(row => ({
+                        date: String(row[0]),
                         close: parseFloat(row[1]) || 0
                     }));
-                    stockName = result[0].values[0][2] || stockCode;
+                    allStockData = allStockData.concat(yearData);
                 }
+                
+                db.close();
             } catch (e) {
-                console.log('上市查無此股票');
+                console.log(`${year}年資料載入失敗:`, e);
             }
         }
         
-        // 如果上市沒找到，嘗試上櫃
-        if (stockData.length === 0) {
-            if (!TrendScanModule.otcDB) {
-                const resp = await fetch(baseUrl + 'otc_price_2025.db');
-                if (resp.ok) {
-                    const buffer = await resp.arrayBuffer();
-                    TrendScanModule.otcDB = new TrendScanModule.sqlEngine.Database(new Uint8Array(buffer));
-                }
-            }
-            
-            if (TrendScanModule.otcDB) {
-                try {
-                    const result = TrendScanModule.otcDB.exec(`
-                        SELECT date, close, name FROM otc_price 
-                        WHERE code = '${stockCode}' 
-                        ORDER BY date ASC
-                    `);
-                    if (result.length > 0 && result[0].values.length > 0) {
-                        stockData = result[0].values.map(row => ({
-                            date: String(row[0]),  // v3.99W: 確保轉為字串
-                            close: parseFloat(row[1]) || 0
-                        }));
-                        stockName = result[0].values[0][2] || stockCode;
-                    }
-                } catch (e) {
-                    console.log('上櫃查無此股票');
-                }
-            }
-        }
-        
-        if (stockData.length === 0) {
-            statusEl.innerHTML = `<span style="color:#c62828;">找不到 ${stockCode}</span>`;
+        if (allStockData.length === 0) {
+            statusEl.innerHTML = `<span style="color:#c62828;">找不到 ${stockCode} 的歷史資料</span>`;
             return;
         }
         
+        // 按日期排序（確保順序正確）
+        allStockData.sort((a, b) => a.date.localeCompare(b.date));
+        
         // 儲存到 MarketIndexModule 並顯示
-        MarketIndexModule.indexData.customStock = stockData;
+        MarketIndexModule.indexData.customStock = allStockData;
         MarketIndexModule.customStockName = `${stockName}(${stockCode})`;
         MarketIndexModule.currentIndex = 'custom';
         
@@ -31268,7 +31419,10 @@ async function searchStockPrice() {
         MarketIndexModule.updateDisplay();
         MarketIndexModule.renderChart();
         
-        statusEl.innerHTML = `<span style="color:#2e7d32;">✓ ${stockName} (${stockData.length}筆)</span>`;
+        // 計算資料範圍
+        const firstDate = allStockData[0].date;
+        const lastDate = allStockData[allStockData.length - 1].date;
+        statusEl.innerHTML = `<span style="color:#2e7d32;">✓ ${stockName} (${allStockData.length}筆，${firstDate.substring(0,4)}~${lastDate.substring(0,4)})</span>`;
         
     } catch (e) {
         console.error('個股查詢失敗:', e);

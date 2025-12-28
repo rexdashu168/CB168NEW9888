@@ -2371,17 +2371,15 @@ button:active, .clickable:active {
 </div>
 <div class="evaluation-container">
     <div class="input-panel" id="inputPanel">
-<div style="background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:white; padding:12px 15px; border-radius:10px; margin-bottom:15px; box-shadow:0 3px 10px rgba(102,126,234,0.3); cursor:pointer;" onclick="toggleInputPanelContent()">
+<div style="background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:white; padding:12px 15px; border-radius:10px; margin-bottom:15px; box-shadow:0 3px 10px rgba(102,126,234,0.3);">
     <div style="display:flex; align-items:center; gap:8px;">
         <span style="font-size:24px;">🤖</span>
-        <div style="flex:1;">
+        <div>
             <div style="font-size:16px; font-weight:800;">AI智能可轉債競拍系統</div>
             <div style="font-size:16px; opacity:0.9; margin-top:1px;">輸入條件 → AI分析 → 策略建議</div>
         </div>
-        <div id="inputPanelToggleBtn" style="background:rgba(255,255,255,0.2); padding:8px 12px; border-radius:8px; font-size:16px; font-weight:bold;">◀ 收闔</div>
     </div>
 </div>
-<div id="inputPanelContent">
 <!-- ========== 第一區塊：競拍條件輸入 ========== -->
 <div class="panel-section" style="background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%); border: 2px solid #667eea; border-radius: 12px; padding: 15px; margin-bottom: 20px;">
     <div class="section-header" style="display:flex; align-items:center; margin-bottom:15px; padding-bottom:10px; border-bottom:2px solid #667eea;">
@@ -2615,7 +2613,6 @@ button:active, .clickable:active {
 <div style="margin-top:20px; padding:15px 0; background:white; position:sticky; bottom:0; z-index:10; border-top:2px solid #e0e0e0;">
     <button type="submit" class="calculate-btn" style="display:block !important; visibility:visible !important;">🎯 開始AI評估</button>
 </div>
-</div><!-- inputPanelContent結束 -->
 </form>
 </div><!-- input-panel結束 -->
 <div class="result-panel" id="resultPanel">
@@ -17264,36 +17261,6 @@ document.getElementById('evaluationForm').addEventListener('submit', function(e)
 // ==========================================
 let isLeftPanelCollapsed = false;
 let originalGridColumns = '38.2% 8px 1fr';
-let isInputPanelContentCollapsed = false;
-
-// v3.99X: 只收闔左側競拍輸入區內容
-function toggleInputPanelContent() {
-    const content = document.getElementById('inputPanelContent');
-    const toggleBtn = document.getElementById('inputPanelToggleBtn');
-    const inputPanel = document.getElementById('inputPanel');
-    
-    if (!content || !toggleBtn) return;
-    
-    if (isInputPanelContentCollapsed) {
-        // 展開
-        content.style.display = 'block';
-        toggleBtn.textContent = '◀ 收闔';
-        if (inputPanel) {
-            inputPanel.style.minWidth = '320px';
-            inputPanel.style.width = '';
-        }
-        isInputPanelContentCollapsed = false;
-    } else {
-        // 收闔
-        content.style.display = 'none';
-        toggleBtn.textContent = '▶ 展開';
-        if (inputPanel) {
-            inputPanel.style.minWidth = 'auto';
-            inputPanel.style.width = 'auto';
-        }
-        isInputPanelContentCollapsed = true;
-    }
-}
 
 function toggleLeftPanel() {
     const container = document.querySelector('.evaluation-container');
@@ -25172,48 +25139,19 @@ async function renderFullTrackerContent(cbCode, container) {
     if (window.marginData?.date) dataSources.push(`融資券: ${window.marginData.date}`);
     if (window.sblData?.date) dataSources.push(`借券: ${window.sblData.date}`);
     const dataDateInfo = dataSources.join(' | ');
-    let tableHtml = `
-        <div style="text-align:center; margin-bottom:12px;">
-            <div style="font-size:15px; font-weight:600; color:#e65100;">
-                📊 完整追蹤表：${searchCode}
-                ${stockCode ? `<span style="font-size:13px; color:#444; font-weight:normal; margin-left:8px;">股票代號: ${stockCode}</span>` : ''}
-            </div>
-            <div style="font-size:13px; color:#555; margin-top:4px;">
-                ${dataSource === 'kanban' ? 'CB生命週期完整追蹤（含已下市）' : '融資融券 × 借券 × CB價格 × 流通餘額 整合追蹤'}
-            </div>
-            <div style="font-size:11px; color:#888; margin-top:4px; padding:4px 8px; background:#f5f5f5; border-radius:4px; display:inline-block;">
-                📅 資料來源：${dataDateInfo}
-            </div>
-        </div>
-        <div style="overflow-x:auto; max-height:450px;">
-            <table style="width:100%; border-collapse:collapse; font-size:13px; table-layout:fixed;">
-                <thead style="position:sticky; top:0; z-index:10;">
-                    <tr style="background:#37474f; color:white;">
-                        <th colspan="1" style="padding:3px; text-align:center; border:1px solid #546e7a;">日期</th>
-                        <th colspan="2" style="padding:3px; text-align:center; background:#c62828; border:1px solid #e57373;">融資</th>
-                        <th colspan="2" style="padding:3px; text-align:center; background:#2e7d32; border:1px solid #81c784;">融券</th>
-                        <th colspan="2" style="padding:3px; text-align:center; background:#ff6f00; border:1px solid #ffb74d;">借券</th>
-                        <th colspan="4" style="padding:3px; text-align:center; background:#1565c0; border:1px solid #64b5f6;">CB價格</th>
-                        <th colspan="2" style="padding:3px; text-align:center; background:#7b1fa2; border:1px solid #ba68c8;">CB餘額</th>
-                    </tr>
-                    <tr style="background:#455a64; color:white; font-size:11px;">
-                        <th style="padding:2px; text-align:center; width:70px;">日期</th>
-                        <th style="padding:2px; text-align:right; width:50px; background:#d32f2f;">餘額</th>
-                        <th style="padding:2px; text-align:right; width:45px; background:#d32f2f; border-right:2px solid #fff;">增減</th>
-                        <th style="padding:2px; text-align:right; width:50px; background:#388e3c;">餘額</th>
-                        <th style="padding:2px; text-align:right; width:45px; background:#388e3c; border-right:2px solid #fff;">增減</th>
-                        <th style="padding:2px; text-align:right; width:50px; background:#e65100;">餘額</th>
-                        <th style="padding:2px; text-align:right; width:45px; background:#e65100; border-right:2px solid #fff;">增減</th>
-                        <th style="padding:2px; text-align:right; width:45px; background:#1976d2;">股價</th>
-                        <th style="padding:2px; text-align:right; width:45px; background:#1976d2;">理論</th>
-                        <th style="padding:2px; text-align:right; width:50px; background:#1976d2;">CB價</th>
-                        <th style="padding:2px; text-align:right; width:45px; background:#1976d2; border-right:2px solid #fff;">溢折</th>
-                        <th style="padding:2px; text-align:right; width:50px; background:#8e24aa;">餘額</th>
-                        <th style="padding:2px; text-align:right; width:40px; background:#8e24aa;">%</th>
-                    </tr>
-                </thead>
-                <tbody>
-    `;
+    
+    // v3.99X: 按月份分組資料
+    const monthGroups = {};
+    displayData.forEach(d => {
+        const monthKey = d.date.substring(0, 7); // 取 YYYY/MM
+        if (!monthGroups[monthKey]) {
+            monthGroups[monthKey] = [];
+        }
+        monthGroups[monthKey].push(d);
+    });
+    const monthKeys = Object.keys(monthGroups).sort((a, b) => b.localeCompare(a)); // 最新月份在前
+    const trackerId = searchCode.replace(/[^a-zA-Z0-9]/g, '_');
+    
     // 融資融券檢查
     const hasMarginInTSE = window.marginData?.loaded && stockCode && window.marginData?.data?.[stockCode];
     const hasMarginInOTC = window.otcMarginData?.loaded && stockCode && window.otcMarginData?.data?.[stockCode];
@@ -25223,13 +25161,11 @@ async function renderFullTrackerContent(cbCode, container) {
     // v3.99U: CB價格資料（新結構）
     const hasCBPriceData = window.cbPriceData?.loaded && window.cbPriceData?.data?.[searchCode];
     const cbPriceList = hasCBPriceData ? window.cbPriceData.data[searchCode].prices : [];
-    // 股價資料
-    const stockPrices = window.stockPriceCache?.data || {};
-    displayData.forEach((d, i) => {
-        const bgColor = i % 2 === 0 ? '#fafafa' : 'white';
+    
+    // 建立單列資料的函數
+    const buildRowHtml = (d, i, prevData, bgColor) => {
         // CB餘額
         const thisWeek = d.balanceShares;
-        const prevData = displayData[i + 1];
         const lastWeek = prevData?.balanceShares || thisWeek;
         const cbChange = thisWeek - lastWeek;
         const remainRate = totalIssue > 0 ? (thisWeek / totalIssue) * 100 : 100;
@@ -25251,16 +25187,14 @@ async function renderFullTrackerContent(cbCode, container) {
                 shortChange = marginInfo.shortChange !== 0 ? (marginInfo.shortChange > 0 ? '+' : '') + formatNumber(marginInfo.shortChange) : '0';
             }
         }
-        // v3.99U: 借券資料（單位轉換為張）
+        // 借券資料
         let sblBalance = '-', sblChange = '-';
         let sblChangeColor = '#666';
         if (hasSblData) {
             const sblInfo = getSblDataForDate(stockCode, d.date);
             if (sblInfo) {
-                // 借券餘額原始單位是股，除以1000轉為張
                 const sblBalanceShares = Math.round(sblInfo.balance / 1000);
                 sblBalance = formatNumber(sblBalanceShares);
-                // 計算增減
                 const prevSblInfo = prevData ? getSblDataForDate(stockCode, prevData.date) : null;
                 if (prevSblInfo) {
                     const prevSblShares = Math.round(prevSblInfo.balance / 1000);
@@ -25272,18 +25206,16 @@ async function renderFullTrackerContent(cbCode, container) {
                 }
             }
         }
-        // v3.99U: CB價格（從新的資料結構中找最接近的日期）
+        // CB價格
         let cbClose = '-', stockPrice = '-', theoPrice = '-', premiumDiscount = '-';
         let premiumColor = '#666';
         const targetDateNum = parseInt(d.date.replace(/\//g, ''));
-        // 從cbPriceList中找最接近的價格
         let cbPriceMatch = null;
         if (cbPriceList.length > 0) {
             let minDiff = Infinity;
             for (const p of cbPriceList) {
                 const pDateNum = parseInt(p.date);
                 const diff = Math.abs(pDateNum - targetDateNum);
-                // 找7天內最接近的
                 if (diff <= 7 && diff < minDiff) {
                     minDiff = diff;
                     cbPriceMatch = p;
@@ -25293,20 +25225,14 @@ async function renderFullTrackerContent(cbCode, container) {
         if (cbPriceMatch && cbPriceMatch.close > 0) {
             cbClose = cbPriceMatch.close.toFixed(2);
         }
-        // 計算理論價（需要股價和轉換價）
-        if (convPrice > 0) {
-            // 嘗試取得股價（從融資融券資料推算或使用CB價格估算）
-            // 這裡簡化處理，如果有CB市價可以反推
-            if (cbPriceMatch && cbPriceMatch.close > 0) {
-                // 假設溢價5%反推理論價
-                const estTheoPrice = cbPriceMatch.close / 1.05;
-                theoPrice = estTheoPrice.toFixed(2);
-                const premium = ((cbPriceMatch.close / estTheoPrice) - 1) * 100;
-                premiumDiscount = (premium >= 0 ? '+' : '') + premium.toFixed(1) + '%';
-                premiumColor = premium >= 0 ? '#c62828' : '#2e7d32';
-            }
+        if (convPrice > 0 && cbPriceMatch && cbPriceMatch.close > 0) {
+            const estTheoPrice = cbPriceMatch.close / 1.05;
+            theoPrice = estTheoPrice.toFixed(2);
+            const premium = ((cbPriceMatch.close / estTheoPrice) - 1) * 100;
+            premiumDiscount = (premium >= 0 ? '+' : '') + premium.toFixed(1) + '%';
+            premiumColor = premium >= 0 ? '#c62828' : '#2e7d32';
         }
-        tableHtml += `
+        return `
             <tr style="background:${bgColor};">
                 <td style="padding:2px 3px; text-align:center; color:#555; border:1px solid #e0e0e0; font-size:11px; white-space:nowrap;">${d.date}</td>
                 <td style="padding:2px 3px; text-align:right; color:#c62828; font-weight:500; border:1px solid #e0e0e0; font-size:11px;">${marginBalance}</td>
@@ -25323,19 +25249,127 @@ async function renderFullTrackerContent(cbCode, container) {
                 <td style="padding:2px 3px; text-align:right; color:#8e24aa; border:1px solid #e0e0e0; font-size:11px;">${remainRate.toFixed(1)}%</td>
             </tr>
         `;
-    });
-    tableHtml += `
-                </tbody>
-            </table>
+    };
+    
+    // 建立表頭
+    const tableHeaderHtml = `
+        <tr style="background:#37474f; color:white;">
+            <th colspan="1" style="padding:3px; text-align:center; border:1px solid #546e7a;">日期</th>
+            <th colspan="2" style="padding:3px; text-align:center; background:#c62828; border:1px solid #e57373;">融資</th>
+            <th colspan="2" style="padding:3px; text-align:center; background:#2e7d32; border:1px solid #81c784;">融券</th>
+            <th colspan="2" style="padding:3px; text-align:center; background:#ff6f00; border:1px solid #ffb74d;">借券</th>
+            <th colspan="4" style="padding:3px; text-align:center; background:#1565c0; border:1px solid #64b5f6;">CB價格</th>
+            <th colspan="2" style="padding:3px; text-align:center; background:#7b1fa2; border:1px solid #ba68c8;">CB餘額</th>
+        </tr>
+        <tr style="background:#455a64; color:white; font-size:11px;">
+            <th style="padding:2px; text-align:center; width:70px;">日期</th>
+            <th style="padding:2px; text-align:right; width:50px; background:#d32f2f;">餘額</th>
+            <th style="padding:2px; text-align:right; width:45px; background:#d32f2f; border-right:2px solid #fff;">增減</th>
+            <th style="padding:2px; text-align:right; width:50px; background:#388e3c;">餘額</th>
+            <th style="padding:2px; text-align:right; width:45px; background:#388e3c; border-right:2px solid #fff;">增減</th>
+            <th style="padding:2px; text-align:right; width:50px; background:#e65100;">餘額</th>
+            <th style="padding:2px; text-align:right; width:45px; background:#e65100; border-right:2px solid #fff;">增減</th>
+            <th style="padding:2px; text-align:right; width:45px; background:#1976d2;">股價</th>
+            <th style="padding:2px; text-align:right; width:45px; background:#1976d2;">理論</th>
+            <th style="padding:2px; text-align:right; width:50px; background:#1976d2;">CB價</th>
+            <th style="padding:2px; text-align:right; width:45px; background:#1976d2; border-right:2px solid #fff;">溢折</th>
+            <th style="padding:2px; text-align:right; width:50px; background:#8e24aa;">餘額</th>
+            <th style="padding:2px; text-align:right; width:40px; background:#8e24aa;">%</th>
+        </tr>
+    `;
+    
+    // v3.99X: 建立按月份收闔的HTML
+    let tableHtml = `
+        <div style="text-align:center; margin-bottom:12px;">
+            <div style="font-size:15px; font-weight:600; color:#e65100;">
+                📊 完整追蹤表：${searchCode}
+                ${stockCode ? `<span style="font-size:13px; color:#444; font-weight:normal; margin-left:8px;">股票代號: ${stockCode}</span>` : ''}
+            </div>
+            <div style="font-size:13px; color:#555; margin-top:4px;">
+                ${dataSource === 'kanban' ? 'CB生命週期完整追蹤（含已下市）' : '融資融券 × 借券 × CB價格 × 流通餘額 整合追蹤'}
+            </div>
+            <div style="font-size:11px; color:#888; margin-top:4px; padding:4px 8px; background:#f5f5f5; border-radius:4px; display:inline-block;">
+                📅 資料來源：${dataDateInfo}
+            </div>
         </div>
+    `;
+    
+    // 按月份建立收闔區塊
+    monthKeys.forEach((monthKey, monthIdx) => {
+        const monthData = monthGroups[monthKey];
+        const isLatestMonth = monthIdx === 0;
+        const monthLabel = monthKey.replace('/', '年') + '月';
+        const monthId = `${trackerId}_month_${monthKey.replace('/', '')}`;
+        
+        // 取得該月最新一筆的CB餘額作為摘要
+        const latestInMonth = monthData[0];
+        const latestBalance = latestInMonth?.balanceShares || 0;
+        const latestRemainRate = totalIssue > 0 ? (latestBalance / totalIssue) * 100 : 100;
+        
+        tableHtml += `
+            <div style="margin-bottom:8px; border:1px solid ${isLatestMonth ? '#e65100' : '#ddd'}; border-radius:8px; overflow:hidden;">
+                <div onclick="toggleTrackerMonth('${monthId}')" 
+                     style="background:${isLatestMonth ? 'linear-gradient(135deg, #ff9800, #f57c00)' : '#f5f5f5'}; 
+                            color:${isLatestMonth ? 'white' : '#333'}; 
+                            padding:10px 15px; cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <span id="${monthId}_icon" style="font-size:14px;">${isLatestMonth ? '▼' : '▶'}</span>
+                        <span style="font-weight:bold; font-size:14px;">📅 ${monthLabel}</span>
+                        <span style="font-size:12px; opacity:0.9;">(${monthData.length}筆)</span>
+                    </div>
+                    <div style="display:flex; gap:15px; font-size:12px;">
+                        <span>CB餘額: <strong>${formatNumber(latestBalance)}</strong>張</span>
+                        <span>流通率: <strong>${latestRemainRate.toFixed(1)}%</strong></span>
+                    </div>
+                </div>
+                <div id="${monthId}" style="display:${isLatestMonth ? 'block' : 'none'}; overflow-x:auto;">
+                    <table style="width:100%; border-collapse:collapse; font-size:13px; table-layout:fixed;">
+                        <thead>${tableHeaderHtml}</thead>
+                        <tbody>
+        `;
+        
+        // 建立該月份的所有資料列
+        monthData.forEach((d, i) => {
+            const bgColor = i % 2 === 0 ? '#fafafa' : 'white';
+            const prevData = monthData[i + 1] || (monthIdx + 1 < monthKeys.length ? monthGroups[monthKeys[monthIdx + 1]]?.[0] : null);
+            tableHtml += buildRowHtml(d, i, prevData, bgColor);
+        });
+        
+        tableHtml += `
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    });
+    
+    tableHtml += `
         <div style="display:flex; justify-content:space-between; align-items:center; font-size:13px; color:#777; margin-top:8px; flex-wrap:wrap; gap:6px; padding:6px 8px; background:#f5f5f5; border-radius:6px;">
-            <span>📊 共 ${displayData.length} 週資料</span>
+            <span>📊 共 ${monthKeys.length} 個月份 / ${displayData.length} 筆資料</span>
             <span>💡 融資融券/借券/CB餘額單位：張</span>
-            <span style="color:#444;">類似 Rex大叔 Excel 追蹤表格式</span>
+            <span style="color:#444;">點擊月份標題可展開/收闔</span>
         </div>
     `;
     container.innerHTML = tableHtml;
 }
+
+/**
+ * v3.99X 新增：切換追蹤表月份收闔狀態
+ */
+function toggleTrackerMonth(monthId) {
+    const content = document.getElementById(monthId);
+    const icon = document.getElementById(monthId + '_icon');
+    if (!content) return;
+    
+    if (content.style.display === 'none') {
+        content.style.display = 'block';
+        if (icon) icon.textContent = '▼';
+    } else {
+        content.style.display = 'none';
+        if (icon) icon.textContent = '▶';
+    }
+}
+
 /**
  * v3.99W 新增：載入全部歷年kanban資料後重新渲染月餘額走勢
  */

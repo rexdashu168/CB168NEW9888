@@ -1633,7 +1633,11 @@ body {
 }
 .calculate-btn { width: 100%; padding: 16px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 10px; font-size: 18px; font-weight: bold; cursor: pointer; transition: all 0.2s; margin-top: 15px; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4); }
 .calculate-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6); }
-.result-panel { background: white; border-radius: 15px; padding: 25px; box-shadow: 0 5px 20px rgba(0,0,0,0.15); min-height: 600px; border: 2px solid rgba(102, 126, 234, 0.3); border-left: 6px solid #667eea; font-size: 16px; overflow-x: auto; }
+.result-panel { background: white; border-radius: 15px; padding: 25px; box-shadow: 0 5px 20px rgba(0,0,0,0.15); min-height: 600px; max-height: calc(100vh - 40px); overflow-y: auto; border: 2px solid rgba(102, 126, 234, 0.3); border-left: 6px solid #667eea; font-size: 16px; overflow-x: auto; position: sticky; top: 20px; }
+.result-panel::-webkit-scrollbar { width: 8px; }
+.result-panel::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+.result-panel::-webkit-scrollbar-thumb { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 4px; }
+.result-panel::-webkit-scrollbar-thumb:hover { background: linear-gradient(135deg, #5a6fd6 0%, #6a4190 100%); }
 .welcome-message { text-align: center; padding: 50px 20px; }
 .welcome-message h2 { font-size: 26px; margin-bottom: 15px; }
 .welcome-message p { font-size: 16px !important; line-height: 1.8; }
@@ -25076,28 +25080,63 @@ async function loadFullTrackerManual(cbCode) {
  */
 async function renderFullTrackerContent(cbCode, container) {
     const searchCode = String(cbCode).trim();
-    // v3.99W: 優先從週餘額取得，如果沒有則從kanban取得
-    let weeklyData = window.weeklyBalanceData?.data?.[searchCode];
-    let dataSource = 'weekly';
-    // 如果沒有週餘額資料，嘗試從kanban取得
-    if (!weeklyData || weeklyData.length === 0) {
-        if (window.kanbanData?.data?.[searchCode]) {
-            const kanbanList = window.kanbanData.data[searchCode];
-            // 轉換kanban格式為週餘額格式
-            weeklyData = kanbanList.map(d => ({
+    
+    // v3.99X: 比對kanban和weekly_balance，取最新的資料
+    let kanbanData = [];
+    let weeklyData = [];
+    let kanbanLatestDate = 0;
+    let weeklyLatestDate = 0;
+    
+    // 1. 取得kanban資料（每日資料）
+    if (window.kanbanData?.data?.[searchCode]) {
+        const kanbanList = window.kanbanData.data[searchCode];
+        if (kanbanList && kanbanList.length > 0) {
+            kanbanData = kanbanList.map(d => ({
                 date: d.date ? d.date.replace(/(\d{4})(\d{2})(\d{2})/, '$1/$2/$3') : '',
                 balanceShares: Math.round((d.balance || 0) / 100000), // 元轉張
-                cbPrice: d.cbPrice || 0
-            })).filter(d => d.date && d.balanceShares > 0);
-            dataSource = 'kanban';
+                cbPrice: d.cbPrice || 0,
+                stockPrice: d.stockPrice || 0,
+                convPrice: d.convPrice || 0,
+                theoPrice: d.theoPrice || 0,
+                source: 'kanban'
+            })).filter(d => d.date);
+            // 取得最新日期
+            if (kanbanData.length > 0) {
+                kanbanLatestDate = Math.max(...kanbanData.map(d => parseInt(d.date.replace(/\//g, ''))));
+            }
         }
     }
-    if (!weeklyData || weeklyData.length === 0) {
+    
+    // 2. 取得weekly_balance資料（週資料）
+    if (window.weeklyBalanceData?.data?.[searchCode]) {
+        const weeklyList = window.weeklyBalanceData.data[searchCode];
+        if (weeklyList && weeklyList.length > 0) {
+            weeklyData = weeklyList.map(d => ({
+                date: d.date,
+                balanceShares: d.balanceShares || 0,
+                cbPrice: 0,
+                stockPrice: 0,
+                convPrice: 0,
+                theoPrice: 0,
+                source: 'weekly'
+            })).filter(d => d.date);
+            // 取得最新日期
+            if (weeklyData.length > 0) {
+                weeklyLatestDate = Math.max(...weeklyData.map(d => parseInt(d.date.replace(/\//g, ''))));
+            }
+        }
+    }
+    
+    // 3. 合併資料：以日期為key，週資料補充kanban沒有的較新日期
+    let displayData = [];
+    let dataSource = '';
+    
+    if (kanbanData.length === 0 && weeklyData.length === 0) {
         container.innerHTML = `<div style="text-align:center; padding:30px; color:#444;">
             <div style="font-size:40px; margin-bottom:12px;">📭</div>
             <div style="font-size:15px; margin-bottom:8px;">找不到 ${searchCode} 的餘額資料</div>
             <div style="font-size:13px; color:#666; margin-bottom:15px;">
-                週餘額(元大)與月餘額(kanban)皆無此標的資料
+                kanban(每日)與週餘額(元大)皆無此標的資料
             </div>
             <div style="padding:12px; background:#e0f2f1; border-radius:8px; font-size:13px; color:#00695c;">
                 💡 建議：點擊「📈 月餘額走勢」嘗試載入全部歷年資料
@@ -25105,6 +25144,48 @@ async function renderFullTrackerContent(cbCode, container) {
         </div>`;
         return;
     }
+    
+    // 建立日期對照表
+    const dateMap = new Map();
+    
+    // 先放入kanban資料（有較完整的價格資訊）
+    kanbanData.forEach(d => {
+        dateMap.set(d.date, d);
+    });
+    
+    // 再放入weekly資料（只補充kanban沒有的日期，或餘額更新的日期）
+    weeklyData.forEach(d => {
+        const existing = dateMap.get(d.date);
+        if (!existing) {
+            // kanban沒有這個日期，直接加入
+            dateMap.set(d.date, d);
+        } else if (d.balanceShares !== existing.balanceShares && d.balanceShares > 0) {
+            // 餘額不同，可能是週資料更新了，保留價格資訊但更新餘額
+            existing.balanceShares = d.balanceShares;
+            existing.source = 'merged';
+        }
+    });
+    
+    // 轉換為陣列並排序
+    displayData = Array.from(dateMap.values()).sort((a, b) => {
+        const dateA = parseInt(a.date.replace(/\//g, ''));
+        const dateB = parseInt(b.date.replace(/\//g, ''));
+        return dateB - dateA; // 最新在前
+    });
+    
+    // 判斷資料來源說明
+    if (kanbanLatestDate > 0 && weeklyLatestDate > 0) {
+        if (weeklyLatestDate > kanbanLatestDate) {
+            dataSource = `週餘額較新 (${Math.floor(weeklyLatestDate/10000)}/${Math.floor((weeklyLatestDate%10000)/100)}/${weeklyLatestDate%100}) + kanban價格`;
+        } else {
+            dataSource = `kanban最新 (${Math.floor(kanbanLatestDate/10000)}/${Math.floor((kanbanLatestDate%10000)/100)}/${kanbanLatestDate%100})`;
+        }
+    } else if (kanbanLatestDate > 0) {
+        dataSource = 'kanban (每日資料)';
+    } else {
+        dataSource = '元大週報 (週資料)';
+    }
+    
     // 取得股票代號
     const stockCode = getStockCodeFromCB(searchCode);
     // 取得CB基本資料（轉換價）
@@ -25117,25 +25198,18 @@ async function renderFullTrackerContent(cbCode, container) {
             totalIssue = (parseFloat(sheet08Row['實際發行總額(百萬)']) || 0) * 10;
         }
     }
-    // v3.99W: 改為顯示全部期間（CB生命週期）
-    // 篩選時間範圍
-    let displayData = [...weeklyData].sort((a, b) => {
-        const dateA = parseInt(a.date.replace(/\//g, ''));
-        const dateB = parseInt(b.date.replace(/\//g, ''));
-        return dateB - dateA;  // 降序，最新在前
-    });
-    // v3.99W: 預設顯示全部資料
+    
+    // v3.99X: 期間篩選
     const periodSelect = document.getElementById(`balancePeriod_${searchCode}`);
     const period = periodSelect ? periodSelect.value : 'all';
     if (period !== 'all') {
         const days = parseInt(period) || 180;
-        displayData = displayData.slice(0, Math.ceil(days / 7));
+        displayData = displayData.slice(0, days);
     }
     // 建立表格HTML
-    // v3.99W: 顯示資料來源
-    const dataSourceLabel = dataSource === 'kanban' ? 'CB_kanban (歷年月資料)' : '元大週報 (週資料)';
+    // v3.99X: 顯示資料來源
     const dataSources = [];
-    dataSources.push(`餘額: ${dataSourceLabel}`);
+    dataSources.push(`餘額: ${dataSource}`);
     if (window.marginData?.date) dataSources.push(`融資券: ${window.marginData.date}`);
     if (window.sblData?.date) dataSources.push(`借券: ${window.sblData.date}`);
     const dataDateInfo = dataSources.join(' | ');
@@ -25206,12 +25280,25 @@ async function renderFullTrackerContent(cbCode, container) {
                 }
             }
         }
-        // CB價格
+        // CB價格 - v3.99X: 優先使用資料本身的欄位（來自kanban）
         let cbClose = '-', stockPrice = '-', theoPrice = '-', premiumDiscount = '-';
         let premiumColor = '#666';
-        const targetDateNum = parseInt(d.date.replace(/\//g, ''));
-        let cbPriceMatch = null;
-        if (cbPriceList.length > 0) {
+        
+        // 優先使用kanban資料本身的欄位
+        if (d.cbPrice && d.cbPrice > 0) {
+            cbClose = d.cbPrice.toFixed(2);
+        }
+        if (d.stockPrice && d.stockPrice > 0) {
+            stockPrice = d.stockPrice.toFixed(2);
+        }
+        if (d.theoPrice && d.theoPrice > 0) {
+            theoPrice = d.theoPrice.toFixed(2);
+        }
+        
+        // 如果kanban沒有，再從cbPriceList找
+        if (cbClose === '-' && cbPriceList.length > 0) {
+            const targetDateNum = parseInt(d.date.replace(/\//g, ''));
+            let cbPriceMatch = null;
             let minDiff = Infinity;
             for (const p of cbPriceList) {
                 const pDateNum = parseInt(p.date);
@@ -25221,14 +25308,23 @@ async function renderFullTrackerContent(cbCode, container) {
                     cbPriceMatch = p;
                 }
             }
+            if (cbPriceMatch && cbPriceMatch.close > 0) {
+                cbClose = cbPriceMatch.close.toFixed(2);
+            }
         }
-        if (cbPriceMatch && cbPriceMatch.close > 0) {
-            cbClose = cbPriceMatch.close.toFixed(2);
-        }
-        if (convPrice > 0 && cbPriceMatch && cbPriceMatch.close > 0) {
-            const estTheoPrice = cbPriceMatch.close / 1.05;
+        
+        // 計算溢折價
+        const cbPriceNum = parseFloat(cbClose) || 0;
+        const theoPriceNum = parseFloat(theoPrice) || 0;
+        if (cbPriceNum > 0 && theoPriceNum > 0) {
+            const premium = ((cbPriceNum / theoPriceNum) - 1) * 100;
+            premiumDiscount = (premium >= 0 ? '+' : '') + premium.toFixed(1) + '%';
+            premiumColor = premium >= 0 ? '#c62828' : '#2e7d32';
+        } else if (cbPriceNum > 0 && convPrice > 0) {
+            // 如果沒有理論價，用估算的
+            const estTheoPrice = cbPriceNum / 1.05;
             theoPrice = estTheoPrice.toFixed(2);
-            const premium = ((cbPriceMatch.close / estTheoPrice) - 1) * 100;
+            const premium = ((cbPriceNum / estTheoPrice) - 1) * 100;
             premiumDiscount = (premium >= 0 ? '+' : '') + premium.toFixed(1) + '%';
             premiumColor = premium >= 0 ? '#c62828' : '#2e7d32';
         }

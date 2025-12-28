@@ -3677,7 +3677,6 @@ button:active, .clickable:active {
                 </div>
             </div>
         </div>
-    </div>
 </div><!-- tabTrendScan結束 -->
 </div><!-- researchTabContent結束 -->
 </div><!-- welcomeMsg結束 -->
@@ -17190,9 +17189,22 @@ function displayResult(r) {
             ⚠️ 您目前填寫了 <b>${r.filledDimCount}</b> 個維度（共 ${r.totalDimCount} 個），系統已按比例調整權重計算。填寫越多維度，評估結果越精準。
            </div>`
         : '';
-    // v3.99X: evaluationResult 內容已整合到 stepReport，此處清空避免重複
-    // 但保留隱藏的維度表格供 Step 1 明細引用
+    // v3.99Q: 標題已移至cbTitleHeader，這裡只顯示基本資訊和Rex大叔提醒
     div.innerHTML = `
+    <!-- ========== 基本資訊 ========== -->
+    <div class="detail-section" style="background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);">
+        <h3>📋 基本資訊</h3>
+        <div style="display:flex; gap:30px; flex-wrap:wrap; font-size:16px;">
+            <div><span style="color:#444;">理論價格：</span><b style="color:#667eea; font-size:24px;">${r.theoreticalPrice || 0}</b> 元</div>
+            <div><span style="color:#444;">底標價格：</span><b style="font-size:20px;">${r.floorPrice}</b> 元</div>
+            <div><span style="color:#444;">已填寫維度：</span><b style="color:#1976d2;">${r.filledDimCount}</b> / ${r.totalDimCount}</div>
+        </div>
+        ${dimWarning}
+    </div>
+    ${generateRexCommentary(r)}
+    ${generateConditionSummaryHTML(r)}
+    <!-- v3.97-as-co: 移除重複的 majorPlayerHTML，已整合到 Step 3 -->
+    <!-- v3.97-as-cq: 隱藏的維度表格供 Step 1 明細引用 -->
     <div id="hiddenDimensionTables" style="display:none;">
         <div id="premiumDimensionTable">
             <div style="font-weight:bold; color:#1976d2; margin-bottom:8px;">📈 溢價率分析法 - 各維度明細</div>
@@ -17220,8 +17232,12 @@ function displayResult(r) {
                 </table>
             </div>
         </div>
+    </div>
+    <div style="text-align:center;margin-top:25px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
+        <button onclick="location.reload()" class="calculate-btn" style="width:180px; background:#555;">🔄 重新評估</button>
+        <button onclick="window.print()" class="calculate-btn" style="width:180px;">🖨️ 列印報告</button>
     </div>`;
-    div.className = 'evaluation-result'; // 不加 active，不顯示可見內容
+    div.scrollIntoView({ behavior: 'smooth' });
     // v3.72: 初始化出價風險評估
     if (r.majorPlayerResult && r.theoreticalPrice) {
         setTimeout(() => {

@@ -2634,10 +2634,6 @@ button:active, .clickable:active {
 <div class="resizer" id="resizer" onclick="toggleLeftPanel()">
     <div class="resizer-btn" id="resizerBtn" title="點擊收合/展開左側面板">◀</div>
 </div>
-<!-- v3.99X: 浮動收合按鈕（收闘後顯示在左邊緣，讓使用者可以展開）-->
-<div id="floatingCollapseBtn" onclick="toggleLeftPanel()" style="display:none; position:fixed; left:0; top:50%; transform:translateY(-50%); width:40px; height:100px; background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius:0 12px 12px 0; color:white; font-size:18px; font-weight:bold; cursor:pointer; z-index:9999; box-shadow:4px 0 15px rgba(102,126,234,0.4); align-items:center; justify-content:center; writing-mode:vertical-rl; text-orientation:mixed;">
-    <span id="floatingCollapseBtnIcon">▶ 展開</span>
-</div>
 <div class="result-panel" id="resultPanel">
     <!-- v3.99Q: CB標題區塊（放在步驟報告前） -->
     <div id="cbTitleHeader" style="display:none;">
@@ -31618,7 +31614,7 @@ const MarketIndexModule = {
         return `
             <div style="margin-top:10px; padding:12px 15px; background:${trendBg}; border-radius:8px; border-left:4px solid ${trendColor};">
                 <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-                    <div style="display:flex; gap:15px; font-size:14px; color:#444; flex-wrap:wrap;">
+                    <div style="display:flex; gap:15px; font-size:14px; color:#444; flex-wrap:wrap; align-items:center;">
                         <span><span style="color:${chartColor};">━</span> 收盤 <strong style="color:${chartColor}; font-size:17px;">${price.toFixed(decimals)}</strong></span>
                         <span>
                             <span style="color:#9c27b0;">┅</span> MA13 <strong style="color:#9c27b0; font-size:17px;">${ma13.toFixed(decimals)}</strong>
@@ -31628,6 +31624,7 @@ const MarketIndexModule = {
                             <span style="color:#ff9800;">┅</span> MA20 <strong style="color:#ff9800; font-size:17px;">${ma20.toFixed(decimals)}</strong>
                             ${ma20Deduct !== null ? `<span style="color:${ma20DeductColor}; font-size:12px; margin-left:4px;">(扣${ma20Deduct.toFixed(decimals)}${ma20DeductArrow})</span>` : ''}
                         </span>
+                        <span onclick="showMAKnowledgeCard()" style="cursor:pointer; background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:white; padding:4px 10px; border-radius:15px; font-size:12px; font-weight:bold; box-shadow:0 2px 6px rgba(102,126,234,0.4); transition:all 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">📚 均線小知識</span>
                     </div>
                     <div style="font-size:14px; font-weight:600; color:${trendColor};">
                         ${trendIcon} ${trendText}
@@ -31637,6 +31634,92 @@ const MarketIndexModule = {
         `;
     }
 };
+// v3.99X: 均線小知識卡片彈窗
+function showMAKnowledgeCard() {
+    const modal = document.createElement('div');
+    modal.id = 'maKnowledgeModal';
+    modal.style.cssText = `position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:9999; display:flex; align-items:center; justify-content:center; padding:20px; box-sizing:border-box;`;
+    modal.innerHTML = `
+        <div style="background:white; border-radius:20px; max-width:700px; width:95%; max-height:85vh; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,0.4);">
+            <!-- 標題區 -->
+            <div style="background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:white; padding:20px 25px; display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <div style="font-size:22px; font-weight:bold;">📚 均線投資小知識</div>
+                    <div style="font-size:14px; opacity:0.9; margin-top:4px;">Rex大叔的技術分析心得分享</div>
+                </div>
+                <div onclick="document.getElementById('maKnowledgeModal').remove()" style="cursor:pointer; font-size:28px; padding:5px 15px; background:rgba(255,255,255,0.2); border-radius:8px; transition:all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">✕</div>
+            </div>
+            <!-- 內容區 -->
+            <div style="padding:20px 25px; max-height:calc(85vh - 80px); overflow-y:auto;">
+                <!-- 均線本質 -->
+                <div style="background:#e3f2fd; border-radius:12px; padding:15px; margin-bottom:15px; border-left:4px solid #2196f3;">
+                    <div style="font-size:16px; font-weight:bold; color:#1565c0; margin-bottom:8px;">📌 均線的本質</div>
+                    <div style="font-size:14px; color:#333; line-height:1.7;">
+                        均線代表過去一段時間<strong style="color:#1565c0;">所有買進者的平均成本</strong>。當股價站上均線，代表近期買進的人平均獲利；跌破均線則代表平均虧損。人性使然，賺錢願意持有，虧損開始動搖。
+                    </div>
+                </div>
+                <!-- 常用週期 -->
+                <div style="background:#fff3e0; border-radius:12px; padding:15px; margin-bottom:15px; border-left:4px solid #ff9800;">
+                    <div style="font-size:16px; font-weight:bold; color:#e65100; margin-bottom:8px;">📊 台股常用均線週期</div>
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px; font-size:13px;">
+                        <div style="background:white; padding:10px; border-radius:8px; text-align:center;">
+                            <div style="font-weight:bold; color:#9c27b0;">5日線（周線）</div>
+                            <div style="color:#666; margin-top:4px;">極短線觀察</div>
+                        </div>
+                        <div style="background:white; padding:10px; border-radius:8px; text-align:center;">
+                            <div style="font-weight:bold; color:#9c27b0;">13日線</div>
+                            <div style="color:#666; margin-top:4px;">短線趨勢</div>
+                        </div>
+                        <div style="background:white; padding:10px; border-radius:8px; text-align:center;">
+                            <div style="font-weight:bold; color:#ff9800;">20日線（月線）</div>
+                            <div style="color:#666; margin-top:4px;">多頭防守點</div>
+                        </div>
+                        <div style="background:white; padding:10px; border-radius:8px; text-align:center;">
+                            <div style="font-weight:bold; color:#2196f3;">60日線（季線）</div>
+                            <div style="color:#666; margin-top:4px;">中期趨勢</div>
+                        </div>
+                    </div>
+                </div>
+                <!-- 重要觀念 -->
+                <div style="background:#ffebee; border-radius:12px; padding:15px; margin-bottom:15px; border-left:4px solid #c62828;">
+                    <div style="font-size:16px; font-weight:bold; color:#c62828; margin-bottom:8px;">⚠️ 重要觀念釐清</div>
+                    <div style="font-size:14px; color:#333; line-height:1.7;">
+                        很多投資人把均線當作「支撐」或「壓力」，但實際上<strong style="color:#c62828;">所有的支撐都不一定是支撐</strong>。市場有時候會一路跌破所有均線。<br><br>
+                        均線的真正價值不在於預測支撐壓力，而在於<strong style="color:#c62828;">客觀呈現趨勢方向</strong>。當股價跌破所有均線時，唯一的事實就是趨勢已經轉弱。
+                    </div>
+                </div>
+                <!-- 扣抵觀念 -->
+                <div style="background:#e8f5e9; border-radius:12px; padding:15px; margin-bottom:15px; border-left:4px solid #4caf50;">
+                    <div style="font-size:16px; font-weight:bold; color:#2e7d32; margin-bottom:8px;">🔄 均線扣抵概念</div>
+                    <div style="font-size:14px; color:#333; line-height:1.7;">
+                        扣抵值是指N天前被「扣掉」的那個價格。<br>
+                        <span style="color:#c62828;">▲ 扣抵值 < 現價</span>：新價比舊價高，均線有機會上升<br>
+                        <span style="color:#2e7d32;">▼ 扣抵值 > 現價</span>：新價比舊價低，均線有壓力下降<br><br>
+                        理解扣抵可以幫助預判均線未來可能的走向。
+                    </div>
+                </div>
+                <!-- 均線排列 -->
+                <div style="background:#f3e5f5; border-radius:12px; padding:15px; margin-bottom:15px; border-left:4px solid #9c27b0;">
+                    <div style="font-size:16px; font-weight:bold; color:#7b1fa2; margin-bottom:8px;">📈 均線排列判讀</div>
+                    <div style="font-size:14px; color:#333; line-height:1.7;">
+                        <strong style="color:#c62828;">🔥 多頭排列</strong>：收盤價 > 短均 > 長均，趨勢向上<br>
+                        <strong style="color:#2e7d32;">❄️ 空頭排列</strong>：收盤價 < 短均 < 長均，趨勢向下<br>
+                        <strong style="color:#ff9800;">🔄 糾結盤整</strong>：均線交叉糾纏，方向不明
+                    </div>
+                </div>
+                <!-- Rex大叔提醒 -->
+                <div style="background:linear-gradient(135deg, #667eea15 0%, #764ba215 100%); border-radius:12px; padding:15px; border:2px solid #667eea;">
+                    <div style="font-size:16px; font-weight:bold; color:#667eea; margin-bottom:8px;">💡 Rex大叔的心得</div>
+                    <div style="font-size:14px; color:#333; line-height:1.7;">
+                        「專注力集中在一條均線上，反而比同時看很多條均線更有效率。市場是非理性的，太多分析反而讓人無所適從。<strong style="color:#667eea;">以簡馭繁，化繁為簡</strong>，有時候簡單的力量比複雜的分析更有用。」
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+    document.body.appendChild(modal);
+}
 // v3.99W: 切換台股趨勢標籤
 function switchTrendTab(tab) {
     const marketTab = document.getElementById('trendTabMarket');
@@ -32216,5 +32299,9 @@ window.addEventListener('DOMContentLoaded', function() {
     // 這些資料改為在需要時才載入
 });
 </script>
+<!-- v3.99X: 浮動收合按鈕（放在body層級，收闘後顯示在左邊緣）-->
+<div id="floatingCollapseBtn" onclick="toggleLeftPanel()" style="display:none; position:fixed; left:0; top:50%; transform:translateY(-50%); width:40px; height:100px; background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius:0 12px 12px 0; color:white; font-size:18px; font-weight:bold; cursor:pointer; z-index:9999; box-shadow:4px 0 15px rgba(102,126,234,0.4); align-items:center; justify-content:center; writing-mode:vertical-rl; text-orientation:mixed;">
+    <span id="floatingCollapseBtnIcon">▶ 展開</span>
+</div>
 </body>
 </html>

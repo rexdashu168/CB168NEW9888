@@ -25244,7 +25244,8 @@ async function renderFullTrackerContent(cbCode, container) {
         const cbChange = thisWeek - lastWeek;
         const remainRate = totalIssue > 0 ? (thisWeek / totalIssue) * 100 : 100;
         const cbChangeColor = cbChange < 0 ? '#2e7d32' : cbChange > 0 ? '#d32f2f' : '#666';
-        // 融資融券
+        
+        // 融資融券 - 從tpxlending取得（G欄融資、K欄融券）
         let marginBalance = '-', marginChange = '-';
         let shortBalance = '-', shortChange = '-';
         let marginChangeColor = '#666', shortChangeColor = '#666';
@@ -25252,15 +25253,15 @@ async function renderFullTrackerContent(cbCode, container) {
             const marginInfo = getMarginDataForDate(stockCode, d.date);
             if (marginInfo) {
                 marginBalance = formatNumber(marginInfo.marginBalance);
-                marginChange = marginInfo.marginChange;
                 shortBalance = formatNumber(marginInfo.shortBalance);
-                shortChange = marginInfo.shortChange;
+                // 增減用前後相減
                 marginChangeColor = marginInfo.marginChange > 0 ? '#c62828' : marginInfo.marginChange < 0 ? '#2e7d32' : '#666';
                 shortChangeColor = marginInfo.shortChange > 0 ? '#c62828' : marginInfo.shortChange < 0 ? '#2e7d32' : '#666';
-                marginChange = marginInfo.marginChange !== 0 ? (marginInfo.marginChange > 0 ? '+' : '') + formatNumber(marginInfo.marginChange) : '0';
-                shortChange = marginInfo.shortChange !== 0 ? (marginInfo.shortChange > 0 ? '+' : '') + formatNumber(marginInfo.shortChange) : '0';
+                marginChange = marginInfo.marginChange !== 0 ? (marginInfo.marginChange > 0 ? '+' : '') + formatNumber(marginInfo.marginChange) : '-';
+                shortChange = marginInfo.shortChange !== 0 ? (marginInfo.shortChange > 0 ? '+' : '') + formatNumber(marginInfo.shortChange) : '-';
             }
         }
+        
         // 借券資料
         let sblBalance = '-', sblChange = '-';
         let sblChangeColor = '#666';
@@ -25274,71 +25275,58 @@ async function renderFullTrackerContent(cbCode, container) {
                     const prevSblShares = Math.round(prevSblInfo.balance / 1000);
                     const sblDiff = sblBalanceShares - prevSblShares;
                     sblChangeColor = sblDiff > 0 ? '#c62828' : sblDiff < 0 ? '#2e7d32' : '#666';
-                    sblChange = sblDiff !== 0 ? (sblDiff > 0 ? '+' : '') + formatNumber(sblDiff) : '0';
+                    sblChange = sblDiff !== 0 ? (sblDiff > 0 ? '+' : '') + formatNumber(sblDiff) : '-';
                 } else {
-                    sblChange = '0';
+                    sblChange = '-';
                 }
             }
         }
-        // CB價格 - v3.99X: 優先使用資料本身的欄位（來自kanban）
-        let cbClose = '-', stockPrice = '-', theoPrice = '-', premiumDiscount = '-';
+        
+        // v3.99X: CB價格、股價、理論價、溢價計算
+        let cbClose = '-', stockPriceStr = '-', theoPriceStr = '-', premiumDiscount = '-';
         let premiumColor = '#666';
         
-        // 優先使用kanban資料本身的欄位
-        if (d.cbPrice && d.cbPrice > 0) {
-            cbClose = d.cbPrice.toFixed(2);
-        }
-        if (d.stockPrice && d.stockPrice > 0) {
-            stockPrice = d.stockPrice.toFixed(2);
-        }
-        if (d.theoPrice && d.theoPrice > 0) {
-            theoPrice = d.theoPrice.toFixed(2);
+        // 從kanban取得股價和CB價（kanban有每日資料）
+        const stockPriceNum = d.stockPrice || 0;
+        const cbPriceNum = d.cbPrice || 0;
+        // 從kanban取得轉換價（F欄）
+        const convPriceFromData = d.convPrice || convPrice || 0;
+        
+        // 顯示股價
+        if (stockPriceNum > 0) {
+            stockPriceStr = stockPriceNum.toFixed(2);
         }
         
-        // 如果kanban沒有，再從cbPriceList找
-        if (cbClose === '-' && cbPriceList.length > 0) {
-            const targetDateNum = parseInt(d.date.replace(/\//g, ''));
-            let cbPriceMatch = null;
-            let minDiff = Infinity;
-            for (const p of cbPriceList) {
-                const pDateNum = parseInt(p.date);
-                const diff = Math.abs(pDateNum - targetDateNum);
-                if (diff <= 7 && diff < minDiff) {
-                    minDiff = diff;
-                    cbPriceMatch = p;
-                }
-            }
-            if (cbPriceMatch && cbPriceMatch.close > 0) {
-                cbClose = cbPriceMatch.close.toFixed(2);
-            }
+        // 顯示CB價
+        if (cbPriceNum > 0) {
+            cbClose = cbPriceNum.toFixed(2);
         }
         
-        // 計算溢折價
-        const cbPriceNum = parseFloat(cbClose) || 0;
-        const theoPriceNum = parseFloat(theoPrice) || 0;
+        // v3.99X: 理論價 = 股價 / 轉換價 × 100
+        let theoPriceNum = 0;
+        if (stockPriceNum > 0 && convPriceFromData > 0) {
+            theoPriceNum = (stockPriceNum / convPriceFromData) * 100;
+            theoPriceStr = theoPriceNum.toFixed(2);
+        }
+        
+        // v3.99X: 溢價 = CB價 / 理論價 - 1
         if (cbPriceNum > 0 && theoPriceNum > 0) {
-            const premium = ((cbPriceNum / theoPriceNum) - 1) * 100;
-            premiumDiscount = (premium >= 0 ? '+' : '') + premium.toFixed(1) + '%';
-            premiumColor = premium >= 0 ? '#c62828' : '#2e7d32';
-        } else if (cbPriceNum > 0 && convPrice > 0) {
-            // 如果沒有理論價，用估算的
-            const estTheoPrice = cbPriceNum / 1.05;
-            theoPrice = estTheoPrice.toFixed(2);
-            const premium = ((cbPriceNum / estTheoPrice) - 1) * 100;
+            const premium = (cbPriceNum / theoPriceNum - 1) * 100;
             premiumDiscount = (premium >= 0 ? '+' : '') + premium.toFixed(1) + '%';
             premiumColor = premium >= 0 ? '#c62828' : '#2e7d32';
         }
+        
         return `
             <tr style="background:${bgColor};">
-                <td style="padding:2px 3px; text-align:center; color:#555; border:1px solid #e0e0e0; font-size:11px; white-space:nowrap;">${d.date}</td>
+                <td style="padding:2px 4px; text-align:center; color:#555; border:1px solid #e0e0e0; font-size:11px; white-space:nowrap;">${d.date}</td>
                 <td style="padding:2px 3px; text-align:right; color:#c62828; font-weight:500; border:1px solid #e0e0e0; font-size:11px;">${marginBalance}</td>
                 <td style="padding:2px 3px; text-align:right; color:${marginChangeColor}; border:1px solid #e0e0e0; border-right:2px solid #ccc; font-size:11px;">${marginChange}</td>
                 <td style="padding:2px 3px; text-align:right; color:#2e7d32; font-weight:500; border:1px solid #e0e0e0; font-size:11px;">${shortBalance}</td>
                 <td style="padding:2px 3px; text-align:right; color:${shortChangeColor}; border:1px solid #e0e0e0; border-right:2px solid #ccc; font-size:11px;">${shortChange}</td>
                 <td style="padding:2px 3px; text-align:right; color:#e65100; font-weight:500; border:1px solid #e0e0e0; font-size:11px;">${sblBalance}</td>
                 <td style="padding:2px 3px; text-align:right; color:${sblChangeColor}; border:1px solid #e0e0e0; border-right:2px solid #ccc; font-size:11px;">${sblChange}</td>
-                <td style="padding:2px 3px; text-align:right; color:#444; border:1px solid #e0e0e0; font-size:11px;">${stockPrice}</td>
-                <td style="padding:2px 3px; text-align:right; color:#1565c0; border:1px solid #e0e0e0; font-size:11px;">${theoPrice}</td>
+                <td style="padding:2px 3px; text-align:right; color:#444; border:1px solid #e0e0e0; font-size:11px;">${stockPriceStr}</td>
+                <td style="padding:2px 3px; text-align:right; color:#1565c0; border:1px solid #e0e0e0; font-size:11px;">${theoPriceStr}</td>
                 <td style="padding:2px 3px; text-align:right; color:#7b1fa2; font-weight:600; border:1px solid #e0e0e0; font-size:11px;">${cbClose}</td>
                 <td style="padding:2px 3px; text-align:right; color:${premiumColor}; border:1px solid #e0e0e0; border-right:2px solid #ccc; font-size:11px;">${premiumDiscount}</td>
                 <td style="padding:2px 3px; text-align:right; color:#8e24aa; font-weight:600; border:1px solid #e0e0e0; font-size:11px;">${formatNumber(thisWeek)}</td>
@@ -25358,7 +25346,7 @@ async function renderFullTrackerContent(cbCode, container) {
             <th colspan="2" style="padding:3px; text-align:center; background:#7b1fa2; border:1px solid #ba68c8;">CB餘額</th>
         </tr>
         <tr style="background:#455a64; color:white; font-size:11px;">
-            <th style="padding:2px; text-align:center; width:70px;">日期</th>
+            <th style="padding:2px 4px; text-align:center; width:80px;">日期</th>
             <th style="padding:2px; text-align:right; width:50px; background:#d32f2f;">餘額</th>
             <th style="padding:2px; text-align:right; width:45px; background:#d32f2f; border-right:2px solid #fff;">增減</th>
             <th style="padding:2px; text-align:right; width:50px; background:#388e3c;">餘額</th>

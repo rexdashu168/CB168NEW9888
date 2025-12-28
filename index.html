@@ -203,9 +203,10 @@ body {
 .header .stat-label { font-size: 16px; color: #444; margin-top: 2px; }
 .version-badge { display: inline-block; background: #7B1FA2; color: white; padding: 4px 12px; border-radius: 20px; font-size: 16px; font-weight: bold; margin: 6px 0 10px 0; }
 .evaluation-container { display: grid; grid-template-columns: 30% 8px 1fr; gap: 0; width: 100%; }
-.evaluation-container.collapsed { grid-template-columns: 0px 8px 1fr !important; }
+.evaluation-container.collapsed { grid-template-columns: 0px 0px 1fr !important; }
 .evaluation-container.collapsed .input-panel { display: none !important; width: 0 !important; min-width: 0 !important; }
-.evaluation-container.collapsed .result-panel { width: 100% !important; }
+.evaluation-container.collapsed .resizer { display: none !important; }
+.evaluation-container.collapsed .result-panel { width: 100% !important; margin-left: 0 !important; }
 .resizer { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); cursor: pointer; position: relative; border-radius: 4px; transition: all 0.3s; display: flex; align-items: flex-start; justify-content: center; }
 .resizer:hover { background: linear-gradient(135deg, #5a6fd6 0%, #6a4190 100%); }
 .resizer-btn { background: rgba(255,255,255,0.2); color: white; font-size: 20px; font-weight: bold; padding: 12px 4px; border-radius: 4px; margin-top: 15px; transition: all 0.2s; cursor: pointer; }
@@ -17301,37 +17302,43 @@ function toggleLeftPanel() {
         inputPanel.style.opacity = '1';
         inputPanel.style.width = '';
         inputPanel.style.minWidth = '';
+        // 恢復resizer顯示
+        if (resizer) {
+            resizer.style.display = 'flex';
+            resizer.classList.remove('collapsed');
+        }
         if (resizerBtn) {
             resizerBtn.textContent = '◀';
             resizerBtn.title = '點擊收合左側面板';
         }
-        if (resizer) resizer.classList.remove('collapsed');
         if (resultPanel) {
             resultPanel.style.width = '';
             resultPanel.style.maxWidth = '';
+            resultPanel.style.marginLeft = '';
         }
         if (floatingBtn) {
             floatingBtn.style.display = 'none';
         }
         isLeftPanelCollapsed = false;
     } else {
-        // 收合 - 隱藏左邊，右邊填滿
+        // 收合 - 隱藏左邊，右邊填滿整個畫面
         originalGridColumns = container.style.gridTemplateColumns || getComputedStyle(container).gridTemplateColumns || '30% 8px 1fr';
         container.classList.add('collapsed');
         container.style.display = 'grid';
-        container.style.gridTemplateColumns = '0px 8px 1fr';
+        container.style.gridTemplateColumns = '0px 0px 1fr';
         inputPanel.style.display = 'none';
         inputPanel.style.opacity = '0';
         inputPanel.style.width = '0';
         inputPanel.style.minWidth = '0';
-        if (resizerBtn) {
-            resizerBtn.textContent = '▶';
-            resizerBtn.title = '點擊展開左側面板';
+        // 隱藏resizer
+        if (resizer) {
+            resizer.style.display = 'none';
+            resizer.classList.add('collapsed');
         }
-        if (resizer) resizer.classList.add('collapsed');
         if (resultPanel) {
             resultPanel.style.width = '100%';
             resultPanel.style.maxWidth = '100%';
+            resultPanel.style.marginLeft = '0';
         }
         // 顯示浮動按鈕（讓使用者可以展開）
         if (floatingBtn) {

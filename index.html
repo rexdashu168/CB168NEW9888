@@ -202,8 +202,8 @@ body {
 .header .stat-value { font-size: 24px; font-weight: 900; }
 .header .stat-label { font-size: 16px; color: #444; margin-top: 2px; }
 .version-badge { display: inline-block; background: #7B1FA2; color: white; padding: 4px 12px; border-radius: 20px; font-size: 16px; font-weight: bold; margin: 6px 0 10px 0; }
-.evaluation-container { display: grid; grid-template-columns: 30% 1fr; gap: 15px; width: 100%; }
-.input-panel { background: white; border-radius: 15px; padding: 20px; box-shadow: 0 5px 20px rgba(0,0,0,0.15); border: 2px solid rgba(102, 126, 234, 0.3); border-left: 6px solid #667eea; box-sizing: border-box; overflow-y: auto; overflow-x: hidden; min-width: 320px; transition: all 0.3s ease; position: sticky; top: 20px; max-height: calc(100vh - 40px); }
+.evaluation-container { display: grid; grid-template-columns: 35% 1fr; gap: 15px; width: 100%; align-items: start; }
+.input-panel { background: white; border-radius: 15px; padding: 20px; box-shadow: 0 5px 20px rgba(0,0,0,0.15); border: 2px solid rgba(102, 126, 234, 0.3); border-left: 6px solid #667eea; box-sizing: border-box; min-width: 320px; }
 .input-panel::-webkit-scrollbar { width: 8px; }
 .input-panel::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
 .input-panel::-webkit-scrollbar-thumb { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 4px; }
@@ -3317,10 +3317,6 @@ button:active, .clickable:active {
 </div><!-- tabTrend結束 -->
 <!-- ===== 標籤2: 績效分析 ===== -->
 <div id="tabPerformance" class="research-tab-content" style="display:none; padding:20px;">
-        <span style="font-size:16px; font-weight:normal; opacity:0.9;">（投資決策驗證）</span>
-        <span class="toggle-icon">▶</span>
-    </div>
-    <div class="right-section-content collapsed" id="performanceSection">
 <!-- 【1】競拍成本效益分析 -->
 <div id="costEffectSection" class="perf-module" style="text-align:left; margin-bottom:15px;">
     <div class="perf-module-header" style="background:linear-gradient(135deg, #1565c0, #1976d2); color:white; padding:10px 12px; border-radius:8px 8px 0 0; font-weight:700; font-size:16px;">
@@ -3389,7 +3385,6 @@ button:active, .clickable:active {
         <button type="button" class="bid-dec-tab" onclick="showBidDecision('atmosphere', event)">市場氛圍</button>
     </div>
     <div id="bidDecisionContent" style="background:white; padding:12px; border-radius:0 0 8px 8px; border:1px solid #ffebee;">載入中...</div>
-</div>
 </div>
 </div><!-- tabPerformance結束 -->
 <!-- ===== 標籤3: 基本資料查詢 ===== -->
@@ -30537,22 +30532,27 @@ const TrendScanModule = {
                     <!-- 時間區間切換標籤 -->
                     <div id="industryPeriodBtns" style="display:flex; gap:8px; margin-bottom:15px; justify-content:center;">
                         <button class="industry-period-btn" data-period="60" 
+                            onclick="TrendScanModule.switchIndustryPeriod('${industry}', 60)"
                             style="padding:8px 16px; border:2px solid #1976d2; background:white; color:#1976d2; border-radius:6px; cursor:pointer; font-size:14px; font-weight:600;">
                             3個月
                         </button>
                         <button class="industry-period-btn" data-period="120" 
+                            onclick="TrendScanModule.switchIndustryPeriod('${industry}', 120)"
                             style="padding:8px 16px; border:2px solid #1976d2; background:white; color:#1976d2; border-radius:6px; cursor:pointer; font-size:14px; font-weight:600;">
                             半年
                         </button>
                         <button class="industry-period-btn active" data-period="252" 
+                            onclick="TrendScanModule.switchIndustryPeriod('${industry}', 252)"
                             style="padding:8px 16px; border:2px solid #1976d2; background:#1976d2; color:white; border-radius:6px; cursor:pointer; font-size:14px; font-weight:600;">
                             1年
                         </button>
                         <button class="industry-period-btn" data-period="504" 
+                            onclick="TrendScanModule.switchIndustryPeriod('${industry}', 504)"
                             style="padding:8px 16px; border:2px solid #1976d2; background:white; color:#1976d2; border-radius:6px; cursor:pointer; font-size:14px; font-weight:600;">
                             2年
                         </button>
                         <button class="industry-period-btn" data-period="1260" 
+                            onclick="TrendScanModule.switchIndustryPeriod('${industry}', 1260)"
                             style="padding:8px 16px; border:2px solid #1976d2; background:white; color:#1976d2; border-radius:6px; cursor:pointer; font-size:14px; font-weight:600;">
                             5年
                         </button>
@@ -30571,21 +30571,6 @@ const TrendScanModule = {
         // 暫存產業股票資料供切換時間使用
         this.currentIndustryStocks = stocks;
         this.currentIndustryName = industry;
-        // 綁定時間按鈕點擊事件（使用setTimeout確保DOM已渲染）
-        const self = this;
-        setTimeout(() => {
-            const btns = document.querySelectorAll('#industryPeriodBtns .industry-period-btn');
-            console.log('[IndustryChart] 綁定按鈕數量:', btns.length);
-            btns.forEach(btn => {
-                btn.onclick = function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const days = parseInt(this.dataset.period);
-                    console.log('[IndustryChart] 切換期間:', days, '天');
-                    self.switchIndustryPeriod(industry, days);
-                };
-            });
-        }, 100);
         // 載入所有成份股資料（預設1年）
         await this.loadAndRenderIndustryChart(industry, stocks, 252);
     },

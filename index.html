@@ -30528,22 +30528,31 @@ const TrendScanModule = {
         // 暫存產業股票資料供切換時間使用
         this.currentIndustryStocks = stocks;
         this.currentIndustryName = industry;
-        // 綁定時間按鈕點擊事件（使用變數保存引用，避免this問題）
+        // 綁定時間按鈕點擊事件（使用setTimeout確保DOM已渲染）
         const self = this;
-        document.querySelectorAll('#industryPeriodBtns .industry-period-btn').forEach(btn => {
-            btn.onclick = function() {
-                const days = parseInt(this.dataset.period);
-                self.switchIndustryPeriod(industry, days);
-            };
-        });
+        setTimeout(() => {
+            const btns = document.querySelectorAll('#industryPeriodBtns .industry-period-btn');
+            console.log('[IndustryChart] 綁定按鈕數量:', btns.length);
+            btns.forEach(btn => {
+                btn.onclick = function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const days = parseInt(this.dataset.period);
+                    console.log('[IndustryChart] 切換期間:', days, '天');
+                    self.switchIndustryPeriod(industry, days);
+                };
+            });
+        }, 100);
         // 載入所有成份股資料（預設1年）
         await this.loadAndRenderIndustryChart(industry, stocks, 252);
     },
     // v3.99W: 切換產業走勢圖時間區間
     async switchIndustryPeriod(industry, days) {
+        console.log('[switchIndustryPeriod] 產業:', industry, '天數:', days);
         // 更新按鈕樣式
         document.querySelectorAll('.industry-period-btn').forEach(btn => {
-            if (parseInt(btn.dataset.period) === days) {
+            const btnDays = parseInt(btn.dataset.period);
+            if (btnDays === days) {
                 btn.style.background = '#1976d2';
                 btn.style.color = 'white';
             } else {
@@ -30551,8 +30560,14 @@ const TrendScanModule = {
                 btn.style.color = '#1976d2';
             }
         });
+        // 顯示載入中
+        const chartContainer = document.getElementById('industryChartContainer');
+        if (chartContainer) {
+            chartContainer.innerHTML = `<div style="color:#1976d2;">⏳ 切換至 ${days > 252 ? Math.round(days/252) + '年' : days > 60 ? Math.round(days/21) + '個月' : days + '天'} 資料中...</div>`;
+        }
         // 重新渲染圖表
         const stocks = this.currentIndustryStocks || [];
+        console.log('[switchIndustryPeriod] 股票數量:', stocks.length);
         if (stocks.length > 0) {
             await this.loadAndRenderIndustryChart(industry, stocks, days);
         }

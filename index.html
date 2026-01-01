@@ -3575,7 +3575,7 @@ button:active, .clickable:active {
                 <!-- 控制列：時間區間 + 指數切換 + 載入 -->
                 <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:12px; padding:10px; background:#ffebee; border-radius:8px;">
                     <span style="font-size:15px; color:#c62828; font-weight:600;">📅 時間</span>
-                    <div style="display:flex; gap:3px; flex-wrap:wrap;">
+                    <div style="display:flex; gap:3px; flex-wrap:wrap; align-items:center;">
                         <button onclick="updateMarketChart('1M')" class="market-period-btn" data-period="1M" style="padding:5px 10px; border:2px solid #d32f2f; border-radius:6px; background:white; color:#d32f2f; cursor:pointer; font-size:13px; font-weight:600;">1月</button>
                         <button onclick="updateMarketChart('3M')" class="market-period-btn" data-period="3M" style="padding:5px 10px; border:2px solid #d32f2f; border-radius:6px; background:white; color:#d32f2f; cursor:pointer; font-size:13px; font-weight:600;">3月</button>
                         <button onclick="updateMarketChart('6M')" class="market-period-btn" data-period="6M" style="padding:5px 10px; border:2px solid #d32f2f; border-radius:6px; background:white; color:#d32f2f; cursor:pointer; font-size:13px; font-weight:600;">6月</button>
@@ -3584,8 +3584,22 @@ button:active, .clickable:active {
                         <button onclick="updateMarketChart('5Y')" class="market-period-btn" data-period="5Y" style="padding:5px 10px; border:2px solid #d32f2f; border-radius:6px; background:white; color:#d32f2f; cursor:pointer; font-size:13px; font-weight:600;">5年</button>
                         <button onclick="updateMarketChart('10Y')" class="market-period-btn" data-period="10Y" style="padding:5px 10px; border:2px solid #d32f2f; border-radius:6px; background:white; color:#d32f2f; cursor:pointer; font-size:13px; font-weight:600;">10年</button>
                         <button onclick="updateMarketChart('ALL')" class="market-period-btn" data-period="ALL" style="padding:5px 10px; border:2px solid #d32f2f; border-radius:6px; background:white; color:#d32f2f; cursor:pointer; font-size:13px; font-weight:600;">全部</button>
+                        <button onclick="toggleCustomDateRange()" class="market-period-btn" data-period="CUSTOM" style="padding:5px 10px; border:2px solid #ff9800; border-radius:6px; background:white; color:#e65100; cursor:pointer; font-size:13px; font-weight:600;">📆自訂</button>
                     </div>
                     <button onclick="loadMarketIndexData()" style="padding:6px 14px; background:#d32f2f; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:600; margin-left:auto;">📥 載入</button>
+                </div>
+                <!-- v3.99X r63: 自訂日期區間 -->
+                <div id="customDateRangePanel" style="display:none; margin-bottom:12px; padding:10px; background:#fff3e0; border-radius:8px; border:2px solid #ff9800;">
+                    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+                        <span style="font-size:14px; color:#e65100; font-weight:600;">📆 自訂區間</span>
+                        <div style="display:flex; gap:5px; align-items:center;">
+                            <input type="date" id="customDateStart" style="padding:5px 8px; border:2px solid #ff9800; border-radius:6px; font-size:13px;">
+                            <span style="color:#888;">～</span>
+                            <input type="date" id="customDateEnd" style="padding:5px 8px; border:2px solid #ff9800; border-radius:6px; font-size:13px;">
+                        </div>
+                        <button onclick="applyCustomDateRange()" style="padding:6px 14px; background:#ff9800; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:600;">套用</button>
+                        <span id="customDateStatus" style="font-size:12px; color:#888;"></span>
+                    </div>
                 </div>
                 <!-- v3.99W: 個股查詢區 -->
                 <div style="display:flex; gap:8px; align-items:center; margin-bottom:12px; padding:10px; background:#e3f2fd; border-radius:8px;">
@@ -34328,11 +34342,25 @@ const MarketIndexModule = {
             '1M': 22, '3M': 66, '6M': 132, '1Y': 252,
             '3Y': 756, '5Y': 1260, '10Y': 2520, 'ALL': 999999
         };
-        const days = periodDays[this.currentPeriod] || 252;
+        let days = periodDays[this.currentPeriod] || 252;
+        
+        // v3.99X r63: 支援自訂日期範圍
+        const useCustomDate = this.currentPeriod === 'CUSTOM' && this.customDateRange;
+        
         // 計算各指數在該時段的漲跌幅
         const calcPeriodChange = (data, decimals = 0) => {
             if (data.length === 0) return { latest: 0, change: 0, percent: 0 };
-            const periodData = data.slice(-days);
+            
+            let periodData;
+            if (useCustomDate) {
+                // 自訂日期範圍過濾
+                periodData = this.filterByDateRange(data, this.customDateRange.start, this.customDateRange.end);
+            } else {
+                periodData = data.slice(-days);
+            }
+            
+            if (periodData.length === 0) return { latest: 0, change: 0, percent: 0 };
+            
             const latest = periodData[periodData.length - 1].close;
             const first = periodData[0].close;
             const change = latest - first;
@@ -34427,6 +34455,43 @@ const MarketIndexModule = {
         }
         return str;
     },
+    // v3.99X r63: 根據日期範圍過濾資料
+    filterByDateRange(data, startDate, endDate) {
+        if (!data || data.length === 0) return [];
+        
+        // 將日期轉為數字比較 (YYYYMMDD)
+        const toDateNum = (dateStr) => {
+            if (!dateStr) return 0;
+            const str = String(dateStr);
+            // 處理 YYYY/M/D 或 YYYY/MM/DD 格式
+            if (str.includes('/')) {
+                const parts = str.split('/');
+                if (parts.length >= 3) {
+                    const year = parts[0];
+                    const month = parts[1].padStart(2, '0');
+                    const day = parts[2].padStart(2, '0');
+                    return parseInt(`${year}${month}${day}`);
+                }
+            }
+            // 處理 YYYYMMDD 格式
+            if (/^\d{8}$/.test(str)) {
+                return parseInt(str);
+            }
+            // 處理 YYYY-MM-DD 格式
+            if (str.includes('-')) {
+                return parseInt(str.replace(/-/g, ''));
+            }
+            return 0;
+        };
+        
+        const startNum = parseInt(startDate.toISOString().split('T')[0].replace(/-/g, ''));
+        const endNum = parseInt(endDate.toISOString().split('T')[0].replace(/-/g, ''));
+        
+        return data.filter(d => {
+            const dateNum = toDateNum(d.date);
+            return dateNum >= startNum && dateNum <= endNum;
+        });
+    },
     // 渲染走勢圖
     renderChart() {
         const container = document.getElementById('marketChartContainer');
@@ -34437,9 +34502,13 @@ const MarketIndexModule = {
         };
         const periodLabels = {
             '1M': '1個月', '3M': '3個月', '6M': '6個月', '1Y': '1年',
-            '3Y': '3年', '5Y': '5年', '10Y': '10年', 'ALL': '全部'
+            '3Y': '3年', '5Y': '5年', '10Y': '10年', 'ALL': '全部', 'CUSTOM': '自訂'
         };
-        const days = periodDays[this.currentPeriod] || 252;
+        let days = periodDays[this.currentPeriod] || 252;
+        
+        // v3.99X r63: 支援自訂日期範圍
+        const useCustomDate = this.currentPeriod === 'CUSTOM' && this.customDateRange;
+        
         // 根據選擇的指數取資料
         let sourceData = this.indexData.tsmc;
         let chartTitle = '台積電(2330)';
@@ -34460,7 +34529,15 @@ const MarketIndexModule = {
         }
         // v3.99W: 過濾掉無效資料（價格為0、null、undefined或負數）
         const validData = sourceData.filter(d => d.close && d.close > 0);
-        const chartData = validData.slice(-days);
+        
+        // v3.99X r63: 根據日期範圍過濾
+        let chartData;
+        if (useCustomDate) {
+            chartData = this.filterByDateRange(validData, this.customDateRange.start, this.customDateRange.end);
+        } else {
+            chartData = validData.slice(-days);
+        }
+        
         if (chartData.length === 0) {
             container.innerHTML = '<div style="text-align:center; padding:40px; color:#999;">暫無資料</div>';
             return;
@@ -34857,7 +34934,7 @@ function switchTrendTab(tab) {
 /**
  * v3.99X r60: 台股年度漲跌幅排行榜
  * v3.99X r61: 新增CB vs 非CB統計比較
- * 從股價資料庫計算每年前20大漲幅和跌幅
+ * v3.99X r62: 改用年份標籤頁顯示
  */
 function renderYearlyStockRanking() {
     // 檢查資料是否已載入
@@ -34980,6 +35057,9 @@ function renderYearlyStockRanking() {
     const years = Object.keys(yearlyData).sort((a, b) => b - a);
     const defaultYear = years[0] || currentYear;
     
+    // 儲存資料供切換年份使用
+    window.yearlyRankingData = yearlyData;
+    
     let html = `
     <div style="font-size:15px; font-weight:bold; color:#d32f2f; margin-bottom:10px;">
         🏆 台股年度漲跌幅排行榜
@@ -34988,19 +35068,20 @@ function renderYearlyStockRanking() {
         </span>
     </div>
     
-    <!-- 年份選擇 -->
-    <div style="display:flex; gap:5px; flex-wrap:wrap; margin-bottom:15px; padding:10px; background:#f5f5f5; border-radius:8px;">
-        <span style="font-size:14px; color:#666; font-weight:600; align-self:center; margin-right:5px;">📅 選擇年份：</span>
+    <!-- 年份標籤 -->
+    <div style="display:flex; gap:3px; flex-wrap:wrap; margin-bottom:15px; padding:8px; background:#f5f5f5; border-radius:8px;">
         ${years.map(y => `
             <button onclick="showYearRanking(${y})" class="year-rank-btn" data-year="${y}" style="
-                padding:6px 12px; 
-                border:2px solid #d32f2f; 
+                padding:8px 14px; 
+                border:none; 
                 border-radius:6px; 
                 background:${y == defaultYear ? '#d32f2f' : 'white'}; 
-                color:${y == defaultYear ? 'white' : '#d32f2f'}; 
+                color:${y == defaultYear ? 'white' : '#666'}; 
                 cursor:pointer; 
                 font-weight:600;
-                font-size:13px;
+                font-size:14px;
+                box-shadow:${y == defaultYear ? '0 2px 8px rgba(211,47,47,0.3)' : '0 1px 3px rgba(0,0,0,0.1)'};
+                transition:all 0.2s;
             ">${y}</button>
         `).join('')}
     </div>
@@ -35009,9 +35090,6 @@ function renderYearlyStockRanking() {
     <div id="yearRankingContent">
         ${renderYearRankingTable(yearlyData[defaultYear] || [], defaultYear)}
     </div>`;
-    
-    // 儲存資料供切換年份使用
-    window.yearlyRankingData = yearlyData;
     
     return html;
 }
@@ -35043,7 +35121,6 @@ function renderYearRankingTable(data, year) {
     
     const cbStats = calcStats(cbStocks);
     const nonCBStats = calcStats(nonCBStocks);
-    const allStats = calcStats(data);
     
     // 判斷CB績效是否較好
     const cbBetter = parseFloat(cbStats.avg) > parseFloat(nonCBStats.avg);
@@ -35062,40 +35139,39 @@ function renderYearRankingTable(data, year) {
         const cbCount = items.filter(d => d.isCB).length;
         
         return `
-        <div style="background:white; border-radius:10px; padding:15px; border:1px solid #e0e0e0;">
-            <div style="font-size:14px; font-weight:bold; color:${titleColor}; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+        <div style="background:white; border-radius:10px; padding:12px; border:1px solid #e0e0e0;">
+            <div style="font-size:14px; font-weight:bold; color:${titleColor}; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
                 <span>${title}</span>
-                <span style="font-size:12px; font-weight:normal; color:#9c27b0;">CB ${cbCount}/20檔</span>
+                <span style="font-size:11px; font-weight:normal; background:#f3e5f5; color:#7b1fa2; padding:2px 8px; border-radius:10px;">CB ${cbCount}/20</span>
             </div>
             <div style="overflow-x:auto;">
-                <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                <table style="width:100%; border-collapse:collapse; font-size:11px;">
                     <thead>
-                        <tr style="background:#f5f5f5;">
-                            <th style="padding:8px 4px; text-align:center; border-bottom:2px solid #e0e0e0; width:30px;">名次</th>
-                            <th style="padding:8px 4px; text-align:left; border-bottom:2px solid #e0e0e0;">代號</th>
-                            <th style="padding:8px 4px; text-align:left; border-bottom:2px solid #e0e0e0;">名稱</th>
-                            <th style="padding:8px 4px; text-align:center; border-bottom:2px solid #e0e0e0;">CB</th>
-                            <th style="padding:8px 4px; text-align:right; border-bottom:2px solid #e0e0e0;">年初價</th>
-                            <th style="padding:8px 4px; text-align:right; border-bottom:2px solid #e0e0e0;">年末價</th>
-                            <th style="padding:8px 4px; text-align:right; border-bottom:2px solid #e0e0e0;">漲跌幅</th>
+                        <tr style="background:#f8f8f8;">
+                            <th style="padding:6px 3px; text-align:center; border-bottom:2px solid #e0e0e0; width:24px;">#</th>
+                            <th style="padding:6px 3px; text-align:left; border-bottom:2px solid #e0e0e0;">代號</th>
+                            <th style="padding:6px 3px; text-align:left; border-bottom:2px solid #e0e0e0;">名稱</th>
+                            <th style="padding:6px 3px; text-align:right; border-bottom:2px solid #e0e0e0;">年初</th>
+                            <th style="padding:6px 3px; text-align:right; border-bottom:2px solid #e0e0e0;">年末</th>
+                            <th style="padding:6px 3px; text-align:right; border-bottom:2px solid #e0e0e0;">漲跌幅</th>
                         </tr>
                     </thead>
                     <tbody>
                         ${items.map((item, idx) => {
                             const rank = idx + 1;
                             const changeColor = item.change >= 0 ? '#c62828' : '#2e7d32';
-                            const bgColor = item.isCB ? '#f3e5f5' : (idx % 2 === 0 ? '#fff' : '#fafafa');
+                            const bgColor = item.isCB ? '#faf5ff' : (idx % 2 === 0 ? '#fff' : '#fafafa');
                             const medalIcon = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : rank;
+                            const cbMark = item.isCB ? '<span style="color:#9c27b0;font-size:10px;">◆</span>' : '';
                             return `
-                            <tr style="background:${bgColor}; border-bottom:1px solid #eee;">
-                                <td style="padding:6px 4px; text-align:center; font-weight:bold;">${medalIcon}</td>
-                                <td style="padding:6px 4px; font-weight:bold; color:#1976d2;">${item.code}</td>
-                                <td style="padding:6px 4px;">${item.name}</td>
-                                <td style="padding:6px 4px; text-align:center;">${item.isCB ? '<span style="color:#9c27b0; font-weight:bold;">✓</span>' : ''}</td>
-                                <td style="padding:6px 4px; text-align:right;">${item.firstPrice.toFixed(2)}</td>
-                                <td style="padding:6px 4px; text-align:right;">${item.lastPrice.toFixed(2)}</td>
-                                <td style="padding:6px 4px; text-align:right; font-weight:bold; color:${changeColor};">
-                                    ${item.change >= 0 ? '+' : ''}${item.change.toFixed(2)}%
+                            <tr style="background:${bgColor}; border-bottom:1px solid #f0f0f0;">
+                                <td style="padding:5px 3px; text-align:center; font-weight:bold; font-size:12px;">${medalIcon}</td>
+                                <td style="padding:5px 3px; font-weight:bold; color:#1976d2;">${item.code}${cbMark}</td>
+                                <td style="padding:5px 3px; max-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${item.name}</td>
+                                <td style="padding:5px 3px; text-align:right; color:#888;">${item.firstPrice.toFixed(1)}</td>
+                                <td style="padding:5px 3px; text-align:right;">${item.lastPrice.toFixed(1)}</td>
+                                <td style="padding:5px 3px; text-align:right; font-weight:bold; color:${changeColor};">
+                                    ${item.change >= 0 ? '+' : ''}${item.change.toFixed(1)}%
                                 </td>
                             </tr>`;
                         }).join('')}
@@ -35106,127 +35182,105 @@ function renderYearRankingTable(data, year) {
     };
     
     return `
-    <div style="font-size:16px; font-weight:bold; color:#333; margin-bottom:15px; text-align:center;">
-        📊 ${year} 年度台股漲跌幅排行
-        <span style="font-size:13px; font-weight:normal; color:#888; margin-left:10px;">
-            (共 ${data.length} 檔)
-        </span>
-    </div>
-    
-    <!-- CB vs 非CB 統計比較 -->
-    <div style="background:linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%); border-radius:12px; padding:15px; margin-bottom:15px; border:2px solid #9c27b0;">
-        <div style="font-size:15px; font-weight:bold; color:#7b1fa2; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
-            <span style="font-size:20px;">📈</span> CB vs 非CB 績效比較
-            <span style="font-size:12px; font-weight:normal; color:#666;">（${year}年）</span>
+    <!-- CB vs 非CB 績效比較 -->
+    <div style="background:linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%); border-radius:10px; padding:12px; margin-bottom:12px; border:1px solid #e0e0e0;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+            <div style="font-size:16px; font-weight:bold; color:#333;">
+                📊 ${year}年 CB vs 非CB 績效比較
+            </div>
+            <div style="font-size:12px; color:#888;">共 ${data.length} 檔股票</div>
         </div>
         
-        <!-- 統計卡片 -->
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:10px; margin-bottom:12px;">
-            <!-- 有發CB -->
-            <div style="background:white; border-radius:8px; padding:12px; border-left:4px solid #9c27b0;">
-                <div style="font-size:13px; color:#7b1fa2; font-weight:bold; margin-bottom:8px;">🏷️ 有發CB公司</div>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; font-size:12px;">
-                    <div>
-                        <div style="color:#888;">家數</div>
-                        <div style="font-weight:bold; font-size:16px; color:#9c27b0;">${cbStats.count}</div>
-                    </div>
-                    <div>
-                        <div style="color:#888;">平均漲幅</div>
-                        <div style="font-weight:bold; font-size:16px; color:${parseFloat(cbStats.avg) >= 0 ? '#c62828' : '#2e7d32'};">
+        <!-- 統計比較表格 -->
+        <div style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse; font-size:13px; background:white; border-radius:8px; overflow:hidden;">
+                <thead>
+                    <tr style="background:linear-gradient(135deg, #7b1fa2, #9c27b0);">
+                        <th style="padding:10px 8px; text-align:left; color:white; font-weight:600;">類別</th>
+                        <th style="padding:10px 8px; text-align:center; color:white; font-weight:600;">家數</th>
+                        <th style="padding:10px 8px; text-align:center; color:white; font-weight:600;">平均漲幅</th>
+                        <th style="padding:10px 8px; text-align:center; color:white; font-weight:600;">中位數</th>
+                        <th style="padding:10px 8px; text-align:center; color:white; font-weight:600;">上漲家數</th>
+                        <th style="padding:10px 8px; text-align:center; color:white; font-weight:600;">上漲率</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="background:#faf5ff; border-bottom:1px solid #e8e8e8;">
+                        <td style="padding:10px 8px; font-weight:bold; color:#7b1fa2;">
+                            <span style="font-size:14px;">🏷️</span> 有發CB
+                        </td>
+                        <td style="padding:10px 8px; text-align:center; font-weight:bold;">${cbStats.count}</td>
+                        <td style="padding:10px 8px; text-align:center; font-weight:bold; color:${parseFloat(cbStats.avg) >= 0 ? '#c62828' : '#2e7d32'};">
                             ${parseFloat(cbStats.avg) >= 0 ? '+' : ''}${cbStats.avg}%
-                        </div>
-                    </div>
-                    <div>
-                        <div style="color:#888;">中位數</div>
-                        <div style="font-weight:bold; color:${parseFloat(cbStats.median) >= 0 ? '#c62828' : '#2e7d32'};">
+                        </td>
+                        <td style="padding:10px 8px; text-align:center; color:${parseFloat(cbStats.median) >= 0 ? '#c62828' : '#2e7d32'};">
                             ${parseFloat(cbStats.median) >= 0 ? '+' : ''}${cbStats.median}%
-                        </div>
-                    </div>
-                    <div>
-                        <div style="color:#888;">上漲比例</div>
-                        <div style="font-weight:bold; color:#1976d2;">${cbStats.positiveRate}%</div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- 無發CB -->
-            <div style="background:white; border-radius:8px; padding:12px; border-left:4px solid #757575;">
-                <div style="font-size:13px; color:#424242; font-weight:bold; margin-bottom:8px;">📄 無發CB公司</div>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; font-size:12px;">
-                    <div>
-                        <div style="color:#888;">家數</div>
-                        <div style="font-weight:bold; font-size:16px; color:#424242;">${nonCBStats.count}</div>
-                    </div>
-                    <div>
-                        <div style="color:#888;">平均漲幅</div>
-                        <div style="font-weight:bold; font-size:16px; color:${parseFloat(nonCBStats.avg) >= 0 ? '#c62828' : '#2e7d32'};">
+                        </td>
+                        <td style="padding:10px 8px; text-align:center;">${cbStats.positive}</td>
+                        <td style="padding:10px 8px; text-align:center; font-weight:bold; color:#1976d2;">${cbStats.positiveRate}%</td>
+                    </tr>
+                    <tr style="background:white; border-bottom:1px solid #e8e8e8;">
+                        <td style="padding:10px 8px; font-weight:bold; color:#616161;">
+                            <span style="font-size:14px;">📄</span> 無發CB
+                        </td>
+                        <td style="padding:10px 8px; text-align:center; font-weight:bold;">${nonCBStats.count}</td>
+                        <td style="padding:10px 8px; text-align:center; font-weight:bold; color:${parseFloat(nonCBStats.avg) >= 0 ? '#c62828' : '#2e7d32'};">
                             ${parseFloat(nonCBStats.avg) >= 0 ? '+' : ''}${nonCBStats.avg}%
-                        </div>
-                    </div>
-                    <div>
-                        <div style="color:#888;">中位數</div>
-                        <div style="font-weight:bold; color:${parseFloat(nonCBStats.median) >= 0 ? '#c62828' : '#2e7d32'};">
+                        </td>
+                        <td style="padding:10px 8px; text-align:center; color:${parseFloat(nonCBStats.median) >= 0 ? '#c62828' : '#2e7d32'};">
                             ${parseFloat(nonCBStats.median) >= 0 ? '+' : ''}${nonCBStats.median}%
-                        </div>
-                    </div>
-                    <div>
-                        <div style="color:#888;">上漲比例</div>
-                        <div style="font-weight:bold; color:#1976d2;">${nonCBStats.positiveRate}%</div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- 績效差異 -->
-            <div style="background:${cbBetter ? '#e8f5e9' : '#ffebee'}; border-radius:8px; padding:12px; border-left:4px solid ${cbBetter ? '#4caf50' : '#f44336'};">
-                <div style="font-size:13px; color:#333; font-weight:bold; margin-bottom:8px;">⚖️ 績效差異</div>
-                <div style="text-align:center;">
-                    <div style="font-size:24px; font-weight:bold; color:${cbBetter ? '#2e7d32' : '#c62828'};">
-                        ${cbBetter ? '📈' : '📉'} ${diffAvg > 0 ? '+' : ''}${diffAvg}%
-                    </div>
-                    <div style="font-size:12px; color:#666; margin-top:4px;">
-                        CB${cbBetter ? '優於' : '落後'}非CB
-                    </div>
-                </div>
-            </div>
+                        </td>
+                        <td style="padding:10px 8px; text-align:center;">${nonCBStats.positive}</td>
+                        <td style="padding:10px 8px; text-align:center; font-weight:bold; color:#1976d2;">${nonCBStats.positiveRate}%</td>
+                    </tr>
+                    <tr style="background:${cbBetter ? '#e8f5e9' : '#ffebee'};">
+                        <td style="padding:10px 8px; font-weight:bold; color:#333;">
+                            <span style="font-size:14px;">⚖️</span> 差異
+                        </td>
+                        <td style="padding:10px 8px; text-align:center; color:#888;">-</td>
+                        <td style="padding:10px 8px; text-align:center; font-weight:bold; font-size:14px; color:${cbBetter ? '#2e7d32' : '#c62828'};">
+                            ${cbBetter ? '📈' : '📉'} ${diffAvg > 0 ? '+' : ''}${diffAvg}%
+                        </td>
+                        <td style="padding:10px 8px; text-align:center; color:#888;">-</td>
+                        <td style="padding:10px 8px; text-align:center; color:#888;">-</td>
+                        <td style="padding:10px 8px; text-align:center; font-weight:bold; color:${cbBetter ? '#2e7d32' : '#c62828'};">
+                            CB${cbBetter ? '勝' : '負'}
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
         
-        <!-- 排行榜中CB佔比 -->
-        <div style="background:white; border-radius:8px; padding:10px; display:flex; justify-content:space-around; flex-wrap:wrap; gap:10px;">
-            <div style="text-align:center;">
-                <div style="font-size:12px; color:#888;">漲幅前20名中CB佔</div>
-                <div style="font-size:18px; font-weight:bold; color:#c62828;">${cbInTop20Gainers}/20 (${(cbInTop20Gainers/20*100).toFixed(0)}%)</div>
+        <!-- 排行榜佔比 -->
+        <div style="display:flex; gap:15px; margin-top:10px; flex-wrap:wrap;">
+            <div style="background:white; padding:8px 15px; border-radius:6px; flex:1; min-width:120px; text-align:center; border:1px solid #e0e0e0;">
+                <div style="font-size:11px; color:#888;">漲幅前20中CB佔</div>
+                <div style="font-size:18px; font-weight:bold; color:#c62828;">${cbInTop20Gainers}/20</div>
             </div>
-            <div style="text-align:center;">
-                <div style="font-size:12px; color:#888;">跌幅前20名中CB佔</div>
-                <div style="font-size:18px; font-weight:bold; color:#2e7d32;">${cbInTop20Losers}/20 (${(cbInTop20Losers/20*100).toFixed(0)}%)</div>
+            <div style="background:white; padding:8px 15px; border-radius:6px; flex:1; min-width:120px; text-align:center; border:1px solid #e0e0e0;">
+                <div style="font-size:11px; color:#888;">跌幅前20中CB佔</div>
+                <div style="font-size:18px; font-weight:bold; color:#2e7d32;">${cbInTop20Losers}/20</div>
             </div>
-            <div style="text-align:center;">
-                <div style="font-size:12px; color:#888;">CB公司佔全市場</div>
-                <div style="font-size:18px; font-weight:bold; color:#9c27b0;">${(cbStats.count / data.length * 100).toFixed(1)}%</div>
+            <div style="background:white; padding:8px 15px; border-radius:6px; flex:1; min-width:120px; text-align:center; border:1px solid #e0e0e0;">
+                <div style="font-size:11px; color:#888;">CB佔全市場</div>
+                <div style="font-size:18px; font-weight:bold; color:#7b1fa2;">${(cbStats.count / data.length * 100).toFixed(1)}%</div>
             </div>
-        </div>
-        
-        <!-- 結論 -->
-        <div style="margin-top:10px; padding:10px; background:${cbBetter ? '#e8f5e9' : '#fff3e0'}; border-radius:6px; font-size:13px; color:#333;">
-            <strong>📋 ${year}年結論：</strong>
-            有發CB的公司平均漲幅為 <strong style="color:${parseFloat(cbStats.avg) >= 0 ? '#c62828' : '#2e7d32'};">${cbStats.avg}%</strong>，
-            無發CB的公司平均漲幅為 <strong style="color:${parseFloat(nonCBStats.avg) >= 0 ? '#c62828' : '#2e7d32'};">${nonCBStats.avg}%</strong>，
-            CB公司績效${cbBetter ? '較佳' : '較差'}，差距 <strong>${Math.abs(diffAvg)}%</strong>。
-            ${cbInTop20Gainers > cbStats.count / data.length * 20 ? 
-                '在漲幅排行中，CB公司佔比高於其市場佔比，表現相對突出。' : 
-                '在漲幅排行中，CB公司佔比未明顯高於市場佔比。'}
+            <div style="background:${cbBetter ? '#e8f5e9' : '#fff3e0'}; padding:8px 15px; border-radius:6px; flex:2; min-width:200px; border:1px solid ${cbBetter ? '#a5d6a7' : '#ffcc80'};">
+                <div style="font-size:12px; color:#333; line-height:1.5;">
+                    <strong>${year}年結論：</strong>CB公司平均${cbBetter ? '優於' : '落後'}非CB <strong>${Math.abs(diffAvg)}%</strong>
+                </div>
+            </div>
         </div>
     </div>
     
-    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(350px, 1fr)); gap:15px;">
+    <!-- 漲跌幅排行榜 -->
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:12px;">
         ${renderTable(top20Gainers, true)}
         ${renderTable(top20Losers, false)}
     </div>
     
-    <div style="margin-top:15px; padding:10px; background:#e3f2fd; border-radius:8px; font-size:12px; color:#1565c0;">
-        💡 <strong>說明：</strong>漲跌幅 = (年末收盤價 - 年初收盤價) / 年初收盤價 × 100%。
-        <span style="background:#f3e5f5; padding:2px 6px; border-radius:4px; color:#7b1fa2;">淺紫色底</span> 表示有發行CB的公司。
-        CB判定依據為該公司是否曾發行可轉換公司債。
+    <div style="margin-top:10px; padding:8px 12px; background:#f5f5f5; border-radius:6px; font-size:11px; color:#888;">
+        💡 <span style="color:#9c27b0;">◆</span> 代號後標記表示有發CB | 淺紫底色為CB公司 | 漲跌幅 = (年末價 - 年初價) / 年初價
     </div>`;
 }
 
@@ -35343,12 +35397,18 @@ async function loadYearlyRankingData() {
 function updateMarketChart(period) {
     // 更新按鈕狀態
     document.querySelectorAll('.market-period-btn').forEach(btn => {
-        if (btn.dataset.period === period) {
-            btn.style.background = '#d32f2f';
-            btn.style.color = 'white';
+        const btnPeriod = btn.dataset.period;
+        if (btnPeriod === period) {
+            if (btnPeriod === 'CUSTOM') {
+                btn.style.background = '#ff9800';
+                btn.style.color = 'white';
+            } else {
+                btn.style.background = '#d32f2f';
+                btn.style.color = 'white';
+            }
         } else {
             btn.style.background = 'white';
-            btn.style.color = '#d32f2f';
+            btn.style.color = btnPeriod === 'CUSTOM' ? '#e65100' : '#d32f2f';
         }
     });
     MarketIndexModule.currentPeriod = period;
@@ -35363,6 +35423,65 @@ function updateMarketChart(period) {
         MarketIndexModule.renderChart();
     }
 }
+
+// v3.99X r63: 切換自訂日期面板
+function toggleCustomDateRange() {
+    const panel = document.getElementById('customDateRangePanel');
+    if (panel) {
+        const isHidden = panel.style.display === 'none';
+        panel.style.display = isHidden ? 'block' : 'none';
+        
+        // 設定預設日期（若未設定）
+        if (isHidden) {
+            const startInput = document.getElementById('customDateStart');
+            const endInput = document.getElementById('customDateEnd');
+            if (startInput && !startInput.value) {
+                // 預設起始日為一年前
+                const oneYearAgo = new Date();
+                oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+                startInput.value = oneYearAgo.toISOString().split('T')[0];
+            }
+            if (endInput && !endInput.value) {
+                // 預設結束日為今天
+                endInput.value = new Date().toISOString().split('T')[0];
+            }
+        }
+    }
+}
+
+// v3.99X r63: 套用自訂日期區間
+function applyCustomDateRange() {
+    const startInput = document.getElementById('customDateStart');
+    const endInput = document.getElementById('customDateEnd');
+    const statusEl = document.getElementById('customDateStatus');
+    
+    if (!startInput?.value || !endInput?.value) {
+        if (statusEl) statusEl.innerHTML = '<span style="color:#c62828;">請選擇起始和結束日期</span>';
+        return;
+    }
+    
+    const startDate = new Date(startInput.value);
+    const endDate = new Date(endInput.value);
+    
+    if (startDate >= endDate) {
+        if (statusEl) statusEl.innerHTML = '<span style="color:#c62828;">起始日期須早於結束日期</span>';
+        return;
+    }
+    
+    // 儲存自訂日期範圍
+    MarketIndexModule.customDateRange = {
+        start: startDate,
+        end: endDate
+    };
+    
+    // 計算天數
+    const days = Math.round((endDate - startDate) / (1000 * 60 * 60 * 24));
+    if (statusEl) statusEl.innerHTML = `<span style="color:#4caf50;">✓ ${startInput.value} ~ ${endInput.value} (${days}天)</span>`;
+    
+    // 切換到自訂模式
+    updateMarketChart('CUSTOM');
+}
+
 // v3.99W: 切換顯示的指數
 function switchMarketIndex(index) {
     MarketIndexModule.currentIndex = index;

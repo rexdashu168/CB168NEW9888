@@ -3622,6 +3622,10 @@ button:active, .clickable:active {
                 <div id="stockForeignNewsContainer" style="display:none; margin-top:15px;">
                     <!-- 動態填入該股票的外電報導 -->
                 </div>
+                <!-- v3.99X r51: 個股融資vs價格分析區 -->
+                <div id="stockMarginAnalysisContainer" style="display:none; margin-top:15px;">
+                    <!-- 動態填入個股融資分析 -->
+                </div>
             </div>
             <!-- 產業趨勢標籤內容（原有內容）-->
             <div id="trendTabIndustryContent" style="display:none;">
@@ -15010,16 +15014,90 @@ function renderIndexMarginAnalysis() {
             ma5, ma20, ma60,
             high52w, low52w,
             marginHigh: marginHigh / 100000000,
-            marginLow: marginLow / 100000000
+            marginLow: marginLow / 100000000,
+            // v3.99X r50: 多期間比較分析
+            periodAnalysis: calculatePeriodAnalysis(prices, margins)
         };
+    };
+    
+    // v3.99X r50: 計算多期間價格vs融資比較
+    const calculatePeriodAnalysis = (prices, margins) => {
+        if (prices.length < 5 || margins.length < 5) return [];
+        
+        const periods = [
+            { label: '5日', days: 5 },
+            { label: '10日', days: 10 },
+            { label: '20日', days: 20 },
+            { label: '60日', days: 60 },
+            { label: '120日', days: 120 },
+            { label: '250日', days: 250 }
+        ];
+        
+        const latest = prices[prices.length - 1];
+        const latestMargin = margins[margins.length - 1];
+        
+        return periods.map(p => {
+            if (prices.length < p.days + 1 || margins.length < p.days + 1) return null;
+            
+            const priceAgo = prices[prices.length - p.days - 1];
+            const marginAgo = margins[margins.length - p.days - 1];
+            
+            const priceChange = ((latest - priceAgo) / priceAgo * 100) || 0;
+            const marginChange = ((latestMargin - marginAgo) / marginAgo * 100) || 0;
+            
+            // 計算背離程度 = 融資變化 - 價格變化
+            // 正值表示融資漲幅 > 價格漲幅（融資過熱）
+            // 負值表示融資漲幅 < 價格漲幅（融資偏冷）
+            const divergence = marginChange - priceChange;
+            
+            // 判斷背離狀態
+            let status = '';
+            let statusColor = '';
+            let statusIcon = '';
+            
+            if (divergence > 15) {
+                status = '融資過熱';
+                statusColor = '#c62828';
+                statusIcon = '🔥';
+            } else if (divergence > 5) {
+                status = '融資偏熱';
+                statusColor = '#ff5722';
+                statusIcon = '⚠️';
+            } else if (divergence > -5) {
+                status = '同步';
+                statusColor = '#4caf50';
+                statusIcon = '✓';
+            } else if (divergence > -15) {
+                status = '融資偏冷';
+                statusColor = '#2196f3';
+                statusIcon = '❄️';
+            } else {
+                status = '融資冰點';
+                statusColor = '#1565c0';
+                statusIcon = '🧊';
+            }
+            
+            return {
+                label: p.label,
+                days: p.days,
+                priceChange: priceChange.toFixed(2),
+                marginChange: marginChange.toFixed(2),
+                divergence: divergence.toFixed(2),
+                status,
+                statusColor,
+                statusIcon
+            };
+        }).filter(p => p !== null);
     };
     
     // 分析各市場
     const tseAnalysis = analyzeMarketCycle(data.tse, data.tse, '收盤價', '融資(元)');
     const otcAnalysis = analyzeMarketCycle(data.otc, data.otc, '收盤價', '融資(元)');
+    // v3.99X r51: 加入台積電分析
+    const stock2330Analysis = analyzeMarketCycle(data.stock2330, data.stock2330, '收盤價', '融資(張)');
     
     // 多空循環與熱度預警區塊
-    if (tseAnalysis || otcAnalysis) {
+    if (tseAnalysis || otcAnalysis || stock2330Analysis) {
         html += `
         <div style="background:linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border-radius:12px; padding:15px; margin-bottom:15px; border:2px solid #ffc107;">
             <div style="font-size:16px; font-weight:bold; color:#e65100; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
@@ -15131,6 +15209,124 @@ function renderIndexMarginAnalysis() {
         }
         
         html += `
+            </div>
+            
+            <!-- v3.99X r51: 多期間價格vs融資比較分析 -->
+            <div style="margin-top:15px; background:white; border-radius:10px; padding:15px; border:1px solid #e0e0e0;">
+                <div style="font-size:14px; font-weight:bold; color:#333; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+                    <span style="font-size:18px;">📊</span> 多期間價格 vs 融資變化比較
+                    <span style="font-size:12px; font-weight:normal; color:#888;">（融資是否漲過頭？）</span>
+                </div>
+                
+                <div style="overflow-x:auto;">
+                    <table style="width:100%; border-collapse:collapse; font-size:13px; min-width:800px;">
+                        <thead>
+                            <tr style="background:#f5f5f5;">
+                                <th style="padding:10px 6px; text-align:center; border-bottom:2px solid #e0e0e0; width:50px;">期間</th>
+                                <th style="padding:10px 6px; text-align:center; border-bottom:2px solid #e0e0e0; color:#1976d2;" colspan="2">🔵 加權指數</th>
+                                <th style="padding:10px 6px; text-align:center; border-bottom:2px solid #e0e0e0; color:#2e7d32;" colspan="2">🟢 櫃買指數</th>
+                                <th style="padding:10px 6px; text-align:center; border-bottom:2px solid #e0e0e0; color:#9c27b0;" colspan="2">🟣 台積電</th>
+                            </tr>
+                            <tr style="background:#fafafa;">
+                                <th style="padding:5px 6px; text-align:center; border-bottom:1px solid #e0e0e0;"></th>
+                                <th style="padding:5px 6px; text-align:center; border-bottom:1px solid #e0e0e0; font-size:11px; color:#666;">漲跌</th>
+                                <th style="padding:5px 6px; text-align:center; border-bottom:1px solid #e0e0e0; font-size:11px; color:#666;">融資</th>
+                                <th style="padding:5px 6px; text-align:center; border-bottom:1px solid #e0e0e0; font-size:11px; color:#666;">漲跌</th>
+                                <th style="padding:5px 6px; text-align:center; border-bottom:1px solid #e0e0e0; font-size:11px; color:#666;">融資</th>
+                                <th style="padding:5px 6px; text-align:center; border-bottom:1px solid #e0e0e0; font-size:11px; color:#666;">漲跌</th>
+                                <th style="padding:5px 6px; text-align:center; border-bottom:1px solid #e0e0e0; font-size:11px; color:#666;">融資</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
+        
+        // 生成各期間比較行
+        const tsePeriods = tseAnalysis?.periodAnalysis || [];
+        const otcPeriods = otcAnalysis?.periodAnalysis || [];
+        const stockPeriods = stock2330Analysis?.periodAnalysis || [];
+        const maxPeriods = Math.max(tsePeriods.length, otcPeriods.length, stockPeriods.length);
+        
+        // 通用背離狀態判斷函數
+        const getDivergenceStatus = (periodData) => {
+            if (!periodData) return { icon: '-', color: '#888', text: '-' };
+            const div = parseFloat(periodData.divergence);
+            if (div > 10) return { icon: '🔥', color: '#c62828', text: '過熱' };
+            if (div > 3) return { icon: '⚠️', color: '#ff5722', text: '偏熱' };
+            if (div > -3) return { icon: '✓', color: '#4caf50', text: '同步' };
+            if (div > -10) return { icon: '❄️', color: '#2196f3', text: '偏冷' };
+            return { icon: '🧊', color: '#1565c0', text: '冰點' };
+        };
+        
+        for (let i = 0; i < maxPeriods; i++) {
+            const tseP = tsePeriods[i];
+            const otcP = otcPeriods[i];
+            const stockP = stockPeriods[i];
+            const label = tseP?.label || otcP?.label || stockP?.label || '';
+            
+            const tseDivStatus = getDivergenceStatus(tseP);
+            const otcDivStatus = getDivergenceStatus(otcP);
+            const stockDivStatus = getDivergenceStatus(stockP);
+            
+            html += `
+                            <tr style="border-bottom:1px solid #eee;">
+                                <td style="padding:8px 6px; text-align:center; font-weight:bold; background:#f9f9f9;">${label}</td>
+                                <td style="padding:8px 4px; text-align:center;">
+                                    <span style="color:${tseP && parseFloat(tseP.priceChange) >= 0 ? '#c62828' : '#2e7d32'}; font-weight:bold; font-size:12px;">
+                                        ${tseP ? (parseFloat(tseP.priceChange) >= 0 ? '+' : '') + tseP.priceChange + '%' : '-'}
+                                    </span>
+                                </td>
+                                <td style="padding:8px 4px; text-align:center;">
+                                    <div style="display:flex; flex-direction:column; align-items:center; gap:1px;">
+                                        <span style="color:${tseP && parseFloat(tseP.marginChange) >= 0 ? '#c62828' : '#2e7d32'}; font-weight:bold; font-size:12px;">
+                                            ${tseP ? (parseFloat(tseP.marginChange) >= 0 ? '+' : '') + tseP.marginChange + '%' : '-'}
+                                        </span>
+                                        <span style="font-size:10px; color:${tseDivStatus.color};">${tseDivStatus.icon}${tseDivStatus.text}</span>
+                                    </div>
+                                </td>
+                                <td style="padding:8px 4px; text-align:center;">
+                                    <span style="color:${otcP && parseFloat(otcP.priceChange) >= 0 ? '#c62828' : '#2e7d32'}; font-weight:bold; font-size:12px;">
+                                        ${otcP ? (parseFloat(otcP.priceChange) >= 0 ? '+' : '') + otcP.priceChange + '%' : '-'}
+                                    </span>
+                                </td>
+                                <td style="padding:8px 4px; text-align:center;">
+                                    <div style="display:flex; flex-direction:column; align-items:center; gap:1px;">
+                                        <span style="color:${otcP && parseFloat(otcP.marginChange) >= 0 ? '#c62828' : '#2e7d32'}; font-weight:bold; font-size:12px;">
+                                            ${otcP ? (parseFloat(otcP.marginChange) >= 0 ? '+' : '') + otcP.marginChange + '%' : '-'}
+                                        </span>
+                                        <span style="font-size:10px; color:${otcDivStatus.color};">${otcDivStatus.icon}${otcDivStatus.text}</span>
+                                    </div>
+                                </td>
+                                <td style="padding:8px 4px; text-align:center;">
+                                    <span style="color:${stockP && parseFloat(stockP.priceChange) >= 0 ? '#c62828' : '#2e7d32'}; font-weight:bold; font-size:12px;">
+                                        ${stockP ? (parseFloat(stockP.priceChange) >= 0 ? '+' : '') + stockP.priceChange + '%' : '-'}
+                                    </span>
+                                </td>
+                                <td style="padding:8px 4px; text-align:center;">
+                                    <div style="display:flex; flex-direction:column; align-items:center; gap:1px;">
+                                        <span style="color:${stockP && parseFloat(stockP.marginChange) >= 0 ? '#c62828' : '#2e7d32'}; font-weight:bold; font-size:12px;">
+                                            ${stockP ? (parseFloat(stockP.marginChange) >= 0 ? '+' : '') + stockP.marginChange + '%' : '-'}
+                                        </span>
+                                        <span style="font-size:10px; color:${stockDivStatus.color};">${stockDivStatus.icon}${stockDivStatus.text}</span>
+                                    </div>
+                                </td>
+                            </tr>`;
+        }
+        
+        html += `
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- 背離狀態說明 -->
+                <div style="margin-top:12px; padding:10px; background:#f5f5f5; border-radius:6px;">
+                    <div style="font-size:12px; color:#666; margin-bottom:6px; font-weight:bold;">📖 背離狀態說明（融資變化 - 價格變化）</div>
+                    <div style="display:flex; flex-wrap:wrap; gap:12px; font-size:12px;">
+                        <span><span style="color:#c62828;">🔥 過熱(>10%)</span> 融資漲幅遠超價格</span>
+                        <span><span style="color:#ff5722;">⚠️ 偏熱(3~10%)</span> 融資漲幅略超價格</span>
+                        <span><span style="color:#4caf50;">✓ 同步(-3~3%)</span> 價格融資同步</span>
+                        <span><span style="color:#2196f3;">❄️ 偏冷(-10~-3%)</span> 融資漲幅落後價格</span>
+                        <span><span style="color:#1565c0;">🧊 冰點(<-10%)</span> 融資明顯落後</span>
+                    </div>
+                </div>
             </div>
             
             <!-- 循環階段說明 -->
@@ -34076,12 +34272,289 @@ async function searchStockPrice() {
         statusEl.innerHTML = `<span style="color:#2e7d32;">✓ ${stockName} (${allStockData.length}筆，${firstDate.substring(0,4)}~${lastDate.substring(0,4)})</span>`;
         // v3.99W: 載入該股票的外電報導
         loadStockForeignNews(stockCode, stockName);
+        // v3.99X r51: 載入融資資料並顯示價格vs融資分析
+        loadStockMarginAnalysis(stockCode, stockName, isOTC, allStockData);
     } catch (e) {
         console.error('個股查詢失敗:', e);
         statusEl.innerHTML = `<span style="color:#c62828;">查詢失敗: ${e.message}</span>`;
     }
 }
-// 載入趨勢掃描資料
+
+// v3.99X r51: 載入個股融資資料並分析
+async function loadStockMarginAnalysis(stockCode, stockName, isOTC, priceData) {
+    const container = document.getElementById('stockMarginAnalysisContainer');
+    if (!container) return;
+    
+    container.style.display = 'block';
+    container.innerHTML = `
+        <div style="padding:15px; text-align:center;">
+            <span style="color:#1976d2;">⏳ 載入融資資料中...</span>
+        </div>`;
+    
+    try {
+        const baseUrl = 'https://rexdashu168.github.io/CB168NEW9888/data/';
+        const dbPrefix = isOTC ? 'otclenging_' : 'tpxlenging_';
+        const tableName = isOTC ? 'otc_margin' : 'tpx_margin';
+        const years = ['2020', '2021', '2022', '2023', '2024', '2025'];
+        
+        let allMarginData = [];
+        
+        // 載入融資資料
+        for (const year of years) {
+            try {
+                const resp = await fetch(baseUrl + dbPrefix + year + '.db');
+                if (!resp.ok) continue;
+                const buffer = await resp.arrayBuffer();
+                const db = new TrendScanModule.sqlEngine.Database(new Uint8Array(buffer));
+                
+                // 融資餘額在第7欄(G欄)，欄位名可能是 margin_buy 或其他
+                const result = db.exec(`
+                    SELECT * FROM ${tableName} 
+                    WHERE code = '${stockCode}' 
+                    ORDER BY date ASC
+                `);
+                
+                if (result.length > 0 && result[0].values.length > 0) {
+                    const columns = result[0].columns;
+                    const marginColIdx = columns.findIndex(c => 
+                        c.toLowerCase().includes('margin') || 
+                        c.toLowerCase().includes('融資') ||
+                        c === 'G' || columns.indexOf(c) === 6
+                    );
+                    const dateColIdx = columns.findIndex(c => c.toLowerCase().includes('date') || c === '日期');
+                    
+                    // 如果找不到特定欄位，假設第7欄(index 6)是融資餘額
+                    const finalMarginIdx = marginColIdx >= 0 ? marginColIdx : 6;
+                    const finalDateIdx = dateColIdx >= 0 ? dateColIdx : 0;
+                    
+                    result[0].values.forEach(row => {
+                        const date = String(row[finalDateIdx]);
+                        const margin = parseFloat(row[finalMarginIdx]) || 0;
+                        if (margin > 0) {
+                            allMarginData.push({ date, margin });
+                        }
+                    });
+                }
+                db.close();
+            } catch (e) {
+                console.log(`${year}年融資資料載入失敗:`, e);
+            }
+        }
+        
+        // 如果沒有融資資料，顯示提示
+        if (allMarginData.length < 20) {
+            container.innerHTML = `
+                <div style="padding:15px; background:#fff3e0; border-radius:10px; border:1px solid #ff9800;">
+                    <div style="font-size:14px; color:#e65100;">
+                        ⚠️ ${stockName} 融資資料不足（僅${allMarginData.length}筆），無法進行分析
+                    </div>
+                </div>`;
+            return;
+        }
+        
+        // 按日期排序
+        allMarginData.sort((a, b) => a.date.localeCompare(b.date));
+        
+        // 合併價格和融資資料（按日期對齊）
+        const mergedData = [];
+        const marginMap = new Map(allMarginData.map(d => [d.date, d.margin]));
+        
+        priceData.forEach(p => {
+            const margin = marginMap.get(p.date);
+            if (margin !== undefined) {
+                mergedData.push({
+                    date: p.date,
+                    price: p.close,
+                    margin: margin
+                });
+            }
+        });
+        
+        if (mergedData.length < 20) {
+            container.innerHTML = `
+                <div style="padding:15px; background:#fff3e0; border-radius:10px; border:1px solid #ff9800;">
+                    <div style="font-size:14px; color:#e65100;">
+                        ⚠️ 價格與融資日期無法對齊（僅${mergedData.length}筆重疊），無法進行分析
+                    </div>
+                </div>`;
+            return;
+        }
+        
+        // 計算多期間分析
+        const analysis = analyzeStockMarginDivergence(mergedData, stockName, stockCode);
+        container.innerHTML = analysis;
+        
+    } catch (e) {
+        console.error('融資分析失敗:', e);
+        container.innerHTML = `
+            <div style="padding:15px; background:#ffebee; border-radius:10px; border:1px solid #c62828;">
+                <div style="font-size:14px; color:#c62828;">
+                    ❌ 融資分析載入失敗: ${e.message}
+                </div>
+            </div>`;
+    }
+}
+
+// v3.99X r51: 分析個股價格vs融資背離
+function analyzeStockMarginDivergence(data, stockName, stockCode) {
+    const latest = data[data.length - 1];
+    const latestPrice = latest.price;
+    const latestMargin = latest.margin;
+    
+    // 計算各期間變化
+    const periods = [
+        { label: '5日', days: 5 },
+        { label: '10日', days: 10 },
+        { label: '20日', days: 20 },
+        { label: '60日', days: 60 },
+        { label: '120日', days: 120 }
+    ];
+    
+    const periodResults = periods.map(p => {
+        if (data.length < p.days + 1) return null;
+        
+        const past = data[data.length - p.days - 1];
+        const priceChange = ((latestPrice - past.price) / past.price * 100) || 0;
+        const marginChange = ((latestMargin - past.margin) / past.margin * 100) || 0;
+        const divergence = marginChange - priceChange;
+        
+        // 判斷狀態
+        let status, statusColor, statusIcon;
+        if (divergence > 15) {
+            status = '融資過熱'; statusColor = '#c62828'; statusIcon = '🔥';
+        } else if (divergence > 5) {
+            status = '融資偏熱'; statusColor = '#ff5722'; statusIcon = '⚠️';
+        } else if (divergence > -5) {
+            status = '同步'; statusColor = '#4caf50'; statusIcon = '✓';
+        } else if (divergence > -15) {
+            status = '融資偏冷'; statusColor = '#2196f3'; statusIcon = '❄️';
+        } else {
+            status = '融資冰點'; statusColor = '#1565c0'; statusIcon = '🧊';
+        }
+        
+        return {
+            label: p.label,
+            priceChange: priceChange.toFixed(2),
+            marginChange: marginChange.toFixed(2),
+            divergence: divergence.toFixed(2),
+            status, statusColor, statusIcon
+        };
+    }).filter(p => p !== null);
+    
+    // 計算整體熱度評估
+    const recentDivergences = periodResults.slice(0, 3).map(p => parseFloat(p.divergence));
+    const avgDivergence = recentDivergences.reduce((a, b) => a + b, 0) / recentDivergences.length;
+    
+    let overallStatus, overallColor, overallIcon, overallAdvice;
+    if (avgDivergence > 10) {
+        overallStatus = '過熱警戒';
+        overallColor = '#c62828';
+        overallIcon = '🔥';
+        overallAdvice = '融資追價明顯，建議謹慎，避免追高';
+    } else if (avgDivergence > 3) {
+        overallStatus = '偏熱注意';
+        overallColor = '#ff5722';
+        overallIcon = '⚠️';
+        overallAdvice = '融資略為積極，留意回檔風險';
+    } else if (avgDivergence > -3) {
+        overallStatus = '正常同步';
+        overallColor = '#4caf50';
+        overallIcon = '✓';
+        overallAdvice = '價格與融資同步，走勢健康';
+    } else if (avgDivergence > -10) {
+        overallStatus = '相對安全';
+        overallColor = '#2196f3';
+        overallIcon = '👍';
+        overallAdvice = '融資相對保守，籌碼較乾淨';
+    } else {
+        overallStatus = '極度冷清';
+        overallColor = '#1565c0';
+        overallIcon = '🧊';
+        overallAdvice = '融資極低，可能是冷門股或佈局時機';
+    }
+    
+    // 計算融資位置（近一年高低點）
+    const margins = data.slice(-250).map(d => d.margin);
+    const marginHigh = Math.max(...margins);
+    const marginLow = Math.min(...margins);
+    const marginPosition = ((latestMargin - marginLow) / (marginHigh - marginLow) * 100) || 0;
+    
+    // 生成HTML
+    let html = `
+    <div style="background:linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%); border-radius:12px; padding:15px; border:2px solid #9c27b0;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <div style="font-size:15px; font-weight:bold; color:#7b1fa2;">
+                📊 ${stockName} 價格 vs 融資分析
+            </div>
+            <div style="font-size:13px; color:#666;">
+                融資餘額: ${(latestMargin).toLocaleString()}張
+            </div>
+        </div>
+        
+        <!-- 整體評估 -->
+        <div style="background:white; border-radius:10px; padding:12px; margin-bottom:12px; display:flex; align-items:center; gap:15px; border-left:4px solid ${overallColor};">
+            <div style="font-size:32px;">${overallIcon}</div>
+            <div style="flex:1;">
+                <div style="font-size:16px; font-weight:bold; color:${overallColor};">${overallStatus}</div>
+                <div style="font-size:13px; color:#666; margin-top:2px;">${overallAdvice}</div>
+            </div>
+            <div style="text-align:right;">
+                <div style="font-size:12px; color:#888;">融資位置</div>
+                <div style="font-size:18px; font-weight:bold; color:#9c27b0;">${marginPosition.toFixed(0)}%</div>
+            </div>
+        </div>
+        
+        <!-- 融資位置條 -->
+        <div style="background:#e0e0e0; height:8px; border-radius:4px; margin-bottom:15px; overflow:hidden;">
+            <div style="height:100%; width:${marginPosition}%; background:linear-gradient(90deg, #4caf50, #ffc107, #ff5722, #c62828); border-radius:4px;"></div>
+        </div>
+        
+        <!-- 多期間比較表格 -->
+        <div style="background:white; border-radius:8px; overflow:hidden;">
+            <table style="width:100%; border-collapse:collapse; font-size:13px;">
+                <thead>
+                    <tr style="background:#f5f5f5;">
+                        <th style="padding:10px 8px; text-align:center; border-bottom:2px solid #e0e0e0;">期間</th>
+                        <th style="padding:10px 8px; text-align:center; border-bottom:2px solid #e0e0e0;">股價漲跌</th>
+                        <th style="padding:10px 8px; text-align:center; border-bottom:2px solid #e0e0e0;">融資變化</th>
+                        <th style="padding:10px 8px; text-align:center; border-bottom:2px solid #e0e0e0;">狀態</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+    
+    periodResults.forEach(p => {
+        html += `
+                    <tr style="border-bottom:1px solid #eee;">
+                        <td style="padding:8px; text-align:center; font-weight:bold; background:#fafafa;">${p.label}</td>
+                        <td style="padding:8px; text-align:center;">
+                            <span style="color:${parseFloat(p.priceChange) >= 0 ? '#c62828' : '#2e7d32'}; font-weight:bold;">
+                                ${parseFloat(p.priceChange) >= 0 ? '+' : ''}${p.priceChange}%
+                            </span>
+                        </td>
+                        <td style="padding:8px; text-align:center;">
+                            <span style="color:${parseFloat(p.marginChange) >= 0 ? '#c62828' : '#2e7d32'}; font-weight:bold;">
+                                ${parseFloat(p.marginChange) >= 0 ? '+' : ''}${p.marginChange}%
+                            </span>
+                        </td>
+                        <td style="padding:8px; text-align:center;">
+                            <span style="color:${p.statusColor}; font-weight:bold;">${p.statusIcon} ${p.status}</span>
+                        </td>
+                    </tr>`;
+    });
+    
+    html += `
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- 說明 -->
+        <div style="margin-top:10px; padding:8px 10px; background:#fff3e0; border-radius:6px; font-size:12px; color:#e65100;">
+            💡 <strong>判讀方式：</strong>融資變化 - 股價漲跌 = 背離度。正值表示融資漲幅超過股價（過熱），負值表示融資落後（相對安全）。
+        </div>
+    </div>`;
+    
+    return html;
+}
 async function loadTrendScanData() {
     const statusEl = document.getElementById('trendScanStatus');
     if (TrendScanModule.isLoading) {

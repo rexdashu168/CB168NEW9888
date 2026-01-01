@@ -34293,8 +34293,10 @@ async function loadStockMarginAnalysis(stockCode, stockName, isOTC, priceData) {
     
     try {
         const baseUrl = 'https://rexdashu168.github.io/CB168NEW9888/data/';
+        // v3.99X r52: 修正資料庫檔名和表格名稱
         const dbPrefix = isOTC ? 'otclenging_' : 'tpxlenging_';
-        const tableName = isOTC ? 'otc_margin' : 'tpx_margin';
+        const dbSuffix = isOTC ? '_filtered.db' : '_combined.db';
+        const tableName = isOTC ? 'otclenging' : 'tpxlenging';
         const years = ['2020', '2021', '2022', '2023', '2024', '2025'];
         
         let allMarginData = [];
@@ -34302,34 +34304,24 @@ async function loadStockMarginAnalysis(stockCode, stockName, isOTC, priceData) {
         // 載入融資資料
         for (const year of years) {
             try {
-                const resp = await fetch(baseUrl + dbPrefix + year + '.db');
+                const dbFileName = dbPrefix + year + dbSuffix;
+                const resp = await fetch(baseUrl + dbFileName);
                 if (!resp.ok) continue;
                 const buffer = await resp.arrayBuffer();
                 const db = new TrendScanModule.sqlEngine.Database(new Uint8Array(buffer));
                 
-                // 融資餘額在第7欄(G欄)，欄位名可能是 margin_buy 或其他
+                // v3.99X r52: 修正SQL查詢，融資餘額欄位名是「融資餘額」
                 const result = db.exec(`
-                    SELECT * FROM ${tableName} 
-                    WHERE code = '${stockCode}' 
-                    ORDER BY date ASC
+                    SELECT 日期, 融資餘額 FROM ${tableName} 
+                    WHERE 代號 = '${stockCode}' 
+                    ORDER BY 日期 ASC
                 `);
                 
                 if (result.length > 0 && result[0].values.length > 0) {
-                    const columns = result[0].columns;
-                    const marginColIdx = columns.findIndex(c => 
-                        c.toLowerCase().includes('margin') || 
-                        c.toLowerCase().includes('融資') ||
-                        c === 'G' || columns.indexOf(c) === 6
-                    );
-                    const dateColIdx = columns.findIndex(c => c.toLowerCase().includes('date') || c === '日期');
-                    
-                    // 如果找不到特定欄位，假設第7欄(index 6)是融資餘額
-                    const finalMarginIdx = marginColIdx >= 0 ? marginColIdx : 6;
-                    const finalDateIdx = dateColIdx >= 0 ? dateColIdx : 0;
-                    
+                    // v3.99X r52: 直接取日期和融資餘額
                     result[0].values.forEach(row => {
-                        const date = String(row[finalDateIdx]);
-                        const margin = parseFloat(row[finalMarginIdx]) || 0;
+                        const date = String(row[0]).replace(/\//g, '');  // 轉成 YYYYMMDD 格式
+                        const margin = parseFloat(row[1]) || 0;
                         if (margin > 0) {
                             allMarginData.push({ date, margin });
                         }
@@ -34355,12 +34347,18 @@ async function loadStockMarginAnalysis(stockCode, stockName, isOTC, priceData) {
         // 按日期排序
         allMarginData.sort((a, b) => a.date.localeCompare(b.date));
         
+        // v3.99X r52: 統一日期格式為 YYYYMMDD
+        const normalizeDate = (dateStr) => {
+            return String(dateStr).replace(/[\/-]/g, '');
+        };
+        
         // 合併價格和融資資料（按日期對齊）
         const mergedData = [];
-        const marginMap = new Map(allMarginData.map(d => [d.date, d.margin]));
+        const marginMap = new Map(allMarginData.map(d => [normalizeDate(d.date), d.margin]));
         
         priceData.forEach(p => {
-            const margin = marginMap.get(p.date);
+            const normalizedDate = normalizeDate(p.date);
+            const margin = marginMap.get(normalizedDate);
             if (margin !== undefined) {
                 mergedData.push({
                     date: p.date,

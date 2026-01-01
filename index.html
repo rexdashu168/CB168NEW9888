@@ -34305,16 +34305,20 @@ async function loadStockMarginAnalysis(stockCode, stockName, isOTC, priceData) {
     container.style.display = 'block';
     container.innerHTML = `
         <div style="padding:15px; text-align:center;">
-            <span style="color:#1976d2;">⏳ 載入融資資料中...</span>
+            <span style="color:#1976d2;">⏳ 載入融資資料中... (${isOTC ? '上櫃' : '上市'})</span>
         </div>`;
+    
+    console.log('[loadStockMarginAnalysis] 股票:', stockCode, '名稱:', stockName, '是否上櫃:', isOTC);
     
     try {
         const baseUrl = 'https://rexdashu168.github.io/CB168NEW9888/data/';
-        // v3.99X r52: 修正資料庫檔名和表格名稱
+        // v3.99X r57: 修正資料庫檔名和表格名稱
         const dbPrefix = isOTC ? 'otclenging_' : 'tpxlenging_';
         const dbSuffix = isOTC ? '_filtered.db' : '_combined.db';
         const tableName = isOTC ? 'otclenging' : 'tpxlenging';
         const years = ['2020', '2021', '2022', '2023', '2024', '2025'];
+        
+        console.log('[loadStockMarginAnalysis] 資料庫前綴:', dbPrefix, '表格名稱:', tableName);
         
         let allMarginData = [];
         
@@ -34322,17 +34326,23 @@ async function loadStockMarginAnalysis(stockCode, stockName, isOTC, priceData) {
         for (const year of years) {
             try {
                 const dbFileName = dbPrefix + year + dbSuffix;
+                console.log('[loadStockMarginAnalysis] 嘗試載入:', baseUrl + dbFileName);
                 const resp = await fetch(baseUrl + dbFileName);
-                if (!resp.ok) continue;
+                if (!resp.ok) {
+                    console.log('[loadStockMarginAnalysis]', dbFileName, '載入失敗:', resp.status);
+                    continue;
+                }
                 const buffer = await resp.arrayBuffer();
                 const db = new TrendScanModule.sqlEngine.Database(new Uint8Array(buffer));
                 
-                // v3.99X r52: 修正SQL查詢，融資餘額欄位名是「融資餘額」
+                // v3.99X r57: 修正SQL查詢，融資餘額欄位名是「融資餘額」
                 const result = db.exec(`
                     SELECT 日期, 融資餘額 FROM ${tableName} 
                     WHERE 代號 = '${stockCode}' 
                     ORDER BY 日期 ASC
                 `);
+                
+                console.log('[loadStockMarginAnalysis]', year, '年查詢結果:', result.length > 0 ? result[0].values.length : 0, '筆');
                 
                 if (result.length > 0 && result[0].values.length > 0) {
                     // v3.99X r52: 直接取日期和融資餘額

@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AI智能可轉債競拍系統 v3.99X (百分位數策略版)</title>
+<!-- v3.99X r69: 修正區間明細表格排序問題（只排序當前區間，不影響其他區間） -->
 <!-- v3.99X r68: 年度排行CB判定改用kanban資料（每年獨立判定） -->
 <!-- v3.99X r67: 融資相關顏色修正（台灣慣例：減少=綠色） -->
 <!-- v3.99X r66: 自訂日期區間無資料提示優化、CB判定邏輯強化 -->
@@ -13505,15 +13506,77 @@ function initDetailTableSort() {
         const th = e.target.closest('.detail-table th.sortable');
         if (!th) return;
         
-        const table = th.closest('table');
+        // v3.99X r69: 阻止事件冒泡，避免影響外層表格
+        e.stopPropagation();
+        
+        const table = th.closest('table.detail-table');
         if (!table) return;
         
         const headerRow = th.parentElement;
         const headers = Array.from(headerRow.querySelectorAll('th'));
         const colIndex = headers.indexOf(th);
         
-        sortTable(table, colIndex, th);
+        // v3.99X r69: 只排序當前明細表格的tbody
+        sortDetailTable(table, colIndex, th);
     });
+}
+
+// v3.99X r69: 專門用於明細表格的排序函數
+function sortDetailTable(table, colIndex, th) {
+    const tbody = table.querySelector('tbody');
+    if (!tbody) return;
+    
+    const rows = Array.from(tbody.querySelectorAll('tr')).filter(row => row.querySelector('td'));
+    if (rows.length === 0) return;
+    
+    // 判斷目前排序方向
+    const isAsc = th.classList.contains('sort-asc');
+    const isDesc = th.classList.contains('sort-desc');
+    
+    // 只清除當前表格表頭的排序狀態（不影響其他表格）
+    table.querySelectorAll('th.sortable').forEach(header => {
+        header.classList.remove('sort-asc', 'sort-desc');
+        let text = header.textContent.replace(/[▲▼↕]/g, '').trim();
+        header.textContent = text;
+    });
+    
+    // 設定新的排序方向
+    let direction = 'desc';
+    if (isDesc) {
+        direction = 'asc';
+        th.classList.add('sort-asc');
+        th.textContent = th.textContent.replace(/[▲▼↕]/g, '').trim() + '▲';
+    } else {
+        th.classList.add('sort-desc');
+        th.textContent = th.textContent.replace(/[▲▼↕]/g, '').trim() + '▼';
+    }
+    
+    // 排序
+    rows.sort((a, b) => {
+        const cellA = a.querySelectorAll('td')[colIndex];
+        const cellB = b.querySelectorAll('td')[colIndex];
+        if (!cellA || !cellB) return 0;
+        
+        let valA = cellA.textContent.trim();
+        let valB = cellB.textContent.trim();
+        
+        // 移除百分比、元等單位
+        valA = valA.replace(/[%元億年檔次,\s]/g, '').replace(/[（(].*[）)]/g, '');
+        valB = valB.replace(/[%元億年檔次,\s]/g, '').replace(/[（(].*[）)]/g, '');
+        
+        // 嘗試轉為數字
+        const numA = parseFloat(valA);
+        const numB = parseFloat(valB);
+        if (!isNaN(numA) && !isNaN(numB)) {
+            return direction === 'asc' ? numA - numB : numB - numA;
+        }
+        
+        // 字串比較
+        return direction === 'asc' ? valA.localeCompare(valB, 'zh-TW') : valB.localeCompare(valA, 'zh-TW');
+    });
+    
+    // 重新排列行（只在當前tbody內）
+    rows.forEach(row => tbody.appendChild(row));
 }
 
 // 頁面載入時初始化

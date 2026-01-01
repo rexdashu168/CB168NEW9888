@@ -13419,14 +13419,19 @@ function sortTable(table, colIndex, th) {
     // 清除所有表頭的排序狀態
     table.querySelectorAll('th').forEach(header => {
         header.classList.remove('sort-asc', 'sort-desc');
+        // 更新箭頭顯示
+        let text = header.textContent.replace(/[▲▼↕]/g, '').trim();
+        header.textContent = text;
     });
     // 設定新的排序方向
     let direction = 'desc'; // 預設降序
     if (isDesc) {
         direction = 'asc';
         th.classList.add('sort-asc');
+        th.textContent = th.textContent.replace(/[▲▼↕]/g, '').trim() + '▲';
     } else {
         th.classList.add('sort-desc');
+        th.textContent = th.textContent.replace(/[▲▼↕]/g, '').trim() + '▼';
     }
     // 排序
     rows.sort((a, b) => {
@@ -13452,6 +13457,29 @@ function sortTable(table, colIndex, th) {
     rows.forEach(row => tbody.appendChild(row));
     if (totalRow) tbody.appendChild(totalRow); // 合計行始終在最後
 }
+
+// v3.99X r44: 初始化明細表格排序（使用事件委派）
+function initDetailTableSort() {
+    document.addEventListener('click', function(e) {
+        // 檢查是否點擊了明細表格的排序欄位
+        const th = e.target.closest('.detail-table th.sortable');
+        if (!th) return;
+        
+        const table = th.closest('table');
+        if (!table) return;
+        
+        const headerRow = th.parentElement;
+        const headers = Array.from(headerRow.querySelectorAll('th'));
+        const colIndex = headers.indexOf(th);
+        
+        sortTable(table, colIndex, th);
+    });
+}
+
+// 頁面載入時初始化
+document.addEventListener('DOMContentLoaded', function() {
+    initDetailTableSort();
+});
 // 為動態生成的表格啟用排序
 function initTableSortForContent() {
     const tables = document.querySelectorAll('#marketTrendContent .trend-year-table');
@@ -14169,49 +14197,37 @@ function renderTypeCompare() {
     const allCBData = window.allCBData || [];
     const auctionItems = allCBData.filter(d => d.type === '競拍' && d.hasMarket);
     const inquiryItems = allCBData.filter(d => d.type === '詢圈' && d.hasMarket);
+    
+    // v3.99X r45: 統一標題樣式，與擔保比較一致
     let html = `
-    <!-- 統計摘要 -->
-    <div style="font-size:16px; font-weight:bold; color:#e65100; margin-bottom:10px;">📊 競拍vs詢圈 整體統計</div>
-    <div class="trend-compare-grid">
-        <div class="trend-compare-card">
-            <h4>🎯 競拍</h4>
-            <div class="trend-compare-row">
-                <span class="trend-compare-label">檔數</span>
-                <span class="trend-compare-value">${a.count}</span>
-            </div>
-            <div class="trend-compare-row">
-                <span class="trend-compare-label">均高</span>
-                <span class="trend-compare-value">${a.avgHigh.toFixed(1)}</span>
-            </div>
-            <div class="trend-compare-row">
-                <span class="trend-compare-label">均低</span>
-                <span class="trend-compare-value">${a.avgLow.toFixed(1)}</span>
-            </div>
-            <div class="trend-compare-row">
-                <span class="trend-compare-label">振幅</span>
-                <span class="trend-compare-value ${a.avgAmp > i.avgAmp ? 'positive' : ''}">${a.avgAmp.toFixed(1)}%</span>
-            </div>
-        </div>
-        <div class="trend-compare-card">
-            <h4>📋 詢圈</h4>
-            <div class="trend-compare-row">
-                <span class="trend-compare-label">檔數</span>
-                <span class="trend-compare-value">${i.count}</span>
-            </div>
-            <div class="trend-compare-row">
-                <span class="trend-compare-label">均高</span>
-                <span class="trend-compare-value">${i.avgHigh.toFixed(1)}</span>
-            </div>
-            <div class="trend-compare-row">
-                <span class="trend-compare-label">均低</span>
-                <span class="trend-compare-value">${i.avgLow.toFixed(1)}</span>
-            </div>
-            <div class="trend-compare-row">
-                <span class="trend-compare-label">振幅</span>
-                <span class="trend-compare-value ${i.avgAmp > a.avgAmp ? 'positive' : ''}">${i.avgAmp.toFixed(1)}%</span>
-            </div>
-        </div>
-    </div>`;
+    <div style="font-size:16px; font-weight:bold; color:#e65100; margin-bottom:8px;">📊 詢圈競拍比較（全年度）</div>
+    <table class="trend-year-table">
+        <tr>
+            <th>類型</th>
+            <th>檔數</th>
+            <th>占比</th>
+            <th>均高</th>
+            <th>均低</th>
+            <th>振幅</th>
+        </tr>
+        <tr>
+            <td style="font-weight:bold; color:#ff6f00;">🎯 競拍</td>
+            <td><b>${a.count}</b></td>
+            <td>${((a.count/(a.count+i.count))*100).toFixed(1)}%</td>
+            <td style="color:#c62828;">${a.avgHigh.toFixed(1)}</td>
+            <td style="color:#2e7d32;">${a.avgLow.toFixed(1)}</td>
+            <td style="font-weight:bold; color:${a.avgAmp > i.avgAmp ? '#2e7d32' : '#333'};">${a.avgAmp.toFixed(1)}%</td>
+        </tr>
+        <tr>
+            <td style="font-weight:bold; color:#1565c0;">📋 詢圈</td>
+            <td><b>${i.count}</b></td>
+            <td>${((i.count/(a.count+i.count))*100).toFixed(1)}%</td>
+            <td style="color:#c62828;">${i.avgHigh.toFixed(1)}</td>
+            <td style="color:#2e7d32;">${i.avgLow.toFixed(1)}</td>
+            <td style="font-weight:bold; color:${i.avgAmp > a.avgAmp ? '#2e7d32' : '#333'};">${i.avgAmp.toFixed(1)}%</td>
+        </tr>
+    </table>`;
+    
     // 個股明細表格 - 競拍
     html += `
     <div style="font-size:16px; font-weight:bold; color:#ff6f00; margin:15px 0 10px 0; cursor:pointer;" onclick="toggleTypeDetail('auction')">
@@ -14434,47 +14450,37 @@ function renderKYAnalysis() {
     if (!data) return '<div>暫無數據</div>';
     const ky = data.overall.ky;
     const nonKy = data.overall.nonKy;
+    
+    // v3.99X r45: 統一標題樣式，與擔保比較一致
     let html = `
-    <div class="trend-compare-grid">
-        <div class="trend-compare-card">
-            <h4>🌏 KY股（海外企業）</h4>
-            <div class="trend-compare-row">
-                <span class="trend-compare-label">檔數</span>
-                <span class="trend-compare-value">${ky.count}</span>
-            </div>
-            <div class="trend-compare-row">
-                <span class="trend-compare-label">均高</span>
-                <span class="trend-compare-value">${ky.avgHigh.toFixed(1)}</span>
-            </div>
-            <div class="trend-compare-row">
-                <span class="trend-compare-label">均低</span>
-                <span class="trend-compare-value">${ky.avgLow.toFixed(1)}</span>
-            </div>
-            <div class="trend-compare-row">
-                <span class="trend-compare-label">振幅</span>
-                <span class="trend-compare-value ${ky.avgAmp > nonKy.avgAmp ? 'positive' : 'negative'}">${ky.avgAmp.toFixed(1)}%</span>
-            </div>
-        </div>
-        <div class="trend-compare-card">
-            <h4>🇹🇼 非KY股（本土企業）</h4>
-            <div class="trend-compare-row">
-                <span class="trend-compare-label">檔數</span>
-                <span class="trend-compare-value">${nonKy.count}</span>
-            </div>
-            <div class="trend-compare-row">
-                <span class="trend-compare-label">均高</span>
-                <span class="trend-compare-value">${nonKy.avgHigh.toFixed(1)}</span>
-            </div>
-            <div class="trend-compare-row">
-                <span class="trend-compare-label">均低</span>
-                <span class="trend-compare-value">${nonKy.avgLow.toFixed(1)}</span>
-            </div>
-            <div class="trend-compare-row">
-                <span class="trend-compare-label">振幅</span>
-                <span class="trend-compare-value ${nonKy.avgAmp > ky.avgAmp ? 'positive' : ''}">${nonKy.avgAmp.toFixed(1)}%</span>
-            </div>
-        </div>
-    </div>`;
+    <div style="font-size:16px; font-weight:bold; color:#e65100; margin-bottom:8px;">📊 KY股比較（全年度）</div>
+    <table class="trend-year-table">
+        <tr>
+            <th>類型</th>
+            <th>檔數</th>
+            <th>占比</th>
+            <th>均高</th>
+            <th>均低</th>
+            <th>振幅</th>
+        </tr>
+        <tr>
+            <td style="font-weight:bold; color:#9c27b0;">🌏 KY股</td>
+            <td><b>${ky.count}</b></td>
+            <td>${((ky.count/(ky.count+nonKy.count))*100).toFixed(1)}%</td>
+            <td style="color:#c62828;">${ky.avgHigh.toFixed(1)}</td>
+            <td style="color:#2e7d32;">${ky.avgLow.toFixed(1)}</td>
+            <td style="font-weight:bold; color:${ky.avgAmp > nonKy.avgAmp ? '#2e7d32' : '#333'};">${ky.avgAmp.toFixed(1)}%</td>
+        </tr>
+        <tr>
+            <td style="font-weight:bold; color:#2e7d32;">🇹🇼 非KY</td>
+            <td><b>${nonKy.count}</b></td>
+            <td>${((nonKy.count/(ky.count+nonKy.count))*100).toFixed(1)}%</td>
+            <td style="color:#c62828;">${nonKy.avgHigh.toFixed(1)}</td>
+            <td style="color:#2e7d32;">${nonKy.avgLow.toFixed(1)}</td>
+            <td style="font-weight:bold; color:${nonKy.avgAmp > ky.avgAmp ? '#2e7d32' : '#333'};">${nonKy.avgAmp.toFixed(1)}%</td>
+        </tr>
+    </table>`;
+    
     // 年度KY股統計表（多年度2010-2025）
     html += `
     <div style="font-size:16px; font-weight:bold; color:#e65100; margin:15px 0 10px 0;">📈 各年度KY股 vs 非KY股表現（2010-2025）</div>

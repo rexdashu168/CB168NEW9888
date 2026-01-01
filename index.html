@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AI智能可轉債競拍系統 v3.99X (百分位數策略版)</title>
+<!-- v3.99X: CBAS履約試算器 - 正確公式版本 -->
+<!-- v3.99X: 產業走勢時間標籤切換修正 -->
 <!-- v3.99X: 收闘按鈕位置修正 - 收闘後顯示在右側，方便使用者展開 -->
 <!-- v3.99W: 百分位數策略 - 基於307檔歷史統計，提供30%/50%/70%/85%中獎率對應的建議價格 -->
 <!-- v3.99U: 所有圖表加入動態tooltip -->
@@ -3458,6 +3460,7 @@ button:active, .clickable:active {
         <button type="button" class="basic-info-tab" onclick="showBasicInfoTab('history', event)" style="background:#1565c0; color:white;">📜 歷史發行</button>
         <button type="button" class="basic-info-tab" onclick="showBasicInfoTab('dna', event)" style="background:#7b1fa2; color:white;">🧬 發債DNA</button>
         <button type="button" class="basic-info-tab" onclick="showBasicInfoTab('foreignNews', event)" style="background:#c62828; color:white;">📰 外電報導</button>
+        <button type="button" class="basic-info-tab" onclick="showBasicInfoTab('cbasCalc', event)" style="background:#ff6f00; color:white;">🧮 CBAS試算</button>
     </div>
     <div id="basicInfoContent" style="min-height:200px; padding:15px; background:#fafafa; border-radius:0 0 8px 8px; border:1px solid #e0e0e0; border-top:none;">
         <div style="text-align:center; color:#444; padding:40px;">
@@ -3533,6 +3536,7 @@ button:active, .clickable:active {
             <button type="button" class="price-trend-tab" onclick="showPriceTrendTab('balance', event)" style="padding:8px 12px; border:2px solid #9c27b0; border-radius:6px; background:white; color:#7b1fa2; cursor:pointer; font-weight:600; font-size:15px; white-space:nowrap;">📋 籌碼轉換</button>
             <button type="button" class="price-trend-tab" onclick="showPriceTrendTab('cbas', event)" style="padding:8px 12px; border:2px solid #9c27b0; border-radius:6px; background:white; color:#7b1fa2; cursor:pointer; font-weight:600; font-size:15px; white-space:nowrap;">🎯 CBAS</button>
             <button type="button" class="price-trend-tab" onclick="showPriceTrendTab('cbasHistory', event)" style="padding:8px 12px; border:2px solid #9c27b0; border-radius:6px; background:white; color:#7b1fa2; cursor:pointer; font-weight:600; font-size:15px; white-space:nowrap;">⚡ CBAS歷史</button>
+            <button type="button" class="price-trend-tab" onclick="showPriceTrendTab('cbasCalc', event)" style="padding:8px 12px; border:2px solid #ff6f00; border-radius:6px; background:white; color:#e65100; cursor:pointer; font-weight:600; font-size:15px; white-space:nowrap;">📐 CBAS試算</button>
         </div>
     </div>
     <!-- 圖表內容區 -->
@@ -22013,6 +22017,10 @@ function showBasicInfoTab(tabName, event) {
                 console.log('[showBasicInfoTab] 執行 renderForeignNews');
                 renderForeignNews(cbCode, content);
                 break;
+            case 'cbasCalc':
+                console.log('[showBasicInfoTab] 執行 renderCBASCalculator');
+                renderCBASCalculator(cbCode, content);
+                break;
             default:
                 content.innerHTML = `<div style="color:#444;">未知標籤：${tabName}</div>`;
         }
@@ -26357,6 +26365,11 @@ function showPriceTrendTab(tabName, event) {
         renderCBASHistoryTab(cbCode, content);
         return;
     }
+    // v3.99X 新增：CBAS損益試算標籤
+    if (tabName === 'cbasCalc') {
+        renderCBASCalculator(cbCode, content);
+        return;
+    }
     // v3.97-zs-br: CB價格走勢標籤 - 使用 CB_price 資料庫
     if (tabName === 'cbHistory') {
         renderCBHistory(cbCode, content);
@@ -27030,6 +27043,641 @@ function renderCBASHistoryChart(monthlyData) {
             }
         }
     });
+}
+// ==================== v3.99X 新增：CBAS損益試算器 ====================
+/**
+ * v3.99X 新增：渲染 CBAS 損益試算器
+ * 公式來源：券商CBAS Option履約損益試算表
+ */
+function renderCBASCalculator(cbCode, container) {
+    // 取得CB基本資料
+    const basicData = window.basicData?.[cbCode] || {};
+    const quoteData09 = window.quoteData?.['09'] || {};
+    const cbData = quoteData09[cbCode] || {};
+    const putbackData = window.putbackData?.[cbCode] || {};
+    
+    // 取得預設值
+    const cbName = basicData['可轉債簡稱'] || cbCode;
+    const putbackDate = putbackData['賣回日期'] || '';
+    const putbackPrice = parseFloat(putbackData['賣回價格']) || 100;
+    const cbPrice = parseFloat(cbData['最新成交價']) || 100;
+    
+    // 計算預設履約日（今天）
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}/${String(today.getMonth()+1).padStart(2,'0')}/${String(today.getDate()).padStart(2,'0')}`;
+    
+    let html = `
+        <div style="background:white; border-radius:12px; padding:20px;">
+            <!-- 標題與模式切換 -->
+            <div style="text-align:center; margin-bottom:15px;">
+                <div style="font-size:20px; font-weight:bold; color:#e65100;">📐 CBAS 損益試算器</div>
+                <div style="font-size:14px; color:#666; margin-top:5px;">${cbCode} ${cbName}</div>
+            </div>
+            
+            <!-- 模式切換標籤 -->
+            <div style="display:flex; justify-content:center; gap:10px; margin-bottom:20px;">
+                <button id="cbasMode_calc" onclick="switchCBASMode('calc')" 
+                    style="padding:10px 20px; border:2px solid #ff6f00; background:#ff6f00; color:white; border-radius:8px; cursor:pointer; font-weight:bold; font-size:14px;">
+                    🔢 損益試算
+                </button>
+                <button id="cbasMode_verify" onclick="switchCBASMode('verify')" 
+                    style="padding:10px 20px; border:2px solid #1565c0; background:white; color:#1565c0; border-radius:8px; cursor:pointer; font-weight:bold; font-size:14px;">
+                    ✅ 庫存驗算
+                </button>
+            </div>
+            
+            <!-- 損益試算模式 -->
+            <div id="cbasCalcMode" style="display:block;">
+            
+            <!-- 輸入區域 -->
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:20px;">
+                <!-- 左欄：基本參數 -->
+                <div style="background:#fff8e1; border-radius:10px; padding:15px; border:2px solid #ff6f00;">
+                    <div style="font-size:16px; font-weight:bold; color:#e65100; margin-bottom:12px;">📝 基本參數</div>
+                    
+                    <div style="margin-bottom:10px;">
+                        <label style="display:block; font-size:13px; color:#666; margin-bottom:3px;">預計履約日期</label>
+                        <input type="text" id="cbasCalc_execDate" value="${todayStr}" 
+                            style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:14px; box-sizing:border-box;">
+                    </div>
+                    
+                    <div style="margin-bottom:10px;">
+                        <label style="display:block; font-size:13px; color:#666; margin-bottom:3px;">CB賣回日(B)</label>
+                        <input type="text" id="cbasCalc_putbackDate" value="${putbackDate}" 
+                            style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:14px; box-sizing:border-box;">
+                    </div>
+                    
+                    <div style="margin-bottom:10px;">
+                        <label style="display:block; font-size:13px; color:#666; margin-bottom:3px;">賣回價格(A)</label>
+                        <input type="number" id="cbasCalc_putbackPrice" value="${putbackPrice.toFixed(4)}" step="0.0001"
+                            style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:14px; box-sizing:border-box;">
+                    </div>
+                    
+                    <div style="margin-bottom:10px;">
+                        <label style="display:block; font-size:13px; color:#666; margin-bottom:3px;">折現率(C) %</label>
+                        <input type="number" id="cbasCalc_discountRate" value="2.5" step="0.1"
+                            style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:14px; box-sizing:border-box;">
+                    </div>
+                    
+                    <div style="margin-bottom:10px;">
+                        <label style="display:block; font-size:13px; color:#666; margin-bottom:3px;">提前call違約金 %</label>
+                        <input type="number" id="cbasCalc_penalty" value="0" step="0.25"
+                            style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:14px; box-sizing:border-box;">
+                        <div style="font-size:11px; color:#888; margin-top:2px;">※ 三個月內履約填0.25%，否則填0</div>
+                    </div>
+                </div>
+                
+                <!-- 右欄：交易參數 -->
+                <div style="background:#e8f5e9; border-radius:10px; padding:15px; border:2px solid #43a047;">
+                    <div style="font-size:16px; font-weight:bold; color:#2e7d32; margin-bottom:12px;">💰 交易參數</div>
+                    
+                    <div style="margin-bottom:10px;">
+                        <label style="display:block; font-size:13px; color:#666; margin-bottom:3px;">履約張數</label>
+                        <input type="number" id="cbasCalc_shares" value="10" step="1"
+                            style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:14px; box-sizing:border-box;">
+                    </div>
+                    
+                    <div style="margin-bottom:10px;">
+                        <label style="display:block; font-size:13px; color:#666; margin-bottom:3px;">期初權利金(市價)</label>
+                        <input type="number" id="cbasCalc_premium" value="${(cbPrice - 95).toFixed(2)}" step="0.01"
+                            style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:14px; box-sizing:border-box;">
+                        <div style="font-size:11px; color:#888; margin-top:2px;">※ 權利金 = CB市價 - 履約價</div>
+                    </div>
+                    
+                    <div style="margin-bottom:10px;">
+                        <label style="display:block; font-size:13px; color:#666; margin-bottom:3px;">CB賣出價格(預估)</label>
+                        <input type="number" id="cbasCalc_sellPrice" value="${cbPrice.toFixed(2)}" step="0.01"
+                            style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:14px; box-sizing:border-box;">
+                    </div>
+                    
+                    <div style="margin-top:15px;">
+                        <button onclick="calculateCBASResult()" 
+                            style="width:100%; padding:12px; background:linear-gradient(135deg, #ff6f00, #ff8f00); color:white; border:none; border-radius:8px; font-size:16px; font-weight:bold; cursor:pointer;">
+                            🔢 計算損益
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 計算結果區域 -->
+            <div id="cbasCalcResult" style="background:#f5f5f5; border-radius:10px; padding:15px; min-height:200px;">
+                <div style="text-align:center; color:#888; padding:40px;">
+                    👆 輸入參數後點擊「計算損益」
+                </div>
+            </div>
+            
+            <!-- 公式說明 -->
+            <div style="margin-top:15px; padding:12px; background:#fff3e0; border-radius:8px; border-left:4px solid #ff6f00;">
+                <div style="font-size:14px; font-weight:bold; color:#e65100; margin-bottom:8px;">📌 CBAS 計算公式</div>
+                <div style="font-size:13px; color:#555; line-height:1.8;">
+                    <div>• <b>履約交割日</b> = 預計履約日 + 2天</div>
+                    <div>• <b>剩餘天數</b> = CB賣回日 - 履約交割日 + 1</div>
+                    <div>• <b>履約價</b> = 100 - 折現率 × 剩餘天數/365 - 提前違約金</div>
+                    <div>• <b>損益平衡價</b> = 履約價 + 權利金</div>
+                    <div>• <b>履約取回金額</b> = (CB賣出價 - 履約價) × 張數 × 1000</div>
+                    <div>• <b>報酬率</b> = (CB賣出價 - 履約價 - 權利金) / 權利金</div>
+                </div>
+            </div>
+            
+            <!-- 風險提示 -->
+            <div style="margin-top:10px; padding:10px; background:#ffebee; border-radius:8px; font-size:13px; color:#c62828;">
+                ⚠️ <b>最大風險</b>：權利金到期歸零，虧損100%。CBAS適合有擔保CB，無擔保需承擔公司信用風險。
+            </div>
+            </div><!-- 結束損益試算模式 -->
+            
+            <!-- 庫存驗算模式 -->
+            <div id="cbasVerifyMode" style="display:none;">
+                <div style="background:#e3f2fd; border-radius:10px; padding:20px; border:2px solid #1565c0;">
+                    <div style="font-size:16px; font-weight:bold; color:#1565c0; margin-bottom:15px;">📋 庫存資料輸入（驗證公式正確性）</div>
+                    
+                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">
+                        <div>
+                            <label style="display:block; font-size:12px; color:#666; margin-bottom:3px;">交易日</label>
+                            <input type="text" id="cbasVerify_tradeDate" placeholder="2025/01/13" 
+                                style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:13px; box-sizing:border-box;">
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:12px; color:#666; margin-bottom:3px;">CB賣回日</label>
+                            <input type="text" id="cbasVerify_putbackDate" placeholder="2026/05/25" 
+                                style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:13px; box-sizing:border-box;">
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:12px; color:#666; margin-bottom:3px;">賣回價格</label>
+                            <input type="number" id="cbasVerify_putbackPrice" placeholder="100.7519" step="0.0001"
+                                style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:13px; box-sizing:border-box;">
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:12px; color:#666; margin-bottom:3px;">折現率 %</label>
+                            <input type="number" id="cbasVerify_discountRate" placeholder="3.00" step="0.01"
+                                style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:13px; box-sizing:border-box;">
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:12px; color:#666; margin-bottom:3px;">權利金率 %</label>
+                            <input type="number" id="cbasVerify_premiumRate" placeholder="1.92" step="0.01"
+                                style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:13px; box-sizing:border-box;">
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:12px; color:#666; margin-bottom:3px;">庫存履約價</label>
+                            <input type="number" id="cbasVerify_stockStrike" placeholder="99.54" step="0.01"
+                                style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:13px; box-sizing:border-box;">
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:12px; color:#666; margin-bottom:3px;">本金</label>
+                            <input type="number" id="cbasVerify_principal" placeholder="500000" step="1000"
+                                style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:13px; box-sizing:border-box;">
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:12px; color:#666; margin-bottom:3px;">權利金總額</label>
+                            <input type="number" id="cbasVerify_totalPremium" placeholder="9600" step="1"
+                                style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:13px; box-sizing:border-box;">
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:12px; color:#666; margin-bottom:3px;">損益平衡價</label>
+                            <input type="number" id="cbasVerify_breakeven" placeholder="101.46" step="0.01"
+                                style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:13px; box-sizing:border-box;">
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top:15px; text-align:center;">
+                        <button onclick="verifyCBASFormula()" 
+                            style="padding:12px 40px; background:linear-gradient(135deg, #1565c0, #1976d2); color:white; border:none; border-radius:8px; font-size:16px; font-weight:bold; cursor:pointer;">
+                            🔍 驗算公式
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 驗算結果 -->
+                <div id="cbasVerifyResult" style="margin-top:15px; background:#f5f5f5; border-radius:10px; padding:15px; min-height:150px;">
+                    <div style="text-align:center; color:#888; padding:30px;">
+                        👆 輸入庫存資料後點擊「驗算公式」
+                    </div>
+                </div>
+                
+                <!-- 公式說明 -->
+                <div style="margin-top:15px; padding:12px; background:#e3f2fd; border-radius:8px; border-left:4px solid #1565c0;">
+                    <div style="font-size:14px; font-weight:bold; color:#1565c0; margin-bottom:8px;">📌 CBAS 正確公式（已驗證）</div>
+                    <div style="font-size:13px; color:#555; line-height:1.8;">
+                        <div>• <b>CBAS到期日</b> = CB賣回日 - 14天</div>
+                        <div>• <b>履約交割日</b> = 交易日 + 2天</div>
+                        <div>• <b>剩餘天數</b> = CB賣回日 - 履約交割日 + 1</div>
+                        <div>• <b>履約價</b> = 100 - 折現率 × 剩餘天數/365</div>
+                        <div>• <b>權利金總額</b> = 本金 × 權利金率</div>
+                        <div>• <b>損益平衡價</b> = 履約價 + 權利金率</div>
+                    </div>
+                </div>
+            </div><!-- 結束庫存驗算模式 -->
+        </div>
+    `;
+    
+    container.innerHTML = html;
+}
+
+/**
+ * v3.99X 新增：計算CBAS損益結果
+ */
+function calculateCBASResult() {
+    // 取得輸入值
+    const execDateStr = document.getElementById('cbasCalc_execDate')?.value || '';
+    const putbackDateStr = document.getElementById('cbasCalc_putbackDate')?.value || '';
+    const putbackPrice = parseFloat(document.getElementById('cbasCalc_putbackPrice')?.value) || 100;
+    const discountRate = parseFloat(document.getElementById('cbasCalc_discountRate')?.value) || 2.5;
+    const penalty = parseFloat(document.getElementById('cbasCalc_penalty')?.value) || 0;
+    const shares = parseInt(document.getElementById('cbasCalc_shares')?.value) || 10;
+    const premium = parseFloat(document.getElementById('cbasCalc_premium')?.value) || 10;
+    const sellPrice = parseFloat(document.getElementById('cbasCalc_sellPrice')?.value) || 100;
+    
+    const resultDiv = document.getElementById('cbasCalcResult');
+    
+    // 解析日期
+    const parseDate = (str) => {
+        const parts = str.replace(/\//g, '-').split('-');
+        if (parts.length !== 3) return null;
+        return new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
+    };
+    
+    const execDate = parseDate(execDateStr);
+    const putbackDate = parseDate(putbackDateStr);
+    
+    if (!execDate || !putbackDate) {
+        resultDiv.innerHTML = `<div style="text-align:center; color:#c62828; padding:20px;">❌ 日期格式錯誤，請使用 YYYY/MM/DD 格式</div>`;
+        return;
+    }
+    
+    // Step 1: 履約交割日 = 預計履約日 + 2天
+    const settlementDate = new Date(execDate);
+    settlementDate.setDate(settlementDate.getDate() + 2);
+    
+    // Step 2: 剩餘天數 = CB賣回日 - 履約交割日 + 1
+    const remainingDays = Math.floor((putbackDate - settlementDate) / (1000 * 60 * 60 * 24)) + 1;
+    
+    if (remainingDays <= 0) {
+        resultDiv.innerHTML = `<div style="text-align:center; color:#c62828; padding:20px;">❌ 履約交割日必須早於CB賣回日</div>`;
+        return;
+    }
+    
+    // Step 3: 履約價 = 100 - 折現率 × 剩餘天數/365 - 提前違約金
+    const strikePrice = 100 - (discountRate / 100) * (remainingDays / 365) - penalty;
+    
+    // Step 4: 損益平衡價 = 履約價 + 權利金
+    const breakEvenPrice = strikePrice + premium;
+    
+    // Step 5: 權利金成本 = 權利金 × 張數 × 1000
+    const premiumCost = premium * shares * 1000;
+    
+    // Step 6: 履約取回金額 = (CB賣出價 - 履約價) × 張數 × 1000
+    const exerciseReturn = (sellPrice - strikePrice) * shares * 1000;
+    
+    // Step 7: 淨損益 = 履約取回金額 - 權利金成本
+    const netProfit = exerciseReturn - premiumCost;
+    
+    // Step 8: 報酬率 = 淨損益 / 權利金成本
+    const returnRate = premiumCost > 0 ? (netProfit / premiumCost * 100) : 0;
+    
+    // 判斷情境
+    let scenario = '';
+    let scenarioColor = '';
+    if (sellPrice >= breakEvenPrice) {
+        scenario = '✅ 獲利情境';
+        scenarioColor = '#2e7d32';
+    } else if (sellPrice >= strikePrice) {
+        scenario = '⚠️ 部分虧損';
+        scenarioColor = '#ff6f00';
+    } else {
+        scenario = '❌ 不履約（全虧）';
+        scenarioColor = '#c62828';
+    }
+    
+    // 格式化日期顯示
+    const formatDate = (d) => `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+    
+    resultDiv.innerHTML = `
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+            <!-- 左欄：計算過程 -->
+            <div>
+                <div style="font-size:16px; font-weight:bold; color:#1565c0; margin-bottom:12px;">📊 計算過程</div>
+                <table style="width:100%; font-size:14px; border-collapse:collapse;">
+                    <tr style="background:#e3f2fd;">
+                        <td style="padding:8px; border:1px solid #ddd;">履約交割日</td>
+                        <td style="padding:8px; border:1px solid #ddd; text-align:right; font-weight:bold;">${formatDate(settlementDate)}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:8px; border:1px solid #ddd;">剩餘天數</td>
+                        <td style="padding:8px; border:1px solid #ddd; text-align:right; font-weight:bold;">${remainingDays} 天</td>
+                    </tr>
+                    <tr style="background:#e3f2fd;">
+                        <td style="padding:8px; border:1px solid #ddd;">折現金額</td>
+                        <td style="padding:8px; border:1px solid #ddd; text-align:right;">${(discountRate / 100 * remainingDays / 365).toFixed(4)}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:8px; border:1px solid #ddd; font-weight:bold; color:#1565c0;">履約價</td>
+                        <td style="padding:8px; border:1px solid #ddd; text-align:right; font-weight:bold; color:#1565c0; font-size:16px;">${strikePrice.toFixed(2)}</td>
+                    </tr>
+                    <tr style="background:#fff3e0;">
+                        <td style="padding:8px; border:1px solid #ddd; font-weight:bold; color:#e65100;">損益平衡價</td>
+                        <td style="padding:8px; border:1px solid #ddd; text-align:right; font-weight:bold; color:#e65100; font-size:16px;">${breakEvenPrice.toFixed(2)}</td>
+                    </tr>
+                </table>
+            </div>
+            
+            <!-- 右欄：損益結果 -->
+            <div>
+                <div style="font-size:16px; font-weight:bold; color:#e65100; margin-bottom:12px;">💰 損益結果</div>
+                <table style="width:100%; font-size:14px; border-collapse:collapse;">
+                    <tr style="background:#fff8e1;">
+                        <td style="padding:8px; border:1px solid #ddd;">權利金成本</td>
+                        <td style="padding:8px; border:1px solid #ddd; text-align:right; color:#c62828;">-${premiumCost.toLocaleString()} 元</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:8px; border:1px solid #ddd;">履約取回金額</td>
+                        <td style="padding:8px; border:1px solid #ddd; text-align:right; color:#2e7d32;">+${exerciseReturn.toLocaleString()} 元</td>
+                    </tr>
+                    <tr style="background:${netProfit >= 0 ? '#e8f5e9' : '#ffebee'};">
+                        <td style="padding:8px; border:1px solid #ddd; font-weight:bold;">淨損益</td>
+                        <td style="padding:8px; border:1px solid #ddd; text-align:right; font-weight:bold; font-size:18px; color:${netProfit >= 0 ? '#2e7d32' : '#c62828'};">
+                            ${netProfit >= 0 ? '+' : ''}${netProfit.toLocaleString()} 元
+                        </td>
+                    </tr>
+                    <tr style="background:${returnRate >= 0 ? '#e8f5e9' : '#ffebee'};">
+                        <td style="padding:8px; border:1px solid #ddd; font-weight:bold;">報酬率</td>
+                        <td style="padding:8px; border:1px solid #ddd; text-align:right; font-weight:bold; font-size:18px; color:${returnRate >= 0 ? '#2e7d32' : '#c62828'};">
+                            ${returnRate >= 0 ? '+' : ''}${returnRate.toFixed(1)}%
+                        </td>
+                    </tr>
+                </table>
+                
+                <!-- 情境判斷 -->
+                <div style="margin-top:12px; padding:12px; background:${netProfit >= 0 ? '#e8f5e9' : '#ffebee'}; border-radius:8px; text-align:center;">
+                    <div style="font-size:18px; font-weight:bold; color:${scenarioColor};">${scenario}</div>
+                    <div style="font-size:13px; color:#666; margin-top:5px;">
+                        CB賣出價 ${sellPrice.toFixed(2)} ${sellPrice >= breakEvenPrice ? '≥' : '<'} 損益平衡價 ${breakEvenPrice.toFixed(2)}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 情境分析表 -->
+        <div style="margin-top:15px;">
+            <div style="font-size:14px; font-weight:bold; color:#37474f; margin-bottom:8px;">📈 情境分析（${shares}張）</div>
+            <div style="overflow-x:auto;">
+                <table style="width:100%; font-size:13px; border-collapse:collapse;">
+                    <thead>
+                        <tr style="background:#37474f; color:white;">
+                            <th style="padding:6px; text-align:center;">CB賣出價</th>
+                            <th style="padding:6px; text-align:right;">履約取回</th>
+                            <th style="padding:6px; text-align:right;">淨損益</th>
+                            <th style="padding:6px; text-align:right;">報酬率</th>
+                            <th style="padding:6px; text-align:center;">結果</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${generateScenarioRows(strikePrice, breakEvenPrice, premium, shares, premiumCost)}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * v3.99X 新增：生成情境分析表格行
+ */
+function generateScenarioRows(strikePrice, breakEvenPrice, premium, shares, premiumCost) {
+
+/**
+ * v3.99X 新增：CBAS模式切換
+ */
+function switchCBASMode(mode) {
+    const calcMode = document.getElementById('cbasCalcMode');
+    const verifyMode = document.getElementById('cbasVerifyMode');
+    const btnCalc = document.getElementById('cbasMode_calc');
+    const btnVerify = document.getElementById('cbasMode_verify');
+    
+    if (mode === 'calc') {
+        calcMode.style.display = 'block';
+        verifyMode.style.display = 'none';
+        btnCalc.style.background = '#ff6f00';
+        btnCalc.style.color = 'white';
+        btnVerify.style.background = 'white';
+        btnVerify.style.color = '#1565c0';
+    } else {
+        calcMode.style.display = 'none';
+        verifyMode.style.display = 'block';
+        btnCalc.style.background = 'white';
+        btnCalc.style.color = '#ff6f00';
+        btnVerify.style.background = '#1565c0';
+        btnVerify.style.color = 'white';
+    }
+}
+
+/**
+ * v3.99X 新增：CBAS庫存驗算
+ */
+function verifyCBASFormula() {
+    // 取得輸入值
+    const tradeDateStr = document.getElementById('cbasVerify_tradeDate')?.value || '';
+    const putbackDateStr = document.getElementById('cbasVerify_putbackDate')?.value || '';
+    const putbackPrice = parseFloat(document.getElementById('cbasVerify_putbackPrice')?.value) || 100;
+    const discountRate = parseFloat(document.getElementById('cbasVerify_discountRate')?.value) || 3;
+    const premiumRate = parseFloat(document.getElementById('cbasVerify_premiumRate')?.value) || 2;
+    const stockStrike = parseFloat(document.getElementById('cbasVerify_stockStrike')?.value) || 0;
+    const principal = parseFloat(document.getElementById('cbasVerify_principal')?.value) || 0;
+    const totalPremium = parseFloat(document.getElementById('cbasVerify_totalPremium')?.value) || 0;
+    const stockBreakeven = parseFloat(document.getElementById('cbasVerify_breakeven')?.value) || 0;
+    
+    const resultDiv = document.getElementById('cbasVerifyResult');
+    
+    // 解析日期
+    const parseDate = (str) => {
+        const parts = str.replace(/\//g, '-').split('-');
+        if (parts.length !== 3) return null;
+        return new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
+    };
+    
+    const tradeDate = parseDate(tradeDateStr);
+    const putbackDate = parseDate(putbackDateStr);
+    
+    if (!tradeDate || !putbackDate) {
+        resultDiv.innerHTML = `<div style="text-align:center; color:#c62828; padding:20px;">❌ 日期格式錯誤，請使用 YYYY/MM/DD 格式</div>`;
+        return;
+    }
+    
+    // === 公式計算 ===
+    // 履約交割日 = 交易日 + 2天
+    const settlementDate = new Date(tradeDate);
+    settlementDate.setDate(settlementDate.getDate() + 2);
+    
+    // 剩餘天數 = CB賣回日 - 履約交割日 + 1
+    const remainingDays = Math.floor((putbackDate - settlementDate) / (1000 * 60 * 60 * 24)) + 1;
+    
+    // 履約價 = 100 - 折現率 × 剩餘天數/365
+    const calcStrike = 100 - (discountRate / 100) * (remainingDays / 365);
+    
+    // 權利金總額 = 本金 × 權利金率
+    const calcPremium = principal * (premiumRate / 100);
+    
+    // 損益平衡價 = 履約價 + 權利金率
+    const calcBreakeven = calcStrike + premiumRate;
+    
+    // CBAS到期日 = 賣回日 - 14天
+    const cbasExpiry = new Date(putbackDate);
+    cbasExpiry.setDate(cbasExpiry.getDate() - 14);
+    
+    // === 比對結果 ===
+    const strikeDiff = stockStrike ? (calcStrike - stockStrike) : null;
+    const premiumDiff = totalPremium ? (calcPremium - totalPremium) : null;
+    const breakevenDiff = stockBreakeven ? (calcBreakeven - stockBreakeven) : null;
+    
+    const formatDate = (d) => `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+    
+    const checkResult = (diff, tolerance = 0.5) => {
+        if (diff === null) return '—';
+        if (Math.abs(diff) < tolerance) return '<span style="color:#2e7d32; font-weight:bold;">✓ 符合</span>';
+        return `<span style="color:#c62828; font-weight:bold;">✗ 差${diff > 0 ? '+' : ''}${diff.toFixed(2)}</span>`;
+    };
+    
+    resultDiv.innerHTML = `
+        <div style="font-size:16px; font-weight:bold; color:#1565c0; margin-bottom:15px;">🔍 驗算結果</div>
+        
+        <!-- 日期計算 -->
+        <div style="background:#e8f5e9; border-radius:8px; padding:12px; margin-bottom:15px;">
+            <div style="font-size:14px; font-weight:bold; color:#2e7d32; margin-bottom:8px;">📅 日期計算</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:10px; font-size:13px;">
+                <div>
+                    <div style="color:#666;">交易日</div>
+                    <div style="font-weight:bold;">${formatDate(tradeDate)}</div>
+                </div>
+                <div>
+                    <div style="color:#666;">履約交割日</div>
+                    <div style="font-weight:bold;">${formatDate(settlementDate)}</div>
+                </div>
+                <div>
+                    <div style="color:#666;">CB賣回日</div>
+                    <div style="font-weight:bold;">${formatDate(putbackDate)}</div>
+                </div>
+                <div>
+                    <div style="color:#666;">剩餘天數</div>
+                    <div style="font-weight:bold; color:#1565c0;">${remainingDays} 天</div>
+                </div>
+            </div>
+            <div style="margin-top:8px; padding-top:8px; border-top:1px dashed #a5d6a7;">
+                <span style="color:#666;">CBAS到期日（賣回日-14天）：</span>
+                <span style="font-weight:bold; color:#e65100;">${formatDate(cbasExpiry)}</span>
+            </div>
+        </div>
+        
+        <!-- 公式驗算比對 -->
+        <table style="width:100%; border-collapse:collapse; font-size:14px;">
+            <thead>
+                <tr style="background:#1565c0; color:white;">
+                    <th style="padding:10px; text-align:left;">項目</th>
+                    <th style="padding:10px; text-align:right;">公式計算</th>
+                    <th style="padding:10px; text-align:right;">庫存數據</th>
+                    <th style="padding:10px; text-align:center;">驗證</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr style="background:#f5f5f5;">
+                    <td style="padding:10px; border:1px solid #ddd;">
+                        <div style="font-weight:bold;">履約價</div>
+                        <div style="font-size:11px; color:#666;">100 - ${discountRate}% × ${remainingDays}/365</div>
+                    </td>
+                    <td style="padding:10px; border:1px solid #ddd; text-align:right; font-weight:bold; color:#1565c0; font-size:16px;">
+                        ${calcStrike.toFixed(2)}
+                    </td>
+                    <td style="padding:10px; border:1px solid #ddd; text-align:right; font-weight:bold;">
+                        ${stockStrike || '—'}
+                    </td>
+                    <td style="padding:10px; border:1px solid #ddd; text-align:center;">
+                        ${checkResult(strikeDiff, 2)}
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:10px; border:1px solid #ddd;">
+                        <div style="font-weight:bold;">權利金總額</div>
+                        <div style="font-size:11px; color:#666;">${principal.toLocaleString()} × ${premiumRate}%</div>
+                    </td>
+                    <td style="padding:10px; border:1px solid #ddd; text-align:right; font-weight:bold; color:#e65100; font-size:16px;">
+                        ${calcPremium.toLocaleString()}
+                    </td>
+                    <td style="padding:10px; border:1px solid #ddd; text-align:right; font-weight:bold;">
+                        ${totalPremium ? totalPremium.toLocaleString() : '—'}
+                    </td>
+                    <td style="padding:10px; border:1px solid #ddd; text-align:center;">
+                        ${checkResult(premiumDiff, 1)}
+                    </td>
+                </tr>
+                <tr style="background:#f5f5f5;">
+                    <td style="padding:10px; border:1px solid #ddd;">
+                        <div style="font-weight:bold;">損益平衡價</div>
+                        <div style="font-size:11px; color:#666;">${calcStrike.toFixed(2)} + ${premiumRate}</div>
+                    </td>
+                    <td style="padding:10px; border:1px solid #ddd; text-align:right; font-weight:bold; color:#2e7d32; font-size:16px;">
+                        ${calcBreakeven.toFixed(2)}
+                    </td>
+                    <td style="padding:10px; border:1px solid #ddd; text-align:right; font-weight:bold;">
+                        ${stockBreakeven || '—'}
+                    </td>
+                    <td style="padding:10px; border:1px solid #ddd; text-align:center;">
+                        ${checkResult(breakevenDiff, 0.5)}
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <!-- 差異說明 -->
+        ${strikeDiff !== null && Math.abs(strikeDiff) >= 2 ? `
+        <div style="margin-top:15px; padding:12px; background:#fff3e0; border-radius:8px; border-left:4px solid #ff6f00;">
+            <div style="font-size:13px; color:#e65100;">
+                <b>💡 履約價差異說明：</b><br>
+                公式計算與庫存數據有 ${Math.abs(strikeDiff).toFixed(2)} 元差異，可能原因：<br>
+                • 券商內含手續費/利潤調整<br>
+                • 信用風險溢價<br>
+                • 避險成本調整<br>
+                • 流動性調整
+            </div>
+        </div>
+        ` : ''}
+    `;
+}
+
+
+    const scenarios = [
+        { price: Math.ceil(breakEvenPrice) + 30, label: '大漲' },
+        { price: Math.ceil(breakEvenPrice) + 15, label: '上漲' },
+        { price: Math.ceil(breakEvenPrice) + 5, label: '小漲' },
+        { price: Math.round(breakEvenPrice), label: '平衡' },
+        { price: Math.round((strikePrice + breakEvenPrice) / 2), label: '小跌' },
+        { price: Math.round(strikePrice), label: '歸零點' },
+        { price: Math.round(strikePrice) - 5, label: '不履約' }
+    ];
+    
+    return scenarios.map(s => {
+        const exerciseReturn = Math.max(0, (s.price - strikePrice) * shares * 1000);
+        const netProfit = exerciseReturn - premiumCost;
+        const returnRate = premiumCost > 0 ? (netProfit / premiumCost * 100) : 0;
+        const isProfit = netProfit >= 0;
+        const isExercise = s.price >= strikePrice;
+        
+        const bgColor = s.price === Math.round(breakEvenPrice) ? '#fff3e0' : 
+                       isProfit ? '#e8f5e9' : '#ffebee';
+        const textColor = isProfit ? '#2e7d32' : '#c62828';
+        
+        return `
+            <tr style="background:${bgColor};">
+                <td style="padding:6px; text-align:center; border:1px solid #ddd; font-weight:bold;">${s.price}</td>
+                <td style="padding:6px; text-align:right; border:1px solid #ddd;">${exerciseReturn.toLocaleString()}</td>
+                <td style="padding:6px; text-align:right; border:1px solid #ddd; color:${textColor}; font-weight:bold;">
+                    ${netProfit >= 0 ? '+' : ''}${netProfit.toLocaleString()}
+                </td>
+                <td style="padding:6px; text-align:right; border:1px solid #ddd; color:${textColor}; font-weight:bold;">
+                    ${returnRate >= 0 ? '+' : ''}${returnRate.toFixed(0)}%
+                </td>
+                <td style="padding:6px; text-align:center; border:1px solid #ddd;">
+                    ${isExercise ? (isProfit ? '✅獲利' : '⚠️虧損') : '❌不履約'}
+                </td>
+            </tr>
+        `;
+    }).join('');
 }
 // ==================== v3.97z-s 新增：CB_kanban資料載入與圖表繪製 ====================
 // v3.97-zs-bs: 等待資料載入的 Promise 輔助函數（取代 setInterval 輪詢）
@@ -29596,8 +30244,14 @@ function renderCBASChart(cbCode, data, container, period) {
                     `}
                 </div>
             </div>
+            <!-- v3.99X: CBAS履約試算器 -->
+            <div id="cbasCalculatorContainer" style="margin-top:15px;"></div>
         </div>
     `;
+    // v3.99X: 延遲初始化試算器
+    setTimeout(() => {
+        initCBASCalculator();
+    }, 100);
 }
 // ═══════════════════════════════════════════════════════════════════════════════
 // v3.98h 新增：CBAS 持倉追蹤功能（整合自 cbas_tracker 版本）
@@ -29946,6 +30600,369 @@ function renderBuyTimingMatrix(premium, remainingYears, cbPrice, exercisePrice) 
         </div>
     `;
 }
+// ═══════════════════════════════════════════════════════════════════════════════
+// v3.99X 新增：CBAS 履約試算器（完整公式版）
+// 公式來源：券商CBAS交易試算表
+// ═══════════════════════════════════════════════════════════════════════════════
+/**
+ * v3.99X: CBAS履約試算器 - 全域變數
+ */
+window.cbasCalculator = {
+    // 預設值
+    defaults: {
+        executionDate: '',      // 預計履約日期
+        sellbackPrice: 100,     // 賣回價格(A)
+        cbSellbackDate: '',     // CB賣回日(B)
+        discountRate: 2.5,      // 折現率(C) %
+        earlyCallPenalty: 0,    // 提前call違約金 %
+        shares: 10,             // 履約張數
+        cbSellPrice: 110,       // CB賣出價格
+        initialPremium: 10      // 期初權利金(市價)
+    }
+};
+
+/**
+ * v3.99X: 渲染CBAS履約試算器介面
+ */
+function renderCBASCalculator() {
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    // 預設CB賣回日為2年後
+    const defaultSellback = new Date(today);
+    defaultSellback.setFullYear(defaultSellback.getFullYear() + 2);
+    const sellbackStr = defaultSellback.toISOString().split('T')[0];
+    
+    return `
+        <div id="cbasCalculatorPanel" style="background:linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%); border-radius:12px; padding:20px; margin-top:15px; border:2px solid #9c27b0;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <div style="font-weight:bold; color:#7b1fa2; font-size:18px; display:flex; align-items:center; gap:8px;">
+                    <span style="font-size:22px;">🧮</span>
+                    CBAS 履約試算器
+                </div>
+                <div style="font-size:13px; color:#666; background:white; padding:4px 10px; border-radius:12px;">
+                    v3.99X 完整公式版
+                </div>
+            </div>
+            
+            <!-- 免責聲明 -->
+            <div style="background:#fff3e0; padding:10px 12px; border-radius:8px; margin-bottom:15px; font-size:13px; color:#e65100; border-left:4px solid #ff9800;">
+                ⚠️ <b>模擬試算提醒</b>：本試算器依據券商公開公式推算，僅供參考。實際權利金報價、履約價格請依券商正式報價為準。
+            </div>
+            
+            <!-- 輸入區塊 -->
+            <div style="background:white; padding:15px; border-radius:10px; margin-bottom:15px;">
+                <div style="font-weight:bold; color:#333; margin-bottom:12px; font-size:15px; border-bottom:2px solid #9c27b0; padding-bottom:8px;">
+                    📝 輸入參數（黃色欄位可自行修改）
+                </div>
+                
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px;">
+                    <!-- 預計履約日期 -->
+                    <div>
+                        <label style="font-size:13px; color:#666; display:block; margin-bottom:4px;">預計履約日期</label>
+                        <input type="date" id="cbas_executionDate" value="${todayStr}"
+                               style="width:100%; padding:10px; border:2px solid #ffc107; border-radius:6px; font-size:14px; background:#fffde7;"
+                               onchange="updateCBASCalculation()">
+                    </div>
+                    
+                    <!-- 賣回價格(A) -->
+                    <div>
+                        <label style="font-size:13px; color:#666; display:block; margin-bottom:4px;">賣回價格(A)</label>
+                        <input type="number" id="cbas_sellbackPrice" value="100" step="0.0001"
+                               style="width:100%; padding:10px; border:2px solid #ffc107; border-radius:6px; font-size:14px; background:#fffde7;"
+                               onchange="updateCBASCalculation()">
+                    </div>
+                    
+                    <!-- CB賣回日(B) -->
+                    <div>
+                        <label style="font-size:13px; color:#666; display:block; margin-bottom:4px;">CB賣回日(B)</label>
+                        <input type="date" id="cbas_cbSellbackDate" value="${sellbackStr}"
+                               style="width:100%; padding:10px; border:2px solid #ffc107; border-radius:6px; font-size:14px; background:#fffde7;"
+                               onchange="updateCBASCalculation()">
+                    </div>
+                    
+                    <!-- 折現率(C) -->
+                    <div>
+                        <label style="font-size:13px; color:#666; display:block; margin-bottom:4px;">折現率(C) %</label>
+                        <input type="number" id="cbas_discountRate" value="2.5" step="0.1"
+                               style="width:100%; padding:10px; border:2px solid #ffc107; border-radius:6px; font-size:14px; background:#fffde7;"
+                               onchange="updateCBASCalculation()">
+                    </div>
+                    
+                    <!-- 提前call違約金 -->
+                    <div>
+                        <label style="font-size:13px; color:#666; display:block; margin-bottom:4px;">提前call違約金 %</label>
+                        <input type="number" id="cbas_earlyCallPenalty" value="0" step="0.25"
+                               style="width:100%; padding:10px; border:2px solid #ffc107; border-radius:6px; font-size:14px; background:#fffde7;"
+                               onchange="updateCBASCalculation()">
+                        <div style="font-size:11px; color:#888; margin-top:2px;">三個月內履約填0.25%</div>
+                    </div>
+                    
+                    <!-- 履約張數 -->
+                    <div>
+                        <label style="font-size:13px; color:#666; display:block; margin-bottom:4px;">履約張數</label>
+                        <input type="number" id="cbas_shares" value="10" step="1" min="1"
+                               style="width:100%; padding:10px; border:2px solid #ffc107; border-radius:6px; font-size:14px; background:#fffde7;"
+                               onchange="updateCBASCalculation()">
+                    </div>
+                    
+                    <!-- CB賣出價格 -->
+                    <div>
+                        <label style="font-size:13px; color:#666; display:block; margin-bottom:4px;">CB賣出價格（預期）</label>
+                        <input type="number" id="cbas_cbSellPrice" value="120" step="0.01"
+                               style="width:100%; padding:10px; border:2px solid #ffc107; border-radius:6px; font-size:14px; background:#fffde7;"
+                               onchange="updateCBASCalculation()">
+                    </div>
+                    
+                    <!-- 期初權利金 -->
+                    <div>
+                        <label style="font-size:13px; color:#666; display:block; margin-bottom:4px;">期初權利金(市價)</label>
+                        <input type="number" id="cbas_initialPremium" value="10" step="0.01"
+                               style="width:100%; padding:10px; border:2px solid #ffc107; border-radius:6px; font-size:14px; background:#fffde7;"
+                               onchange="updateCBASCalculation()">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 計算結果 -->
+            <div id="cbas_results" style="background:white; padding:15px; border-radius:10px;">
+                <!-- 由 updateCBASCalculation() 動態填入 -->
+            </div>
+            
+            <!-- 公式說明 -->
+            <div style="background:white; padding:15px; border-radius:10px; margin-top:15px;">
+                <div style="font-weight:bold; color:#333; margin-bottom:10px; font-size:15px;">
+                    📐 計算公式說明
+                </div>
+                <div style="font-size:13px; color:#555; line-height:1.8;">
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:10px;">
+                        <div style="background:#f5f5f5; padding:10px; border-radius:6px;">
+                            <div style="font-weight:bold; color:#1565c0; margin-bottom:5px;">① 履約交割日</div>
+                            <code style="background:#e3f2fd; padding:2px 6px; border-radius:3px;">= 預計履約日 + 2天</code>
+                        </div>
+                        <div style="background:#f5f5f5; padding:10px; border-radius:6px;">
+                            <div style="font-weight:bold; color:#1565c0; margin-bottom:5px;">② 剩餘天數</div>
+                            <code style="background:#e3f2fd; padding:2px 6px; border-radius:3px;">= CB賣回日 - 履約交割日 + 1</code>
+                        </div>
+                        <div style="background:#f5f5f5; padding:10px; border-radius:6px;">
+                            <div style="font-weight:bold; color:#7b1fa2; margin-bottom:5px;">③ 履約價（核心）</div>
+                            <code style="background:#f3e5f5; padding:2px 6px; border-radius:3px;">= 100 - 折現率 × 剩餘天數/365 - 違約金</code>
+                        </div>
+                        <div style="background:#f5f5f5; padding:10px; border-radius:6px;">
+                            <div style="font-weight:bold; color:#2e7d32; margin-bottom:5px;">④ 損益平衡價</div>
+                            <code style="background:#e8f5e9; padding:2px 6px; border-radius:3px;">= 履約價 + 期初權利金</code>
+                        </div>
+                        <div style="background:#f5f5f5; padding:10px; border-radius:6px;">
+                            <div style="font-weight:bold; color:#e65100; margin-bottom:5px;">⑤ 履約取回金額</div>
+                            <code style="background:#fff3e0; padding:2px 6px; border-radius:3px;">= (CB賣出價 - 履約價) × 張數 × 1000</code>
+                        </div>
+                        <div style="background:#f5f5f5; padding:10px; border-radius:6px;">
+                            <div style="font-weight:bold; color:#d32f2f; margin-bottom:5px;">⑥ 報酬率</div>
+                            <code style="background:#ffebee; padding:2px 6px; border-radius:3px;">= (CB賣出價 - 履約價 - 權利金) / 權利金</code>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * v3.99X: 更新CBAS計算結果
+ */
+function updateCBASCalculation() {
+    // 取得輸入值
+    const executionDateStr = document.getElementById('cbas_executionDate')?.value || '';
+    const sellbackPrice = parseFloat(document.getElementById('cbas_sellbackPrice')?.value) || 100;
+    const cbSellbackDateStr = document.getElementById('cbas_cbSellbackDate')?.value || '';
+    const discountRate = parseFloat(document.getElementById('cbas_discountRate')?.value) || 0;
+    const earlyCallPenalty = parseFloat(document.getElementById('cbas_earlyCallPenalty')?.value) || 0;
+    const shares = parseInt(document.getElementById('cbas_shares')?.value) || 1;
+    const cbSellPrice = parseFloat(document.getElementById('cbas_cbSellPrice')?.value) || 0;
+    const initialPremium = parseFloat(document.getElementById('cbas_initialPremium')?.value) || 0;
+    
+    // 計算
+    const executionDate = new Date(executionDateStr);
+    const cbSellbackDate = new Date(cbSellbackDateStr);
+    
+    // ① 履約交割日 = 預計履約日 + 2天
+    const settlementDate = new Date(executionDate);
+    settlementDate.setDate(settlementDate.getDate() + 2);
+    
+    // ② 剩餘天數 = CB賣回日 - 履約交割日 + 1
+    const remainingDays = Math.ceil((cbSellbackDate - settlementDate) / (1000 * 60 * 60 * 24)) + 1;
+    
+    // ③ 履約價 = 100 - 折現率 × 剩餘天數/365 - 提前違約金
+    const exercisePrice = 100 - (discountRate / 100) * (remainingDays / 365) - earlyCallPenalty;
+    
+    // ④ 損益平衡價 = 履約價 + 期初權利金
+    const breakEvenPrice = exercisePrice + initialPremium;
+    
+    // ⑤ 權利金成本 = 期初權利金 × 張數 × 1000
+    const premiumCost = initialPremium * shares * 1000;
+    
+    // ⑥ 履約取回金額 = (CB賣出價 - 履約價) × 張數 × 1000
+    const exerciseReturn = (cbSellPrice - exercisePrice) * shares * 1000;
+    
+    // ⑦ 淨獲利 = 履約取回金額 - 權利金成本
+    const netProfit = exerciseReturn - premiumCost;
+    
+    // ⑧ 報酬率 = (CB賣出價 - 履約價 - 權利金) / 權利金
+    const returnRate = initialPremium > 0 ? ((cbSellPrice - exercisePrice - initialPremium) / initialPremium * 100) : 0;
+    
+    // 判斷獲利狀態
+    const isProfitable = cbSellPrice > breakEvenPrice;
+    const profitColor = isProfitable ? '#2e7d32' : '#d32f2f';
+    
+    // 格式化日期
+    const formatDate = (date) => {
+        return date.toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' });
+    };
+    
+    // 更新結果顯示
+    const resultsDiv = document.getElementById('cbas_results');
+    if (!resultsDiv) return;
+    
+    resultsDiv.innerHTML = `
+        <div style="font-weight:bold; color:#333; margin-bottom:12px; font-size:15px; border-bottom:2px solid #9c27b0; padding-bottom:8px;">
+            📊 計算結果
+        </div>
+        
+        <!-- 中間計算步驟 -->
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px; margin-bottom:15px;">
+            <div style="background:#e3f2fd; padding:12px; border-radius:8px; text-align:center;">
+                <div style="font-size:12px; color:#666;">履約交割日</div>
+                <div style="font-size:15px; font-weight:bold; color:#1565c0;">${formatDate(settlementDate)}</div>
+            </div>
+            <div style="background:#e3f2fd; padding:12px; border-radius:8px; text-align:center;">
+                <div style="font-size:12px; color:#666;">剩餘天數</div>
+                <div style="font-size:18px; font-weight:bold; color:#1565c0;">${remainingDays}</div>
+                <div style="font-size:11px; color:#888;">(${(remainingDays/365).toFixed(2)}年)</div>
+            </div>
+            <div style="background:#f3e5f5; padding:12px; border-radius:8px; text-align:center;">
+                <div style="font-size:12px; color:#666;">履約價</div>
+                <div style="font-size:18px; font-weight:bold; color:#7b1fa2;">${exercisePrice.toFixed(2)}</div>
+            </div>
+            <div style="background:#fff3e0; padding:12px; border-radius:8px; text-align:center;">
+                <div style="font-size:12px; color:#666;">損益平衡價</div>
+                <div style="font-size:18px; font-weight:bold; color:#e65100;">${breakEvenPrice.toFixed(2)}</div>
+            </div>
+        </div>
+        
+        <!-- 損益計算 -->
+        <div style="background:${isProfitable ? '#e8f5e9' : '#ffebee'}; padding:15px; border-radius:10px; border-left:5px solid ${profitColor};">
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:12px; text-align:center;">
+                <div>
+                    <div style="font-size:12px; color:#666;">權利金成本</div>
+                    <div style="font-size:16px; font-weight:bold; color:#d32f2f;">-${premiumCost.toLocaleString()}</div>
+                    <div style="font-size:11px; color:#888;">${shares}張 × ${initialPremium} × 1000</div>
+                </div>
+                <div>
+                    <div style="font-size:12px; color:#666;">履約取回</div>
+                    <div style="font-size:16px; font-weight:bold; color:#1976d2;">+${exerciseReturn.toLocaleString()}</div>
+                    <div style="font-size:11px; color:#888;">(${cbSellPrice}-${exercisePrice.toFixed(2)})×${shares}×1000</div>
+                </div>
+                <div>
+                    <div style="font-size:12px; color:#666;">淨獲利</div>
+                    <div style="font-size:20px; font-weight:bold; color:${profitColor};">
+                        ${netProfit >= 0 ? '+' : ''}${netProfit.toLocaleString()}
+                    </div>
+                </div>
+                <div>
+                    <div style="font-size:12px; color:#666;">報酬率</div>
+                    <div style="font-size:20px; font-weight:bold; color:${profitColor};">
+                        ${returnRate >= 0 ? '+' : ''}${returnRate.toFixed(1)}%
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 情境分析 -->
+        <div style="margin-top:15px;">
+            <div style="font-weight:bold; color:#333; margin-bottom:10px; font-size:14px;">📈 CB價格情境分析</div>
+            <table style="width:100%; border-collapse:collapse; font-size:13px;">
+                <thead>
+                    <tr style="background:#f5f5f5;">
+                        <th style="padding:8px; text-align:left; border-bottom:2px solid #ddd;">CB賣出價</th>
+                        <th style="padding:8px; text-align:right; border-bottom:2px solid #ddd;">履約取回</th>
+                        <th style="padding:8px; text-align:right; border-bottom:2px solid #ddd;">淨獲利</th>
+                        <th style="padding:8px; text-align:right; border-bottom:2px solid #ddd;">報酬率</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${generateCBASScenarios(exercisePrice, initialPremium, shares, breakEvenPrice)}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- 關鍵提醒 -->
+        <div style="margin-top:15px; background:#fff8e1; padding:12px; border-radius:8px; border-left:4px solid #ffc107;">
+            <div style="font-weight:bold; color:#f57c00; margin-bottom:6px;">⚠️ 投資風險提醒</div>
+            <div style="font-size:13px; color:#555; line-height:1.6;">
+                <div>• <b>最大損失</b>：權利金100%歸零 = <span style="color:#d32f2f; font-weight:bold;">-${premiumCost.toLocaleString()}元</span></div>
+                <div>• <b>歸零價位</b>：CB跌到 <span style="color:#d32f2f; font-weight:bold;">${exercisePrice.toFixed(2)}元</span> 以下，權利金內含價值歸零</div>
+                <div>• <b>損益平衡</b>：CB需漲到 <span style="color:#7b1fa2; font-weight:bold;">${breakEvenPrice.toFixed(2)}元</span> 才開始獲利</div>
+                <div>• <b>CBAS到期日</b>：CB賣回日前14天（本例為 ${formatDate(new Date(cbSellbackDate.getTime() - 14*24*60*60*1000))}）</div>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * v3.99X: 生成CBAS情境分析表格
+ */
+function generateCBASScenarios(exercisePrice, initialPremium, shares, breakEvenPrice) {
+    const scenarios = [
+        { label: '履約價（歸零）', price: exercisePrice },
+        { label: '損益平衡', price: breakEvenPrice },
+        { label: '獲利10%', price: breakEvenPrice * 1.1 },
+        { label: '獲利50%', price: exercisePrice + initialPremium * 1.5 },
+        { label: '獲利100%', price: exercisePrice + initialPremium * 2 },
+        { label: '獲利200%', price: exercisePrice + initialPremium * 3 },
+    ];
+    
+    return scenarios.map(s => {
+        const exerciseReturn = (s.price - exercisePrice) * shares * 1000;
+        const premiumCost = initialPremium * shares * 1000;
+        const netProfit = exerciseReturn - premiumCost;
+        const returnRate = initialPremium > 0 ? ((s.price - exercisePrice - initialPremium) / initialPremium * 100) : 0;
+        
+        const rowBg = netProfit >= 0 ? '#e8f5e9' : (netProfit < -premiumCost * 0.5 ? '#ffebee' : '#fff8e1');
+        const profitColor = netProfit >= 0 ? '#2e7d32' : '#d32f2f';
+        
+        return `
+            <tr style="background:${rowBg};">
+                <td style="padding:8px; border-bottom:1px solid #eee;">
+                    <span style="font-weight:bold;">${s.price.toFixed(2)}</span>
+                    <span style="color:#888; font-size:11px; margin-left:5px;">(${s.label})</span>
+                </td>
+                <td style="padding:8px; text-align:right; border-bottom:1px solid #eee;">
+                    ${exerciseReturn.toLocaleString()}
+                </td>
+                <td style="padding:8px; text-align:right; border-bottom:1px solid #eee; color:${profitColor}; font-weight:bold;">
+                    ${netProfit >= 0 ? '+' : ''}${netProfit.toLocaleString()}
+                </td>
+                <td style="padding:8px; text-align:right; border-bottom:1px solid #eee; color:${profitColor}; font-weight:bold;">
+                    ${returnRate >= 0 ? '+' : ''}${returnRate.toFixed(1)}%
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+/**
+ * v3.99X: 初始化CBAS計算器（頁面載入時呼叫）
+ */
+function initCBASCalculator() {
+    const container = document.getElementById('cbasCalculatorContainer');
+    if (container) {
+        container.innerHTML = renderCBASCalculator();
+        // 延遲執行初始計算
+        setTimeout(() => {
+            updateCBASCalculation();
+        }, 100);
+    }
+}
+
 /**
  * 取得期間標籤
  */
@@ -30529,27 +31546,22 @@ const TrendScanModule = {
                     <!-- 時間區間切換標籤 -->
                     <div id="industryPeriodBtns" style="display:flex; gap:8px; margin-bottom:15px; justify-content:center;">
                         <button class="industry-period-btn" data-period="60" 
-                            onclick="TrendScanModule.switchIndustryPeriod('${industry}', 60)"
                             style="padding:8px 16px; border:2px solid #1976d2; background:white; color:#1976d2; border-radius:6px; cursor:pointer; font-size:14px; font-weight:600;">
                             3個月
                         </button>
                         <button class="industry-period-btn" data-period="120" 
-                            onclick="TrendScanModule.switchIndustryPeriod('${industry}', 120)"
                             style="padding:8px 16px; border:2px solid #1976d2; background:white; color:#1976d2; border-radius:6px; cursor:pointer; font-size:14px; font-weight:600;">
                             半年
                         </button>
                         <button class="industry-period-btn active" data-period="252" 
-                            onclick="TrendScanModule.switchIndustryPeriod('${industry}', 252)"
                             style="padding:8px 16px; border:2px solid #1976d2; background:#1976d2; color:white; border-radius:6px; cursor:pointer; font-size:14px; font-weight:600;">
                             1年
                         </button>
                         <button class="industry-period-btn" data-period="504" 
-                            onclick="TrendScanModule.switchIndustryPeriod('${industry}', 504)"
                             style="padding:8px 16px; border:2px solid #1976d2; background:white; color:#1976d2; border-radius:6px; cursor:pointer; font-size:14px; font-weight:600;">
                             2年
                         </button>
                         <button class="industry-period-btn" data-period="1260" 
-                            onclick="TrendScanModule.switchIndustryPeriod('${industry}', 1260)"
                             style="padding:8px 16px; border:2px solid #1976d2; background:white; color:#1976d2; border-radius:6px; cursor:pointer; font-size:14px; font-weight:600;">
                             5年
                         </button>
@@ -30568,6 +31580,17 @@ const TrendScanModule = {
         // 暫存產業股票資料供切換時間使用
         this.currentIndustryStocks = stocks;
         this.currentIndustryName = industry;
+        // v3.99X: 使用 JavaScript 綁定按鈕事件（避免特殊字符問題）
+        const self = this;
+        document.querySelectorAll('#industryPeriodBtns .industry-period-btn').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                const days = parseInt(this.dataset.period);
+                console.log('[IndustryChart] 點擊切換期間:', days, '天');
+                self.switchIndustryPeriod(self.currentIndustryName, days);
+            });
+        });
         // 載入所有成份股資料（預設1年）
         await this.loadAndRenderIndustryChart(industry, stocks, 252);
     },
@@ -31179,48 +32202,108 @@ const ForeignNewsModule = {
     getIndustryReports() {
         return this.data.filter(item => item.type === '產業趨勢')
             .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    },
+    // v3.99X: 根據關鍵字搜尋報導（用公司名稱搜尋）
+    searchByKeyword(keyword) {
+        if (!keyword || this.data.length === 0) return [];
+        const searchTerm = String(keyword).trim().toLowerCase();
+        return this.data.filter(item => {
+            // 檢查公司名稱
+            if (item.company && String(item.company).toLowerCase().includes(searchTerm)) return true;
+            // 檢查標題
+            if (item.title && String(item.title).toLowerCase().includes(searchTerm)) return true;
+            // 檢查 relatedCompanies
+            if (item.relatedCompanies && String(item.relatedCompanies).toLowerCase().includes(searchTerm)) return true;
+            // 檢查 code 欄位中的公司名
+            if (item.code && String(item.code).toLowerCase().includes(searchTerm)) return true;
+            // 檢查標籤
+            if (item.tags && String(item.tags).toLowerCase().includes(searchTerm)) return true;
+            return false;
+        }).sort((a, b) => {
+            if (b.importanceNum !== a.importanceNum) {
+                return b.importanceNum - a.importanceNum;
+            }
+            return (b.date || '').localeCompare(a.date || '');
+        });
     }
 };
 // v3.99W: 渲染外電報導標籤內容
 async function renderForeignNews(cbCode, container) {
     container.innerHTML = '<div style="text-align:center; padding:40px; color:#1976d2;">⏳ 載入外電報導中...</div>';
     try {
-        // 取得CB的股票代號
-        const cb = window.cbDataCache?.find(c => c.code === cbCode);
-        if (!cb) {
-            container.innerHTML = '<div style="text-align:center; padding:40px; color:#999;">找不到該CB資料</div>';
-            return;
+        // v3.99X r41: 修正股票代號取得邏輯，不再依賴 cbDataCache
+        let stockCode = '';
+        let stockName = '';
+        
+        // 方法1: 從 basicData 取得（最可靠）
+        if (window.basicData?.[cbCode]) {
+            const basicInfo = window.basicData[cbCode];
+            stockCode = basicInfo['股票代號'] || basicInfo['標的代號'] || '';
+            stockName = basicInfo['公司名稱'] || basicInfo['標的名稱'] || basicInfo['可轉債簡稱']?.replace(/[一二三四五六七八九十\d]+$/, '') || '';
         }
-        // v3.99W: 修正股票代號提取邏輯
-        // 優先使用 CB 資料中的 stockCode 欄位
-        // 若無，則從 CB 代號取前4位（如 23837 → 2383）
-        // 若是中文代號，則去除後綴
-        let stockCode = cb.stockCode || cb['股票代號'] || '';
+        
+        // 方法2: 從 cbDataCache 取得
+        if (!stockCode) {
+            const cb = window.cbDataCache?.find(c => c.code === cbCode);
+            if (cb) {
+                stockCode = cb.stockCode || cb['股票代號'] || '';
+                stockName = stockName || cb.name?.replace(/[一二三四五六七八九十\d]+$/, '') || '';
+            }
+        }
+        
+        // 方法3: 從 CB 代號推算
         if (!stockCode) {
             if (/^\d{5,}$/.test(cbCode)) {
-                // 5位以上數字代號，取前4位
+                // 5位以上數字代號，取前4位（如 82992 → 8299）
                 stockCode = cbCode.substring(0, 4);
             } else {
                 // 中文代號，去除後綴數字
                 stockCode = cbCode.replace(/[一二三四五六七八九十\d]+$/, '');
             }
         }
-        stockCode = String(stockCode).replace('.0', '').trim();
-        // 取得股票名稱
-        let stockName = cb.name?.replace(/[一二三四五六七八九十\d]+$/, '') || '';
-        if (!stockName && cb.name) {
-            stockName = cb.name.substring(0, cb.name.length - 1);  // 去掉最後一個字（期數）
+        
+        // 方法4: 從下拉選單的選中項目取得名稱
+        if (!stockName) {
+            const selectEl = document.getElementById('basicInfoCBSelect');
+            if (selectEl && selectEl.selectedOptions[0]) {
+                const selectedText = selectEl.selectedOptions[0].textContent || '';
+                // 格式如 "82992 群聯二" → 取 "群聯"
+                const match = selectedText.match(/\d+\s+(.+?)[一二三四五六七八九十\d]*$/);
+                if (match) {
+                    stockName = match[1].trim();
+                }
+            }
         }
+        
+        // 方法5: 從 CB 名稱推算（去除數字後綴）
+        if (!stockName && cbCode) {
+            // 嘗試從 cbCode 本身推算（如果是中文名稱）
+            stockName = cbCode.replace(/[一二三四五六七八九十\d]+$/, '');
+        }
+        
+        stockCode = String(stockCode).replace('.0', '').trim();
+        stockName = stockName || cbCode;
+        
         console.log(`[renderForeignNews] CB代號: ${cbCode}, 股票代號: ${stockCode}, 股票名稱: ${stockName}`);
+        
         // 載入外電資料和熱度資料
         await Promise.all([
             ForeignNewsModule.loadData(),
             ForeignNewsModule.loadHeatData()
         ]);
-        // 取得熱度資料
-        const heatInfo = ForeignNewsModule.getStockHeat(stockCode);
-        // 搜尋相關報導
-        const reports = ForeignNewsModule.searchByCode(stockCode);
+        
+        // 取得熱度資料（用股票代號和名稱都試試）
+        let heatInfo = ForeignNewsModule.getStockHeat(stockCode);
+        if (!heatInfo && stockName) {
+            heatInfo = ForeignNewsModule.getStockHeat(stockName);
+        }
+        
+        // 搜尋相關報導（用股票代號和名稱都搜尋）
+        let reports = ForeignNewsModule.searchByCode(stockCode);
+        if (reports.length === 0 && stockName) {
+            // 用名稱搜尋
+            reports = ForeignNewsModule.searchByKeyword(stockName);
+        }
         // 熱度區塊HTML
         let heatHTML = '';
         if (heatInfo) {
@@ -31345,6 +32428,427 @@ function toggleForeignNewsContent(idx) {
             arrow.style.transform = 'rotate(0deg)';
         }
     }
+}
+// ==========================================
+// v3.99X: CBAS 履約試算器
+// ==========================================
+/**
+ * v3.99X 新增：渲染 CBAS 履約試算器
+ * 正確公式（依券商實際計算方式）：
+ * - 履約交割日 = 預計履約日 + 2天
+ * - 剩餘天數 = CB賣回日 - 履約交割日 + 1
+ * - 履約價 = 100 - 折現率 × 剩餘天數/365 - 提前call違約金
+ * - 損益平衡價 = 履約價 + 權利金(市價)
+ * - 履約獲利 = (CB賣出價 - 履約價) × 張數 × 1000
+ * - 報酬率 = (CB賣出價 - 履約價 - 權利金) / 權利金
+ */
+function renderCBASCalculator(cbCode, container) {
+    // 嘗試從CBAS資料中取得預設值
+    const cbasInfo = window.cbasData?.find(d => d.code === cbCode || d.cbCode === cbCode) || null;
+    const cbInfo = window.cbDataCache?.find(c => c.code === cbCode) || null;
+    
+    // 預設值設定
+    const today = new Date();
+    const defaultExerciseDate = today.toISOString().split('T')[0];
+    
+    // 從CBAS資料取得預設值
+    let defaultSellbackPrice = 100;
+    let defaultSellbackDate = '';
+    let defaultDiscountRate = 2.5;
+    let defaultPremium = 0;
+    
+    if (cbasInfo) {
+        defaultSellbackPrice = parseFloat(cbasInfo.sellbackPrice) || parseFloat(cbasInfo['賣回價格A']) || 100;
+        defaultDiscountRate = (parseFloat(cbasInfo.discountRateC) || parseFloat(cbasInfo['折現率C']) || 0.025) * 100;
+        defaultPremium = parseFloat(cbasInfo.premium) || parseFloat(cbasInfo['權利金百元報價']) || 0;
+    }
+    
+    // 從CB基本資料取得賣回日
+    if (cbInfo) {
+        const putbackDate = cbInfo.putbackDate || cbInfo['賣回日期'] || cbInfo['賣回日'] || '';
+        if (putbackDate) {
+            defaultSellbackDate = putbackDate.replace(/\//g, '-');
+        }
+    }
+    
+    // 如果沒有賣回日，設定預設為2年後
+    if (!defaultSellbackDate) {
+        const twoYearsLater = new Date(today);
+        twoYearsLater.setFullYear(twoYearsLater.getFullYear() + 2);
+        defaultSellbackDate = twoYearsLater.toISOString().split('T')[0];
+    }
+    
+    const cbName = cbInfo?.name || cbCode;
+    
+    container.innerHTML = `
+        <div style="padding:5px;">
+            <!-- 標題區 -->
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <div style="font-size:18px; font-weight:bold; color:#ff6f00;">
+                    🧮 CBAS 履約試算器 ${cbCode ? `- ${cbCode} ${cbName}` : ''}
+                </div>
+                <div style="font-size:13px; color:#888;">
+                    v3.99X | 依券商實際計算公式
+                </div>
+            </div>
+            
+            <!-- 免責聲明 -->
+            <div style="background:#fff3e0; padding:10px 15px; border-radius:8px; margin-bottom:15px; font-size:13px; color:#e65100; border-left:4px solid #ff9800;">
+                ⚠️ <strong>模擬試算提醒</strong>：以下數據均為系統依據公開公式推算之模擬值，僅供參考。
+                實際權利金報價、履約價格、損益計算請依券商提供之正式報價為準。投資有風險，請審慎評估。
+            </div>
+            
+            <!-- 公式說明區（可收合）-->
+            <div style="background:#e3f2fd; border-radius:8px; margin-bottom:15px; overflow:hidden;">
+                <div onclick="toggleCBASFormula()" style="padding:12px 15px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; background:#bbdefb;">
+                    <span style="font-weight:bold; color:#1565c0;">📐 CBAS 計算公式說明</span>
+                    <span id="cbasFormulaArrow" style="color:#1565c0; transition:transform 0.2s;">▼</span>
+                </div>
+                <div id="cbasFormulaContent" style="display:none; padding:15px; font-size:13px; line-height:1.8;">
+                    <table style="width:100%; border-collapse:collapse;">
+                        <tr style="background:#e3f2fd;">
+                            <td style="padding:8px; border:1px solid #90caf9; font-weight:bold; width:30%;">履約交割日</td>
+                            <td style="padding:8px; border:1px solid #90caf9;">預計履約日期 + 2天</td>
+                        </tr>
+                        <tr>
+                            <td style="padding:8px; border:1px solid #90caf9; font-weight:bold;">剩餘天數</td>
+                            <td style="padding:8px; border:1px solid #90caf9;">CB賣回日 - 履約交割日 + 1</td>
+                        </tr>
+                        <tr style="background:#e3f2fd;">
+                            <td style="padding:8px; border:1px solid #90caf9; font-weight:bold;">履約價</td>
+                            <td style="padding:8px; border:1px solid #90caf9;">100 - 折現率 × 剩餘天數/365 - 提前違約金</td>
+                        </tr>
+                        <tr>
+                            <td style="padding:8px; border:1px solid #90caf9; font-weight:bold;">損益平衡價</td>
+                            <td style="padding:8px; border:1px solid #90caf9;">履約價 + 權利金(市價)</td>
+                        </tr>
+                        <tr style="background:#e3f2fd;">
+                            <td style="padding:8px; border:1px solid #90caf9; font-weight:bold;">履約取回金額</td>
+                            <td style="padding:8px; border:1px solid #90caf9;">(CB賣出價 - 履約價) × 張數 × 1000</td>
+                        </tr>
+                        <tr>
+                            <td style="padding:8px; border:1px solid #90caf9; font-weight:bold;">報酬率</td>
+                            <td style="padding:8px; border:1px solid #90caf9;">(CB賣出價 - 履約價 - 權利金) / 權利金</td>
+                        </tr>
+                    </table>
+                    <div style="margin-top:10px; padding:8px; background:#fff8e1; border-radius:4px; color:#f57c00;">
+                        ⚠️ <strong>提前call違約金</strong>：承作三個月內履約 = 0.25%，超過三個月 = 0%
+                    </div>
+                    <div style="margin-top:8px; padding:8px; background:#ffebee; border-radius:4px; color:#c62828;">
+                        ⚠️ <strong>最大風險</strong>：權利金到期歸零，虧損100%
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 輸入區 -->
+            <div style="background:#fff; border:1px solid #e0e0e0; border-radius:10px; padding:20px; margin-bottom:15px;">
+                <div style="font-weight:bold; color:#333; margin-bottom:15px; font-size:15px;">
+                    📝 輸入參數 <span style="font-size:12px; color:#888; font-weight:normal;">（黃色欄位自行輸入）</span>
+                </div>
+                
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:15px;">
+                    <!-- 預計履約日期 -->
+                    <div>
+                        <label style="display:block; font-size:13px; color:#666; margin-bottom:5px;">預計履約日期</label>
+                        <input type="date" id="cbas_exerciseDate" value="${defaultExerciseDate}"
+                               style="width:100%; padding:10px; border:2px solid #ffc107; border-radius:6px; font-size:14px; background:#fffde7;"
+                               onchange="calculateCBASResult()">
+                    </div>
+                    
+                    <!-- CB賣回日 -->
+                    <div>
+                        <label style="display:block; font-size:13px; color:#666; margin-bottom:5px;">CB賣回日(B)</label>
+                        <input type="date" id="cbas_sellbackDate" value="${defaultSellbackDate}"
+                               style="width:100%; padding:10px; border:2px solid #ffc107; border-radius:6px; font-size:14px; background:#fffde7;"
+                               onchange="calculateCBASResult()">
+                    </div>
+                    
+                    <!-- 賣回價格 -->
+                    <div>
+                        <label style="display:block; font-size:13px; color:#666; margin-bottom:5px;">賣回價格(A)</label>
+                        <input type="number" id="cbas_sellbackPrice" value="${defaultSellbackPrice}" step="0.0001"
+                               style="width:100%; padding:10px; border:2px solid #ffc107; border-radius:6px; font-size:14px; background:#fffde7;"
+                               onchange="calculateCBASResult()">
+                    </div>
+                    
+                    <!-- 折現率 -->
+                    <div>
+                        <label style="display:block; font-size:13px; color:#666; margin-bottom:5px;">折現率(C) %</label>
+                        <input type="number" id="cbas_discountRate" value="${defaultDiscountRate}" step="0.01"
+                               style="width:100%; padding:10px; border:2px solid #ffc107; border-radius:6px; font-size:14px; background:#fffde7;"
+                               onchange="calculateCBASResult()">
+                    </div>
+                    
+                    <!-- 提前call違約金 -->
+                    <div>
+                        <label style="display:block; font-size:13px; color:#666; margin-bottom:5px;">提前call違約金 %</label>
+                        <input type="number" id="cbas_earlyPenalty" value="0" step="0.01"
+                               style="width:100%; padding:10px; border:2px solid #ffc107; border-radius:6px; font-size:14px; background:#fffde7;"
+                               onchange="calculateCBASResult()">
+                        <div style="font-size:11px; color:#888; margin-top:3px;">三個月內履約填0.25</div>
+                    </div>
+                    
+                    <!-- 履約張數 -->
+                    <div>
+                        <label style="display:block; font-size:13px; color:#666; margin-bottom:5px;">履約張數</label>
+                        <input type="number" id="cbas_shares" value="10" step="1"
+                               style="width:100%; padding:10px; border:2px solid #ffc107; border-radius:6px; font-size:14px; background:#fffde7;"
+                               onchange="calculateCBASResult()">
+                    </div>
+                    
+                    <!-- 期初權利金(市價) -->
+                    <div>
+                        <label style="display:block; font-size:13px; color:#666; margin-bottom:5px;">期初權利金(市價)</label>
+                        <input type="number" id="cbas_premium" value="${defaultPremium || 15}" step="0.01"
+                               style="width:100%; padding:10px; border:2px solid #ffc107; border-radius:6px; font-size:14px; background:#fffde7;"
+                               onchange="calculateCBASResult()">
+                    </div>
+                    
+                    <!-- CB賣出價格 -->
+                    <div>
+                        <label style="display:block; font-size:13px; color:#666; margin-bottom:5px;">CB賣出價格</label>
+                        <input type="number" id="cbas_sellPrice" value="120" step="0.01"
+                               style="width:100%; padding:10px; border:2px solid #ffc107; border-radius:6px; font-size:14px; background:#fffde7;"
+                               onchange="calculateCBASResult()">
+                    </div>
+                </div>
+                
+                <div style="margin-top:15px; text-align:center;">
+                    <button onclick="calculateCBASResult()" style="padding:12px 30px; background:linear-gradient(135deg, #ff6f00 0%, #ff8f00 100%); color:white; border:none; border-radius:8px; font-size:15px; font-weight:bold; cursor:pointer; box-shadow:0 2px 8px rgba(255,111,0,0.3);">
+                        🧮 計算結果
+                    </button>
+                    <button onclick="resetCBASInputs()" style="padding:12px 20px; background:#757575; color:white; border:none; border-radius:8px; font-size:14px; cursor:pointer; margin-left:10px;">
+                        🔄 重置
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 計算結果區 -->
+            <div id="cbasResultArea" style="background:linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border:2px solid #ffc107; border-radius:10px; padding:20px;">
+                <div style="font-weight:bold; color:#ff6f00; margin-bottom:15px; font-size:15px;">
+                    📊 計算結果
+                </div>
+                
+                <!-- 中間計算過程 -->
+                <div style="background:#fff; border-radius:8px; padding:15px; margin-bottom:15px;">
+                    <div style="font-size:13px; color:#666; margin-bottom:10px;">📐 計算過程</div>
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px;">
+                        <div style="background:#f5f5f5; padding:10px; border-radius:6px; text-align:center;">
+                            <div style="font-size:12px; color:#888;">履約交割日</div>
+                            <div style="font-size:14px; font-weight:bold; color:#333;" id="cbas_result_deliveryDate">-</div>
+                        </div>
+                        <div style="background:#f5f5f5; padding:10px; border-radius:6px; text-align:center;">
+                            <div style="font-size:12px; color:#888;">剩餘天數</div>
+                            <div style="font-size:14px; font-weight:bold; color:#333;" id="cbas_result_remainDays">-</div>
+                        </div>
+                        <div style="background:#e3f2fd; padding:10px; border-radius:6px; text-align:center;">
+                            <div style="font-size:12px; color:#1565c0;">履約價</div>
+                            <div style="font-size:16px; font-weight:bold; color:#1565c0;" id="cbas_result_exercisePrice">-</div>
+                        </div>
+                        <div style="background:#fff3e0; padding:10px; border-radius:6px; text-align:center;">
+                            <div style="font-size:12px; color:#e65100;">損益平衡價</div>
+                            <div style="font-size:16px; font-weight:bold; color:#e65100;" id="cbas_result_breakeven">-</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 最終結果 -->
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:12px;">
+                    <div style="background:#fff; padding:15px; border-radius:8px; text-align:center; border:2px solid #4caf50;">
+                        <div style="font-size:13px; color:#666;">履約取回金額</div>
+                        <div style="font-size:20px; font-weight:bold; color:#2e7d32;" id="cbas_result_returnAmount">-</div>
+                    </div>
+                    <div style="background:#fff; padding:15px; border-radius:8px; text-align:center; border:2px solid #1976d2;">
+                        <div style="font-size:13px; color:#666;">權利金成本</div>
+                        <div style="font-size:20px; font-weight:bold; color:#1565c0;" id="cbas_result_premiumCost">-</div>
+                    </div>
+                    <div style="background:#fff; padding:15px; border-radius:8px; text-align:center; border:2px solid #ff9800;">
+                        <div style="font-size:13px; color:#666;">淨獲利</div>
+                        <div style="font-size:20px; font-weight:bold;" id="cbas_result_netProfit">-</div>
+                    </div>
+                    <div style="background:#fff; padding:15px; border-radius:8px; text-align:center; border:2px solid #9c27b0;">
+                        <div style="font-size:13px; color:#666;">報酬率</div>
+                        <div style="font-size:20px; font-weight:bold;" id="cbas_result_returnRate">-</div>
+                    </div>
+                </div>
+                
+                <!-- 情境模擬表 -->
+                <div style="margin-top:15px; background:#fff; border-radius:8px; padding:15px;">
+                    <div style="font-size:13px; color:#666; margin-bottom:10px;">📈 CB價格情境模擬</div>
+                    <div id="cbas_scenario_table"></div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // 初始計算
+    setTimeout(() => calculateCBASResult(), 100);
+}
+
+// 展開/收合公式說明
+function toggleCBASFormula() {
+    const content = document.getElementById('cbasFormulaContent');
+    const arrow = document.getElementById('cbasFormulaArrow');
+    if (content && arrow) {
+        if (content.style.display === 'none') {
+            content.style.display = 'block';
+            arrow.style.transform = 'rotate(180deg)';
+        } else {
+            content.style.display = 'none';
+            arrow.style.transform = 'rotate(0deg)';
+        }
+    }
+}
+
+// 計算CBAS結果
+function calculateCBASResult() {
+    try {
+        // 取得輸入值
+        const exerciseDateStr = document.getElementById('cbas_exerciseDate')?.value;
+        const sellbackDateStr = document.getElementById('cbas_sellbackDate')?.value;
+        const sellbackPrice = parseFloat(document.getElementById('cbas_sellbackPrice')?.value) || 100;
+        const discountRate = (parseFloat(document.getElementById('cbas_discountRate')?.value) || 0) / 100;
+        const earlyPenalty = (parseFloat(document.getElementById('cbas_earlyPenalty')?.value) || 0) / 100;
+        const shares = parseInt(document.getElementById('cbas_shares')?.value) || 10;
+        const premium = parseFloat(document.getElementById('cbas_premium')?.value) || 0;
+        const sellPrice = parseFloat(document.getElementById('cbas_sellPrice')?.value) || 100;
+        
+        if (!exerciseDateStr || !sellbackDateStr) {
+            return;
+        }
+        
+        // 計算履約交割日 = 預計履約日 + 2天
+        const exerciseDate = new Date(exerciseDateStr);
+        const deliveryDate = new Date(exerciseDate);
+        deliveryDate.setDate(deliveryDate.getDate() + 2);
+        
+        // 計算剩餘天數 = CB賣回日 - 履約交割日 + 1
+        const sellbackDate = new Date(sellbackDateStr);
+        const remainDays = Math.floor((sellbackDate - deliveryDate) / (1000 * 60 * 60 * 24)) + 1;
+        
+        // 計算履約價 = 100 - 折現率 × 剩餘天數/365 - 提前違約金
+        const exercisePrice = 100 - discountRate * remainDays / 365 - earlyPenalty * 100;
+        
+        // 損益平衡價 = 履約價 + 權利金
+        const breakevenPrice = exercisePrice + premium;
+        
+        // 履約取回金額 = (CB賣出價 - 履約價) × 張數 × 1000
+        const returnAmount = (sellPrice - exercisePrice) * shares * 1000;
+        
+        // 權利金成本 = 權利金 × 張數 × 1000
+        const premiumCost = premium * shares * 1000;
+        
+        // 淨獲利 = 履約取回金額 - 權利金成本
+        const netProfit = returnAmount - premiumCost;
+        
+        // 報酬率 = (CB賣出價 - 履約價 - 權利金) / 權利金
+        const returnRate = premium > 0 ? ((sellPrice - exercisePrice - premium) / premium * 100) : 0;
+        
+        // 更新顯示
+        document.getElementById('cbas_result_deliveryDate').textContent = deliveryDate.toLocaleDateString('zh-TW');
+        document.getElementById('cbas_result_remainDays').textContent = remainDays + ' 天';
+        document.getElementById('cbas_result_exercisePrice').textContent = exercisePrice.toFixed(2);
+        document.getElementById('cbas_result_breakeven').textContent = breakevenPrice.toFixed(2);
+        document.getElementById('cbas_result_returnAmount').textContent = '$' + returnAmount.toLocaleString();
+        document.getElementById('cbas_result_premiumCost').textContent = '$' + premiumCost.toLocaleString();
+        
+        const netProfitEl = document.getElementById('cbas_result_netProfit');
+        netProfitEl.textContent = (netProfit >= 0 ? '+$' : '-$') + Math.abs(netProfit).toLocaleString();
+        netProfitEl.style.color = netProfit >= 0 ? '#2e7d32' : '#c62828';
+        
+        const returnRateEl = document.getElementById('cbas_result_returnRate');
+        returnRateEl.textContent = (returnRate >= 0 ? '+' : '') + returnRate.toFixed(1) + '%';
+        returnRateEl.style.color = returnRate >= 0 ? '#2e7d32' : '#c62828';
+        
+        // 生成情境模擬表
+        generateCBASScenarioTable(exercisePrice, premium, shares);
+        
+    } catch (e) {
+        console.error('[calculateCBASResult] 錯誤:', e);
+    }
+}
+
+// 生成CBAS情境模擬表
+function generateCBASScenarioTable(exercisePrice, premium, shares) {
+    const container = document.getElementById('cbas_scenario_table');
+    if (!container) return;
+    
+    // CB價格情境：從損益平衡價 -20% 到 +30%
+    const breakevenPrice = exercisePrice + premium;
+    const scenarios = [
+        { label: '大漲+30%', price: breakevenPrice * 1.3 },
+        { label: '上漲+20%', price: breakevenPrice * 1.2 },
+        { label: '上漲+10%', price: breakevenPrice * 1.1 },
+        { label: '損益平衡', price: breakevenPrice },
+        { label: '下跌-10%', price: breakevenPrice * 0.9 },
+        { label: '下跌-20%', price: breakevenPrice * 0.8 },
+        { label: '履約價(歸零)', price: exercisePrice },
+    ];
+    
+    let html = `
+        <table style="width:100%; border-collapse:collapse; font-size:13px;">
+            <thead>
+                <tr style="background:#f5f5f5;">
+                    <th style="padding:8px; border:1px solid #e0e0e0; text-align:left;">情境</th>
+                    <th style="padding:8px; border:1px solid #e0e0e0; text-align:right;">CB價格</th>
+                    <th style="padding:8px; border:1px solid #e0e0e0; text-align:right;">權利金價值</th>
+                    <th style="padding:8px; border:1px solid #e0e0e0; text-align:right;">損益/張</th>
+                    <th style="padding:8px; border:1px solid #e0e0e0; text-align:right;">報酬率</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    scenarios.forEach(s => {
+        const premiumValue = Math.max(0, s.price - exercisePrice);
+        const pnlPerShare = (premiumValue - premium) * 1000;
+        const returnRate = premium > 0 ? ((premiumValue / premium - 1) * 100) : 0;
+        
+        const rowColor = pnlPerShare > 0 ? '#e8f5e9' : (pnlPerShare < -premium * 500 ? '#ffebee' : '#fff8e1');
+        const pnlColor = pnlPerShare >= 0 ? '#2e7d32' : '#c62828';
+        
+        html += `
+            <tr style="background:${rowColor};">
+                <td style="padding:8px; border:1px solid #e0e0e0;">${s.label}</td>
+                <td style="padding:8px; border:1px solid #e0e0e0; text-align:right;">${s.price.toFixed(2)}</td>
+                <td style="padding:8px; border:1px solid #e0e0e0; text-align:right;">${premiumValue.toFixed(2)}</td>
+                <td style="padding:8px; border:1px solid #e0e0e0; text-align:right; color:${pnlColor}; font-weight:bold;">
+                    ${pnlPerShare >= 0 ? '+' : ''}${pnlPerShare.toLocaleString()}
+                </td>
+                <td style="padding:8px; border:1px solid #e0e0e0; text-align:right; color:${pnlColor}; font-weight:bold;">
+                    ${returnRate >= 0 ? '+' : ''}${returnRate.toFixed(1)}%
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += '</tbody></table>';
+    html += `
+        <div style="margin-top:10px; font-size:12px; color:#888;">
+            ⚠️ 損益平衡價 = ${breakevenPrice.toFixed(2)} | 履約價(歸零點) = ${exercisePrice.toFixed(2)}
+        </div>
+    `;
+    
+    container.innerHTML = html;
+}
+
+// 重置CBAS輸入
+function resetCBASInputs() {
+    const today = new Date();
+    document.getElementById('cbas_exerciseDate').value = today.toISOString().split('T')[0];
+    
+    const twoYearsLater = new Date(today);
+    twoYearsLater.setFullYear(twoYearsLater.getFullYear() + 2);
+    document.getElementById('cbas_sellbackDate').value = twoYearsLater.toISOString().split('T')[0];
+    
+    document.getElementById('cbas_sellbackPrice').value = '100';
+    document.getElementById('cbas_discountRate').value = '2.5';
+    document.getElementById('cbas_earlyPenalty').value = '0';
+    document.getElementById('cbas_shares').value = '10';
+    document.getElementById('cbas_premium').value = '15';
+    document.getElementById('cbas_sellPrice').value = '120';
+    
+    calculateCBASResult();
 }
 // ==========================================
 // v3.99W: 大盤走勢模組

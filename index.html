@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AI智能可轉債競拍系統 v3.99X (百分位數策略版)</title>
+<!-- v3.99X r72: 修正年度排行CB判定邏輯（補充01_basic/auction資料、標題顯示當年CB數） -->
 <!-- v3.99X r71: 修正產業走勢圖時間區間切換（忽略無資料日期、智慧找基期） -->
 <!-- v3.99X r70: 修正區間明細表格排序事件冒泡問題（th加onclick stopPropagation） -->
 <!-- v3.99X r69: 修正區間明細表格排序問題（只排序當前區間，不影響其他區間） -->
@@ -35111,7 +35112,7 @@ function renderYearlyStockRanking() {
         </div>`;
     }
     
-    // v3.99X r68: 建立每年CB發行公司清單（從kanban資料）
+    // v3.99X r72: 建立每年CB發行公司清單（從kanban資料）
     // cbYearStockMap: { year: Set([stockCode1, stockCode2, ...]), ... }
     const cbYearStockMap = {};
     const allCBStockCodes = new Set(); // 所有年份的CB公司
@@ -35120,6 +35121,7 @@ function renderYearlyStockRanking() {
     const getStockCodeFromCB = (cbCode) => {
         if (!cbCode) return '';
         const str = String(cbCode).trim();
+        // CB代號通常是5位數（如62441），取前4位就是股票代號（6244）
         if (str.length >= 4) {
             const first4 = str.substring(0, 4);
             if (/^\d{4}$/.test(first4)) return first4;
@@ -35127,8 +35129,11 @@ function renderYearlyStockRanking() {
         return '';
     };
     
-    // 從 kanbanCache 載入每年CB公司清單
+    // v3.99X r72: 從 kanbanCache 載入每年CB公司清單
+    // kanbanCache 格式: { cbCode: [{date, dateNum, ...}, ...], ... }
     if (window.kanbanCache && Object.keys(window.kanbanCache).length > 0) {
+        console.log(`[年度排行] kanbanCache 有 ${Object.keys(window.kanbanCache).length} 檔CB`);
+        
         Object.keys(window.kanbanCache).forEach(cbCode => {
             const stockCode = getStockCodeFromCB(cbCode);
             if (!stockCode) return;
@@ -35138,44 +35143,88 @@ function renderYearlyStockRanking() {
             // 從該CB的資料中取得出現的年份
             const cbData = window.kanbanCache[cbCode];
             if (cbData && cbData.length > 0) {
+                // 取該CB的所有日期，提取年份
+                const years = new Set();
                 cbData.forEach(d => {
-                    const dateNum = d.dateNum || parseInt(String(d.date).replace(/[-\/]/g, ''));
-                    if (dateNum) {
-                        const year = parseInt(String(dateNum).substring(0, 4));
+                    // 日期可能是 20250101 或 2025/01/01 或 2025-01-01
+                    let dateStr = String(d.date || d.dateNum || '');
+                    dateStr = dateStr.replace(/[-\/]/g, '');
+                    if (dateStr.length >= 8) {
+                        const year = parseInt(dateStr.substring(0, 4));
                         if (year >= 2015 && year <= 2030) {
-                            if (!cbYearStockMap[year]) cbYearStockMap[year] = new Set();
-                            cbYearStockMap[year].add(stockCode);
+                            years.add(year);
                         }
                     }
                 });
+                
+                // 將該股票代號加入對應年份
+                years.forEach(year => {
+                    if (!cbYearStockMap[year]) cbYearStockMap[year] = new Set();
+                    cbYearStockMap[year].add(stockCode);
+                });
             }
         });
+        
         console.log(`[年度排行] 從kanban載入CB公司: ${allCBStockCodes.size} 家`);
-        Object.keys(cbYearStockMap).forEach(y => {
+        Object.keys(cbYearStockMap).sort().forEach(y => {
             console.log(`  ${y}年: ${cbYearStockMap[y].size} 家`);
         });
+    } else {
+        console.log('[年度排行] kanbanCache 為空或未載入');
     }
     
-    // 補充來源: 如果kanban沒資料，從競拍資料載入
-    if (allCBStockCodes.size === 0) {
-        if (window.auctionDataCache) {
-            window.auctionDataCache.forEach(row => {
-                const stockCode = getStockCodeFromCB(row['股票代號'] || row['CB代號'] || '');
-                const listingDate = row['掛牌日期'] || row['掛牌日'] || '';
-                const year = listingDate ? parseInt(String(listingDate).substring(0, 4)) : 0;
-                if (stockCode) {
-                    allCBStockCodes.add(stockCode);
-                    if (year >= 2015) {
+    // v3.99X r72: 補充來源 - 從01_basic或競拍資料載入
+    // 這是為了確保即使kanban沒載入，也能有CB判定
+    if (allCBStockCodes.size < 100) {
+        console.log('[年度排行] kanban資料不足，嘗試從其他來源補充...');
+        
+        // 來源1: sheet01Data (01_basic.csv)
+        if (window.sheet01Data && window.sheet01Data.length > 0) {
+            window.sheet01Data.forEach(row => {
+                const cbCode = String(row['cb代碼'] || row['CB代碼'] || row['代號'] || '').trim();
+                const stockCode = getStockCodeFromCB(cbCode);
+                if (!stockCode) return;
+                
+                allCBStockCodes.add(stockCode);
+                
+                // 嘗試取得掛牌日期來判斷年份
+                const listingDate = String(row['掛牌日期'] || row['掛牌日'] || row['發行日'] || '').replace(/[-\/]/g, '');
+                if (listingDate.length >= 8) {
+                    const year = parseInt(listingDate.substring(0, 4));
+                    if (year >= 2015 && year <= 2030) {
                         if (!cbYearStockMap[year]) cbYearStockMap[year] = new Set();
                         cbYearStockMap[year].add(stockCode);
                     }
                 }
             });
+            console.log(`[年度排行] 從01_basic補充後: ${allCBStockCodes.size} 家`);
         }
-        console.log(`[年度排行] 從auction補充CB公司: ${allCBStockCodes.size} 家`);
+        
+        // 來源2: auctionDataCache (04_auction.csv)
+        if (window.auctionDataCache && window.auctionDataCache.length > 0) {
+            window.auctionDataCache.forEach(row => {
+                const cbCode = String(row['CB代號'] || row['cb代碼'] || row['股票代號'] || '').trim();
+                const stockCode = getStockCodeFromCB(cbCode);
+                if (!stockCode) return;
+                
+                allCBStockCodes.add(stockCode);
+                
+                const listingDate = String(row['掛牌日期'] || row['掛牌日'] || '').replace(/[-\/]/g, '');
+                if (listingDate.length >= 8) {
+                    const year = parseInt(listingDate.substring(0, 4));
+                    if (year >= 2015 && year <= 2030) {
+                        if (!cbYearStockMap[year]) cbYearStockMap[year] = new Set();
+                        cbYearStockMap[year].add(stockCode);
+                    }
+                }
+            });
+            console.log(`[年度排行] 從auction補充後: ${allCBStockCodes.size} 家`);
+        }
     }
     
     console.log(`[年度排行] CB發行公司總數: ${allCBStockCodes.size}`);
+    console.log(`[年度排行] cbYearStockMap 年份: ${Object.keys(cbYearStockMap).sort().join(', ')}`);
+    
     
     
     // 計算年度漲跌幅
@@ -35235,14 +35284,18 @@ function renderYearlyStockRanking() {
     const years = Object.keys(yearlyData).sort((a, b) => b - a);
     const defaultYear = years[0] || currentYear;
     
-    // 儲存資料供切換年份使用
+    // v3.99X r72: 儲存資料供切換年份使用
     window.yearlyRankingData = yearlyData;
+    window.cbYearStockMap = cbYearStockMap;  // 儲存每年CB清單
+    
+    // 計算預設年份的CB數量
+    const defaultYearCBCount = cbYearStockMap[defaultYear]?.size || 0;
     
     let html = `
     <div style="font-size:15px; font-weight:bold; color:#d32f2f; margin-bottom:10px;">
         🏆 台股年度漲跌幅排行榜
-        <span style="font-size:13px; font-weight:normal; color:#666; margin-left:10px;">
-            共 ${Object.keys(TrendScanModule.priceData).length} 檔股票 | CB公司(所有年) ${allCBStockCodes.size} 家
+        <span id="yearlyRankingSubtitle" style="font-size:13px; font-weight:normal; color:#666; margin-left:10px;">
+            共 ${Object.keys(TrendScanModule.priceData).length} 檔股票 | ${defaultYear}年CB公司 ${defaultYearCBCount} 家
         </span>
     </div>
     
@@ -35474,6 +35527,14 @@ function showYearRanking(year) {
             btn.style.color = '#d32f2f';
         }
     });
+    
+    // v3.99X r72: 更新標題顯示當年CB公司數量
+    const subtitleEl = document.getElementById('yearlyRankingSubtitle');
+    if (subtitleEl && window.cbYearStockMap) {
+        const yearCBCount = window.cbYearStockMap[year]?.size || 0;
+        const totalStocks = Object.keys(TrendScanModule.priceData || {}).length;
+        subtitleEl.innerHTML = `共 ${totalStocks} 檔股票 | ${year}年CB公司 ${yearCBCount} 家`;
+    }
     
     // 更新內容
     const container = document.getElementById('yearRankingContent');

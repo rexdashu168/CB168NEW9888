@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AI智能可轉債競拍系統 v3.99X (百分位數策略版)</title>
+<!-- v3.99X r74: 修正資料庫查詢支援英文欄位名(Date,Code,Name,Close) -->
+<!-- v3.99X r73: 修正年度排行股票名稱顯示、過濾異常低價股票 -->
 <!-- v3.99X r72: 修正年度排行CB判定邏輯（補充01_basic/auction資料、標題顯示當年CB數） -->
 <!-- v3.99X r71: 修正產業走勢圖時間區間切換（忽略無資料日期、智慧找基期） -->
 <!-- v3.99X r70: 修正區間明細表格排序事件冒泡問題（th加onclick stopPropagation） -->
@@ -35257,8 +35259,28 @@ function renderYearlyStockRanking() {
             const lastPrice = yp[yp.length - 1].close;
             if (firstPrice <= 0 || lastPrice <= 0) return;
             
+            // v3.99X r73: 過濾異常低價（年初價格太低可能是資料錯誤）
+            // 例如：年初價0.1元，年末10元，漲幅9900%，這種通常是資料錯誤
+            if (firstPrice < 1) return;  // 忽略年初價格低於1元的股票
+            
             const change = ((lastPrice - firstPrice) / firstPrice * 100).toFixed(2);
-            const stockName = TrendScanModule.stockNames?.[stockCode] || stockCode;
+            
+            // v3.99X r73: 修正股票名稱查詢，嘗試多種key格式
+            let stockName = stockCode;
+            if (TrendScanModule.stockNames) {
+                // 嘗試原始代號
+                if (TrendScanModule.stockNames[stockCode]) {
+                    stockName = TrendScanModule.stockNames[stockCode];
+                }
+                // 嘗試去除空白後的代號
+                else if (TrendScanModule.stockNames[stockCode.trim()]) {
+                    stockName = TrendScanModule.stockNames[stockCode.trim()];
+                }
+                // 嘗試4位數代號
+                else if (TrendScanModule.stockNames[normalizedCode]) {
+                    stockName = TrendScanModule.stockNames[normalizedCode];
+                }
+            }
             
             // v3.99X r68: 判斷該年是否有發CB（從cbYearStockMap查詢）
             const yearNum = parseInt(year);
@@ -35580,20 +35602,26 @@ async function loadYearlyRankingData() {
                     // v3.99X r68: 根據prefix使用正確的表名
                     const tableName = prefix; // stock_price 或 otc_price
                     
-                    // 嘗試讀取資料
+                    // v3.99X r74: 嘗試讀取資料，支援中文和英文欄位名
                     let results;
                     try {
-                        results = db.exec(`SELECT 日期, 代號, 名稱, 收市 FROM ${tableName} WHERE 收市 > 0`);
+                        // 先嘗試英文欄位名（新格式）
+                        results = db.exec(`SELECT Date, Code, Name, Close FROM ${tableName} WHERE Close > 0`);
                     } catch (e) {
                         try {
-                            results = db.exec(`SELECT 日期, 代號, 名稱, 收盤價 as 收市 FROM ${tableName} WHERE 收盤價 > 0`);
+                            // 嘗試中文欄位名（舊格式）
+                            results = db.exec(`SELECT 日期, 代號, 名稱, 收市 FROM ${tableName} WHERE 收市 > 0`);
                         } catch (e2) {
-                            // 嘗試用 stock_price 表名（舊格式）
                             try {
-                                results = db.exec(`SELECT 日期, 代號, 名稱, 收市 FROM stock_price WHERE 收市 > 0`);
+                                results = db.exec(`SELECT 日期, 代號, 名稱, 收盤價 as 收市 FROM ${tableName} WHERE 收盤價 > 0`);
                             } catch (e3) {
-                                db.close();
-                                continue;
+                                // 嘗試用 stock_price 表名（舊格式）
+                                try {
+                                    results = db.exec(`SELECT Date, Code, Name, Close FROM stock_price WHERE Close > 0`);
+                                } catch (e4) {
+                                    db.close();
+                                    continue;
+                                }
                             }
                         }
                     }

@@ -27321,11 +27321,11 @@ function calculateCBASResult() {
     // Step 4: 損益平衡價 = 履約價 + 權利金
     const breakEvenPrice = strikePrice + premium;
     
-    // Step 5: 權利金成本 = 權利金 × 張數 × 1000
-    const premiumCost = premium * shares * 1000;
+    // Step 5: 權利金成本 = 權利金 × 張數 × 1000（取整數）
+    const premiumCost = Math.round(premium * shares * 1000);
     
-    // Step 6: 履約取回金額 = (CB賣出價 - 履約價) × 張數 × 1000
-    const exerciseReturn = (sellPrice - strikePrice) * shares * 1000;
+    // Step 6: 履約取回金額 = (CB賣出價 - 履約價) × 張數 × 1000（取整數）
+    const exerciseReturn = Math.round((sellPrice - strikePrice) * shares * 1000);
     
     // Step 7: 淨損益 = 履約取回金額 - 權利金成本
     const netProfit = exerciseReturn - premiumCost;
@@ -27442,6 +27442,44 @@ function calculateCBASResult() {
  * v3.99X 新增：生成情境分析表格行
  */
 function generateScenarioRows(strikePrice, breakEvenPrice, premium, shares, premiumCost) {
+    const scenarios = [
+        { price: Math.ceil(breakEvenPrice) + 30, label: '大漲' },
+        { price: Math.ceil(breakEvenPrice) + 15, label: '上漲' },
+        { price: Math.ceil(breakEvenPrice) + 5, label: '小漲' },
+        { price: Math.round(breakEvenPrice), label: '平衡' },
+        { price: Math.round((strikePrice + breakEvenPrice) / 2), label: '小跌' },
+        { price: Math.round(strikePrice), label: '歸零點' },
+        { price: Math.round(strikePrice) - 5, label: '不履約' }
+    ];
+    
+    return scenarios.map(s => {
+        const exerciseReturn = Math.round(Math.max(0, (s.price - strikePrice) * shares * 1000));
+        const netProfit = exerciseReturn - premiumCost;
+        const returnRate = premiumCost > 0 ? (netProfit / premiumCost * 100) : 0;
+        const isProfit = netProfit >= 0;
+        const isExercise = s.price >= strikePrice;
+        
+        const bgColor = s.price === Math.round(breakEvenPrice) ? '#fff3e0' : 
+                       isProfit ? '#e8f5e9' : '#ffebee';
+        const textColor = isProfit ? '#2e7d32' : '#c62828';
+        
+        return `
+            <tr style="background:${bgColor};">
+                <td style="padding:6px; text-align:center; border:1px solid #ddd; font-weight:bold;">${s.price}</td>
+                <td style="padding:6px; text-align:right; border:1px solid #ddd;">${exerciseReturn.toLocaleString()}</td>
+                <td style="padding:6px; text-align:right; border:1px solid #ddd; color:${textColor}; font-weight:bold;">
+                    ${netProfit >= 0 ? '+' : ''}${netProfit.toLocaleString()}
+                </td>
+                <td style="padding:6px; text-align:right; border:1px solid #ddd; color:${textColor}; font-weight:bold;">
+                    ${returnRate >= 0 ? '+' : ''}${returnRate.toFixed(0)}%
+                </td>
+                <td style="padding:6px; text-align:center; border:1px solid #ddd;">
+                    ${isExercise ? (isProfit ? '✅獲利' : '⚠️虧損') : '❌不履約'}
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
 
 /**
  * v3.99X 新增：CBAS模式切換
@@ -27512,8 +27550,8 @@ function verifyCBASFormula() {
     // 履約價 = 100 - 折現率 × 剩餘天數/365
     const calcStrike = 100 - (discountRate / 100) * (remainingDays / 365);
     
-    // 權利金總額 = 本金 × 權利金率
-    const calcPremium = principal * (premiumRate / 100);
+    // 權利金總額 = 本金 × 權利金率（取整數）
+    const calcPremium = Math.round(principal * (premiumRate / 100));
     
     // 損益平衡價 = 履約價 + 權利金率
     const calcBreakeven = calcStrike + premiumRate;
@@ -32355,58 +32393,64 @@ async function renderForeignNews(cbCode, container) {
         // 統計
         const fiveStarCount = reports.filter(r => r.importanceNum === 5).length;
         const fourStarCount = reports.filter(r => r.importanceNum === 4).length;
-        // 渲染報導列表
+        
+        // v3.99X r42: 重新設計外電報導樣式 - 與台股掃描一致的卡片式設計
         let html = heatHTML + `
-            <div style="margin-bottom:15px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-                    <div style="font-size:18px; font-weight:bold; color:#c62828;">
-                        📰 ${stockName}(${stockCode}) 外電報導
+            <div style="background:linear-gradient(135deg, #fff8e1, #fff3e0); border:2px solid #ff9800; border-radius:10px; padding:15px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <div style="font-size:16px; font-weight:bold; color:#e65100;">
+                        📰 ${stockName}(${stockCode}) 外電報導 (${reports.length}篇)
                     </div>
-                    <div style="display:flex; gap:10px; font-size:14px;">
-                        <span style="background:#ffebee; padding:4px 10px; border-radius:4px; color:#c62828;">
-                            共 <strong>${reports.length}</strong> 篇
-                        </span>
-                        <span style="background:#fff8e1; padding:4px 10px; border-radius:4px; color:#f57c00;">
-                            ⭐⭐⭐⭐⭐ ${fiveStarCount}篇
-                        </span>
-                        <span style="background:#e3f2fd; padding:4px 10px; border-radius:4px; color:#1976d2;">
-                            ⭐⭐⭐⭐ ${fourStarCount}篇
-                        </span>
-                    </div>
+                    <span style="font-size:13px; color:#888;">點擊查看詳情</span>
                 </div>
-            </div>
-            <div style="max-height:400px; overflow-y:auto;">
+                <div style="display:flex; flex-direction:column; gap:8px; max-height:480px; overflow-y:auto; padding-right:5px;">
         `;
-        reports.forEach((report, idx) => {
-            const importanceColor = report.importanceNum >= 5 ? '#c62828' : 
-                                   report.importanceNum >= 4 ? '#f57c00' : 
-                                   report.importanceNum >= 3 ? '#1976d2' : '#666';
-            const categoryColor = report.category?.includes('升') ? '#c62828' : 
-                                 report.category?.includes('降') ? '#2e7d32' : '#666';
+        
+        // 暫存搜尋結果供點擊使用
+        window._basicInfoForeignNewsResults = reports;
+        
+        reports.slice(0, 20).forEach((report, idx) => {
+            const importanceStars = '⭐'.repeat(Math.min(report.importanceNum || 1, 5));
+            const borderColor = report.importanceNum >= 5 ? '#c62828' : report.importanceNum >= 4 ? '#ff9800' : '#1976d2';
+            
+            // 類別標籤顏色
+            let categoryBg = '#f5f5f5';
+            let categoryColor = '#666';
+            if (report.category?.includes('升目標') || report.category?.includes('升評')) {
+                categoryBg = '#ffebee'; categoryColor = '#c62828';
+            } else if (report.category?.includes('降目標') || report.category?.includes('降評')) {
+                categoryBg = '#e8f5e9'; categoryColor = '#2e7d32';
+            } else if (report.category?.includes('重申')) {
+                categoryBg = '#e3f2fd'; categoryColor = '#1565c0';
+            } else if (report.category?.includes('產業') || report.category?.includes('趨勢')) {
+                categoryBg = '#f3e5f5'; categoryColor = '#7b1fa2';
+            } else if (report.category?.includes('法說')) {
+                categoryBg = '#fff3e0'; categoryColor = '#e65100';
+            }
+            
             html += `
-                <div style="background:white; border:1px solid #e0e0e0; border-radius:8px; margin-bottom:10px; overflow:hidden;">
-                    <div onclick="toggleForeignNewsContent(${idx})" 
-                         style="padding:12px 15px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; background:#fafafa; border-bottom:1px solid #eee;">
-                        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-                            <span style="font-size:14px; color:#666;">${report.date || '-'}</span>
-                            <span style="font-size:14px; font-weight:600; color:#333;">${report.company || '-'}</span>
-                            <span style="background:#f5f5f5; padding:2px 8px; border-radius:4px; font-size:13px; color:#666;">${report.source || '-'}</span>
-                            <span style="background:${categoryColor}20; padding:2px 8px; border-radius:4px; font-size:13px; color:${categoryColor}; font-weight:600;">${report.category || '-'}</span>
-                        </div>
-                        <div style="display:flex; align-items:center; gap:8px;">
-                            <span style="color:${importanceColor}; font-size:14px;">${report.importance || ''}</span>
-                            <span id="foreignNewsArrow${idx}" style="color:#999; transition:transform 0.2s;">▼</span>
-                        </div>
+                <div style="background:white; padding:12px 14px; border-radius:8px; border-left:4px solid ${borderColor}; cursor:pointer; transition:all 0.2s;"
+                     onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.15)'" 
+                     onmouseout="this.style.boxShadow='none'"
+                     onclick="showBasicInfoForeignReportDetail(${idx})">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                        <span style="font-weight:600; color:#000; font-size:14px;">${report.date || '-'} | ${report.source || '-'}</span>
+                        <span style="font-size:13px; color:#ff9800;">${importanceStars}</span>
                     </div>
-                    <div id="foreignNewsContent${idx}" style="display:none; padding:15px; background:#fff; font-size:14px; line-height:1.8; color:#333; white-space:pre-wrap;">${report.content || '無內容'}</div>
-                    ${report.tags ? `<div style="padding:8px 15px; background:#f9f9f9; border-top:1px solid #eee; font-size:13px; color:#666;">${report.tags}</div>` : ''}
+                    <div style="font-size:14px; font-weight:600; margin-bottom:6px;">
+                        <span style="color:#c62828;">${report.company || ''}</span>
+                        <span style="color:#666;"> | </span>
+                        <span style="padding:2px 8px; background:${categoryBg}; color:${categoryColor}; border-radius:4px; font-size:12px;">${report.category || ''}</span>
+                    </div>
+                    <div style="font-size:13px; color:#333; line-height:1.6;">${(report.content || '').substring(0, 120)}...</div>
+                    ${report.tags ? `<div style="margin-top:8px; display:flex; gap:5px; flex-wrap:wrap;">${report.tags.match(/#[^\s#]+/g)?.slice(0,5).map(t => `<span style="background:#fff3e0; color:#e65100; padding:3px 8px; border-radius:4px; font-size:12px;">${t}</span>`).join('') || ''}</div>` : ''}
                 </div>
             `;
         });
+        
         html += `
-            </div>
-            <div style="margin-top:10px; padding:10px; background:#f5f5f5; border-radius:6px; font-size:13px; color:#666; text-align:center;">
-                📊 資料來源：外電綜合報導資料庫（2025年券商研究報告整理）
+                </div>
+                ${reports.length > 20 ? `<div style="text-align:center; color:#888; font-size:13px; margin-top:10px;">顯示前20篇，共${reports.length}篇報導</div>` : ''}
             </div>
         `;
         container.innerHTML = html;
@@ -32416,6 +32460,27 @@ async function renderForeignNews(cbCode, container) {
     }
 }
 // v3.99W: 展開/收合外電報導內容
+function toggleForeignNewsContent(idx) {
+    const content = document.getElementById(`foreignNewsContent${idx}`);
+    const arrow = document.getElementById(`foreignNewsArrow${idx}`);
+    if (content && arrow) {
+        if (content.style.display === 'none') {
+            content.style.display = 'block';
+            arrow.style.transform = 'rotate(180deg)';
+        } else {
+            content.style.display = 'none';
+            arrow.style.transform = 'rotate(0deg)';
+        }
+    }
+}
+
+// v3.99X r42: 基本資料外電報導詳情顯示（點擊卡片開啟彈窗）
+function showBasicInfoForeignReportDetail(idx) {
+    const reports = window._basicInfoForeignNewsResults || [];
+    if (reports && reports[idx]) {
+        showForeignReportDetail(reports[idx]);
+    }
+}
 function toggleForeignNewsContent(idx) {
     const content = document.getElementById(`foreignNewsContent${idx}`);
     const arrow = document.getElementById(`foreignNewsArrow${idx}`);

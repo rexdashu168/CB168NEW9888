@@ -32282,9 +32282,24 @@ const TrendScanModule = {
         if (!chartContainer) return;
         chartContainer.innerHTML = `<div style="color:#1976d2;">⏳ 載入產業走勢資料中...</div>`;
         try {
+            // v3.99X r53: 確保資料庫已載入
+            if (!this.tseDB || !this.otcDB) {
+                chartContainer.innerHTML = `<div style="color:#1976d2;">⏳ 初始化資料庫...</div>`;
+                await this.initSQL();
+                const baseUrl = 'https://rexdashu168.github.io/CB168NEW9888/data/';
+                if (!this.tseDB) {
+                    this.tseDB = await this.loadDatabase(baseUrl + 'stock_price_2025.db', '上市');
+                }
+                if (!this.otcDB) {
+                    this.otcDB = await this.loadDatabase(baseUrl + 'otc_price_2025.db', '上櫃');
+                }
+            }
+            
             // 收集所有股票的價格資料
             const allStockData = {};
             let validStockCount = 0;
+            console.log('[loadAndRenderIndustryChart] 開始載入', stocks.length, '檔股票, 期間:', periodDays, '天');
+            
             for (const stock of stocks) {
                 let priceData = [];
                 // 從資料庫查詢資料（根據期間調整查詢量）
@@ -32300,6 +32315,8 @@ const TrendScanModule = {
                     validStockCount++;
                 }
             }
+            
+            console.log('[loadAndRenderIndustryChart] 有效股票數:', validStockCount);
             if (validStockCount === 0) {
                 chartContainer.innerHTML = '<div style="color:#999;">無法取得足夠的價格資料</div>';
                 return;
@@ -34393,7 +34410,7 @@ async function loadStockMarginAnalysis(stockCode, stockName, isOTC, priceData) {
     }
 }
 
-// v3.99X r51: 分析個股價格vs融資背離
+// v3.99X r56: 分析個股價格vs融資背離（融入Rex大叔融資循環理論）
 function analyzeStockMarginDivergence(data, stockName, stockCode) {
     const latest = data[data.length - 1];
     const latestPrice = latest.price;
@@ -34416,18 +34433,34 @@ function analyzeStockMarginDivergence(data, stockName, stockCode) {
         const marginChange = ((latestMargin - past.margin) / past.margin * 100) || 0;
         const divergence = marginChange - priceChange;
         
-        // 判斷狀態
-        let status, statusColor, statusIcon;
-        if (divergence > 15) {
-            status = '融資過熱'; statusColor = '#c62828'; statusIcon = '🔥';
-        } else if (divergence > 5) {
-            status = '融資偏熱'; statusColor = '#ff5722'; statusIcon = '⚠️';
-        } else if (divergence > -5) {
-            status = '同步'; statusColor = '#4caf50'; statusIcon = '✓';
-        } else if (divergence > -15) {
-            status = '融資偏冷'; statusColor = '#2196f3'; statusIcon = '❄️';
+        // v3.99X r56: 判斷融資循環階段（Rex大叔理論）
+        let cyclePhase, cycleIcon, cycleColor, cycleAdvice;
+        
+        if (priceChange > 0 && marginChange < 0) {
+            cyclePhase = '起漲轉強';
+            cycleIcon = '🚀';
+            cycleColor = '#4caf50';
+            cycleAdvice = '籌碼乾淨，可找機會布局';
+        } else if (priceChange > 0 && marginChange > 0) {
+            cyclePhase = '追價階段';
+            cycleIcon = '⚡';
+            cycleColor = '#ff9800';
+            cycleAdvice = '散戶追價，漲勢快但要防拉回';
+        } else if (priceChange < 0 && marginChange > 0) {
+            cyclePhase = '起跌轉弱';
+            cycleIcon = '⚠️';
+            cycleColor = '#f44336';
+            cycleAdvice = '散戶攤平，應減碼或出場';
+        } else if (priceChange < 0 && marginChange < 0) {
+            cyclePhase = '追殺階段';
+            cycleIcon = '❄️';
+            cycleColor = '#2196f3';
+            cycleAdvice = '洗盤中，留意止跌反彈訊號';
         } else {
-            status = '融資冰點'; statusColor = '#1565c0'; statusIcon = '🧊';
+            cyclePhase = '盤整觀望';
+            cycleIcon = '⏸️';
+            cycleColor = '#9e9e9e';
+            cycleAdvice = '方向不明，觀望為宜';
         }
         
         return {
@@ -34435,41 +34468,14 @@ function analyzeStockMarginDivergence(data, stockName, stockCode) {
             priceChange: priceChange.toFixed(2),
             marginChange: marginChange.toFixed(2),
             divergence: divergence.toFixed(2),
-            status, statusColor, statusIcon
+            cyclePhase, cycleIcon, cycleColor, cycleAdvice
         };
     }).filter(p => p !== null);
     
-    // 計算整體熱度評估
-    const recentDivergences = periodResults.slice(0, 3).map(p => parseFloat(p.divergence));
-    const avgDivergence = recentDivergences.reduce((a, b) => a + b, 0) / recentDivergences.length;
-    
-    let overallStatus, overallColor, overallIcon, overallAdvice;
-    if (avgDivergence > 10) {
-        overallStatus = '過熱警戒';
-        overallColor = '#c62828';
-        overallIcon = '🔥';
-        overallAdvice = '融資追價明顯，建議謹慎，避免追高';
-    } else if (avgDivergence > 3) {
-        overallStatus = '偏熱注意';
-        overallColor = '#ff5722';
-        overallIcon = '⚠️';
-        overallAdvice = '融資略為積極，留意回檔風險';
-    } else if (avgDivergence > -3) {
-        overallStatus = '正常同步';
-        overallColor = '#4caf50';
-        overallIcon = '✓';
-        overallAdvice = '價格與融資同步，走勢健康';
-    } else if (avgDivergence > -10) {
-        overallStatus = '相對安全';
-        overallColor = '#2196f3';
-        overallIcon = '👍';
-        overallAdvice = '融資相對保守，籌碼較乾淨';
-    } else {
-        overallStatus = '極度冷清';
-        overallColor = '#1565c0';
-        overallIcon = '🧊';
-        overallAdvice = '融資極低，可能是冷門股或佈局時機';
-    }
+    // 判斷主要趨勢階段（以20日為主）
+    const mainPeriod = periodResults.find(p => p.label === '20日') || periodResults[0];
+    const shortPeriod = periodResults.find(p => p.label === '5日') || periodResults[0];
+    const longPeriod = periodResults.find(p => p.label === '60日') || periodResults[periodResults.length - 1];
     
     // 計算融資位置（近一年高低點）
     const margins = data.slice(-250).map(d => d.margin);
@@ -34477,45 +34483,168 @@ function analyzeStockMarginDivergence(data, stockName, stockCode) {
     const marginLow = Math.min(...margins);
     const marginPosition = ((latestMargin - marginLow) / (marginHigh - marginLow) * 100) || 0;
     
+    // v3.99X r56: 計算追繳壓力區間（融資維持率130%對應的成本價）
+    // 股價低於買進成本22%就會被追繳（1/1.3 ≈ 0.78）
+    const marginCallPrice = latestPrice / 0.78;  // 買在這價位以上的融資可能面臨追繳
+    
+    // v3.99X r56: 判斷散戶心理階段
+    let retailMood, moodIcon, moodColor;
+    const priceChange60 = longPeriod ? parseFloat(longPeriod.priceChange) : 0;
+    const marginChange60 = longPeriod ? parseFloat(longPeriod.marginChange) : 0;
+    
+    if (priceChange60 > 20 && marginChange60 > 30) {
+        retailMood = '瘋狂追價中';
+        moodIcon = '🤑';
+        moodColor = '#c62828';
+    } else if (priceChange60 > 10 && marginChange60 > 15) {
+        retailMood = '積極樂觀';
+        moodIcon = '😊';
+        moodColor = '#ff5722';
+    } else if (priceChange60 > 0 && marginChange60 < 0) {
+        retailMood = '謹慎觀望';
+        moodIcon = '🤔';
+        moodColor = '#4caf50';
+    } else if (priceChange60 < -10 && marginChange60 > 10) {
+        retailMood = '死抱攤平';
+        moodIcon = '😰';
+        moodColor = '#f44336';
+    } else if (priceChange60 < -20 && marginChange60 < -10) {
+        retailMood = '恐慌殺出';
+        moodIcon = '😱';
+        moodColor = '#1565c0';
+    } else if (priceChange60 < 0 && marginChange60 < 0) {
+        retailMood = '認賠出場';
+        moodIcon = '😔';
+        moodColor = '#2196f3';
+    } else {
+        retailMood = '平靜觀望';
+        moodIcon = '😐';
+        moodColor = '#757575';
+    }
+    
+    // v3.99X r56: 綜合評估（結合Rex大叔的觀點）
+    let overallStatus, overallColor, overallIcon, overallAdvice, rexComment;
+    
+    // 根據融資位置和趨勢階段綜合判斷
+    if (marginPosition > 80 && parseFloat(mainPeriod.marginChange) > 0) {
+        overallStatus = '⚠️ 融資過熱警戒';
+        overallColor = '#c62828';
+        overallIcon = '🔥';
+        overallAdvice = '融資水位偏高且持續增加，潛在賣壓沉重';
+        rexComment = '散戶已經大量借錢買進，記住「融資=潛在賣壓」。主力看到融資籌碼那麼多那麼亂，你敢進場去拉抬嗎？往上拉只是讓層層套牢的融資解套而已。';
+    } else if (mainPeriod.cyclePhase === '起跌轉弱') {
+        overallStatus = '⚠️ 籌碼轉弱中';
+        overallColor = '#f44336';
+        overallIcon = '📉';
+        overallAdvice = '價跌量增，散戶逢低攤平中';
+        rexComment = '散戶一看急跌就會想買進股票，而股票買進後反而增加潛在賣壓。這些凌亂的融資籌碼，只要有錢就是繼續攤平繼續買，最後通常是被追繳斷頭出場。';
+    } else if (mainPeriod.cyclePhase === '追價階段' && marginPosition > 60) {
+        overallStatus = '⚡ 追價過熱';
+        overallColor = '#ff5722';
+        overallIcon = '⚡';
+        overallAdvice = '散戶追價中，漲勢快但風險增';
+        rexComment = '「大漲三天，散戶不請自來」。當散戶不計成本瘋狂買上去，就是主力要出貨的對象。漲最快最有效率，但要慎防隨時拉回！';
+    } else if (mainPeriod.cyclePhase === '起漲轉強') {
+        overallStatus = '✓ 籌碼健康';
+        overallColor = '#4caf50';
+        overallIcon = '🚀';
+        overallAdvice = '價漲量縮，籌碼沉澱乾淨';
+        rexComment = '融資減少代表散戶把股票賣掉了，但價格反而上漲，代表市場上有股更大的力量把籌碼都買走了。籌碼乾淨穩定，後勢上漲機率高。';
+    } else if (mainPeriod.cyclePhase === '追殺階段') {
+        overallStatus = '❄️ 洗盤階段';
+        overallColor = '#2196f3';
+        overallIcon = '🧊';
+        overallAdvice = '融資籌碼清洗中';
+        rexComment = '「融資不死，空頭不止」。融資通常會在連續下跌或大跌時才會不計成本瘋狂砍出，那時候才比較容易見到波段底部。等籌碼洗乾淨，整軍待發。';
+    } else if (marginPosition < 20) {
+        overallStatus = '👍 融資冰點';
+        overallColor = '#1565c0';
+        overallIcon = '🧊';
+        overallAdvice = '融資極低，籌碼乾淨';
+        rexComment = '融資水位很低，代表散戶幾乎都跑光了。籌碼乾淨的股票，未來要漲的時候阻力會比較小，可以留意佈局機會。';
+    } else {
+        overallStatus = '⏸️ 中性觀望';
+        overallColor = '#757575';
+        overallIcon = '⏸️';
+        overallAdvice = '持續觀察籌碼變化';
+        rexComment = '目前沒有明顯的籌碼訊號，建議持續觀察價格與融資的相對變化，掌握散戶目前處在哪個階段。';
+    }
+    
     // 生成HTML
     let html = `
     <div style="background:linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%); border-radius:12px; padding:15px; border:2px solid #9c27b0;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
             <div style="font-size:15px; font-weight:bold; color:#7b1fa2;">
-                📊 ${stockName} 價格 vs 融資分析
+                📊 ${stockName} 融資籌碼分析
             </div>
             <div style="font-size:13px; color:#666;">
-                融資餘額: ${(latestMargin).toLocaleString()}張
+                融資餘額: <strong>${(latestMargin).toLocaleString()}</strong> 張
             </div>
         </div>
         
-        <!-- 整體評估 -->
-        <div style="background:white; border-radius:10px; padding:12px; margin-bottom:12px; display:flex; align-items:center; gap:15px; border-left:4px solid ${overallColor};">
-            <div style="font-size:32px;">${overallIcon}</div>
-            <div style="flex:1;">
-                <div style="font-size:16px; font-weight:bold; color:${overallColor};">${overallStatus}</div>
-                <div style="font-size:13px; color:#666; margin-top:2px;">${overallAdvice}</div>
+        <!-- 整體評估 + 散戶心理 -->
+        <div style="display:grid; grid-template-columns:1fr auto; gap:10px; margin-bottom:12px;">
+            <div style="background:white; border-radius:10px; padding:12px; border-left:4px solid ${overallColor};">
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <div style="font-size:36px;">${overallIcon}</div>
+                    <div style="flex:1;">
+                        <div style="font-size:17px; font-weight:bold; color:${overallColor};">${overallStatus}</div>
+                        <div style="font-size:13px; color:#666; margin-top:2px;">${overallAdvice}</div>
+                    </div>
+                </div>
             </div>
-            <div style="text-align:right;">
-                <div style="font-size:12px; color:#888;">融資位置</div>
-                <div style="font-size:18px; font-weight:bold; color:#9c27b0;">${marginPosition.toFixed(0)}%</div>
+            <div style="background:white; border-radius:10px; padding:12px; text-align:center; min-width:100px;">
+                <div style="font-size:11px; color:#888;">散戶心理</div>
+                <div style="font-size:28px;">${moodIcon}</div>
+                <div style="font-size:12px; font-weight:bold; color:${moodColor};">${retailMood}</div>
             </div>
+        </div>
+        
+        <!-- 融資位置 + 追繳區 -->
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;">
+            <div style="background:white; border-radius:8px; padding:10px; text-align:center;">
+                <div style="font-size:11px; color:#888;">融資位置(近一年)</div>
+                <div style="font-size:24px; font-weight:bold; color:${marginPosition > 70 ? '#c62828' : marginPosition < 30 ? '#2e7d32' : '#ff9800'};">${marginPosition.toFixed(0)}%</div>
+                <div style="font-size:11px; color:#666;">${marginPosition > 70 ? '偏高風險' : marginPosition < 30 ? '相對安全' : '中性區間'}</div>
+            </div>
+            <div style="background:white; border-radius:8px; padding:10px; text-align:center;">
+                <div style="font-size:11px; color:#888;">追繳壓力線</div>
+                <div style="font-size:24px; font-weight:bold; color:#c62828;">${marginCallPrice.toFixed(0)}</div>
+                <div style="font-size:11px; color:#666;">買在此價以上恐追繳</div>
+            </div>
+        </div>
+        
+        <!-- Rex大叔點評 -->
+        <div style="background:#fff8e1; border-radius:8px; padding:10px 12px; margin-bottom:12px; border-left:4px solid #ffc107;">
+            <div style="font-size:12px; color:#666; margin-bottom:4px;">💡 <strong>籌碼解讀</strong></div>
+            <div style="font-size:13px; color:#5d4037; line-height:1.6;">${rexComment}</div>
         </div>
         
         <!-- 融資位置條 -->
-        <div style="background:#e0e0e0; height:8px; border-radius:4px; margin-bottom:15px; overflow:hidden;">
-            <div style="height:100%; width:${marginPosition}%; background:linear-gradient(90deg, #4caf50, #ffc107, #ff5722, #c62828); border-radius:4px;"></div>
+        <div style="margin-bottom:15px;">
+            <div style="display:flex; justify-content:space-between; font-size:11px; color:#888; margin-bottom:4px;">
+                <span>冰點 0%</span>
+                <span>中性 50%</span>
+                <span>過熱 100%</span>
+            </div>
+            <div style="background:#e0e0e0; height:10px; border-radius:5px; overflow:hidden; position:relative;">
+                <div style="height:100%; width:100%; background:linear-gradient(90deg, #4caf50 0%, #8bc34a 25%, #ffc107 50%, #ff9800 75%, #f44336 100%);"></div>
+                <div style="position:absolute; top:-2px; left:calc(${Math.min(marginPosition, 100)}% - 7px); width:14px; height:14px; background:white; border:3px solid ${overallColor}; border-radius:50%;"></div>
+            </div>
         </div>
         
-        <!-- 多期間比較表格 -->
-        <div style="background:white; border-radius:8px; overflow:hidden;">
+        <!-- 融資循環階段表格 -->
+        <div style="background:white; border-radius:8px; overflow:hidden; margin-bottom:12px;">
+            <div style="background:#7b1fa2; color:white; padding:10px 12px; font-size:14px; font-weight:bold;">
+                📈 融資循環四階段分析
+            </div>
             <table style="width:100%; border-collapse:collapse; font-size:13px;">
                 <thead>
                     <tr style="background:#f5f5f5;">
-                        <th style="padding:10px 8px; text-align:center; border-bottom:2px solid #e0e0e0;">期間</th>
-                        <th style="padding:10px 8px; text-align:center; border-bottom:2px solid #e0e0e0;">股價漲跌</th>
-                        <th style="padding:10px 8px; text-align:center; border-bottom:2px solid #e0e0e0;">融資變化</th>
-                        <th style="padding:10px 8px; text-align:center; border-bottom:2px solid #e0e0e0;">狀態</th>
+                        <th style="padding:10px 6px; text-align:center; border-bottom:2px solid #e0e0e0; width:50px;">期間</th>
+                        <th style="padding:10px 6px; text-align:center; border-bottom:2px solid #e0e0e0;">股價</th>
+                        <th style="padding:10px 6px; text-align:center; border-bottom:2px solid #e0e0e0;">融資</th>
+                        <th style="padding:10px 6px; text-align:center; border-bottom:2px solid #e0e0e0;">循環階段</th>
                     </tr>
                 </thead>
                 <tbody>`;
@@ -34523,19 +34652,21 @@ function analyzeStockMarginDivergence(data, stockName, stockCode) {
     periodResults.forEach(p => {
         html += `
                     <tr style="border-bottom:1px solid #eee;">
-                        <td style="padding:8px; text-align:center; font-weight:bold; background:#fafafa;">${p.label}</td>
-                        <td style="padding:8px; text-align:center;">
+                        <td style="padding:8px 6px; text-align:center; font-weight:bold; background:#fafafa;">${p.label}</td>
+                        <td style="padding:8px 6px; text-align:center;">
                             <span style="color:${parseFloat(p.priceChange) >= 0 ? '#c62828' : '#2e7d32'}; font-weight:bold;">
-                                ${parseFloat(p.priceChange) >= 0 ? '+' : ''}${p.priceChange}%
+                                ${parseFloat(p.priceChange) >= 0 ? '▲' : '▼'} ${Math.abs(parseFloat(p.priceChange)).toFixed(1)}%
                             </span>
                         </td>
-                        <td style="padding:8px; text-align:center;">
+                        <td style="padding:8px 6px; text-align:center;">
                             <span style="color:${parseFloat(p.marginChange) >= 0 ? '#c62828' : '#2e7d32'}; font-weight:bold;">
-                                ${parseFloat(p.marginChange) >= 0 ? '+' : ''}${p.marginChange}%
+                                ${parseFloat(p.marginChange) >= 0 ? '▲' : '▼'} ${Math.abs(parseFloat(p.marginChange)).toFixed(1)}%
                             </span>
                         </td>
-                        <td style="padding:8px; text-align:center;">
-                            <span style="color:${p.statusColor}; font-weight:bold;">${p.statusIcon} ${p.status}</span>
+                        <td style="padding:8px 6px; text-align:center;">
+                            <span style="background:${p.cycleColor}20; color:${p.cycleColor}; padding:3px 8px; border-radius:12px; font-size:12px; font-weight:bold;">
+                                ${p.cycleIcon} ${p.cyclePhase}
+                            </span>
                         </td>
                     </tr>`;
     });
@@ -34545,9 +34676,30 @@ function analyzeStockMarginDivergence(data, stockName, stockCode) {
             </table>
         </div>
         
-        <!-- 說明 -->
-        <div style="margin-top:10px; padding:8px 10px; background:#fff3e0; border-radius:6px; font-size:12px; color:#e65100;">
-            💡 <strong>判讀方式：</strong>融資變化 - 股價漲跌 = 背離度。正值表示融資漲幅超過股價（過熱），負值表示融資落後（相對安全）。
+        <!-- 融資循環說明 -->
+        <div style="background:#f5f5f5; border-radius:8px; padding:12px;">
+            <div style="font-size:12px; font-weight:bold; color:#333; margin-bottom:8px;">📚 融資循環四階段口訣</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:12px;">
+                <div style="display:flex; align-items:center; gap:6px;">
+                    <span style="background:#4caf50; color:white; padding:2px 6px; border-radius:4px;">🚀 起漲</span>
+                    <span style="color:#666;">價漲+融資減 → 買點</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:6px;">
+                    <span style="background:#ff9800; color:white; padding:2px 6px; border-radius:4px;">⚡ 追價</span>
+                    <span style="color:#666;">價漲+融資增 → 防拉回</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:6px;">
+                    <span style="background:#f44336; color:white; padding:2px 6px; border-radius:4px;">⚠️ 起跌</span>
+                    <span style="color:#666;">價跌+融資增 → 減碼</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:6px;">
+                    <span style="background:#2196f3; color:white; padding:2px 6px; border-radius:4px;">❄️ 追殺</span>
+                    <span style="color:#666;">價跌+融資減 → 等反彈</span>
+                </div>
+            </div>
+            <div style="margin-top:10px; padding-top:8px; border-top:1px dashed #ccc; font-size:11px; color:#888; line-height:1.5;">
+                💡 <strong>核心觀念：</strong>「融資 = 潛在賣壓」。站在散戶的對面思考，知己知彼百戰百勝。融資籌碼太亂的標的要敬而遠之，否則可能最後你也深陷其中而無法自拔。
+            </div>
         </div>
     </div>`;
     

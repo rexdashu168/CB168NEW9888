@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AI智能可轉債競拍系統 v3.99X (百分位數策略版)</title>
+<!-- v3.99X r66: 自訂日期區間無資料提示優化、CB判定邏輯強化 -->
 <!-- v3.99X: CBAS履約試算器 - 正確公式版本 -->
 <!-- v3.99X: 產業走勢時間標籤切換修正 -->
 <!-- v3.99X: 收闘按鈕位置修正 - 收闘後顯示在右側，方便使用者展開 -->
@@ -13834,11 +13835,11 @@ function renderSizeCompare() {
     <div class="trend-table-wrapper">
     <table class="trend-year-table" id="sizeTable">
         <tr>
-            <th class="sortable" style="width:25%;">規模區間</th>
-            <th class="sortable" style="width:15%;">檔數</th>
-            <th class="sortable" style="width:15%;">均高</th>
-            <th class="sortable" style="width:15%;">均低</th>
-            <th class="sortable" style="width:15%;">振幅</th>
+            <th style="width:25%;">規模區間</th>
+            <th style="width:15%;">檔數</th>
+            <th style="width:15%;">均高▼</th>
+            <th style="width:15%;">均低</th>
+            <th style="width:15%;">振幅</th>
         </tr>`;
     const maxAmp = Math.max(...ranges.map(r => r.avgAmp));
     ranges.forEach((r, idx) => {
@@ -13964,11 +13965,11 @@ function renderCapitalCompare() {
     <div class="trend-table-wrapper">
     <table class="trend-year-table" id="capitalTable">
         <tr>
-            <th class="sortable" style="width:25%;">股本區間</th>
-            <th class="sortable" style="width:15%;">檔數</th>
-            <th class="sortable" style="width:15%;">均高</th>
-            <th class="sortable" style="width:15%;">均低</th>
-            <th class="sortable" style="width:15%;">振幅</th>
+            <th style="width:25%;">股本區間</th>
+            <th style="width:15%;">檔數</th>
+            <th style="width:15%;">均高▼</th>
+            <th style="width:15%;">均低</th>
+            <th style="width:15%;">振幅</th>
         </tr>`;
     const maxAmp = Math.max(...ranges.map(r => r.avgAmp));
     ranges.forEach((r, idx) => {
@@ -14088,11 +14089,11 @@ function renderConversionCompare() {
     <div class="trend-table-wrapper">
     <table class="trend-year-table" id="conversionTable">
         <tr>
-            <th class="sortable" style="width:25%;">轉換價區間</th>
-            <th class="sortable" style="width:15%;">檔數</th>
-            <th class="sortable" style="width:15%;">均高</th>
-            <th class="sortable" style="width:15%;">均低</th>
-            <th class="sortable" style="width:15%;">振幅</th>
+            <th style="width:25%;">轉換價區間</th>
+            <th style="width:15%;">檔數</th>
+            <th style="width:15%;">均高▼</th>
+            <th style="width:15%;">均低</th>
+            <th style="width:15%;">振幅</th>
         </tr>`;
     const maxAmp = Math.max(...ranges.map(r => r.avgAmp));
     ranges.forEach((r, idx) => {
@@ -14203,11 +14204,11 @@ function renderRatingCompare() {
     <div class="trend-table-wrapper">
     <table class="trend-year-table" id="ratingTable">
         <tr>
-            <th class="sortable" style="width:25%;">信評等級</th>
-            <th class="sortable" style="width:15%;">檔數</th>
-            <th class="sortable" style="width:15%;">均高</th>
-            <th class="sortable" style="width:15%;">均低</th>
-            <th class="sortable" style="width:15%;">振幅</th>
+            <th style="width:25%;">信評等級</th>
+            <th style="width:15%;">檔數</th>
+            <th style="width:15%;">均高▼</th>
+            <th style="width:15%;">均低</th>
+            <th style="width:15%;">振幅</th>
         </tr>`;
     const maxAmp = validRanges.length > 0 ? Math.max(...validRanges.map(r => r.avgAmp)) : 0;
     const minAmp = validRanges.length > 0 ? Math.min(...validRanges.map(r => r.avgAmp)) : 0;
@@ -14742,9 +14743,13 @@ async function loadIndexMarginData() {
         const totalRecords = tseData.length + otcData.length + stock2330Data.length;
         console.log(`✅ 大盤指數載入完成: TSE=${tseData.length}筆, OTC=${otcData.length}筆, 2330=${stock2330Data.length}筆`);
         if (statusEl) statusEl.innerHTML = `<span style="color:#4caf50;">✓ 載入完成 ${totalRecords} 筆</span>`;
-        // 重新渲染
+        // v3.99X r64: 修正重新渲染邏輯
         setTimeout(() => {
-            showMarketTrendTab('indexMargin');
+            const container = document.getElementById('marginAnalysisContainer');
+            if (container) {
+                container.innerHTML = renderIndexMarginAnalysis();
+                container.dataset.loaded = 'true';
+            }
         }, 300);
     } catch (e) {
         console.error('載入大盤指數失敗:', e);
@@ -34487,10 +34492,18 @@ const MarketIndexModule = {
         const startNum = parseInt(startDate.toISOString().split('T')[0].replace(/-/g, ''));
         const endNum = parseInt(endDate.toISOString().split('T')[0].replace(/-/g, ''));
         
-        return data.filter(d => {
+        console.log('[filterByDateRange] 範圍:', startNum, '~', endNum, '資料筆數:', data.length);
+        if (data.length > 0) {
+            console.log('[filterByDateRange] 資料日期範例:', data[0].date, '→', toDateNum(data[0].date));
+        }
+        
+        const filtered = data.filter(d => {
             const dateNum = toDateNum(d.date);
             return dateNum >= startNum && dateNum <= endNum;
         });
+        
+        console.log('[filterByDateRange] 過濾後筆數:', filtered.length);
+        return filtered;
     },
     // 渲染走勢圖
     renderChart() {
@@ -34539,7 +34552,34 @@ const MarketIndexModule = {
         }
         
         if (chartData.length === 0) {
-            container.innerHTML = '<div style="text-align:center; padding:40px; color:#999;">暫無資料</div>';
+            // v3.99X r66: 自訂日期區間無資料時提供更詳細的提示
+            let noDataMsg = '暫無資料';
+            if (useCustomDate) {
+                const startStr = this.customDateRange.start.toISOString().split('T')[0];
+                const endStr = this.customDateRange.end.toISOString().split('T')[0];
+                // 檢查資料的日期範圍
+                let dataMinDate = '', dataMaxDate = '';
+                if (validData.length > 0) {
+                    const dates = validData.map(d => {
+                        const ds = String(d.date);
+                        if (ds.length === 8) return ds;
+                        if (ds.includes('/')) return ds.split('/').map((p,i) => i===0 ? p : p.padStart(2,'0')).join('');
+                        return ds.replace(/-/g,'');
+                    }).sort();
+                    dataMinDate = dates[0];
+                    dataMaxDate = dates[dates.length - 1];
+                    // 格式化顯示
+                    dataMinDate = dataMinDate.substring(0,4) + '/' + dataMinDate.substring(4,6) + '/' + dataMinDate.substring(6,8);
+                    dataMaxDate = dataMaxDate.substring(0,4) + '/' + dataMaxDate.substring(4,6) + '/' + dataMaxDate.substring(6,8);
+                }
+                noDataMsg = `
+                    <div style="font-size:14px; color:#c62828; margin-bottom:8px;">📅 所選區間無資料</div>
+                    <div style="font-size:12px; color:#666; margin-bottom:5px;">查詢區間: ${startStr} ~ ${endStr}</div>
+                    ${dataMinDate ? `<div style="font-size:12px; color:#888;">資料涵蓋: ${dataMinDate} ~ ${dataMaxDate}</div>` : '<div style="font-size:12px; color:#888;">此標的尚未載入資料</div>'}
+                    <div style="font-size:11px; color:#999; margin-top:8px;">請調整日期區間或確認CSV檔案是否包含該期間資料</div>
+                `;
+            }
+            container.innerHTML = `<div style="text-align:center; padding:30px; background:#fff3e0; border-radius:8px;">${noDataMsg}</div>`;
             return;
         }
         // 使用 Canvas 繪製走勢圖
@@ -34979,9 +35019,11 @@ function renderYearlyStockRanking() {
         </div>`;
     }
     
-    // 建立CB發行公司清單（從競拍資料）
+    // v3.99X r66: 建立CB發行公司清單（從多個來源）
     const cbStockCodes = new Set();
     const cbYearMap = {}; // 記錄每檔CB的發行年份
+    
+    // 來源1: 競拍資料 (04_auction)
     if (window.auctionDataCache) {
         window.auctionDataCache.forEach(row => {
             const stockCode = String(row['股票代號'] || '').substring(0, 4).trim();
@@ -34990,17 +35032,46 @@ function renderYearlyStockRanking() {
             if (stockCode && stockCode.length === 4) {
                 cbStockCodes.add(stockCode);
                 if (!cbYearMap[stockCode]) cbYearMap[stockCode] = [];
-                if (year >= 2015) cbYearMap[stockCode].push(year);
+                if (year >= 2010) cbYearMap[stockCode].push(year);
             }
         });
     }
-    // 也從 sheetAllCB (01_basic) 補充
+    
+    // 來源2: cbSupplementMap (已建立的對照表)
     if (window.cbSupplementMap) {
         Object.keys(window.cbSupplementMap).forEach(cbCode => {
             const stockCode = cbCode.substring(0, 4);
             if (stockCode.length === 4) cbStockCodes.add(stockCode);
         });
     }
+    
+    // 來源3: sheet01Data (01_basic.csv 原始資料)
+    if (window.sheet01Data && window.sheet01Data.length > 0) {
+        window.sheet01Data.forEach(row => {
+            // 嘗試從不同欄位取得股票代號
+            let stockCode = String(row['股票代號'] || row['代號'] || row['cb代碼'] || '').trim();
+            // 如果是5位數CB代號，取前4位
+            if (stockCode.length >= 4) {
+                stockCode = stockCode.substring(0, 4);
+                if (/^\d{4}$/.test(stockCode)) {
+                    cbStockCodes.add(stockCode);
+                    // 嘗試取得掛牌年份
+                    const listingDate = row['掛牌日期'] || row['掛牌日'] || row['發行日'] || '';
+                    if (listingDate) {
+                        const year = parseInt(String(listingDate).substring(0, 4));
+                        if (year >= 2010) {
+                            if (!cbYearMap[stockCode]) cbYearMap[stockCode] = [];
+                            if (!cbYearMap[stockCode].includes(year)) {
+                                cbYearMap[stockCode].push(year);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    console.log(`[年度排行] CB發行公司數量: ${cbStockCodes.size}`);
     
     // 計算年度漲跌幅
     const yearlyData = {};
@@ -35324,60 +35395,66 @@ async function loadYearlyRankingData() {
         }
         
         let totalLoaded = 0;
+        
+        // v3.99X r64: 同時載入上市(stock_price)和上櫃(otc_price)資料
+        const dbPrefixes = ['stock_price', 'otc_price'];
+        
         for (const year of yearsToLoad) {
-            try {
-                const dbFile = `data/stock_price_${year}.db`;
-                const response = await fetch(dbFile);
-                if (!response.ok) continue;
-                
-                const buffer = await response.arrayBuffer();
-                const db = new TrendScanModule.sqlEngine.Database(new Uint8Array(buffer));
-                
-                // 嘗試讀取資料
-                let results;
+            for (const prefix of dbPrefixes) {
                 try {
-                    results = db.exec(`SELECT 日期, 代號, 名稱, 收市 FROM stock_price WHERE 收市 > 0`);
-                } catch (e) {
+                    const dbFile = `data/${prefix}_${year}.db`;
+                    const response = await fetch(dbFile);
+                    if (!response.ok) continue;
+                    
+                    const buffer = await response.arrayBuffer();
+                    const db = new TrendScanModule.sqlEngine.Database(new Uint8Array(buffer));
+                    
+                    // 嘗試讀取資料
+                    let results;
                     try {
-                        results = db.exec(`SELECT 日期, 代號, 名稱, 收盤價 as 收市 FROM stock_price WHERE 收盤價 > 0`);
-                    } catch (e2) {
-                        db.close();
-                        continue;
+                        results = db.exec(`SELECT 日期, 代號, 名稱, 收市 FROM stock_price WHERE 收市 > 0`);
+                    } catch (e) {
+                        try {
+                            results = db.exec(`SELECT 日期, 代號, 名稱, 收盤價 as 收市 FROM stock_price WHERE 收盤價 > 0`);
+                        } catch (e2) {
+                            db.close();
+                            continue;
+                        }
                     }
-                }
-                
-                if (results.length > 0) {
-                    const rows = results[0].values;
-                    rows.forEach(row => {
-                        const [date, code, name, close] = row;
-                        if (!code || !close) return;
-                        
-                        const stockCode = String(code).trim();
-                        if (!TrendScanModule.priceData[stockCode]) {
-                            TrendScanModule.priceData[stockCode] = [];
-                        }
-                        if (!TrendScanModule.stockNames) {
-                            TrendScanModule.stockNames = {};
-                        }
-                        TrendScanModule.stockNames[stockCode] = name || stockCode;
-                        
-                        TrendScanModule.priceData[stockCode].push({
-                            date: parseInt(String(date).replace(/[-\/]/g, '')),
-                            close: parseFloat(close)
+                    
+                    if (results.length > 0) {
+                        const rows = results[0].values;
+                        rows.forEach(row => {
+                            const [date, code, name, close] = row;
+                            if (!code || !close) return;
+                            
+                            const stockCode = String(code).trim();
+                            if (!TrendScanModule.priceData[stockCode]) {
+                                TrendScanModule.priceData[stockCode] = [];
+                            }
+                            if (!TrendScanModule.stockNames) {
+                                TrendScanModule.stockNames = {};
+                            }
+                            TrendScanModule.stockNames[stockCode] = name || stockCode;
+                            
+                            TrendScanModule.priceData[stockCode].push({
+                                date: parseInt(String(date).replace(/[-\/]/g, '')),
+                                close: parseFloat(close)
+                            });
                         });
-                    });
-                    totalLoaded += rows.length;
+                        totalLoaded += rows.length;
+                    }
+                    db.close();
+                    
+                } catch (e) {
+                    // 靜默忽略
                 }
-                db.close();
-                
-                if (statusEl) statusEl.innerHTML = `<span style="color:#ff9800;">⏳ 已載入 ${year} 年... (${totalLoaded.toLocaleString()} 筆)</span>`;
-                
-            } catch (e) {
-                console.warn(`載入 ${year} 年股價失敗:`, e.message);
             }
+            
+            if (statusEl) statusEl.innerHTML = `<span style="color:#ff9800;">⏳ 載入 ${year} 年... (${totalLoaded.toLocaleString()} 筆)</span>`;
         }
         
-        if (statusEl) statusEl.innerHTML = `<span style="color:#4caf50;">✓ 載入完成 (${totalLoaded.toLocaleString()} 筆)</span>`;
+        if (statusEl) statusEl.innerHTML = `<span style="color:#4caf50;">✓ 載入完成 (${totalLoaded.toLocaleString()} 筆，上市+上櫃)</span>`;
         
         // 重新渲染
         setTimeout(() => {
@@ -35480,6 +35557,14 @@ function applyCustomDateRange() {
     
     // 切換到自訂模式
     updateMarketChart('CUSTOM');
+    
+    // v3.99X r64: 檢查是否有該區間資料
+    setTimeout(() => {
+        const container = document.getElementById('marketChartContainer');
+        if (container && container.textContent.includes('暫無資料')) {
+            if (statusEl) statusEl.innerHTML = `<span style="color:#ff9800;">⚠️ ${startInput.value} ~ ${endInput.value} 區間無資料（CSV可能未包含此期間）</span>`;
+        }
+    }, 100);
 }
 
 // v3.99W: 切換顯示的指數

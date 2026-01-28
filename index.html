@@ -6486,6 +6486,60 @@ function getSmartValue(row, fieldKey) {
     return undefined;
 }
 function safeFloat(val) { const num = parseFloat(val); return isNaN(num) ? 0 : num; }
+
+// v3.99X r70: 工作日計算（跳過週末）
+// 注意：台灣股市假日需從證交所公告或CSV檔案載入
+// 目前僅判斷週末，特殊假日（春節、國定假日）需另外處理
+
+/**
+ * 台灣股市假日清單（可從外部CSV載入更新）
+ */
+let TW_STOCK_HOLIDAYS = [];
+
+/**
+ * 載入假日資料（可選）
+ * @param {Array} holidays - 假日陣列，格式如 ['2025-01-01', '2025-01-27', ...]
+ */
+function loadStockHolidays(holidays) {
+    TW_STOCK_HOLIDAYS = holidays || [];
+}
+
+/**
+ * 判斷是否為台灣股市交易日
+ */
+function isTradingDay(date) {
+    const dateStr = date.toISOString().split('T')[0];
+    const dayOfWeek = date.getDay();
+    
+    // 週末不交易
+    if (dayOfWeek === 0 || dayOfWeek === 6) return false;
+    
+    // 檢查是否在假日清單中
+    if (TW_STOCK_HOLIDAYS.includes(dateStr)) return false;
+    
+    return true;
+}
+
+/**
+ * 計算N個工作日後的日期
+ * @param {Date} startDate - 起始日期
+ * @param {number} workDays - 工作日數
+ * @returns {Date} N個工作日後的日期
+ */
+function addWorkingDays(startDate, workDays) {
+    const result = new Date(startDate);
+    let daysAdded = 0;
+    
+    while (daysAdded < workDays) {
+        result.setDate(result.getDate() + 1);
+        if (isTradingDay(result)) {
+            daysAdded++;
+        }
+    }
+    
+    return result;
+}
+
 function safeFixed(val, digits=2) { const num = parseFloat(val); return isNaN(num) ? '-' : num.toFixed(digits); }
 // v3.81 新增：通用Excel日期解析函數
 function parseExcelDate(dateVal) {
@@ -6597,13 +6651,11 @@ async function loadStatistics() {
             result.push(current.trim());
             return result;
         };
-        // v3.99X r67: 收集缺失的CSV檔案
-        const missingFiles = [];
         const loadCSVFile = async (filename) => {
             try {
                 const response = await fetch(`data/00_cb/${filename}`);
                 if (!response.ok) {
-                    missingFiles.push(filename);
+                    console.warn(`⚠️ CSV 檔案不存在: ${filename}`);
                     return [];
                 }
                 const text = await response.text();
@@ -6622,7 +6674,7 @@ async function loadStatistics() {
                 console.log(`✅ CSV: ${filename} (${data.length} 筆)`);
                 return data;
             } catch (e) {
-                missingFiles.push(filename);
+                console.warn(`⚠️ 載入 CSV 失敗: ${filename}`, e);
                 return [];
             }
         };
@@ -6658,16 +6710,32 @@ async function loadStatistics() {
         window.filterRangeData = sheetFilterRange || [];
         window.priceAdjustData = sheetPriceAdjust || [];
         window.cbasCalcData = sheetCbasCalc || [];
-        // v3.99X r67: 競拍資料改為非必要（若缺少僅警告）
+        // 檢查核心資料是否存在
         if (!sheetAuction || sheetAuction.length === 0) {
-            console.warn('⚠️ 找不到競拍資料 (04_auction.csv)，競拍相關功能將受限');
-            sheetAuction = []; // 設為空陣列避免後續錯誤
-        }
-        // v3.99X r67: 統一顯示缺失檔案清單
-        if (missingFiles.length > 0) {
-            console.warn(`📋 以下 ${missingFiles.length} 個檔案缺失（相關功能將受限）:`, missingFiles.join(', '));
+            throw new Error('找不到競拍資料 (04_auction.csv)，請確認 data/00_cb/ 目錄下有 CSV 檔案');
         }
         console.log('📂 CSV 資料載入完成');
+        
+        // v3.99X r70: 初始化2025年台灣股市休市日
+        // 資料來源：台灣證券交易所公告 https://www.twse.com.tw/
+        const holidays2025 = [
+            '2025-01-01', // 元旦
+            '2025-01-27', // 春節前調整放假
+            '2025-01-28', // 春節
+            '2025-01-29', // 春節
+            '2025-01-30', // 春節
+            '2025-01-31', // 春節後調整放假
+            '2025-02-28', // 和平紀念日
+            '2025-04-04', // 兒童節
+            '2025-04-05', // 清明節補假
+            '2025-05-01', // 勞動節（若遇六日順延）
+            '2025-06-02', // 端午節（暫定，實際以公告為準）
+            '2025-10-10', // 國慶日
+            '2025-10-11'  // 國慶日補假（暫定）
+        ];
+        loadStockHolidays(holidays2025);
+        console.log('📅 已載入2025年股市休市日 (' + holidays2025.length + ' 天)');
+        
         // CSV 模式下的日期處理
         window.sheet10Date = null;
         if (sheetBalance && sheetBalance.length > 0) {
@@ -7648,62 +7716,53 @@ async function loadStatistics() {
                                 year = currentYear;
                             }
                             bidEndDate = `${year}-${String(endMonth).padStart(2, '0')}-${String(endDay).padStart(2, '0')}`;
-                            // 開標日通常是截標後2個工作日
+                            // v3.99X r69: 開標日通常是截標後2個工作日（跳過週末和假日）
                             const endDateObj = new Date(bidEndDate);
-                            endDateObj.setDate(endDateObj.getDate() + 2);
-                            openDate = endDateObj.toISOString().split('T')[0];
+                            const openDateObj = addWorkingDays(endDateObj, 2);
+                            openDate = openDateObj.toISOString().split('T')[0];
                         }
                     }
                 }
                 // 處理掛牌日
                 let listingDate = '';
-                const listDateRaw = row['掛牌日'];
-                if (listDateRaw && listDateRaw !== '未定') {
+                const listDateRaw = row['掛牌日'] || row['掛牌日期'];
+                if (listDateRaw && listDateRaw !== '未定' && listDateRaw !== '-') {
                     const d = parseExcelDate(listDateRaw);
                     if (d) {
                         listingDate = d.toISOString().split('T')[0];
                     }
                 }
-                // 判斷狀態
-                // v3.73 修正：增加價格判斷（非整數=已成交=已開標結束）
+                // v3.99X r70: 判斷狀態 - 優先使用日期判斷，確保已掛牌案件正確顯示
                 let status = 'pending';
-                // 優先判斷：價格有小數點 = 已經開標結束（成交價）
-                if (priceIsDecimal) {
-                    status = 'opened';
-                } else if (listingDate) {
+                
+                // 第一優先：如果掛牌日已過 → 已掛牌
+                if (listingDate) {
                     const listDate = new Date(listingDate);
                     if (listDate <= today) {
                         status = 'listed';
-                    } else if (openDate) {
-                        const openDateObj = new Date(openDate);
-                        if (openDateObj <= today) {
-                            status = 'opened';
-                        } else if (bidEndDate) {
-                            const bidEndDateObj = new Date(bidEndDate);
-                            if (bidEndDateObj < today) {
-                                status = 'closed'; // 截標已過但還沒開標
-                            } else if (bidPeriod) {
-                                status = 'bidding';
-                            }
-                        }
                     }
-                } else if (openDate) {
+                }
+                
+                // 第二優先：如果還沒判定為已掛牌，檢查價格是否有小數點（成交價）
+                if (status !== 'listed' && priceIsDecimal) {
+                    status = 'opened';
+                }
+                
+                // 第三優先：如果有開標日且已過
+                if (status === 'pending' && openDate) {
                     const openDateObj = new Date(openDate);
                     if (openDateObj <= today) {
                         status = 'opened';
-                    } else if (bidEndDate) {
-                        const bidEndDateObj = new Date(bidEndDate);
-                        if (bidEndDateObj < today) {
-                            status = 'closed';
-                        } else if (bidPeriod) {
-                            status = 'bidding';
-                        }
                     }
-                } else if (bidEndDate) {
-                    // v3.73 新增：即使沒有開標日，如果截標日已過也算closed
+                }
+                
+                // 第四優先：如果截標日已過
+                if (status === 'pending' && bidEndDate) {
                     const bidEndDateObj = new Date(bidEndDate);
                     if (bidEndDateObj < today) {
                         status = 'closed';
+                    } else if (bidPeriod) {
+                        status = 'bidding';
                     }
                 }
                 // 計算區間值
@@ -27884,8 +27943,19 @@ async function renderCBHistory(cbCode, container) {
         </div>`;
         return;
     }
-    // v3.99W: 使用全部資料
-    const filteredData = priceData;
+    // v3.99X r69: 根據 currentCBPeriod 過濾資料
+    let filteredData;
+    if (currentCBPeriod === 'all') {
+        filteredData = priceData;
+    } else {
+        const days = parseInt(currentCBPeriod) || 90;
+        filteredData = priceData.slice(-days);
+    }
+    
+    if (filteredData.length === 0) {
+        filteredData = priceData; // 備援：如果過濾後沒資料就用全部
+    }
+    
     const latestData = filteredData[filteredData.length - 1];
     const firstData = filteredData[0];
     const cbPrice = latestData.close || 0;
@@ -27935,11 +28005,13 @@ async function renderCBHistory(cbCode, container) {
     const aboveMA = lastMA && cbPrice >= lastMA;
     const maStatus = lastMA ? (aboveMA ? '站上均線 ▲' : '跌破均線 ▼') : '';
     const maStatusColor = aboveMA ? '#d32f2f' : '#2e7d32';
+    // v3.99X r69: 動態顯示期間標籤
+    const periodLabel = getPeriodLabel(currentCBPeriod);
     container.innerHTML = `
         <div style="background:#fff; padding:15px; border-radius:8px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:8px;">
                 <div style="font-weight:bold; color:#7b1fa2; font-size:16px;">
-                    💰 ${cbCode} CB價格走勢 <span style="font-size:15px; color:#444; font-weight:normal;">(全部期間)</span>
+                    💰 ${cbCode} CB價格走勢 <span style="font-size:15px; color:#444; font-weight:normal;">(${periodLabel})</span>
                 </div>
                 <div style="display:flex; gap:10px; align-items:center;">
                     ${lastMA ? `<span style="font-size:13px; color:${maStatusColor}; font-weight:bold;">${maStatus}</span>` : ''}

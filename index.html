@@ -3540,19 +3540,6 @@ button:active, .clickable:active {
             <button type="button" class="price-trend-tab" onclick="showPriceTrendTab('cbasHistory', event)" style="padding:8px 12px; border:2px solid #9c27b0; border-radius:6px; background:white; color:#7b1fa2; cursor:pointer; font-weight:600; font-size:15px; white-space:nowrap;">⚡ CBAS歷史</button>
             <button type="button" class="price-trend-tab" onclick="showPriceTrendTab('cbasCalc', event)" style="padding:8px 12px; border:2px solid #ff6f00; border-radius:6px; background:white; color:#e65100; cursor:pointer; font-weight:600; font-size:15px; white-space:nowrap;">📐 CBAS試算</button>
         </div>
-        <!-- v3.99X r66: 時間區間選擇器 -->
-        <div style="display:flex; gap:6px; align-items:center; padding:8px; background:#f5f5f5; border-radius:6px; margin-top:8px;">
-            <span style="font-size:14px; color:#7b1fa2; font-weight:600;">📅 時間:</span>
-            <div style="display:flex; gap:4px; flex-wrap:wrap;">
-                <button onclick="changeCBPeriod('30')" class="cb-period-btn" data-period="30" style="padding:4px 8px; border:2px solid #9c27b0; border-radius:4px; background:white; color:#7b1fa2; cursor:pointer; font-size:13px; font-weight:600;">1月</button>
-                <button onclick="changeCBPeriod('90')" class="cb-period-btn active" data-period="90" style="padding:4px 8px; border:2px solid #9c27b0; border-radius:4px; background:#9c27b0; color:white; cursor:pointer; font-size:13px; font-weight:600;">3月</button>
-                <button onclick="changeCBPeriod('180')" class="cb-period-btn" data-period="180" style="padding:4px 8px; border:2px solid #9c27b0; border-radius:4px; background:white; color:#7b1fa2; cursor:pointer; font-size:13px; font-weight:600;">6月</button>
-                <button onclick="changeCBPeriod('365')" class="cb-period-btn" data-period="365" style="padding:4px 8px; border:2px solid #9c27b0; border-radius:4px; background:white; color:#7b1fa2; cursor:pointer; font-size:13px; font-weight:600;">1年</button>
-                <button onclick="changeCBPeriod('730')" class="cb-period-btn" data-period="730" style="padding:4px 8px; border:2px solid #9c27b0; border-radius:4px; background:white; color:#7b1fa2; cursor:pointer; font-size:13px; font-weight:600;">2年</button>
-                <button onclick="changeCBPeriod('1095')" class="cb-period-btn" data-period="1095" style="padding:4px 8px; border:2px solid #9c27b0; border-radius:4px; background:white; color:#7b1fa2; cursor:pointer; font-size:13px; font-weight:600;">3年</button>
-                <button onclick="changeCBPeriod('all')" class="cb-period-btn" data-period="all" style="padding:4px 8px; border:2px solid #9c27b0; border-radius:4px; background:white; color:#7b1fa2; cursor:pointer; font-size:13px; font-weight:600;">全部</button>
-            </div>
-        </div>
     </div>
     <!-- 圖表內容區 -->
     <div id="priceTrendContent" style="min-height:300px;">
@@ -6600,22 +6587,14 @@ async function loadStatistics() {
         };
         const loadCSVFile = async (filename) => {
             try {
-                const fullPath = `data/00_cb/${filename}`;
-                console.log(`📥 嘗試載入: ${fullPath}`);
-                const response = await fetch(fullPath);
-                console.log(`📡 ${filename} 回應狀態: ${response.status} ${response.statusText}`);
+                const response = await fetch(`data/00_cb/${filename}`);
                 if (!response.ok) {
-                    console.error(`❌ ${filename} 載入失敗: ${response.status} ${response.statusText}`);
-                    console.error(`   完整路徑: ${window.location.origin}/${fullPath}`);
+                    console.warn(`⚠️ CSV 檔案不存在: ${filename}`);
                     return [];
                 }
                 const text = await response.text();
-                console.log(`📄 ${filename} 讀取成功，檔案大小: ${text.length} bytes`);
                 const lines = text.split('\n').filter(l => l.trim());
-                if (lines.length < 2) {
-                    console.warn(`⚠️ ${filename} 檔案格式錯誤或為空`);
-                    return [];
-                }
+                if (lines.length < 2) return [];
                 const headers = parseCSVLineLocal(lines[0]);
                 const data = [];
                 for (let i = 1; i < lines.length; i++) {
@@ -6629,7 +6608,7 @@ async function loadStatistics() {
                 console.log(`✅ CSV: ${filename} (${data.length} 筆)`);
                 return data;
             } catch (e) {
-                console.error(`❌ 載入 CSV 失敗: ${filename}`, e);
+                console.warn(`⚠️ 載入 CSV 失敗: ${filename}`, e);
                 return [];
             }
         };
@@ -13548,11 +13527,11 @@ let html = `
 <div class="trend-table-wrapper">
 <table class="trend-year-table" id="sizeTable">
     <tr>
-        <th style="width:25%;">規模區間</th>
-        <th style="width:15%;">檔數</th>
-        <th style="width:15%;">均高▼</th>
-        <th style="width:15%;">均低</th>
-        <th style="width:15%;">振幅</th>
+        <th class="sortable" style="width:25%;">規模區間</th>
+        <th class="sortable" style="width:15%;">檔數</th>
+        <th class="sortable" style="width:15%;">均高</th>
+        <th class="sortable" style="width:15%;">均低</th>
+        <th class="sortable" style="width:15%;">振幅</th>
     </tr>`;
 const maxAmp = Math.max(...ranges.map(r => r.avgAmp));
 ranges.forEach((r, idx) => {
@@ -13681,11 +13660,11 @@ let html = `
 <div class="trend-table-wrapper">
 <table class="trend-year-table" id="capitalTable">
     <tr>
-        <th style="width:25%;">股本區間</th>
-        <th style="width:15%;">檔數</th>
-        <th style="width:15%;">均高▼</th>
-        <th style="width:15%;">均低</th>
-        <th style="width:15%;">振幅</th>
+        <th class="sortable" style="width:25%;">股本區間</th>
+        <th class="sortable" style="width:15%;">檔數</th>
+        <th class="sortable" style="width:15%;">均高</th>
+        <th class="sortable" style="width:15%;">均低</th>
+        <th class="sortable" style="width:15%;">振幅</th>
     </tr>`;
 const maxAmp = Math.max(...ranges.map(r => r.avgAmp));
 ranges.forEach((r, idx) => {
@@ -13808,11 +13787,11 @@ let html = `
 <div class="trend-table-wrapper">
 <table class="trend-year-table" id="conversionTable">
     <tr>
-        <th style="width:25%;">轉換價區間</th>
-        <th style="width:15%;">檔數</th>
-        <th style="width:15%;">均高▼</th>
-        <th style="width:15%;">均低</th>
-        <th style="width:15%;">振幅</th>
+        <th class="sortable" style="width:25%;">轉換價區間</th>
+        <th class="sortable" style="width:15%;">檔數</th>
+        <th class="sortable" style="width:15%;">均高</th>
+        <th class="sortable" style="width:15%;">均低</th>
+        <th class="sortable" style="width:15%;">振幅</th>
     </tr>`;
 const maxAmp = Math.max(...ranges.map(r => r.avgAmp));
 ranges.forEach((r, idx) => {
@@ -13926,11 +13905,11 @@ let html = `
 <div class="trend-table-wrapper">
 <table class="trend-year-table" id="ratingTable">
     <tr>
-        <th style="width:25%;">信評等級</th>
-        <th style="width:15%;">檔數</th>
-        <th style="width:15%;">均高▼</th>
-        <th style="width:15%;">均低</th>
-        <th style="width:15%;">振幅</th>
+        <th class="sortable" style="width:25%;">信評等級</th>
+        <th class="sortable" style="width:15%;">檔數</th>
+        <th class="sortable" style="width:15%;">均高</th>
+        <th class="sortable" style="width:15%;">均低</th>
+        <th class="sortable" style="width:15%;">振幅</th>
     </tr>`;
 const maxAmp = validRanges.length > 0 ? Math.max(...validRanges.map(r => r.avgAmp)) : 0;
 const minAmp = validRanges.length > 0 ? Math.min(...validRanges.map(r => r.avgAmp)) : 0;
@@ -25555,107 +25534,74 @@ details: []             // 詳細資料
   /**
 - 顯示價格走勢標籤頁
   */
-  // v3.99X r66: CB價格走勢時間區間切換
-  let currentCBPeriod = ‘90’; // 預設3個月
+  function showPriceTrendTab(tabName, event) {
+  // v3.97-as-ci: 更新標籤樣式（紫色邊框風格）
+  document.querySelectorAll(’.price-trend-tab’).forEach(tab => {
+  tab.style.background = ‘white’;
+  tab.style.color = ‘#7b1fa2’;
+  tab.style.border = ‘2px solid #9c27b0’;
+  tab.classList.remove(‘active’);
+  });
+  // 確保正確找到按鈕元素（處理點擊 emoji 或文字的情況）
+  if (event) {
+  let target = event.target;
+  while (target && !target.classList.contains(‘price-trend-tab’)) {
+  target = target.parentElement;
+  }
+  if (target) {
+  target.style.background = ‘#9c27b0’;
+  target.style.color = ‘white’;
+  target.style.border = ‘2px solid #9c27b0’;
+  target.classList.add(‘active’);
+  }
+  } else {
+  const tabs = document.querySelectorAll(’.price-trend-tab’);
+  const index = tabName === ‘stockPrice’ ? 0 : tabName === ‘cbPrice’ ? 1 :
+  tabName === ‘cbHistory’ ? 2 : tabName === ‘balance’ ? 3 : 4;
+  if (tabs[index]) {
+  tabs[index].style.background = ‘#9c27b0’;
+  tabs[index].style.color = ‘white’;
+  tabs[index].style.border = ‘2px solid #9c27b0’;
+  tabs[index].classList.add(‘active’);
+  }
+  }
+  const content = document.getElementById(‘priceTrendContent’);
+  const cbCode = currentPriceTrendCB;
+  if (!cbCode) {
+  content.innerHTML = `<div style="text-align:center; color:#444; padding:60px 20px; background:#fff; border-radius:12px;"> <div style="font-size:32px; margin-bottom:12px;">👆</div> <div style="font-size:16px;">請先選擇一檔可轉債</div> </div>`;
+  return;
+  }
+  // CBAS標籤特殊處理：可以不依賴 kanban 歷史資料
+  if (tabName === ‘cbas’) {
+  renderCBASFromCurrentData(cbCode, content);
+  return;
+  }
+  // v3.98S 新增：CBAS歷史月拆解標籤
+  if (tabName === ‘cbasHistory’) {
+  renderCBASHistoryTab(cbCode, content);
+  return;
+  }
+  // v3.99X 新增：CBAS損益試算標籤
+  if (tabName === ‘cbasCalc’) {
+  renderCBASCalculator(cbCode, content);
+  return;
+  }
+  // v3.97-zs-br: CB價格走勢標籤 - 使用 CB_price 資料庫
+  if (tabName === ‘cbHistory’) {
+  renderCBHistory(cbCode, content);
+  return;
+  }
+  // 顯示載入中
+  content.innerHTML = `<div style="text-align:center; padding:40px; color:#444; background:#fff; border-radius:12px;">
+  <div style="font-size:24px; margin-bottom:10px;">⏳</div>
+  <div>載入 ${cbCode} 價格走勢中…</div>
+  
+   </div>`;
+   // 取得期間設定
+   const period = document.getElementById('priceTrendPeriod')?.value || '90';
+   // 載入kanban資料並繪製圖表
+   loadKanbanAndRender(cbCode, tabName, period, content);
 
-function changeCBPeriod(period) {
-currentCBPeriod = period;
-
-```
-// 更新按鈕狀態
-document.querySelectorAll('.cb-period-btn').forEach(btn => {
-    if (btn.dataset.period === period) {
-        btn.style.background = '#9c27b0';
-        btn.style.color = 'white';
-    } else {
-        btn.style.background = 'white';
-        btn.style.color = '#7b1fa2';
-    }
-});
-
-// 取得當前選中的標籤
-const activeTab = document.querySelector('.price-trend-tab.active');
-if (!activeTab) return;
-
-// 判斷是哪個標籤
-const tabText = activeTab.textContent.trim();
-let tabName = 'stockPrice';
-if (tabText.includes('理論價值')) tabName = 'cbPrice';
-else if (tabText.includes('價格走勢')) tabName = 'cbHistory';
-else if (tabText.includes('籌碼轉換')) tabName = 'balance';
-else if (tabText.includes('CBAS歷史')) tabName = 'cbasHistory';
-else if (tabText.includes('CBAS試算')) tabName = 'cbasCalc';
-else if (tabText.includes('CBAS')) tabName = 'cbas';
-
-// 重新渲染當前標籤（不需要event參數）
-showPriceTrendTab(tabName);
-```
-
-}
-
-function showPriceTrendTab(tabName, event) {
-// v3.97-as-ci: 更新標籤樣式（紫色邊框風格）
-document.querySelectorAll(’.price-trend-tab’).forEach(tab => {
-tab.style.background = ‘white’;
-tab.style.color = ‘#7b1fa2’;
-tab.style.border = ‘2px solid #9c27b0’;
-tab.classList.remove(‘active’);
-});
-// 確保正確找到按鈕元素（處理點擊 emoji 或文字的情況）
-if (event) {
-let target = event.target;
-while (target && !target.classList.contains(‘price-trend-tab’)) {
-target = target.parentElement;
-}
-if (target) {
-target.style.background = ‘#9c27b0’;
-target.style.color = ‘white’;
-target.style.border = ‘2px solid #9c27b0’;
-target.classList.add(‘active’);
-}
-} else {
-const tabs = document.querySelectorAll(’.price-trend-tab’);
-const index = tabName === ‘stockPrice’ ? 0 : tabName === ‘cbPrice’ ? 1 :
-tabName === ‘cbHistory’ ? 2 : tabName === ‘balance’ ? 3 : 4;
-if (tabs[index]) {
-tabs[index].style.background = ‘#9c27b0’;
-tabs[index].style.color = ‘white’;
-tabs[index].style.border = ‘2px solid #9c27b0’;
-tabs[index].classList.add(‘active’);
-}
-}
-const content = document.getElementById(‘priceTrendContent’);
-const cbCode = currentPriceTrendCB;
-if (!cbCode) {
-content.innerHTML = `<div style="text-align:center; color:#444; padding:60px 20px; background:#fff; border-radius:12px;"> <div style="font-size:32px; margin-bottom:12px;">👆</div> <div style="font-size:16px;">請先選擇一檔可轉債</div> </div>`;
-return;
-}
-// CBAS標籤特殊處理：可以不依賴 kanban 歷史資料
-if (tabName === ‘cbas’) {
-renderCBASFromCurrentData(cbCode, content);
-return;
-}
-// v3.98S 新增：CBAS歷史月拆解標籤
-if (tabName === ‘cbasHistory’) {
-renderCBASHistoryTab(cbCode, content);
-return;
-}
-// v3.99X 新增：CBAS損益試算標籤
-if (tabName === ‘cbasCalc’) {
-renderCBASCalculator(cbCode, content);
-return;
-}
-// v3.97-zs-br: CB價格走勢標籤 - 使用 CB_price 資料庫
-if (tabName === ‘cbHistory’) {
-renderCBHistory(cbCode, content);
-return;
-}
-// 顯示載入中
-content.innerHTML = `<div style="text-align:center; padding:40px; color:#444; background:#fff; border-radius:12px;"> <div style="font-size:24px; margin-bottom:10px;">⏳</div> <div>載入 ${cbCode} 價格走勢中...</div> </div>`;
-// v3.99X r66: 使用全域變數 currentCBPeriod
-const period = currentCBPeriod || ‘90’;
-// 載入kanban資料並繪製圖表
-loadKanbanAndRender(cbCode, tabName, period, content);
 }
 /**
 
@@ -25852,8 +25798,8 @@ loadKanbanAndRender(cbCode, tabName, period, content);
   const cbPrice = parseFloat(latestKanban.cbPrice) || parseFloat(cbData?.[‘最新成交價’]) || 0;
   const stockPrice = parseFloat(latestKanban.stockPrice) || 0;
   const convPrice = parseFloat(latestKanban.convPrice) || parseFloat(cbData?.[‘轉換價格’]) || 0;
-  // v3.99X r66: 使用全域變數 currentCBPeriod
-  const period = currentCBPeriod || ‘90’;
+  // 渲染 CBAS 分析頁面
+  const period = document.getElementById(‘priceTrendPeriod’)?.value || ‘90’;
   renderCBASChart(cbCode, [{
   cbPrice: cbPrice,
   stockPrice: stockPrice,

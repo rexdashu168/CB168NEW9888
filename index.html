@@ -30564,11 +30564,16 @@ function filterDataByPeriod(data, period) {
     if (!latestDateNum && latestData?.date) {
         latestDateNum = parseInt(latestData.date.replace(/-/g, '').replace(/\//g, ''));
     }
+    
+    // v3.99X r72: 加入除錯訊息
+    console.log(`[filterDataByPeriod] period=${period}, days=${days}, 資料筆數=${data.length}, 最新日期=${latestDateNum}`);
+    
     if (!latestDateNum) {
         // 如果無法取得最新日期，退回使用今天
         const cutoffDate = new Date();
         cutoffDate.setDate(cutoffDate.getDate() - days);
         const cutoffNum = parseInt(cutoffDate.toISOString().slice(0, 10).replace(/-/g, ''));
+        console.log(`[filterDataByPeriod] 無法取得最新日期，使用今天往前推: cutoff=${cutoffNum}`);
         return data.filter(d => d.dateNum >= cutoffNum);
     }
     // 從最新日期往前推算 cutoff 日期
@@ -30579,7 +30584,9 @@ function filterDataByPeriod(data, period) {
     const latestDate = new Date(latestYear, latestMonth - 1, latestDay);
     latestDate.setDate(latestDate.getDate() - days);
     const cutoffNum = parseInt(latestDate.toISOString().slice(0, 10).replace(/-/g, ''));
-    return data.filter(d => d.dateNum >= cutoffNum);
+    const filtered = data.filter(d => d.dateNum >= cutoffNum);
+    console.log(`[filterDataByPeriod] 從最新日期往前推: cutoff=${cutoffNum}, 篩選後=${filtered.length}筆`);
+    return filtered;
 }
 /**
  * v3.97-as-bs: SVG 圖表生成工具函數

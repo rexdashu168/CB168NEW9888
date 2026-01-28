@@ -27906,13 +27906,15 @@ async function renderCBHistory(cbCode, container) {
                     window.cbPriceData.data[cbCode] = rows.map(row => {
                         const obj = {};
                         cols.forEach((col, i) => obj[col] = row[i]);
-                        const dateStr = obj.date || '';
+                        const dateStr = obj.date || obj['日期'] || '';
                         const dateNum = parseInt(String(dateStr).replace(/[-\/]/g, '')) || 0;
+                        // v3.99X r73: 使用「明日參價」作為價格，而非「收市」
+                        const price = parseFloat(obj['明日參價'] || obj.ref_price || obj.close || obj['收市']) || 0;
                         return {
                             date: dateStr,
                             dateNum: dateNum,
-                            close: parseFloat(obj.close) || 0,
-                            volume: parseFloat(obj.volume) || 0
+                            close: price,  // 實際上是明日參價
+                            volume: parseFloat(obj.volume || obj['筆數']) || 0
                         };
                     });
                 }
@@ -30085,31 +30087,97 @@ async function loadYuantaHistoryData() {
  */
 async function loadKanbanAndRender(cbCode, tabName, period, container) {
     try {
-        // 檢查是否已載入資料
-        if (!window.kanbanData.loaded && !window.kanbanData.loading) {
-            container.innerHTML = `<div style="text-align:center; padding:40px; color:#444;">⏳ 首次載入歷史資料中，請稍候...</div>`;
-            await loadAllKanbanData();
-        }
-        // 等待載入完成
-        while (window.kanbanData.loading) {
-            await new Promise(r => setTimeout(r, 100));
-        }
-        // 取得該CB的時間序列資料（同時嘗試字串和數字格式）
+        // v3.99X r73: 優先使用 CB_price 資料（明日參價），再用 kanban 資料
         const searchCode = String(cbCode).trim();
-        let cbTimeSeries = window.kanbanData.data[searchCode] || [];
-        // 如果找不到，嘗試純數字格式（去掉前導零）
-        if (cbTimeSeries.length === 0) {
-            const numCode = parseInt(searchCode, 10);
-            if (!isNaN(numCode)) {
-                cbTimeSeries = window.kanbanData.data[String(numCode)] || [];
+        let cbTimeSeries = [];
+        let dataSource = '';
+        
+        // 步驟1: 嘗試從 CB_price 取得資料
+        if (!window.cbPriceData) {
+            window.cbPriceData = { data: {}, loaded: false };
+        }
+        
+        if (!window.cbPriceData.data[searchCode]) {
+            try {
+                const response = await fetch('data/cb_price.db');
+                if (response.ok) {
+                    const SQL = window.kanbanSQL || await initSqlJs({
+                        locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}`
+                    });
+                    const arrayBuffer = await response.arrayBuffer();
+                    const db = new SQL.Database(new Uint8Array(arrayBuffer));
+                    const results = db.exec(`SELECT * FROM cb_price WHERE code = '${searchCode}' OR code = '${parseInt(searchCode)}' ORDER BY date`);
+                    if (results.length > 0) {
+                        const cols = results[0].columns;
+                        const rows = results[0].values;
+                        window.cbPriceData.data[searchCode] = rows.map(row => {
+                            const obj = {};
+                            cols.forEach((col, i) => obj[col] = row[i]);
+                            const dateStr = obj.date || obj['日期'] || '';
+                            const dateNum = parseInt(String(dateStr).replace(/[-\/]/g, '')) || 0;
+                            const price = parseFloat(obj['明日參價'] || obj.ref_price || obj.close || obj['收市']) || 0;
+                            const stockPrice = parseFloat(obj['股價'] || obj.stock_price) || 0;
+                            
+                            // v3.99X r73: 從基本資料取得轉換價
+                            let convPrice = 0;
+                            if (window.cbSupplementMap && window.cbSupplementMap[searchCode]) {
+                                convPrice = window.cbSupplementMap[searchCode].convPrice || 0;
+                            }
+                            
+                            return {
+                                date: dateStr,
+                                dateNum: dateNum,
+                                cbPrice: price,
+                                stockPrice: stockPrice,
+                                convPrice: convPrice,
+                                balance: 0,
+                                cbName: obj.name || obj['名稱'] || ''
+                            };
+                        });
+                    }
+                    db.close();
+                }
+            } catch (e) {
+                console.warn('CB_price 資料載入失敗:', e.message);
             }
         }
-        // 除錯輸出
-        console.log(`[kanban] 查詢 ${searchCode}, 找到 ${cbTimeSeries.length} 筆資料`);
+        
+        cbTimeSeries = window.cbPriceData.data[searchCode] || [];
+        if (cbTimeSeries.length > 0) {
+            dataSource = 'CB_price';
+            console.log(`[r73] 使用 CB_price 資料: ${searchCode}, ${cbTimeSeries.length} 筆`);
+        }
+        
+        // 步驟2: 如果 CB_price 沒有資料，使用 kanban 資料
         if (cbTimeSeries.length === 0) {
-            // 檢查kanban中是否有該CB（列出前10個key作為參考）
-            const keys = Object.keys(window.kanbanData.data).slice(0, 10);
-            console.log(`[kanban] 資料庫中前10個CB代號:`, keys);
+            // 檢查是否已載入 kanban 資料
+            if (!window.kanbanData.loaded && !window.kanbanData.loading) {
+                container.innerHTML = `<div style="text-align:center; padding:40px; color:#444;">⏳ 首次載入歷史資料中，請稍候...</div>`;
+                await loadAllKanbanData();
+            }
+            // 等待載入完成
+            while (window.kanbanData.loading) {
+                await new Promise(r => setTimeout(r, 100));
+            }
+            // 取得該CB的時間序列資料
+            cbTimeSeries = window.kanbanData.data[searchCode] || [];
+            // 如果找不到，嘗試純數字格式（去掉前導零）
+            if (cbTimeSeries.length === 0) {
+                const numCode = parseInt(searchCode, 10);
+                if (!isNaN(numCode)) {
+                    cbTimeSeries = window.kanbanData.data[String(numCode)] || [];
+                }
+            }
+            if (cbTimeSeries.length > 0) {
+                dataSource = 'kanban';
+                console.log(`[r73] 使用 kanban 資料: ${searchCode}, ${cbTimeSeries.length} 筆`);
+            }
+        }
+        
+        // 除錯輸出
+        console.log(`[r73] 查詢 ${searchCode}, 資料來源: ${dataSource}, 找到 ${cbTimeSeries.length} 筆`);
+        
+        if (cbTimeSeries.length === 0) {
             container.innerHTML = `
                 <div style="text-align:center; padding:40px; color:#444;">
                     <div style="font-size:48px; margin-bottom:15px;">📭</div>
@@ -30117,8 +30185,7 @@ async function loadKanbanAndRender(cbCode, tabName, period, container) {
                     <div style="font-size:16px; margin-top:10px; color:#444;">
                         可能原因：<br>
                         • 新發行的CB，尚無歷史行情<br>
-                        • 已下市較久的CB，不在 CB_kanban Excel 資料中<br>
-                        • data/kanban/ 資料夾未放置 CB_kanban_YYYY_all.csv 檔案
+                        • 已下市較久的CB，不在 CB_price / CB_kanban 資料中
                     </div>
                     <div style="margin-top:15px;">
                         <button onclick="showPriceTrendTab('cbas')"

@@ -28097,7 +28097,7 @@ function renderCBASFromCurrentData(cbCode, container) {
  * v3.98S 新增：CBAS歷史月拆解資料管理器
  */
 const CBASHistoryManager = {
-    availableYears: [2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025],
+    availableYears: [2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026],
     loadedYears: new Set(),
     data: {},  // { cbCode: [{ date, principal, trades, minPremium, maxPremium, avgPremium, period }] }
     sqlEngine: null,
@@ -30180,19 +30180,73 @@ async function loadAllKanbanData(loadAll = false) {
         window.kanbanSQL = SQL;
         const allData = window.kanbanData.data || {};
         const allDates = new Set(window.kanbanData.dates || []);
-        // v3.98P: 改為單年度檔案載入（2017-2025共9個檔案）
-        // 預設載入近3年，loadAll = true 時載入全部9年
+        // v3.98P: 改為單年度檔案載入（2017-2026）
+        // v3.99X r71: 2026年支援Excel格式
+        // 預設載入近3年，loadAll = true 時載入全部
         const currentYear = new Date().getFullYear();
         const defaultYears = [currentYear, currentYear - 1, currentYear - 2];
-        const allYears = [2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017];
+        const allYears = [2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017];
         const yearsToLoad = loadAll ? allYears : defaultYears.filter(y => y >= 2017);
         const dbFiles = yearsToLoad.map(year => ({
             file: `data/cb_kanban_${year}.db`,
+            xlsxFile: `data/CB_kanban_${year}.xlsx`,
+            year: year,
             label: `${year}`
         }));
         console.log(`📊 準備載入 cb_kanban: ${yearsToLoad.join(', ')}`);
         for (const dbInfo of dbFiles) {
             updateProgress(`載入 ${dbInfo.label} 資料...`);
+            
+            // v3.99X r71: 2026年優先嘗試Excel
+            if (dbInfo.year === 2026) {
+                try {
+                    const response = await fetch(dbInfo.xlsxFile);
+                    if (response.ok) {
+                        const arrayBuffer = await response.arrayBuffer();
+                        updateProgress(`解析 ${dbInfo.label} Excel 資料...`);
+                        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+                        
+                        // Excel格式：每天一個工作表
+                        workbook.SheetNames.forEach(sheetName => {
+                            const sheet = workbook.Sheets[sheetName];
+                            const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+                            
+                            jsonData.forEach(row => {
+                                const code = row['代號'] || row['code'];
+                                if (!code) return;
+                                
+                                if (!allData[code]) {
+                                    allData[code] = [];
+                                }
+                                
+                                const dateNum = parseInt(String(row['日期'] || row['date'] || sheetName).replace(/[-\/]/g, '')) || 0;
+                                
+                                allData[code].push({
+                                    date: String(row['日期'] || row['date'] || sheetName),
+                                    dateNum: dateNum,
+                                    cbName: row['名稱'] || row['name'] || '',
+                                    convPrice: parseFloat(row['轉換價格'] || row['conv_price']) || 0,
+                                    callStartDate: row['call_start'] || '',
+                                    callEndDate: row['call_end'] || '',
+                                    callPrice: parseFloat(row['call_price']) || 0,
+                                    delistDate: row['delist_date'] || '',
+                                    balance: parseFloat(row['餘額'] || row['balance']) || 0,
+                                    cbPrice: parseFloat(row['CB價格'] || row['cb_price']) || 0,
+                                    stockPrice: parseFloat(row['股價'] || row['stock_price']) || 0
+                                });
+                                if (dateNum) allDates.add(dateNum);
+                            });
+                        });
+                        
+                        console.log(`✅ ${dbInfo.xlsxFile} 載入完成`);
+                        continue; // 成功載入Excel，跳過db嘗試
+                    }
+                } catch (e) {
+                    console.warn(`Excel載入失敗，嘗試db: ${e.message}`);
+                }
+            }
+            
+            // 載入db檔案（2017-2025，或2026的Excel載入失敗時）
             try {
                 const response = await fetch(dbInfo.file);
                 if (!response.ok) {
@@ -35468,54 +35522,113 @@ async function loadYearlyRankingData() {
         const dbPrefixes = ['stock_price', 'otc_price'];
         
         for (const year of yearsToLoad) {
-            for (const prefix of dbPrefixes) {
-                try {
-                    const dbFile = `data/${prefix}_${year}.db`;
-                    const response = await fetch(dbFile);
-                    if (!response.ok) continue;
-                    
-                    const buffer = await response.arrayBuffer();
-                    const db = new TrendScanModule.sqlEngine.Database(new Uint8Array(buffer));
-                    
-                    // 嘗試讀取資料
-                    let results;
+            // v3.99X r71: 2026年使用Excel檔案
+            if (year === 2026) {
+                for (const prefix of dbPrefixes) {
                     try {
-                        results = db.exec(`SELECT 日期, 代號, 名稱, 收市 FROM stock_price WHERE 收市 > 0`);
-                    } catch (e) {
-                        try {
-                            results = db.exec(`SELECT 日期, 代號, 名稱, 收盤價 as 收市 FROM stock_price WHERE 收盤價 > 0`);
-                        } catch (e2) {
-                            db.close();
-                            continue;
-                        }
-                    }
-                    
-                    if (results.length > 0) {
-                        const rows = results[0].values;
-                        rows.forEach(row => {
-                            const [date, code, name, close] = row;
-                            if (!code || !close) return;
+                        const xlsxFile = `data/${prefix}_${year}.xlsx`;
+                        const response = await fetch(xlsxFile);
+                        if (!response.ok) continue;
+                        
+                        const arrayBuffer = await response.arrayBuffer();
+                        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+                        
+                        // Excel格式：每天一個工作表
+                        workbook.SheetNames.forEach(sheetName => {
+                            const sheet = workbook.Sheets[sheetName];
+                            const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: '' });
                             
-                            const stockCode = String(code).trim();
-                            if (!TrendScanModule.priceData[stockCode]) {
-                                TrendScanModule.priceData[stockCode] = [];
-                            }
-                            if (!TrendScanModule.stockNames) {
-                                TrendScanModule.stockNames = {};
-                            }
-                            TrendScanModule.stockNames[stockCode] = name || stockCode;
-                            
-                            TrendScanModule.priceData[stockCode].push({
-                                date: parseInt(String(date).replace(/[-\/]/g, '')),
-                                close: parseFloat(close)
+                            jsonData.forEach(row => {
+                                const date = row['日期'] || row['Date'] || sheetName;
+                                const code = row['代號'] || row['Code'];
+                                const name = row['名稱'] || row['Name'];
+                                const close = row['收市'] || row['收盤價'] || row['Close'];
+                                
+                                if (!code || !close || close <= 0) return;
+                                
+                                const stockCode = String(code).trim();
+                                if (!TrendScanModule.priceData[stockCode]) {
+                                    TrendScanModule.priceData[stockCode] = [];
+                                }
+                                if (!TrendScanModule.stockNames) {
+                                    TrendScanModule.stockNames = {};
+                                }
+                                TrendScanModule.stockNames[stockCode] = name || stockCode;
+                                
+                                // 解析日期
+                                let dateNum = 0;
+                                if (typeof date === 'number') {
+                                    // Excel日期序列號
+                                    const excelDate = new Date((date - 25569) * 86400 * 1000);
+                                    dateNum = parseInt(excelDate.toISOString().split('T')[0].replace(/-/g, ''));
+                                } else {
+                                    dateNum = parseInt(String(date).replace(/[-\/]/g, ''));
+                                }
+                                
+                                TrendScanModule.priceData[stockCode].push({
+                                    date: dateNum,
+                                    close: parseFloat(close)
+                                });
+                                totalLoaded++;
                             });
                         });
-                        totalLoaded += rows.length;
+                        
+                        console.log(`✅ ${xlsxFile} 載入完成`);
+                    } catch (e) {
+                        console.warn(`載入 ${prefix}_${year}.xlsx 失敗:`, e.message);
                     }
-                    db.close();
-                    
-                } catch (e) {
-                    // 靜默忽略
+                }
+            } else {
+                // 2015-2025年：使用db檔案
+                for (const prefix of dbPrefixes) {
+                    try {
+                        const dbFile = `data/${prefix}_${year}.db`;
+                        const response = await fetch(dbFile);
+                        if (!response.ok) continue;
+                        
+                        const buffer = await response.arrayBuffer();
+                        const db = new TrendScanModule.sqlEngine.Database(new Uint8Array(buffer));
+                        
+                        // 嘗試讀取資料
+                        let results;
+                        try {
+                            results = db.exec(`SELECT 日期, 代號, 名稱, 收市 FROM stock_price WHERE 收市 > 0`);
+                        } catch (e) {
+                            try {
+                                results = db.exec(`SELECT 日期, 代號, 名稱, 收盤價 as 收市 FROM stock_price WHERE 收盤價 > 0`);
+                            } catch (e2) {
+                                db.close();
+                                continue;
+                            }
+                        }
+                        
+                        if (results.length > 0) {
+                            const rows = results[0].values;
+                            rows.forEach(row => {
+                                const [date, code, name, close] = row;
+                                if (!code || !close) return;
+                                
+                                const stockCode = String(code).trim();
+                                if (!TrendScanModule.priceData[stockCode]) {
+                                    TrendScanModule.priceData[stockCode] = [];
+                                }
+                                if (!TrendScanModule.stockNames) {
+                                    TrendScanModule.stockNames = {};
+                                }
+                                TrendScanModule.stockNames[stockCode] = name || stockCode;
+                                
+                                TrendScanModule.priceData[stockCode].push({
+                                    date: parseInt(String(date).replace(/[-\/]/g, '')),
+                                    close: parseFloat(close)
+                                });
+                            });
+                            totalLoaded += rows.length;
+                        }
+                        db.close();
+                        
+                    } catch (e) {
+                        // 靜默忽略
+                    }
                 }
             }
             
@@ -35684,8 +35797,8 @@ async function searchStockPrice() {
         let stockName = stockCode;
         let isOTC = false;
         // v3.99W: 上市2008-2025，上櫃2008-2025
-        const tseYears = ['2008', '2009', '2010', '2011', '2012', '2013', '2014', '2015', '2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023', '2024', '2025'];
-        const otcYears = ['2008', '2009', '2010', '2011', '2012', '2013', '2014', '2015', '2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023', '2024', '2025'];
+        const tseYears = ['2008', '2009', '2010', '2011', '2012', '2013', '2014', '2015', '2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023', '2024', '2025', '2026'];
+        const otcYears = ['2008', '2009', '2010', '2011', '2012', '2013', '2014', '2015', '2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023', '2024', '2025', '2026'];
         // 先判斷是上市還是上櫃（用2025年資料測試）
         statusEl.innerHTML = '<span style="color:#1976d2;">⏳ 判斷市場類型...</span>';
         // 測試上市
